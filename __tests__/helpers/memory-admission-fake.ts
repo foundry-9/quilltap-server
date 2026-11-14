@@ -76,9 +76,9 @@ export function fakeRepositories(store: FakeMemoryStore) {
       findByIdRaw: async () => null,
     },
     memories: {
-      create: async (data: Partial<Memory>, opts?: { createdAt?: string; updatedAt?: string }) => {
+      create: async (data: Partial<Memory>, opts?: { id?: string; createdAt?: string; updatedAt?: string }) => {
         write('create')
-        const id = `mem-${store.nextId++}`
+        const id = opts?.id ?? `mem-${store.nextId++}`
         const now = opts?.createdAt ?? new Date().toISOString()
         const row = { tier: 'hot', supersededById: null, consolidatedFrom: [], ...data, id, createdAt: now, updatedAt: now } as Memory
         store.rows.set(id, row)
@@ -123,6 +123,34 @@ export function fakeRepositories(store: FakeMemoryStore) {
         row.relatedMemoryIds = list
         return [...list]
       },
+      removeRelatedMemoryIds: async (_c: string, id: string, ids: string[]) => {
+        write('removeRelatedMemoryIds')
+        const row = store.rows.get(id)
+        if (!row) return null
+        row.relatedMemoryIds = (row.relatedMemoryIds ?? []).filter((x) => !ids.includes(x))
+        return [...row.relatedMemoryIds]
+      },
+      addConsolidatedMembers: async (_c: string, id: string, ids: string[]) => {
+        write('addConsolidatedMembers')
+        const row = store.rows.get(id)
+        if (!row) return null
+        const list = [...(row.consolidatedFrom ?? [])]
+        for (const add of ids) if (add !== id && !list.includes(add)) list.push(add)
+        row.consolidatedFrom = list
+        return [...list]
+      },
+      findIdsLinkingTo: async (characterId: string, ids: string[]) =>
+        Array.from(store.rows.values())
+          .filter((m) => m.characterId === characterId && (m.relatedMemoryIds ?? []).some((x) => ids.includes(x)))
+          .map((m) => ({ id: m.id, relatedMemoryIds: [...(m.relatedMemoryIds ?? [])] })),
+      markConsidered: async (_c: string, ids: string[], when: string) => {
+        write('markConsidered')
+        for (const id of ids) {
+          const row = store.rows.get(id)
+          if (row) row.consolidatedAt = when
+        }
+        return ids.length
+      },
       countCapBreakdown: async () => ({ hotTotal: 0, demotable: 0, protected: 0 }),
     },
     backgroundJobs: { findRecentByType: async () => [] },
@@ -150,11 +178,12 @@ export function fakeMemoryIndex(store: FakeMemoryStore) {
       Array.from(store.rows.values())
         .filter((m) => m.characterId === characterId && m.embedding)
         .map((m) => ({ id: m.id, embedding: m.embedding as Float32Array, metadata: { memoryId: m.id, characterId } })),
-    upsert: async (_c: string, entries: Array<{ id: string; embedding: Float32Array }>) => {
+    upsert: async (_c: string, entries: Array<{ id: string; embedding: Float32Array; alongside?: Partial<Memory> }>) => {
       store.writes.push('index.upsert')
       return entries.map((e) => {
         const row = store.rows.get(e.id)
         if (!row) return null
+        if (e.alongside) Object.assign(row, e.alongside)
         row.embedding = e.embedding
         return { ...row }
       })

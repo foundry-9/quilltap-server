@@ -1,9 +1,8 @@
 /**
  * The Wardrobe dialog's History tab: newest first, the current entry marked
- * "Wearing now" with no button, Wear again posting the rollback, a stale-item
- * warning on the button, and — when the Live tab holds staged edits for this
- * character — a confirmation, then the staging discarded before the rollback
- * runs, so Done can never flush it over the restored outfit.
+ * "Wearing now" with no button, Wear again staging the entry (nothing sent
+ * until Done), a stale-item warning on the button, a confirmation before other
+ * staged Live-tab edits are replaced, and Unstage on the staged entry.
  */
 
 // Uses global jest (not @jest/globals) so the jest-dom matcher augmentation
@@ -61,6 +60,8 @@ describe('OutfitHistoryTab', () => {
       characterId: 'char-1',
       characterName: 'Bertie',
       hasStagedEdits: false,
+      stagedIndex: null as number | null,
+      stageEntry: jest.fn(),
       discardStagedEdits: jest.fn(),
       requestConfirmation: jest.fn().mockResolvedValue(true),
       ...overrides,
@@ -92,44 +93,46 @@ describe('OutfitHistoryTab', () => {
     expect(within(screen.getByTestId('outfit-history-entry-1')).getByTitle('Top — archived')).toBeInTheDocument()
   })
 
-  it('Wear again posts the rollback for that index', async () => {
+  it('Wear again stages the entry and sends nothing', async () => {
     const props = renderTab()
     fireEvent.click(within(await screen.findByTestId('outfit-history-entry-0')).getByText('Wear again'))
-    await waitFor(() => expect(rollbackCalls()).toHaveLength(1))
-    expect(JSON.parse(String(rollbackCalls()[0][1].body))).toEqual({ characterId: 'char-1', index: 0 })
+    await waitFor(() => expect(props.stageEntry).toHaveBeenCalledTimes(1))
+    expect((props.stageEntry as jest.Mock).mock.calls[0][0].index).toBe(0)
+    expect(props.requestConfirmation).not.toHaveBeenCalled()
+    expect(rollbackCalls()).toHaveLength(0)
+  })
+
+  it('confirms before replacing other staged Live-tab edits', async () => {
+    const props = renderTab({ hasStagedEdits: true })
+    fireEvent.click(within(await screen.findByTestId('outfit-history-entry-0')).getByText('Wear again'))
+    await waitFor(() => expect(props.stageEntry).toHaveBeenCalled())
+    expect(props.requestConfirmation).toHaveBeenCalledWith(
+      "Discard the staged changes to Bertie's outfit and stage outfit 0 instead?",
+    )
+    expect(rollbackCalls()).toHaveLength(0)
+  })
+
+  it('replaces a staged pick without asking', async () => {
+    const props = renderTab({ hasStagedEdits: true, stagedIndex: 1 })
+    fireEvent.click(within(await screen.findByTestId('outfit-history-entry-0')).getByText('Wear again'))
+    await waitFor(() => expect(props.stageEntry).toHaveBeenCalled())
     expect(props.requestConfirmation).not.toHaveBeenCalled()
   })
 
-  it('confirms and discards staged Live-tab edits before rolling back', async () => {
-    const order: string[] = []
-    const props = renderTab({
-      hasStagedEdits: true,
-      discardStagedEdits: jest.fn((options?: { reseed?: boolean }) => {
-        order.push(options?.reseed ? 'reseed' : 'discard')
-      }),
-    })
-    fetchSpy.mockImplementation(async (input: RequestInfo | URL) => {
-      if (String(input).includes('wardrobe-rollback')) order.push('rollback')
-      const body = String(input).includes('wardrobe-rollback')
-        ? { equippedSlots: EMPTY, previousIndex: 2, restoredIndex: 0, skipped: [] }
-        : HISTORY
-      return { ok: true, status: 200, statusText: 'OK', json: async () => body }
-    })
-
-    fireEvent.click(within(await screen.findByTestId('outfit-history-entry-0')).getByText('Wear again'))
-    await waitFor(() => expect(order).toContain('reseed'))
-
-    expect(props.requestConfirmation).toHaveBeenCalledWith(
-      "Discard the staged changes to Bertie's outfit and return to outfit 0?",
-    )
-    expect(order).toEqual(['discard', 'rollback', 'reseed'])
+  it('marks the staged entry and offers Unstage', async () => {
+    const props = renderTab({ hasStagedEdits: true, stagedIndex: 0 })
+    const staged = await screen.findByTestId('outfit-history-entry-0')
+    expect(within(staged).getByText('Staged — on at Done')).toBeInTheDocument()
+    expect(within(staged).queryByText('Wear again')).toBeNull()
+    fireEvent.click(within(staged).getByText('Unstage'))
+    expect(props.discardStagedEdits).toHaveBeenCalledTimes(1)
   })
 
   it('does nothing when the operator keeps the staged edits', async () => {
     const props = renderTab({ hasStagedEdits: true, requestConfirmation: jest.fn().mockResolvedValue(false) })
     fireEvent.click(within(await screen.findByTestId('outfit-history-entry-0')).getByText('Wear again'))
     await waitFor(() => expect(props.requestConfirmation).toHaveBeenCalled())
-    expect(props.discardStagedEdits).not.toHaveBeenCalled()
+    expect(props.stageEntry).not.toHaveBeenCalled()
     expect(rollbackCalls()).toHaveLength(0)
   })
 

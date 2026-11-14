@@ -83,6 +83,7 @@ import { patchSchemaOf } from '@/lib/schemas/patch-schema';
 import { KEYSTONES_PER_SUBJECT_MAX, MemoryKindEnum } from '@/lib/schemas/memory.types';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { MemoryListSortSchema, MemoryListSortOrderSchema } from '@/lib/memory/list-sort';
 import { notFound, badRequest, serverError, validationError, successResponse, errorResponse } from '@/lib/api/responses';
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types';
 import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
@@ -319,8 +320,16 @@ async function listMemoriesByCharacter(
   const tierParam = searchParams.get('tier');
   const tier: 'hot' | 'cold' | undefined = tierParam === 'hot' || tierParam === 'cold' ? tierParam : undefined;
   const keystoneOnly = searchParams.get('keystone') === 'true';
-  const sortBy = searchParams.get('sortBy') || 'createdAt';
-  const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
+  const sortByParsed = MemoryListSortSchema.safeParse(searchParams.get('sortBy') || 'createdAt');
+  if (!sortByParsed.success) {
+    return badRequest(`Invalid sortBy; expected one of: ${MemoryListSortSchema.options.join(', ')}`);
+  }
+  const sortOrderParsed = MemoryListSortOrderSchema.safeParse(searchParams.get('sortOrder') || 'desc');
+  if (!sortOrderParsed.success) {
+    return badRequest('Invalid sortOrder; expected asc or desc');
+  }
+  const sortBy = sortByParsed.data;
+  const sortOrder = sortOrderParsed.data;
 
   // Pagination params (default: no limit = return all for backward compat)
   const limitParam = searchParams.get('limit');
@@ -637,23 +646,27 @@ async function handleCreateMemory(
 
   const inserted = admissionInserted(outcome);
 
+  // The memory stands whatever happens to the keystone mark. A refused mark (a
+  // race on the limit, or admission folded the text into a row that cannot
+  // carry one) is reported as a warning on the success, never as an error
+  // after the row is saved — which read as "nothing was saved" and invited a
+  // retry.
+  let warning: string | undefined;
   if (validatedData.keystone && !memory.keystone) {
     const marked = await updateMemory(memory.characterId, memory.id, { keystone: true }, { userId: user.id });
-    if (!marked.ok) {
-      // The memory stands; only the mark was refused (a race on the limit, or
-      // admission folded the text into a row that cannot carry one).
+    if (marked.ok) {
+      memory = marked.memory;
+    } else {
       logger.debug('[Memories API] Keystone mark refused after manual create', {
         characterId: validatedData.characterId,
         memoryId: memory.id,
         reason: marked.reason,
       });
-      return badRequest(
+      warning =
         marked.reason === 'keystone-refused'
           ? `The memory was saved, but not as a keystone: ${marked.message}`
-          : 'The memory was saved, but could not be marked a keystone.'
-      );
+          : 'The memory was saved, but could not be marked a keystone.';
     }
-    memory = marked.memory;
   }
   logger.debug('[Memories API] Manual memory create resolved', {
     characterId: validatedData.characterId,
@@ -673,7 +686,7 @@ async function handleCreateMemory(
 
   // 201 only when a row was created; a reinforcement or near-duplicate
   // absorption returns 200 with the existing row, and `action` says which.
-  return successResponse({ memory, action: outcome.action.kind }, inserted ? 201 : 200);
+  return successResponse({ memory, action: outcome.action.kind, ...(warning ? { warning } : {}) }, inserted ? 201 : 200);
 }
 
 async function handleSearch(

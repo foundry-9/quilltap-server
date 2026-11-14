@@ -1,63 +1,90 @@
 /**
  * Characters Repository
  *
- * Backend-agnostic repository for Character entities.
- * Works with SQLite through the database abstraction layer.
- * Handles CRUD operations and advanced queries for Character entities.
+ * A character is one slim row plus one vault. The store-backed base
+ * (`store-backed.repository.ts`) owns everything that split implies — overlay
+ * on read, route-and-strip on write, provision on create, the raw readers —
+ * through the vault's binding (`lib/characters/vault/binding.ts`). What is
+ * here is only what is particular to characters: the archive guard and the
+ * store-name reconcile as hooks, the user-owned and tag queries, partner
+ * links, favourites, control, Carina, the fact-sheet key patch, and the
+ * per-item prompt and scenario operations.
  */
 
-import { Character, CharacterInput, CharacterSchema, CharacterSystemPrompt, CharacterScenario } from '@/lib/schemas/types';
-import { TaggableBaseRepository, CreateOptions } from './base.repository';
-import { logger } from '@/lib/logger';
-import { TypedQueryFilter, UpdateSpec } from '../interfaces';
 import {
-  applyDocumentStoreOverlay,
-  applyDocumentStoreOverlayOne,
-  applyDocumentStoreWriteOverlay,
-  MANAGED_FIELDS,
-} from './character-properties-overlay';
+  Character,
+  CharacterInput,
+  CharacterRow,
+  CharacterRowSchema,
+  CharacterSystemPrompt,
+  CharacterScenario,
+} from '@/lib/schemas/types';
+import { CreateOptions } from './base.repository';
+import { AbstractStoreBackedRepository, type StoreOverlayBinding } from './store-backed.repository';
+import { logger } from '@/lib/logger';
+import { TypedQueryFilter } from '../interfaces';
+import { characterVaultBinding } from '@/lib/characters/vault/binding';
+import { CHARACTER_VAULT_LAYOUT, type VaultContext } from '@/lib/characters/vault/layout';
+import {
+  addFolderItem,
+  listFolderItems,
+  removeFolderItem,
+  rewriteFolderItem,
+  type LocatedItem,
+} from '@/lib/characters/vault/items';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
+import { processSingleton } from '@/lib/utils/process-singleton';
+import { readVaultFileStrict } from '@/lib/characters/vault/readers';
+import { parseVaultMetadata } from '@/lib/characters/vault/parsers';
 
-export class CharacterArchivedError extends Error {
-  constructor(characterId: string, message = 'this character is archived; rehydrate it to continue') {
-    super(message);
-    this.name = 'CharacterArchivedError';
-    this.message = `Character ${characterId} is archived: ${message}`;
-  }
+// The archive guard lives with the character domain so non-repository code
+// (the shared item-folder ops) can raise it without importing a repository.
+export { CharacterArchivedError, validateCharacterArchivePatch } from '@/lib/characters/archive-guard';
+import { CharacterArchivedError, validateCharacterArchivePatch } from '@/lib/characters/archive-guard';
+
+/**
+ * What `update()` takes: any field of the character except the two
+ * sub-collections, which are written one item at a time (`addSystemPrompt`,
+ * `updateScenario`, …) and never as a whole array (D6).
+ */
+export type CharacterUpdate = Partial<Omit<Character, 'systemPrompts' | 'scenarios'>>;
+
+/** One write chain per key, process-wide (a module-level map is per bundle — bug 235). */
+const characterWriteChains = processSingleton(
+  'characters.repository.writeChains',
+  () => new Map<string, Promise<unknown>>(),
+);
+
+/** Run `fn` after every earlier write queued on `key`. Never re-enter the same key from `fn`. */
+function runSerialized<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = characterWriteChains.get(key) ?? Promise.resolve();
+  const next = prev.catch(() => {}).then(fn);
+  characterWriteChains.set(key, next);
+  void next
+    .catch(() => {})
+    .finally(() => {
+      if (characterWriteChains.get(key) === next) characterWriteChains.delete(key);
+    });
+  return next;
 }
 
 /**
- * Guard every write to an archived character.
- *
- * Archiving prunes the vault in place (§4.2a): an archived character keeps a
- * live, writable vault, and this guard — running before the write overlay — is
- * what stands between that vault and an edit arriving through the repository.
- *
- * A tombstone is read-only with exactly one exception: **unarchive**, the
- * single-key patch that clears `archivedAt`. Nothing else is sanctioned — in
- * particular, nulling `characterDocumentMountPointId` (the old
- * archive-finalization patch) is refused, because nothing legitimately nulls
- * the pointer any more: the vault survives the archive.
+ * A key-level fact-sheet patch found `metadata.json` present but not a JSON
+ * object. Merging into `{}` would erase the user's sheet, so the patch is
+ * refused until the file is repaired.
  */
-export function validateCharacterArchivePatch(existing: Partial<Character> | null, data: Partial<Character>): void {
-  if (!existing?.archivedAt) {
-    return;
+export class CharacterMetadataUnreadableError extends Error {
+  constructor(characterId: string) {
+    super(`Character ${characterId}'s metadata.json is not a JSON object; repair it before patching keys`);
+    this.name = 'CharacterMetadataUnreadableError';
   }
-
-  const keys = Object.keys(data);
-
-  const isSanctionedUnarchive = keys.length === 1 && 'archivedAt' in data && data.archivedAt === null;
-  if (isSanctionedUnarchive) {
-    return;
-  }
-
-  throw new CharacterArchivedError(existing.id ?? 'unknown');
 }
 
 /**
  * Characters Repository
  * Implements CRUD operations for characters with support for tags, personas, favorites, and physical descriptions.
  */
+
 /**
  * Bring store names into line after a change to a character's name or vault
  * (`lib/mount-index/reconcile-store-names.ts`). Never fails the caller's
@@ -77,129 +104,123 @@ async function reconcileVaultNames(trigger: string, characterId: string): Promis
   }
 }
 
-export class CharactersRepository extends TaggableBaseRepository<Character> {
+/**
+ * The repository's generic is the slim row (`CharacterRow`): that is what the
+ * `characters` table holds and what every base read validates against, so a
+ * raw read is honestly typed. The hydrated `Character` — row plus vault — is
+ * what every non-raw read returns.
+ */
+export class CharactersRepository extends AbstractStoreBackedRepository<CharacterRow, Character> {
   constructor() {
-    super('characters', CharacterSchema);
+    super('characters', CharacterRowSchema);
+  }
+
+  protected readonly store: StoreOverlayBinding<CharacterRow, Character> = characterVaultBinding;
+  protected readonly pointerField = 'characterDocumentMountPointId' as const;
+
+  // ============================================================================
+  // HOOKS
+  // ============================================================================
+
+  /** The tombstone guard: only unarchive may touch an archived character. */
+  protected guardUpdate(existing: CharacterRow | null, patch: Partial<Character>): void {
+    if ('systemPrompts' in patch || 'scenarios' in patch) {
+      // Never a whole-array write (D6): it re-projected the folder and swept
+      // anything it did not recognise. The per-item operations are the only
+      // writers of either sub-collection.
+      throw new Error('update() does not take systemPrompts or scenarios; use the per-item prompt and scenario operations');
+    }
+    validateCharacterArchivePatch(existing, patch);
+    if (existing?.archivedAt && patch.archivedAt === null) {
+      logger.info('Rehydrating archived character', { characterId: existing.id });
+    }
   }
 
   /**
-   * Find a character by ID
-   * @param id The character ID
-   * @returns Promise<Character | null> The character if found, null otherwise
+   * An old vault left by a namesake may hold "<Name> Character Vault", in
+   * which case the new one was provisioned as "… (2)": retire the old one and
+   * hand the new vault its plain name.
    */
-  async findById(id: string): Promise<Character | null> {
-    const raw = await this._findById(id);
-    return applyDocumentStoreOverlayOne(raw);
+  protected async afterCreate(character: Character): Promise<void> {
+    await reconcileVaultNames('character-created', character.id);
   }
 
-  /**
-   * Find a character by ID **without applying the vault overlay**. The returned
-   * Character has empty / default values for every managed field (identity,
-   * description, manifesto, personality, exampleDialogues, title, firstMessage,
-   * talkativeness, pronouns, aliases, physicalDescription, systemPrompts,
-   * scenarios) because the DB columns for those fields were dropped in the 4.6
-   * cutover and now live exclusively in the character vault.
-   *
-   * **Almost no caller wants this.** Use {@link findById} for any normal
-   * read — it overlays the vault and returns the character users see in the
-   * UI. The legitimate exceptions are:
-   *
-   * - The overlay's own bootstrap code (it needs to read the row before it can
-   *   apply itself), inside {@link ./character-properties-overlay}.
-   * - Startup migrations and backfills that operate on the DB row directly
-   *   (e.g. {@link ../../startup/backfill-character-vaults}), where the
-   *   overlay either isn't ready or isn't desired.
-   *
-   * Adding new callers requires a comment justifying why the overlay must be
-   * skipped — otherwise you almost certainly want `findById`.
-   */
-  async findByIdRaw(id: string): Promise<Character | null> {
-    return this._findById(id);
+  /** The vault is named after the character, so a rename renames it. */
+  protected async afterRename(id: string): Promise<void> {
+    await reconcileVaultNames('character-renamed', id);
   }
 
-  /**
-   * Find all characters
-   * @returns Promise<Character[]> Array of all characters
-   */
-  async findAll(): Promise<Character[]> {
-    const raw = await this._findAll();
-    return applyDocumentStoreOverlay(raw);
+  /** The vault outlives its character; retire its name. */
+  protected async afterDelete(id: string): Promise<void> {
+    await reconcileVaultNames('character-deleted', id);
   }
 
-  /**
-   * Find all characters **without applying the vault overlay**. See the warnings
-   * on {@link findByIdRaw}. Reserved for startup migrations / backfills and the
-   * overlay's own bootstrap.
-   */
-  async findAllRaw(): Promise<Character[]> {
-    return this._findAll();
+  /** The create-time defaults for the row's own columns. */
+  protected prepareCreateData(
+    data: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Omit<Character, 'id' | 'createdAt' | 'updatedAt'> {
+    return {
+      ...data,
+      tags: data.tags ?? [],
+      isFavorite: data.isFavorite ?? false,
+      partnerLinks: data.partnerLinks ?? [],
+      avatarOverrides: data.avatarOverrides ?? [],
+    };
   }
 
-  /**
-   * Find the character whose vault is `mountPointId`, **without the vault
-   * overlay**. Used by the scenario location to classify a mount as a
-   * character's (it needs only `id`, `userId`, `archivedAt`) — hydrating the
-   * vault to answer "whose mount is this?" would be wasted work, and a broken
-   * vault must cost a classification rather than a throw.
-   */
-  async findByDocumentMountPointIdRaw(mountPointId: string): Promise<Character | null> {
-    return this.findOneByFilter({ characterDocumentMountPointId: mountPointId } as TypedQueryFilter<Character>);
+  /** `update()` takes everything but the two sub-collections (see {@link CharacterUpdate}). */
+  async update(id: string, data: CharacterUpdate): Promise<Character | null> {
+    return super.update(id, data);
   }
 
-  /**
-   * Find characters by user ID
-   * @param userId The user ID
-   * @returns Promise<Character[]> Array of characters belonging to the user
-   */
+  /** Create a character; the input type allows fields with defaults to be omitted. */
+  async create(
+    data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions,
+  ): Promise<Character> {
+    return super.create(data as Omit<Character, 'id' | 'createdAt' | 'updatedAt'>, options);
+  }
+
+  /** Restore a character row bound to its archived vault (see the base). */
+  async createBoundToStore(
+    data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
+    mountPointId: string,
+    options?: CreateOptions,
+  ): Promise<CharacterRow> {
+    return super.createBoundToStore(data as Omit<Character, 'id' | 'createdAt' | 'updatedAt'>, mountPointId, options);
+  }
+
+  // ============================================================================
+  // CHARACTER QUERIES
+  // ============================================================================
+
+  /** Characters belonging to a user. */
   async findByUserId(userId: string): Promise<Character[]> {
-    const raw = await super.findByUserId(userId);
-    return applyDocumentStoreOverlay(raw);
+    return this.hydrate(await this.findByFilter({ userId } as TypedQueryFilter<CharacterRow>));
   }
 
-  /**
-   * Find user-controlled characters by user ID
-   * @param userId The user ID
-   * @returns Promise<Character[]> Array of user-controlled characters
-   */
+  /** User-controlled characters of a user. */
   async findUserControlled(userId: string): Promise<Character[]> {
     return this.safeQuery(
-      async () => {
-        const results = await this.findByFilter({
-          userId,
-          controlledBy: 'user',
-        });
-        return applyDocumentStoreOverlay(results);
-      },
+      async () => this.hydrate(await this.findByFilter({ userId, controlledBy: 'user' })),
       'Error finding user-controlled characters',
       { userId },
-      []
+      [],
     );
   }
 
-  /**
-   * Find multiple characters by their IDs in a single query
-   * @param ids Array of character IDs
-   * @returns Promise<Character[]> Array of found characters (may be shorter than input if some IDs don't exist)
-   */
-  async findByIds(ids: string[]): Promise<Character[]> {
-    const raw = await super.findByIds(ids);
-    return applyDocumentStoreOverlay(raw);
+  /** Characters carrying a tag. */
+  async findByTag(tagId: string): Promise<Character[]> {
+    return this.hydrate(await this.findByFilter({ tags: { $in: [tagId] } } as TypedQueryFilter<CharacterRow>));
   }
 
   /**
-   * Resolve character IDs to display names — **without the vault overlay**.
+   * Resolve character IDs to display names — **without the vault**.
    *
-   * `name` is a plain DB column, so the overlay has nothing to add here, and
-   * skipping it is the point: this runs on the per-turn context path, where a
-   * character whose vault is unreadable must cost the caller a *name*, not the
-   * whole turn (`findById` throws `CharacterVaultUnavailableError` on that
-   * shelf, by design — see the class docblock). IDs with no row, or with a
-   * blank name, are simply absent from the returned map; callers are expected
-   * to degrade rather than assume a hit.
-   *
-   * @param ids Character IDs to resolve (deduped internally; empty is fine)
-   * @param options.excludeArchived Leave archived characters (tombstones) out
-   * @returns Promise<Map<string, string>> id → name, for the IDs that resolved
+   * `name` is a column, so the vault has nothing to add, and skipping it is the
+   * point: this runs on the per-turn context path, where a character whose
+   * vault is unreadable must cost the caller a *name*, not the whole turn.
+   * IDs with no row, or with a blank name, are absent from the returned map.
    */
   async findNamesByIds(
     ids: string[],
@@ -212,7 +233,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
 
     return this.safeQuery(
       async () => {
-        const rows = await super.findByIds(unique);
+        const rows = await this.findByFilter({ id: { $in: unique } } as TypedQueryFilter<CharacterRow>);
         const names = new Map<string, string>();
         for (const row of rows) {
           if (options.excludeArchived && row.archivedAt) continue;
@@ -227,309 +248,53 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     );
   }
 
-  /**
-   * Find characters that use a specific image as their default
-   * @param imageId The image file ID
-   * @returns Promise<Character[]> Array of characters using this image as default
-   */
+  /** Characters using an image as their default. */
   async findByDefaultImageId(imageId: string): Promise<Character[]> {
     return this.safeQuery(
-      async () => {
-        const results = await this.findByFilter({
-          defaultImageId: imageId,
-        });
-        return applyDocumentStoreOverlay(results);
-      },
+      async () => this.hydrate(await this.findByFilter({ defaultImageId: imageId })),
       'Error finding characters by default image ID',
       { imageId },
       []
     );
   }
 
-  /**
-   * Find characters that use a specific image in their avatar overrides
-   * @param imageId The image file ID
-   * @returns Promise<Character[]> Array of characters using this image in overrides
-   */
+  /** Characters using an image in their avatar overrides. */
   async findByAvatarOverrideImageId(imageId: string): Promise<Character[]> {
     return this.safeQuery(
-      async () => {
-        const results = await this.findByFilter({
-          'avatarOverrides.imageId': imageId,
-        } as TypedQueryFilter<Character>);
-        return applyDocumentStoreOverlay(results);
-      },
+      async () => this.hydrate(await this.findByFilter({
+        'avatarOverrides.imageId': imageId,
+      } as TypedQueryFilter<CharacterRow>)),
       'Error finding characters by avatar override image ID',
       { imageId },
       []
     );
   }
 
-  /**
-   * Find characters with a specific tag
-   * @param tagId The tag ID
-   * @returns Promise<Character[]> Array of characters with the tag
-   */
-  async findByTag(tagId: string): Promise<Character[]> {
-    const raw = await super.findByTag(tagId);
-    return applyDocumentStoreOverlay(raw);
-  }
-
-  /**
-   * Create a new character.
-   *
-   * Atomic from the caller's perspective: validates input, inserts the DB row,
-   * provisions the character's document-store vault, projects every vault-managed
-   * field (identity, description, manifesto, personality, exampleDialogues,
-   * title, firstMessage, talkativeness, pronouns, aliases, physicalDescription,
-   * systemPrompts, scenarios) into the freshly-scaffolded vault, and sets
-   * `characterDocumentMountPointId` on the row. Callers should NOT call
-   * `ensureCharacterVault` afterwards — `create()` owns the full operation.
-   *
-   * Any `characterDocumentMountPointId` in `data` is dropped: a freshly-created
-   * character always gets a freshly-provisioned vault, since pointing a new
-   * row at an existing vault would cross-link unrelated content. (A restore
-   * re-binding a row to the vault its archive carries uses
-   * {@link createBoundToVault} instead.)
-   *
-   * @param data The character data (without id, createdAt, updatedAt). Fields with defaults are optional.
-   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
-   * @returns Promise<Character> The created character with generated id, timestamps, and linked vault
-   */
-  async create(
-    data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: CreateOptions
-  ): Promise<Character> {
-    return this.safeQuery(
-      async () => {
-        // Drop any incoming mountPointId — create always provisions a fresh
-        // vault. Importers that carry a source mountPointId in the payload
-        // shouldn't reuse it; the import-reconciliation pass remaps that
-        // pointer to a vault the importer separately created if applicable.
-        const characterData = this.withCreateDefaults(data, null);
-
-        const created = await this._create(characterData, options);
-
-        // Provision the vault using the in-memory character (which carries the
-        // input's managed-field values). ensureCharacterVault scaffolds folders,
-        // writes every managed file via writeCharacterVaultManagedFields, and
-        // updates the DB row with the new characterDocumentMountPointId.
-        await ensureCharacterVault(created);
-        // An old vault left by a namesake may hold "<Name> Character Vault",
-        // in which case the new one was provisioned as "… (2)". Retire the old
-        // one and hand the new vault its plain name.
-        await reconcileVaultNames('character-created', created.id);
-
-        logger.info('Character created', {
-          characterId: created.id,
-          userId: data.userId,
-          name: data.name,
-        });
-
-        // Reload through the overlay so the returned character reflects the
-        // vault-backed state, including the freshly-set mountPointId.
-        const finalCharacter = await this.findById(created.id);
-        if (!finalCharacter) {
-          throw new Error(`Character ${created.id} disappeared immediately after creation`);
-        }
-        return finalCharacter;
-      },
-      'Error creating character',
-      { userId: data.userId, name: data.name }
-    );
-  }
-
-  /**
-   * Restore a character row bound to the vault a backup carries for it.
-   *
-   * The one sanctioned exception to {@link create}'s fresh-vault rule, and
-   * only for the restore: the archive's own vault for this character is being
-   * restored alongside the row, so minting a fresh one would leave the row
-   * pointing at an empty vault and the archived one orphaned (bug 185). The
-   * restore's claim map guarantees no two rows are given the same vault.
-   *
-   * Writes the slim row with `characterDocumentMountPointId` set and does
-   * nothing else — no provisioning, no projection of managed fields (the
-   * archived vault already holds them). The vault's rows usually arrive later
-   * in the restore than the character's, so the row is returned raw, never
-   * through the overlay, which would throw until they do.
-   */
-  async createBoundToVault(
-    data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
-    mountPointId: string,
-    options?: CreateOptions
-  ): Promise<Character> {
-    return this.safeQuery(
-      async () => {
-        const created = await this._create(this.withCreateDefaults(data, mountPointId), options);
-        logger.info('Character restored bound to its archived vault', {
-          characterId: created.id,
-          userId: data.userId,
-          mountPointId,
-        });
-        return created;
-      },
-      'Error restoring character bound to its vault',
-      { userId: data.userId, name: data.name, mountPointId }
-    );
-  }
-
-  /** The create-time defaults, with the vault pointer set as given. */
-  private withCreateDefaults(
-    data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
-    characterDocumentMountPointId: string | null
-  ): Omit<Character, 'id' | 'createdAt' | 'updatedAt'> {
-    const { characterDocumentMountPointId: _incomingMountId, ...rest } = data as Record<string, unknown> & {
-      characterDocumentMountPointId?: string | null;
-    };
-    return {
-      ...rest,
-      tags: (rest as Partial<Character>).tags ?? [],
-      aliases: (rest as Partial<Character>).aliases ?? [],
-      pronouns: (rest as Partial<Character>).pronouns ?? null,
-      isFavorite: (rest as Partial<Character>).isFavorite ?? false,
-      partnerLinks: (rest as Partial<Character>).partnerLinks ?? [],
-      avatarOverrides: (rest as Partial<Character>).avatarOverrides ?? [],
-      physicalDescription: (rest as Partial<Character>).physicalDescription ?? null,
-      systemPrompts: (rest as Partial<Character>).systemPrompts ?? [],
-      scenarios: (rest as Partial<Character>).scenarios ?? [],
-      characterDocumentMountPointId,
-    } as Omit<Character, 'id' | 'createdAt' | 'updatedAt'>;
-  }
-
-  /**
-   * Update a character.
-   *
-   * Managed content fields (identity, description, manifesto, personality,
-   * exampleDialogues, title, firstMessage, talkativeness, pronouns, aliases,
-   * physicalDescription, systemPrompts, scenarios) in `data` are routed to
-   * the character's vault via {@link applyDocumentStoreWriteOverlay}; the
-   * remaining DB-only fields are written through `_update`. The returned
-   * character is overlaid through {@link applyDocumentStoreOverlayOne} so
-   * callers see the vault-backed view just as {@link findById} would.
-   *
-   * If a character somehow lacks a vault, `applyDocumentStoreWriteOverlay`
-   * auto-provisions one (loud `logger.error` so the upstream bug surfaces)
-   * before routing the patch — managed fields are never silently dropped.
-   */
-  async update(id: string, data: Partial<Character>): Promise<Character | null> {
-    return this.safeQuery(
-      async () => {
-        const existing = await this.findByIdRaw(id);
-        validateCharacterArchivePatch(existing, data);
-
-        if (existing?.archivedAt && data.archivedAt === null) {
-          logger.info('Rehydrating archived character', { characterId: id });
-        }
-
-        const dbPatch = await applyDocumentStoreWriteOverlay(id, data);
-        const hasDbWork = Object.keys(dbPatch).length > 0;
-        const result = hasDbWork ? await this._update(id, dbPatch) : await this._findById(id);
-        // The vault is named after the character, so a rename renames it.
-        if (result && existing && data.name !== undefined && data.name !== existing.name) {
-          await reconcileVaultNames('character-renamed', id);
-        }
-        return applyDocumentStoreOverlayOne(result);
-      },
-      'Error updating character',
-      { characterId: id }
-    );
-  }
-
-  protected createErrorMessage(): string {
-    return 'Error creating character entity';
-  }
-
-  /**
-   * Vault-aware row transform for the base `_create`. Mirrors `_update`:
-   * strips vault-managed keys before INSERT so callers that pass e.g. `title`
-   * or `description` to `create()` don't blow up with "no such column" —
-   * those fields belong in the character vault, not the DB row.
-   */
-  protected toPersistedRow(validated: Character): Character {
-    const dbRow = { ...validated } as Record<string, unknown>;
-    for (const f of MANAGED_FIELDS) {
-      delete dbRow[f as string];
-    }
-    return dbRow as Character;
-  }
-
-  /**
-   * Vault-aware override of the base `_update`. The 4.6 cutover dropped DB
-   * columns for vault-managed fields (title, identity, description, manifesto,
-   * personality, physicalDescription, pronouns, aliases, firstMessage,
-   * talkativeness, exampleDialogues, systemPrompts, scenarios) — they live in
-   * the character vault now. The base implementation reads existing state
-   * through the overlay-aware `findById`, which rehydrates those fields from
-   * the vault; spreading them into `$set` produces UPDATE statements SQLite
-   * rejects with "no such column". Read raw here, and strip any managed-field
-   * keys before writing as a defensive backstop.
-   */
-  protected async _update(id: string, data: Partial<Character>): Promise<Character | null> {
-    return this.safeQuery(async () => {
-      const existing = await this.findByIdRaw(id);
-      if (!existing) {
-        logger.warn('Entity not found for update', {
-          collection: 'characters',
-          id,
-        });
-        return null;
-      }
-
-      const now = this.getCurrentTimestamp();
-      const merged = {
-        ...existing,
-        ...data,
-        id: existing.id,
-        createdAt: existing.createdAt,
-        updatedAt: ('updatedAt' in data)
-          ? (data as Record<string, unknown>).updatedAt as string
-          : now,
-      } as Character;
-
-      const validated = this.validate(merged);
-
-      const dbRow = { ...validated } as Record<string, unknown>;
-      for (const f of MANAGED_FIELDS) {
-        delete dbRow[f as string];
-      }
-
-      const collection = await this.getCollection();
-      await collection.updateOne(
-        { id } as TypedQueryFilter<Character>,
-        { $set: dbRow } as UpdateSpec<Character>
-      );
-
-      return validated;
-    }, 'Error updating character entity', { id });
-  }
-
-  /**
-   * Delete a character
-   * @param id The character ID
-   * @returns Promise<boolean> True if character was deleted, false if not found
-   */
-  async delete(id: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const result = await this._delete(id);
-
-        if (result) {
-          logger.info('Character deleted', { characterId: id });
-          // The vault outlives its character; retire its name.
-          await reconcileVaultNames('character-deleted', id);
-        }
-
-        return result;
-      },
-      'Error deleting character',
-      { characterId: id }
-    );
-  }
-
   // ============================================================================
   // TAG OPERATIONS
   // ============================================================================
+
+  /** Add a tag; returns the hydrated character. */
+  async addTag(characterId: string, tagId: string): Promise<Character | null> {
+    const row = await this.findByIdRaw(characterId);
+    if (!row) {
+      logger.warn('Character not found for tag addition', { characterId });
+      return null;
+    }
+    if (row.tags.includes(tagId)) return this.findById(characterId);
+    return this.update(characterId, { tags: [...row.tags, tagId] });
+  }
+
+  /** Remove a tag; returns the hydrated character. */
+  async removeTag(characterId: string, tagId: string): Promise<Character | null> {
+    const row = await this.findByIdRaw(characterId);
+    if (!row) {
+      logger.warn('Character not found for tag removal', { characterId });
+      return null;
+    }
+    if (!row.tags.includes(tagId)) return this.findById(characterId);
+    return this.update(characterId, { tags: row.tags.filter((id) => id !== tagId) });
+  }
 
   // ============================================================================
   // PARTNER LINK OPERATIONS
@@ -627,209 +392,206 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   // ============================================================================
-  // GENERIC SUB-ARRAY HELPERS
-  // ============================================================================
-
-  private async addToSubArray<S extends { id: string; createdAt: string; updatedAt: string }>(
-    characterId: string,
-    getItems: (c: Character) => S[],
-    buildItem: (id: string, now: string) => S,
-    applyUpdate: (items: S[]) => Partial<Character>,
-    errorMsg: string,
-    logContext?: Record<string, unknown>,
-    onBeforeAdd?: (existingItems: S[], newItem: S) => void
-  ): Promise<S | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn(`Character not found: ${errorMsg}`, { characterId });
-          return null;
-        }
-        const id = this.generateId();
-        const now = this.getCurrentTimestamp();
-        const newItem = buildItem(id, now);
-        const items = getItems(character);
-        onBeforeAdd?.(items, newItem);
-        items.push(newItem);
-        await this.update(characterId, applyUpdate(items));
-        return newItem;
-      },
-      errorMsg,
-      { characterId, ...logContext }
-    );
-  }
-
-  private async updateInSubArray<S extends { id: string; createdAt: string; updatedAt: string }>(
-    characterId: string,
-    itemId: string,
-    getItems: (c: Character) => S[],
-    buildUpdated: (existing: S, now: string) => S,
-    applyUpdate: (items: S[]) => Partial<Character>,
-    errorMsg: string,
-    logContext?: Record<string, unknown>,
-    onAfterBuild?: (items: S[], index: number, updated: S) => void
-  ): Promise<S | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn(`Character not found: ${errorMsg}`, { characterId });
-          return null;
-        }
-        const items = getItems(character);
-        const index = items.findIndex((i) => i.id === itemId);
-        if (index === -1) {
-          logger.warn(`Item not found: ${errorMsg}`, { characterId, itemId });
-          return null;
-        }
-        const now = this.getCurrentTimestamp();
-        const updated = buildUpdated(items[index], now);
-        onAfterBuild?.(items, index, updated);
-        items[index] = updated;
-        await this.update(characterId, applyUpdate(items));
-        return updated;
-      },
-      errorMsg,
-      { characterId, ...logContext }
-    );
-  }
-
-  private async removeFromSubArray<S extends { id: string }>(
-    characterId: string,
-    itemId: string,
-    getItems: (c: Character) => S[],
-    applyUpdate: (items: S[]) => Partial<Character>,
-    errorMsg: string,
-    onAfterRemove?: (remaining: S[]) => void
-  ): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn(`Character not found: ${errorMsg}`, { characterId });
-          return false;
-        }
-        const items = getItems(character);
-        const filtered = items.filter((i) => i.id !== itemId);
-        if (filtered.length === items.length) {
-          logger.warn(`Item not found for removal: ${errorMsg}`, { characterId, itemId });
-          return false;
-        }
-        onAfterRemove?.(filtered);
-        await this.update(characterId, applyUpdate(filtered));
-        return true;
-      },
-      errorMsg,
-      { characterId, itemId }
-    );
-  }
-
-  // ============================================================================
-  // PHYSICAL DESCRIPTION OPERATIONS
-  // ============================================================================
-
-  // ============================================================================
-  // SYSTEM PROMPT OPERATIONS
+  // FACT SHEET (metadata.json) KEY PATCH
   // ============================================================================
 
   /**
-   * The patch every system-prompt write applies.
+   * Set and unset fact-sheet keys, merged here under one write chain per
+   * character so two editors never race a read-merge-replace (D11). The HTTP
+   * route's `?action=patch-metadata` is the caller; `update({ metadata })`
+   * stays whole-object replace for every other writer (Pascal's effects in the
+   * job child depend on it).
+   */
+  async patchMetadata(
+    characterId: string,
+    patch: { set: Record<string, unknown>; unset: string[] },
+  ): Promise<Character | null> {
+    return runSerialized(`character-metadata:${characterId}`, async () => {
+      const row = await this.findByIdRaw(characterId);
+      if (!row) return null;
+      const mountPointId = row.characterDocumentMountPointId;
+      let current: Record<string, unknown> = {};
+      if (mountPointId) {
+        const raw = await readVaultFileStrict(mountPointId, CHARACTER_VAULT_LAYOUT.metadata.path, characterId);
+        if (raw !== null) {
+          const parsed = parseVaultMetadata(raw, characterId, mountPointId);
+          if (!parsed) throw new CharacterMetadataUnreadableError(characterId);
+          current = parsed;
+        }
+      }
+      const next: Record<string, unknown> = { ...current, ...patch.set };
+      for (const key of patch.unset) delete next[key];
+      logger.debug('Patching character metadata keys', {
+        characterId,
+        set: Object.keys(patch.set),
+        unset: patch.unset,
+      });
+      return this.update(characterId, { metadata: next });
+    });
+  }
+
+  // ============================================================================
+  // SUB-COLLECTIONS: SYSTEM PROMPTS AND SCENARIOS
+  //
+  // Per item (D6): each operation finds its item by id and writes, renames or
+  // deletes that one file (`lib/characters/vault/items.ts`). Ids are stable
+  // (frontmatter `id:`, D5), so the id an add returns is the id every later
+  // read returns, and a rename keeps it. Neither array is ever written whole
+  // through `update()`.
+  // ============================================================================
+
+  /**
+   * The row and vault context a sub-collection write needs, or null when the
+   * character does not exist. Refuses an archived character (the archive guard
+   * `update()` applies, for writes that bypass `update()`).
+   */
+  private async subCollectionContext(
+    characterId: string,
+  ): Promise<{ row: CharacterRow; ctx: VaultContext } | null> {
+    const row = await this.findByIdRaw(characterId);
+    if (!row) {
+      logger.warn('Character not found for a prompt or scenario write', { characterId });
+      return null;
+    }
+    if (row.archivedAt) {
+      throw new CharacterArchivedError(characterId);
+    }
+    let mountPointId = row.characterDocumentMountPointId;
+    if (!mountPointId) {
+      logger.error('Character has no vault for a prompt or scenario write; provisioning the scaffold', { characterId });
+      mountPointId = (await ensureCharacterVault(row)).mountPointId;
+    }
+    return { row, ctx: { characterId, mountPointId } };
+  }
+
+  /**
+   * Keep `defaultSystemPromptId` in step with the prompts' `isDefault` flags.
    *
-   * The default prompt is recorded twice — as the `isDefault` flag inside the
-   * prompt and as the character's `defaultSystemPromptId` column — and every
-   * consumer (chat creation, the announcement dialog, the voice preview) reads
-   * the column *first*, falling back to the flag only when the column is null.
-   * A write that moved the flag alone therefore looked right in the editor and
-   * changed nothing about which prompt a new chat actually used. Both faces of
-   * the fact move together here, so no caller has to remember the second one.
+   * The default prompt is recorded twice — the flag inside the prompt and this
+   * column — and every consumer reads the column first (bug 154). Ids are
+   * stable now, so the column names the effective default after every write
+   * and never goes stale.
    */
-  private systemPromptsPatch(
-    items: CharacterSystemPrompt[],
-    transientId?: string
-  ): Partial<Character> {
-    const defaultId = items.find((p) => p.isDefault)?.id ?? null;
-    return {
-      systemPrompts: items,
-      // A prompt being added for the first time carries an id minted here, and
-      // the vault re-keys it from its file path on the very next read — so
-      // recording that id would leave the column naming nothing. Null instead,
-      // which sends every reader to the `isDefault` flag, which is correct; the
-      // next write to this character's prompts heals the column.
-      defaultSystemPromptId: defaultId === transientId ? null : defaultId,
-    };
+  private async syncDefaultPromptColumn(row: CharacterRow, prompts: CharacterSystemPrompt[]): Promise<void> {
+    const defaultId = prompts.find((p) => p.isDefault)?.id ?? null;
+    if ((row.defaultSystemPromptId ?? null) !== defaultId) {
+      await this._update(row.id, { defaultSystemPromptId: defaultId }, row);
+      logger.debug('Default system prompt column moved', { characterId: row.id, defaultSystemPromptId: defaultId });
+    }
   }
 
-  /**
-   * Add a system prompt to a character
-   * @param characterId The character ID
-   * @param data The system prompt data (without id, createdAt, updatedAt)
-   * @returns Promise<CharacterSystemPrompt | null> The added prompt if successful
-   */
+  /** Rewrite every prompt whose on-disk `isDefault` flag disagrees with `defaultId`. */
+  private async writeDefaultFlags(
+    ctx: VaultContext,
+    located: LocatedItem<CharacterSystemPrompt>[],
+    defaultId: string | null,
+    skipId?: string,
+  ): Promise<void> {
+    const prompts = CHARACTER_VAULT_LAYOUT.prompts;
+    for (const entry of located) {
+      if (entry.item.id === skipId) continue;
+      const wanted = entry.item.id === defaultId;
+      if (entry.onDisk.isDefault !== wanted) {
+        await rewriteFolderItem(prompts, ctx, entry, { ...entry.onDisk, isDefault: wanted });
+      }
+    }
+  }
+
+  /** Add a system prompt. The first prompt, or one added as default, becomes the default. */
   async addSystemPrompt(
     characterId: string,
     data: Omit<CharacterSystemPrompt, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<CharacterSystemPrompt | null> {
-    let transientId: string | undefined;
-    return this.addToSubArray<CharacterSystemPrompt>(
-      characterId,
-      (c) => c.systemPrompts ?? [],
-      (id, now) => {
-        transientId = id;
-        return { ...data, id, createdAt: now, updatedAt: now };
+    return this.safeQuery(
+      async () => {
+        const target = await this.subCollectionContext(characterId);
+        if (!target) return null;
+        const { row, ctx } = target;
+        const prompts = CHARACTER_VAULT_LAYOUT.prompts;
+        const located = await listFolderItems(prompts, ctx);
+        const now = this.getCurrentTimestamp();
+        const added: CharacterSystemPrompt = {
+          ...data,
+          id: this.generateId(),
+          isDefault: !!data.isDefault || located.length === 0,
+          createdAt: now,
+          updatedAt: now,
+        };
+        if (added.isDefault) await this.writeDefaultFlags(ctx, located, added.id);
+        await addFolderItem(prompts, ctx, added);
+        const after = added.isDefault
+          ? [...located.map((l) => ({ ...l.item, isDefault: false })), added]
+          : [...located.map((l) => l.item), added];
+        await this.syncDefaultPromptColumn(row, after);
+        return added;
       },
-      (items) => this.systemPromptsPatch(items, transientId),
       'Error adding system prompt',
-      { promptName: data.name },
-      (existingItems, newItem) => {
-        if (data.isDefault || existingItems.length === 0) {
-          existingItems.forEach((p) => { p.isDefault = false; });
-          newItem.isDefault = true;
-        }
-      }
+      { characterId, promptName: data.name }
     );
   }
 
-  /**
-   * Update a system prompt
-   */
+  /** Update a system prompt; a name change renames its file and keeps its id. */
   async updateSystemPrompt(
     characterId: string,
     promptId: string,
     data: Partial<Omit<CharacterSystemPrompt, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<CharacterSystemPrompt | null> {
-    return this.updateInSubArray<CharacterSystemPrompt>(
-      characterId,
-      promptId,
-      (c) => c.systemPrompts ?? [],
-      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
-      (items) => this.systemPromptsPatch(items),
-      'Error updating system prompt',
-      { promptId },
-      (items, _index, updated) => {
-        if (data.isDefault) {
-          items.forEach((p) => { p.isDefault = false; });
-          updated.isDefault = true;
+    return this.safeQuery(
+      async () => {
+        const target = await this.subCollectionContext(characterId);
+        if (!target) return null;
+        const { row, ctx } = target;
+        const prompts = CHARACTER_VAULT_LAYOUT.prompts;
+        const located = await listFolderItems(prompts, ctx);
+        const current = located.find((l) => l.item.id === promptId);
+        if (!current) {
+          logger.warn('System prompt not found for update', { characterId, promptId });
+          return null;
         }
-      }
+        const updated: CharacterSystemPrompt = {
+          ...current.item,
+          ...data,
+          id: current.item.id,
+          createdAt: current.item.createdAt,
+          updatedAt: this.getCurrentTimestamp(),
+        };
+        if (data.isDefault) await this.writeDefaultFlags(ctx, located, promptId, promptId);
+        await rewriteFolderItem(prompts, ctx, current, updated);
+        const after = located.map((l) =>
+          l.item.id === promptId ? updated : data.isDefault ? { ...l.item, isDefault: false } : l.item,
+        );
+        await this.syncDefaultPromptColumn(row, CHARACTER_VAULT_LAYOUT.prompts.normalize(after));
+        return updated;
+      },
+      'Error updating system prompt',
+      { characterId, promptId }
     );
   }
 
-  /**
-   * Delete a system prompt from a character
-   */
+  /** Delete a system prompt; if it was the default, the first remaining prompt takes over. */
   async deleteSystemPrompt(characterId: string, promptId: string): Promise<boolean> {
-    return this.removeFromSubArray<CharacterSystemPrompt>(
-      characterId,
-      promptId,
-      (c) => c.systemPrompts ?? [],
-      (items) => this.systemPromptsPatch(items),
-      'Error deleting system prompt',
-      (remaining) => {
-        if (remaining.length > 0 && !remaining.some((p) => p.isDefault)) {
-          remaining[0].isDefault = true;
+    return this.safeQuery(
+      async () => {
+        const target = await this.subCollectionContext(characterId);
+        if (!target) return false;
+        const { row, ctx } = target;
+        const prompts = CHARACTER_VAULT_LAYOUT.prompts;
+        const located = await listFolderItems(prompts, ctx);
+        const doomed = located.find((l) => l.item.id === promptId);
+        if (!doomed) {
+          logger.warn('System prompt not found for removal', { characterId, promptId });
+          return false;
         }
-      }
+        await removeFolderItem(prompts, ctx, doomed);
+        const remaining = located.filter((l) => l !== doomed);
+        if (doomed.item.isDefault && remaining.length > 0 && !remaining.some((l) => l.onDisk.isDefault)) {
+          await this.writeDefaultFlags(ctx, remaining, remaining[0].item.id);
+        }
+        await this.syncDefaultPromptColumn(row, prompts.normalize(remaining.map((l) => l.onDisk)));
+        return true;
+      },
+      'Error deleting system prompt',
+      { characterId, promptId }
     );
   }
 
@@ -837,141 +599,118 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * Set a system prompt as default, or clear the default entirely with `null`.
    *
    * The one chokepoint for "which prompt does this character start with": it
-   * moves the `isDefault` flags and the `defaultSystemPromptId` column together
-   * (see {@link systemPromptsPatch}). Anything that changes the default — the
-   * star in the prompts editor, the picker on the character's Profiles tab —
-   * goes through here rather than writing one of the two by hand.
+   * moves the `isDefault` flags and the `defaultSystemPromptId` column
+   * together. Anything that changes the default — the star in the prompts
+   * editor, the picker on the character's Profiles tab — goes through here.
    */
   async setDefaultSystemPrompt(characterId: string, promptId: string | null): Promise<Character | null> {
     return this.safeQuery(
       async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for setting default prompt', { characterId });
-          return null;
-        }
-
-        const prompts = character.systemPrompts ?? [];
-        const targetIndex = promptId === null ? -1 : prompts.findIndex((p) => p.id === promptId);
-
-        if (promptId !== null && targetIndex === -1) {
+        const target = await this.subCollectionContext(characterId);
+        if (!target) return null;
+        const { row, ctx } = target;
+        const located = await listFolderItems(CHARACTER_VAULT_LAYOUT.prompts, ctx);
+        if (promptId !== null && !located.some((l) => l.item.id === promptId)) {
           logger.warn('System prompt not found', { characterId, promptId });
           return null;
         }
-
-        const now = this.getCurrentTimestamp();
-        prompts.forEach((p, i) => {
-          p.isDefault = i === targetIndex;
-          p.updatedAt = now;
-        });
-
-        return this.update(characterId, this.systemPromptsPatch(prompts));
+        await this.writeDefaultFlags(ctx, located, promptId);
+        await this.syncDefaultPromptColumn(
+          row,
+          located.map((l) => ({ ...l.item, isDefault: l.item.id === promptId })),
+        );
+        return this.findById(characterId);
       },
       'Error setting default system prompt',
       { characterId, promptId }
     );
   }
 
-  // ============================================================================
-  // SCENARIO OPERATIONS
-  // ============================================================================
-
-  /**
-   * Add a scenario to a character
-   * @param characterId The character ID
-   * @param data The scenario data (title and content)
-   * @returns Promise<CharacterScenario | null> The added scenario if successful, null if character not found
-   */
+  /** Add a scenario. Its id is real from the start (D5). */
   async addScenario(
     characterId: string,
-    data: { title: string; content: string; archived?: boolean }
+    data: { title: string; content: string; description?: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
-    // A vault-backed character re-keys each scenario from its file path when
-    // the vault is read back, so the id minted below is transient. Callers
-    // (the create route, and through it the Scenario Builder's picker
-    // selection) need the id a later read will return — bug 165. Note the
-    // projected ids already present, add, then re-read and return the new one.
-    const before = await this.findById(characterId);
-    const priorIds = new Set((before?.scenarios ?? []).map((s) => s.id));
-    const added = await this.addToSubArray<CharacterScenario>(
-      characterId,
-      (c) => c.scenarios ?? [],
-      (id, now) => ({
-        id,
-        title: data.title,
-        content: data.content,
-        // Omission means active; never persist an explicit `archived: false`.
-        ...(data.archived === true && { archived: true }),
-        createdAt: now,
-        updatedAt: now,
-      }),
-      (items) => ({ scenarios: items }),
+    return this.safeQuery(
+      async () => {
+        const target = await this.subCollectionContext(characterId);
+        if (!target) return null;
+        const now = this.getCurrentTimestamp();
+        const added: CharacterScenario = {
+          id: this.generateId(),
+          title: data.title,
+          content: data.content,
+          ...(data.description !== undefined && data.description.trim().length > 0 && { description: data.description }),
+          // Omission means active; never persist an explicit `archived: false`.
+          ...(data.archived === true && { archived: true }),
+          createdAt: now,
+          updatedAt: now,
+        };
+        await addFolderItem(CHARACTER_VAULT_LAYOUT.scenarios, target.ctx, added);
+        return added;
+      },
       'Error adding scenario',
-      { title: data.title }
+      { characterId, title: data.title }
     );
-    if (!added) return null;
-    const after = await this.findById(characterId);
-    const fresh = (after?.scenarios ?? []).filter((s) => !priorIds.has(s.id));
-    const projected =
-      fresh.find((s) => s.title === data.title) ?? (fresh.length === 1 ? fresh[0] : undefined);
-    if (projected && projected.id !== added.id) {
-      logger.debug('addScenario: returning the vault-projected scenario id', {
-        characterId,
-        transientId: added.id,
-        projectedId: projected.id,
-      });
-    }
-    return projected ?? added;
   }
 
-  /**
-   * Update a scenario on a character
-   * @param characterId The character ID
-   * @param scenarioId The scenario ID
-   * @param data Partial scenario data to update (title and/or content)
-   * @returns Promise<CharacterScenario | null> The updated scenario if found, null otherwise
-   */
+  /** Update a scenario; a title change renames its file and keeps its id. */
   async updateScenario(
     characterId: string,
     scenarioId: string,
-    data: { title?: string; content?: string; archived?: boolean }
+    data: { title?: string; content?: string; description?: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
-    return this.updateInSubArray<CharacterScenario>(
-      characterId,
-      scenarioId,
-      (c) => c.scenarios ?? [],
-      (existing, now) => {
-        const { archived: _dropped, ...rest } = existing;
-        const archived = data.archived ?? existing.archived;
-        return {
+    return this.safeQuery(
+      async () => {
+        const target = await this.subCollectionContext(characterId);
+        if (!target) return null;
+        const scenarios = CHARACTER_VAULT_LAYOUT.scenarios;
+        const located = await listFolderItems(scenarios, target.ctx);
+        const current = located.find((l) => l.item.id === scenarioId);
+        if (!current) {
+          logger.warn('Scenario not found for update', { characterId, scenarioId });
+          return null;
+        }
+        const { archived: _archived, description: _description, ...rest } = current.item;
+        const archived = data.archived ?? current.item.archived;
+        const description = data.description ?? current.item.description;
+        const updated: CharacterScenario = {
           ...rest,
-          ...data,
+          ...(data.title !== undefined && { title: data.title }),
+          ...(data.content !== undefined && { content: data.content }),
+          ...(description !== undefined && description.trim().length > 0 && { description }),
           // Omission means active; drop the key rather than writing `false`.
-          ...(archived === true ? { archived: true } : {}),
-          id: existing.id,
-          createdAt: existing.createdAt,
-          updatedAt: now,
+          ...(archived === true && { archived: true }),
+          id: current.item.id,
+          createdAt: current.item.createdAt,
+          updatedAt: this.getCurrentTimestamp(),
         };
+        await rewriteFolderItem(scenarios, target.ctx, current, updated);
+        return updated;
       },
-      (items) => ({ scenarios: items }),
       'Error updating scenario',
-      { scenarioId }
+      { characterId, scenarioId }
     );
   }
 
-  /**
-   * Remove a scenario from a character
-   * @param characterId The character ID
-   * @param scenarioId The scenario ID
-   * @returns Promise<boolean> True if scenario was removed, false if not found
-   */
+  /** Remove a scenario. */
   async removeScenario(characterId: string, scenarioId: string): Promise<boolean> {
-    return this.removeFromSubArray<CharacterScenario>(
-      characterId,
-      scenarioId,
-      (c) => c.scenarios ?? [],
-      (items) => ({ scenarios: items }),
-      'Error removing scenario'
+    return this.safeQuery(
+      async () => {
+        const target = await this.subCollectionContext(characterId);
+        if (!target) return false;
+        const scenarios = CHARACTER_VAULT_LAYOUT.scenarios;
+        const located = await listFolderItems(scenarios, target.ctx);
+        const doomed = located.find((l) => l.item.id === scenarioId);
+        if (!doomed) {
+          logger.warn('Scenario not found for removal', { characterId, scenarioId });
+          return false;
+        }
+        await removeFolderItem(scenarios, target.ctx, doomed);
+        return true;
+      },
+      'Error removing scenario',
+      { characterId, scenarioId }
     );
   }
 }

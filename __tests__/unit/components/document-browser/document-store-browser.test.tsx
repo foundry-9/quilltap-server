@@ -190,4 +190,37 @@ describe('DocumentStoreBrowser', () => {
     expect(screen.queryByText('Upload here')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Folder actions for Drafts' })).toBeNull()
   })
+
+  it('lays the folder out as picture tiles, remembers the choice, and picks from a tile', async () => {
+    serve((method, path) => {
+      if (path === '/api/v1/mount-points/store-a') return { mountPoint: store('store-a', 'Archive') }
+      if (path === '/api/v1/mount-points/store-a/files') {
+        return { files: [...FILES, file('portrait.webp', { fileType: 'image', originalMimeType: 'image/webp' })], folders: ['Drafts'] }
+      }
+      return { mountPoints: [] }
+    })
+    const onPickFile = jest.fn()
+    renderWithQuery(<DocumentStoreBrowser storeId="store-a" onPickFile={onPickFile} />)
+    await screen.findByText('notes.md')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pictures' }))
+    expect(screen.getByRole('button', { name: 'Pictures' })).toHaveAttribute('aria-pressed', 'true')
+    expect(window.localStorage.getItem('quilltap.documentBrowser.layout')).toBe('grid')
+    expect(screen.queryAllByTestId('document-row')).toHaveLength(0)
+    const tiles = screen.getAllByTestId('document-tile')
+    expect(tiles.map((t) => t.getAttribute('data-path'))).toEqual(['notes.md', 'portrait.webp'])
+    // An image shows itself; a document gets its glyph. Name and date ride on the tile.
+    expect(tiles[1].querySelector('img')?.getAttribute('src')).toContain('/files/portrait.webp?raw=1')
+    expect(tiles[0].querySelector('img')).toBeNull()
+    expect(within(tiles[0]).getByText('notes.md')).toBeInTheDocument()
+    expect(within(tiles[0]).getByText(/2026/)).toBeInTheDocument()
+    // Folders are tiles too.
+    expect(within(screen.getByTestId('documents-grid')).getByRole('button', { name: 'Open folder Drafts' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open portrait.webp' }))
+    expect(onPickFile).toHaveBeenCalledWith(expect.objectContaining({ relativePath: 'portrait.webp' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'List' }))
+    expect(screen.getAllByTestId('document-row').length).toBeGreaterThan(0)
+  })
 })

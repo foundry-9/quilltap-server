@@ -44,6 +44,8 @@ import type {
 import type { AttachedFile } from './types'
 import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 import { countEstablishedFacts, frameEstablishedFacts, isEstablishedFact } from '@/lib/chat/established-fact';
+import { resolveToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils'
+import { DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types'
 
 const logger = createServiceLogger('ContextBuilderService')
 
@@ -119,8 +121,11 @@ export interface BuildMessageContextOptions {
    * note (`buildTurnYieldInstruction`). Ephemeral, never persisted.
    */
   offerYield?: boolean
-  /** `'bid'` for a storyteller bid's dry build (see `BuildContextOptions.purpose`). */
-  purpose?: 'turn' | 'bid'
+  /**
+   * `'bid'` for a storyteller bid's dry build, `'opening'` for a chat's first
+   * line (see `BuildContextOptions.purpose`).
+   */
+  purpose?: 'turn' | 'bid' | 'opening'
   /** The storyteller bid or plan section, appended as the last trailing section. */
   storytellerSection?: string
   /**
@@ -184,6 +189,88 @@ export async function findAttachedFiles(
 }
 
 /**
+ * One turn's loaded attachments made ready for a request: images tagged as
+ * this turn's uploads and passed on whole (`applyImageTransportBudget` decides
+ * capability, count and bytes for them once, on the final array, for whichever
+ * profile is called); everything else decided here — text inlined into the
+ * user's own message, a natively supported type kept, a failed fallback
+ * dropped rather than tripping the provider's rejection.
+ *
+ * The Salon's `loadAndProcessFiles` and the Brahma Console both call it.
+ */
+export async function prepareTurnAttachments(
+  fileAttachments: Awaited<ReturnType<typeof loadChatFilesForLLM>>,
+  args: {
+    connectionProfile: ConnectionProfile
+    repos: ReturnType<typeof getRepositories>
+    userId: string
+    chatId: string
+    /** The file's metadata, for the fallback (defaults to the attachment itself). */
+    metadataFor?: (fileAttachment: Awaited<ReturnType<typeof loadChatFilesForLLM>>[number], index: number) => AttachedFile | undefined
+    /** Epoch ms the images are tagged with (default now). */
+    uploadedAt?: number
+    /** This turn's uploads (default) or an earlier turn's, carried again. */
+    origin?: 'upload' | 'rehydrated'
+  },
+): Promise<{
+  attachmentsToSend: Awaited<ReturnType<typeof loadChatFilesForLLM>>
+  fallbackResults: FallbackResult[]
+  messageContentPrefix: string
+}> {
+  const fallbackResults: FallbackResult[] = []
+  let messageContentPrefix = ''
+  const uploadedAt = args.uploadedAt ?? Date.now()
+  const attachmentsToSend: typeof fileAttachments = []
+
+  for (let i = 0; i < fileAttachments.length; i++) {
+    const fileAttachment = fileAttachments[i]
+
+    if (isImageFile(fileAttachment.mimeType)) {
+      attachmentsToSend.push(
+        tagForTransport(fileAttachment, { origin: args.origin ?? 'upload', createdAt: uploadedAt, describable: true }),
+      )
+      continue
+    }
+
+    const fileMetadata: AttachedFile = args.metadataFor?.(fileAttachment, i) ?? {
+      id: fileAttachment.id,
+      filepath: fileAttachment.filepath ?? `/api/v1/files/${fileAttachment.id}`,
+      filename: fileAttachment.filename,
+      mimeType: fileAttachment.mimeType,
+      size: fileAttachment.size,
+    }
+
+    const fallbackResult = await processFileAttachmentFallback(
+      fileMetadata,
+      fileAttachment,
+      args.connectionProfile,
+      args.repos,
+      args.userId,
+      { chatId: args.chatId }
+    )
+
+    fallbackResults.push(fallbackResult)
+
+    // Add fallback content to message prefix
+    const fallbackPrefix = formatFallbackAsMessagePrefix(fallbackResult)
+    if (fallbackPrefix) {
+      messageContentPrefix += fallbackPrefix
+    }
+
+    // Keep the attachment only when the provider natively supports it
+    // (processFileAttachmentFallback returns type 'unsupported' with no error
+    // in that case). A text result replaces the attachment with prefix text;
+    // 'unsupported' with an error means fallback was attempted and failed —
+    // sending the raw bytes anyway would just trip the provider's rejection.
+    if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
+      attachmentsToSend.push(fileAttachment)
+    }
+  }
+
+  return { attachmentsToSend, fallbackResults, messageContentPrefix }
+}
+
+/**
  * Load and process attached files for a message
  */
 export async function loadAndProcessFiles(
@@ -211,55 +298,16 @@ export async function loadAndProcessFiles(
     { provider: connectionProfile.provider }
   )
 
-  // Process file attachment fallbacks if provider doesn't support them.
-  //
-  // Images are not decided here: they are tagged as this turn's uploads and
-  // passed on whole, and `applyImageTransportBudget` decides capability, count
-  // and bytes for them once, on the final array, for whichever profile is
-  // called. Everything else (text inlining, unsupported types) is decided here,
-  // because its text belongs in the user's own message.
-  const fallbackResults: FallbackResult[] = []
-  let messageContentPrefix = ''
-  const uploadedAt = Date.now()
-  const attachmentsToSend: typeof fileAttachments = []
-
-  for (let i = 0; i < fileAttachments.length; i++) {
-    const fileAttachment = fileAttachments[i]
-    const fileMetadata = attachedFiles.find(f => f.id === fileAttachment.id) ?? attachedFiles[i]
-
-    if (isImageFile(fileAttachment.mimeType)) {
-      attachmentsToSend.push(
-        tagForTransport(fileAttachment, { origin: 'upload', createdAt: uploadedAt, describable: true }),
-      )
-      continue
-    }
-
-    const fallbackResult = await processFileAttachmentFallback(
-      fileMetadata,
-      fileAttachment,
+  const { attachmentsToSend, fallbackResults, messageContentPrefix } = await prepareTurnAttachments(
+    fileAttachments,
+    {
       connectionProfile,
       repos,
       userId,
-      { chatId }
-    )
-
-    fallbackResults.push(fallbackResult)
-
-    // Add fallback content to message prefix
-    const fallbackPrefix = formatFallbackAsMessagePrefix(fallbackResult)
-    if (fallbackPrefix) {
-      messageContentPrefix += fallbackPrefix
-    }
-
-    // Keep the attachment only when the provider natively supports it
-    // (processFileAttachmentFallback returns type 'unsupported' with no error
-    // in that case). A text result replaces the attachment with prefix text;
-    // 'unsupported' with an error means fallback was attempted and failed —
-    // sending the raw bytes anyway would just trip the provider's rejection.
-    if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
-      attachmentsToSend.push(fileAttachment)
-    }
-  }
+      chatId,
+      metadataFor: (fileAttachment, i) => attachedFiles.find(f => f.id === fileAttachment.id) ?? attachedFiles[i],
+    },
+  )
 
   return {
     attachedFiles,
@@ -574,29 +622,28 @@ export async function rehydrateUserAttachments(args: {
 }
 
 /**
- * Number of ASSISTANT messages that must appear *after* a TOOL message before
- * its result body is elided from the outgoing LLM context. At 3 turns the raw
- * payload is replaced with a compact stub; within the last 3 turns it is sent
- * verbatim. Counting ASSISTANT messages is the turn proxy agreed for both
- * interactive (≈1 per turn) and autonomous (all-ASSISTANT) rooms.
- */
-const TOOL_RESULT_VERBATIM_TURNS = 3
-
-/**
  * Render the content string for a single TOOL message in the outgoing context.
+ *
+ * A TOOL message's result body is elided once `verbatimTurns` ASSISTANT
+ * messages follow it: the raw payload becomes a compact stub. Counting
+ * ASSISTANT messages is the turn proxy agreed for both interactive (≈1 per
+ * turn) and autonomous (all-ASSISTANT) rooms. The window is the responding
+ * profile's `toolResultVerbatimTurns` (resolved by the caller through
+ * `resolveToolResultVerbatimTurns`); `0` never elides.
  *
  * @param toolData   Parsed tool payload ({ toolName|tool, result, arguments, … })
  * @param assistantAfter  Number of ASSISTANT messages that follow this TOOL msg
- *                         in the filtered sequence. When ≥ TOOL_RESULT_VERBATIM_TURNS
- *                         the result body is replaced with a compact stub.
+ *                         in the filtered sequence.
+ * @param verbatimTurns   Turns a result stays in full; 0 = never elide.
  * @returns          Formatted content string, role will be USER in the output.
  */
 function renderToolResultContent(
   toolData: { toolName?: string; tool?: string; result?: unknown; arguments?: unknown },
   assistantAfter: number,
+  verbatimTurns: number,
 ): string {
   const toolName = toolData.toolName || toolData.tool || 'Unknown'
-  if (assistantAfter >= TOOL_RESULT_VERBATIM_TURNS) {
+  if (verbatimTurns > 0 && assistantAfter >= verbatimTurns) {
     // Elide: include compact argument summary so context is not opaque.
     let compactArgs = ''
     if (toolData.arguments !== undefined && toolData.arguments !== null) {
@@ -607,7 +654,7 @@ function renderToolResultContent(
         compactArgs = String(toolData.arguments).slice(0, 200)
       }
     }
-    return `[Tool Result: ${toolName}] (args: ${compactArgs}) — result elided (>3 turns old); call again to re-read.`
+    return `[Tool Result: ${toolName}] (args: ${compactArgs}) — result elided (>${verbatimTurns} turns old); call again to re-read.`
   }
   const resultText = toolData.result !== undefined && toolData.result !== null && toolData.result !== ''
     ? String(toolData.result)
@@ -616,11 +663,17 @@ function renderToolResultContent(
 }
 
 /**
- * Build conversation messages for context
+ * Build conversation messages for context.
+ *
+ * `toolResultVerbatimTurns` is how many turns a tool result is sent in full
+ * before it is elided (0 = never); callers pass the responding profile's
+ * value from `resolveToolResultVerbatimTurns`, and it defaults to the
+ * documented default when omitted.
  */
 export function buildConversationMessages(
   existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string }>,
-  isMultiCharacter: boolean
+  isMultiCharacter: boolean,
+  toolResultVerbatimTurns: number = DEFAULT_TOOL_RESULT_VERBATIM_TURNS,
 ): {
   conversationMessages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>
   messagesWithParticipants?: MessageWithParticipant[]
@@ -651,7 +704,7 @@ export function buildConversationMessages(
           const toolData = JSON.parse(msg.content || '{}')
           return {
             role: 'USER' as const,
-            content: renderToolResultContent(toolData, assistantAfter[i]),
+            content: renderToolResultContent(toolData, assistantAfter[i], toolResultVerbatimTurns),
             id: msg.id,
           }
         } catch {
@@ -679,7 +732,7 @@ export function buildConversationMessages(
             const toolData = JSON.parse(msg.content || '{}')
             return {
               role: 'USER' as const,
-              content: renderToolResultContent(toolData, assistantAfter[i]),
+              content: renderToolResultContent(toolData, assistantAfter[i], toolResultVerbatimTurns),
               id: msg.id,
               createdAt: msg.createdAt,
               participantId: null,
@@ -805,91 +858,10 @@ export function selectAttachmentAnchorIndex(
   return -1
 }
 
-/**
- * Anti-chorus content rules for multi-character turns, appended to the system
- * message on BOTH anchor routes (the discipline is about what a turn contains,
- * not who speaks it).
- *
- * Motivated by the "committee meeting" failure mode observed with weaker
- * models: every character opens with a roll-call recap of the prior speakers,
- * endorses all of it, claims "the one thing nobody has named," parrots the
- * cast's coined phrases verbatim, and closes by restating the group's action
- * list. The rules target the *shape* of the chorus rather than specific
- * wording — phrase blocklists alone have proven too weak to hold. Exported for
- * unit testing.
- *
- * The chorus is characters echoing *each other*. Answering the user is not a
- * chorus: an earlier wording banned agreement outright and listed objection
- * among the first reasons to speak, which fed "the probation" — characters who
- * would not simply say yes to the user (docs/developer/features/
- * prompt-trust-the-probation.md §8). Keep warmth and a plain yes as complete turns.
- */
-export const GROUP_SCENE_DISCIPLINE = `GROUP-SCENE DISCIPLINE — the failure mode of a group scene is the chorus: each character recaps what the other characters said, agrees with all of it, and adds one small item shaped like everyone else's. Never join a chorus:
-- Do not open by summarizing or listing what other characters just said. Everyone present heard it. React to at most one specific thing, or simply act.
-- Do not agree-then-add with another character ("X is right — but there's one thing nobody has named"). If all you have is agreement with another character plus a small addendum, give the addendum alone in a sentence or two — or pass the turn if passing is offered. This is about echoing the cast, not about answering the user: a plain yes to the user, doing what the user asked, or a laugh at the user's joke is a complete turn.
-- Never reuse another character's metaphors, images, or coined phrases. A striking phrase someone else used in this scene is spent; repeating it is a defect, not a callback. If several characters have already said much the same thing, saying it again in your own accent adds nothing.
-- Do not restate the plan, the task list, or the group's conclusions. They are already on the record; a speech re-affirming what is decided adds nothing.
-- Speak to change something: new information, an action actually taken, a joke, warmth, a question, a genuine objection, a refusal. Re-pledging your commitment is not a turn.
-- Vary register and length. Most real conversational turns are one to three sentences. A long speech is an event, not a default — and never the second one in a row.`
-
-/**
- * In multi-character chats, anchor each reply to the responding character and
- * forbid it from writing anyone else's turn. Two routes, chosen per profile by
- * `multiCharacterPrefill`:
- *
- *   - **prefill** — append an assistant `[Name]` message. The model
- *     structurally continues only that character's line; the leading tag is
- *     stripped downstream by `stripCharacterNamePrefix()`.
- *   - **prose** — append an instruction to the system message instead, leaving
- *     the conversation ending on a user message. We deliberately do NOT tell
- *     the model to emit a `[Name]` tag — that both contradicts the always-on
- *     Identity Reminder ("do not prefix with your name") and teaches weaker
- *     models the very screenplay format they then run away with, writing the
- *     whole cast's turns. Identity is anchored in prose and foreign speaker
- *     tags forbidden outright.
- *
- * Both routes also append {@link GROUP_SCENE_DISCIPLINE} to the system message:
- * the identity anchor keeps a turn attributed to one character, but says
- * nothing about content, and with the previous turns as the strongest style
- * examples in context, models converge into the recap-endorse-echo chorus the
- * discipline block forbids.
- *
- * `finalizeMessageResponse()` truncates a response at the first foreign
- * `[Name]`/`Name:` tag as a structural backstop either way.
- *
- * Mutates `formattedMessages` in place. Exported for unit testing.
- */
-export function applyMultiCharacterTurnAnchor(
-  formattedMessages: Array<{ role: string; content: string; thoughtSignature?: string; name?: string }>,
-  characterName: string,
-  usePrefill: boolean
-): void {
-  const systemIdx = formattedMessages.findIndex(m => m.role === 'system')
-
-  const systemAdditions: string[] = []
-  if (!usePrefill) {
-    systemAdditions.push(
-      `IMPORTANT — this is a multi-character scene. Respond as ${characterName} and ONLY ${characterName}: write only ${characterName}'s own dialogue, actions, and thoughts for this single turn, then stop. Never write, narrate, quote, or continue another participant's turn, and never label any text with another participant's name (no "[Name]" or "Name:" speaker tags for anyone but ${characterName}). Output only ${characterName}'s contribution.`
-    )
-  }
-  systemAdditions.push(GROUP_SCENE_DISCIPLINE)
-
-  if (systemIdx >= 0) {
-    formattedMessages[systemIdx] = {
-      ...formattedMessages[systemIdx],
-      content: formattedMessages[systemIdx].content + '\n\n' + systemAdditions.join('\n\n'),
-    }
-  }
-
-  if (usePrefill) {
-    formattedMessages.push({
-      role: 'assistant',
-      content: `[${characterName}]`,
-      thoughtSignature: undefined,
-      name: undefined,
-    })
-  }
-}
+// The multi-character turn anchor lives in lib/chat/multi-character-anchor.ts
+// so the failover service can re-anchor a substitute without importing this module (#217).
+export { GROUP_SCENE_DISCIPLINE, applyMultiCharacterTurnAnchor } from '@/lib/chat/multi-character-anchor'
+import { applyMultiCharacterTurnAnchor } from '@/lib/chat/multi-character-anchor'
 
 /**
  * Record-only: a transcript row that exists for the operator and must never
@@ -1132,9 +1104,16 @@ export async function buildMessageContext(
     : filteredExistingMessages
 
   // Build conversation messages
+  const toolResultVerbatimTurns = resolveToolResultVerbatimTurns(connectionProfile)
+  logger.debug('Building conversation history', {
+    chatId: chat.id,
+    profileId: connectionProfile.id,
+    toolResultVerbatimTurns,
+  })
   const { conversationMessages, messagesWithParticipants: builtWithParticipants } = buildConversationMessages(
     messagesForConversation,
-    isMultiCharacter
+    isMultiCharacter,
+    toolResultVerbatimTurns,
   )
   // Mark fact rows on the multi-character sequence: everybody knows an
   // established fact, so the history-access cut must not hide one from a seat
@@ -1163,8 +1142,10 @@ export async function buildMessageContext(
     )
   )
 
-  // Generate memory recap on first message or character join, unless explicitly overridden
-  const shouldGenerateRecap = requestMemoryRecap ?? isCharacterFirstResponse
+  // Generate memory recap on first message or character join, unless explicitly
+  // overridden. A chat's opening line is always a first response: the staff's
+  // opening whispers already sit in history, which is why it is named outright.
+  const shouldGenerateRecap = requestMemoryRecap ?? (options.purpose === 'opening' || isCharacterFirstResponse)
 
   // Get timestamp config from chat or user defaults
   const timestampConfig = chat.timestampConfig || chatSettings?.defaultTimestampConfig || null

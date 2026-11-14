@@ -16,6 +16,16 @@ export async function safeJsonParse<T = unknown>(response: Response): Promise<T>
 }
 
 /**
+ * The message to show for an error body. A validation failure's `error` is
+ * only the category ("Validation error"); its `message` says what was wrong.
+ */
+export function readErrorMessage(data: unknown): string | undefined {
+  const body = data as { error?: string; message?: string } | null | undefined
+  if (body?.error === 'Validation error' && body.message) return body.message
+  return body?.error
+}
+
+/**
  * Fetch JSON with safe error handling
  * Properly handles cases where the server returns HTML error pages
  */
@@ -31,7 +41,7 @@ export async function fetchJson<T = unknown>(
       return {
         ok: false,
         status: response.status,
-        error: (data as { error?: string })?.error || `Request failed with status ${response.status}`,
+        error: readErrorMessage(data) || `Request failed with status ${response.status}`,
       }
     }
 

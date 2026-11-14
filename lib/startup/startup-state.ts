@@ -7,10 +7,12 @@
  * The startup sequence is:
  * 1. 'pending' - Server just started
  * 2. 'migrations' - Running startup migrations (CRITICAL - must complete)
- * 3. 'seeding' - Seeding initial data (first startup only, non-blocking)
- * 4. 'plugin-updates' - Auto-upgrading npm-installed plugins (non-blocking)
- * 5. 'plugins' - Plugin initialization in progress
- * 6. 'file-storage' - File storage initialization in progress
+ * 3. 'plugin-updates' - Auto-upgrading npm-installed plugins (non-blocking)
+ * 4. 'plugins' - Plugin initialization in progress
+ * 5. 'file-storage' - File storage initialization in progress
+ * 6. 'seeding' - Seeding initial data (first startup only, non-blocking;
+ *    after file storage and the structural-table check, so the sample
+ *    characters' vaults have their tables)
  * 7. 'complete' - All initialization complete
  * 8. 'failed' - Initialization failed (server still runs but may have issues)
  *

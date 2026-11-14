@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-11-12
+
+### Added
+
+- `CheapModelConfig.resolveDefaultModel?(apiKey, baseUrl)` — lets a provider name its background model at run time (for example the newest model in its low-cost family, read from its live model list). The host caches the answer and prefers it over `defaultModel`.
+
+### Changed
+
+- `CheapModelConfig.defaultModel` and `recommendedModels` are now optional, so a provider with no model name that stays valid across releases need not hard-code one.
+- `PLUGIN_TYPES_VERSION` re-synced to the package version.
+
 ## [2.10.0] - 2026-10-29
 
 ### Added

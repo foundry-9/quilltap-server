@@ -1,6 +1,6 @@
 # Refactor 4.12 — The browser family, finished: the remaining Wardrobe / Inventory pairs and the last legacy browser
 
-**Status:** Phases 1–3 done (2026-11-03). Phases 4 and 5 are unblocked: the tier walk (spec 4) settled the project tier, and specs 7 and 2 are done. Proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). Sequel to the six-phase [folder browser](complete/folder-browser.md), whose own "left for later" list this picks up. The server-side tier resolver (`location.ts` ×3) is the [tier-walk spec](refactor-4-12-tier-walk.md)'s family A and is not repeated here.
+**Status:** Phases 1–3 done (2026-11-03). Phases 4 and 5 are unblocked: the tier walk (spec 4) settled the project tier, and specs 7 and 2 are done. Proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). Sequel to the six-phase [folder browser](complete/folder-browser.md), whose own "left for later" list this picks up. The server-side tier resolver (`location.ts` ×3) is the [tier-walk spec](complete/refactor-4-12-tier-walk.md)'s family A and is not repeated here.
 
 ## 1. The problem
 
@@ -81,8 +81,8 @@ Not a refactor of the browser family so much as the end of the `files` table as 
 
 **Prerequisites.** Two other 4.12 specs land first. Both are done: spec 7 (#138) and spec 2 (#140).
 
-- [Spec 7, one watcher core](refactor-4-12-native-watcher-core.md) (**done**). Before it, the `files/` watcher had no polling fallback: when a recursive `fs.watch` was refused it logged a warning and stayed off, leaving the manual *Sync* button as the only recovery. It now inherits the fallback, which is what lets decision 4 drop the button.
-- [Spec 2, one document core](refactor-4-12-document-core.md) (**done**). The editor and `doc_read_file` read an uploaded blob through two different readers. Once `/files` is a store browser, opening an upload goes through that path, so the divergence should be settled first.
+- [Spec 7, one watcher core](complete/refactor-4-12-native-watcher-core.md) (**done**). Before it, the `files/` watcher had no polling fallback: when a recursive `fs.watch` was refused it logged a warning and stayed off, leaving the manual *Sync* button as the only recovery. It now inherits the fallback, which is what lets decision 4 drop the button.
+- [Spec 2, one document core](complete/refactor-4-12-document-core.md) (**done**). The editor and `doc_read_file` read an uploaded blob through two different readers. Once `/files` is a store browser, opening an upload goes through that path, so the divergence should be settled first.
 
 **Decisions.**
 

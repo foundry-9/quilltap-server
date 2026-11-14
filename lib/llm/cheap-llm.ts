@@ -23,10 +23,8 @@ import {
   getAverageCostPer1M,
 } from './pricing'
 import { getCheapModelConfig } from '@/lib/plugins/provider-registry'
-import {
-  LEGACY_CHEAPEST_MODEL_MAP,
-  LEGACY_RECOMMENDED_CHEAP_MODELS,
-} from './fallback-data'
+import { getResolvedCheapModel } from './cheap-model-resolver'
+import { LEGACY_CHEAPEST_MODEL_MAP } from './fallback-data'
 
 /**
  * Strategy for selecting the cheap LLM provider
@@ -45,6 +43,12 @@ export interface CheapLLMConfig {
   defaultCheapProfileId?: string
   /** Whether to fall back to local models (Ollama) if available */
   fallbackToLocal: boolean
+  /**
+   * The Green Room's own profile for choosing opening outfits (`llm_choose`).
+   * Unset = the cheap LLM. Read only by `selectGreenRoomLLM`
+   * (`lib/chat/opening/green-room/model.ts`); the ladder ignores it.
+   */
+  outfitSelectionProfileId?: string
 }
 
 /**
@@ -150,21 +154,9 @@ export function buildCheapLLMConfig(
     fallbackToLocal: settings.fallbackToLocal,
     userDefinedProfileId: settings.userDefinedProfileId ?? undefined,
     defaultCheapProfileId: settings.defaultCheapProfileId ?? undefined,
+    outfitSelectionProfileId: settings.outfitSelectionProfileId ?? undefined,
   }
 }
-
-/**
- * Mapping of providers to their cheapest models (legacy fallback)
- * @see getCheapModelConfig() from provider-registry for plugin-based resolution
- */
-
-/**
- * Models that are known to work well for cheap LLM tasks
- * Re-exported from fallback-data.ts for backward compatibility
- *
- * @deprecated Use getCheapModelConfig() from provider-registry instead
- */
-export const RECOMMENDED_CHEAP_MODELS = LEGACY_RECOMMENDED_CHEAP_MODELS
 
 /**
  * Default cheap LLM configuration
@@ -175,29 +167,43 @@ export const DEFAULT_CHEAP_LLM_CONFIG: CheapLLMConfig = {
 }
 
 /**
- * Gets the cheapest model for a given provider
- * First checks the plugin registry, falls back to hardcoded map.
+ * Gets the cheapest model for a given provider.
+ *
+ * Order: the model the provider named at run time (`resolveDefaultModel`,
+ * cached by `cheap-model-resolver`, needs the profile for its key), then the
+ * plugin's static `defaultModel`, then the legacy map. Null when none of them
+ * knows one — a provider that resolves at run time and has not answered yet.
  */
-export function getCheapestModel(provider: Provider): string {
-  // First try the plugin registry
+export function getCheapestModel(
+  provider: Provider,
+  profile?: Pick<ConnectionProfile, 'provider' | 'apiKeyId' | 'baseUrl' | 'userId'>,
+): string | null {
+  if (profile) {
+    const resolved = getResolvedCheapModel(profile)
+    if (resolved) return resolved
+  }
+
   const registryConfig = getCheapModelConfig(provider)
   if (registryConfig?.defaultModel) {
     return registryConfig.defaultModel
   }
 
-  // Fall back to hardcoded map
-  return LEGACY_CHEAPEST_MODEL_MAP[provider]
+  return LEGACY_CHEAPEST_MODEL_MAP[provider] ?? null
 }
 
 /**
  * Selects the appropriate cheap LLM provider based on configuration
  *
- * Selection priority (per CHEAP-LLM.md spec):
+ * Selection priority:
  * 1. Global defaultCheapProfileId if set
  * 2. USER_DEFINED strategy with userDefinedProfileId
- * 3. Any profile with isCheap flag set to true
+ * 3. USER_DEFINED with no usable profile chosen: any profile flagged isCheap
  * 4. LOCAL_FIRST or fallbackToLocal using Ollama
  * 5. Fall back to current profile's cheapest model variant
+ *
+ * The strategy the operator picked is honoured: a profile flagged isCheap is
+ * a User Defined candidate, never an override of Provider Cheapest or Local
+ * First (which it used to be, silently, whatever the settings card said).
  *
  * @param currentProfile - The current connection profile being used for chat
  * @param config - Cheap LLM configuration
@@ -236,8 +242,12 @@ export function getCheapLLMProvider(
     })
   }
 
-  // Priority 3: Use any profile marked as "cheap" (isCheap flag)
-  const cheapProfiles = availableProfiles.filter(p => p.isCheap === true)
+  // Priority 3: User Defined without a usable chosen profile — any profile
+  // marked "cheap" (isCheap flag) stands in. Only for USER_DEFINED: the other
+  // strategies say what they want, and the flag must not overrule them.
+  const cheapProfiles = config.strategy === 'USER_DEFINED'
+    ? availableProfiles.filter(p => p.isCheap === true)
+    : []
   if (cheapProfiles.length > 0) {
     // Prefer local (Ollama) cheap profiles for zero cost
     const localCheapProfile = cheapProfiles.find(p => p.provider === 'OLLAMA')
@@ -260,9 +270,13 @@ export function getCheapLLMProvider(
     // we should still fall through to the cheapest provider
   }
 
-  // Priority 5: No dedicated cheap LLM available - warn and use current profile
-  // Toast warning that no cheap LLM is configured
-  if (onNoCheapLLM) {
+  // Priority 5: the provider's cheapest model, on the current profile.
+  // Under PROVIDER_CHEAPEST (the default, and the setup wizard's "Auto") this
+  // is the chosen path, not a fallback: no toast, and a debug line rather than
+  // a warning on every background call. Any other strategy that reaches here
+  // fell through, which is worth the toast and the warning.
+  const chosenPath = config.strategy === 'PROVIDER_CHEAPEST'
+  if (onNoCheapLLM && !chosenPath) {
     onNoCheapLLM()
   }
 
@@ -273,14 +287,32 @@ export function getCheapLLMProvider(
   }
 
   // Map current provider to its cheapest variant (fallback)
-  const cheapModel = getCheapestModel(currentProfile.provider)
+  const cheapModel = getCheapestModel(currentProfile.provider, currentProfile)
 
-  logger.warn('[CheapLLM] Using FALLBACK to cheapest model for current provider', {
+  // A provider that names its cheap model at run time may not have answered
+  // yet (first background call of the process). The profile's own model is
+  // certainly available, so use it this once; the lookup is under way.
+  if (!cheapModel) {
+    logger.debug('[CheapLLM] Cheap model not known yet; using the profile\'s own model', {
+      context: 'getCheapLLMProvider',
+      provider: currentProfile.provider,
+      currentProfileModel: currentProfile.modelName,
+    })
+    return selectionFromProfile(currentProfile)
+  }
+
+  const logContext = {
     context: 'getCheapLLMProvider',
+    strategy: config.strategy,
     provider: currentProfile.provider,
     cheapModel,
     currentProfileModel: currentProfile.modelName,
-  })
+  }
+  if (chosenPath) {
+    logger.debug('[CheapLLM] Using the provider\'s cheapest model', logContext)
+  } else {
+    logger.warn('[CheapLLM] Using FALLBACK to cheapest model for current provider', logContext)
+  }
 
   // The current profile, but on its provider's cheapest model.
   return { ...selectionFromProfile(currentProfile), modelName: cheapModel }

@@ -2,7 +2,6 @@
  * Chats API v1 - Document Mode Actions
  *
  * Handles document mode actions for Scriptorium Phase 3.5:
- * - active-document: Get the active document for a chat
  * - open-document: Open a document alongside the chat
  * - close-document: Close the document pane
  * - read-document: Read file content for the document editor
@@ -356,35 +355,6 @@ async function refreshDocumentMode(
 }
 
 /**
- * Get an active document for a chat (the earliest-opened). Retained for the
- * legacy single-pane route; the workspace uses `open-documents` instead.
- */
-export async function handleActiveDocument(
-  chatId: string,
-  { repos }: RequestContext
-): Promise<NextResponse> {
-  try {
-    const doc = await repos.chatDocuments.findActiveForChat(chatId);
-
-    return successResponse({
-      document: doc ? {
-        id: doc.id,
-        filePath: doc.filePath,
-        scope: doc.scope,
-        mountPoint: doc.mountPoint,
-        displayTitle: doc.displayTitle,
-      } : null,
-    });
-  } catch (error) {
-    logger.error('Failed to get active document', {
-      chatId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return serverError('Failed to get active document');
-  }
-}
-
-/**
  * List every open document for a chat (oldest-opened first). The tabbed
  * workspace calls this on mount to restore one editor pane/tab per open
  * document. Content is fetched separately per document via `read-document`.
@@ -524,6 +494,8 @@ export async function handleCloseDocument(
 
     return successResponse({ success: true });
   } catch (error) {
+    // A validation failure is the middleware's 400, not a 500 (#166).
+    if (error instanceof z.ZodError) throw error;
     logger.error('Failed to close document', {
       chatId,
       error: error instanceof Error ? error.message : String(error),

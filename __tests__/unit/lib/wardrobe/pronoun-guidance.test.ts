@@ -19,7 +19,7 @@ const { standardPronounSubjectOf, STANDARD_PRONOUN_SUBJECTS } =
 const { buildWardrobeItemFile } =
   require('@/lib/mount-index/character-vault') as typeof import('@/lib/mount-index/character-vault')
 const { parseWardrobeItemFile } =
-  require('@/lib/database/repositories/vault-overlay/parsers') as typeof import('@/lib/database/repositories/vault-overlay/parsers')
+  require('@/lib/wardrobe/vault-parsers') as typeof import('@/lib/wardrobe/vault-parsers')
 const { wardrobeItemFieldsSchema } =
   require('@/lib/schemas/wardrobe.types') as typeof import('@/lib/schemas/wardrobe.types')
 

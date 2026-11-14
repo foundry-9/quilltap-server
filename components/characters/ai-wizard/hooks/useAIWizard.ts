@@ -6,9 +6,10 @@
  * State management for the AI character wizard.
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { filterProfilesBySupportedMimeType, profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import type { ConnectionProfile } from '@/lib/schemas/types'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import type {
   WizardStep,
   DescriptionSourceType,
@@ -38,9 +39,15 @@ export function useAIWizard({
 }: UseAIWizardProps) {
   // State
   const [currentStep, setCurrentStep] = useState<WizardStep>(1)
-  const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
-  const [loadingProfiles, setLoadingProfiles] = useState(true)
-  const [primaryProfileId, setPrimaryProfileId] = useState('')
+  const {
+    data: profiles = [],
+    isLoading: loadingProfiles,
+    isError: profilesFailed,
+  } = useConnectionProfilesQuery<ConnectionProfile>()
+  const [pickedProfileId, setPickedProfileId] = useState('')
+  // Until the user picks one, the default profile (else the first) is in force.
+  const primaryProfileId = pickedProfileId || (profiles.find((p) => p.isDefault) ?? profiles[0])?.id || ''
+  const setPrimaryProfileId = setPickedProfileId
   const [descriptionSource, setDescriptionSource] = useState<DescriptionSourceType>('existing')
   const [uploadedImageId, setUploadedImageId] = useState<string | null>(null)
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null)
@@ -59,41 +66,8 @@ export function useAIWizard({
     errors: {} as Record<string, string>,
   })
   const [generatedData, setGeneratedData] = useState<GeneratedCharacterData | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  // Fetch connection profiles on mount
-  useEffect(() => {
-    const fetchProfiles = async () => {
-      try {
-        setLoadingProfiles(true)
-        const response = await fetch('/api/v1/connection-profiles')
-        if (!response.ok) {
-          throw new Error('Failed to fetch connection profiles')
-        }
-        const data = await response.json()
-        const profileList = data.profiles || []
-        setProfiles(profileList)
-
-        // Auto-select default profile if available
-        const defaultProfile = profileList.find((p: ConnectionProfile) => p.isDefault)
-        if (defaultProfile) {
-          setPrimaryProfileId(defaultProfile.id)
-        } else if (profileList.length > 0) {
-          setPrimaryProfileId(profileList[0].id)
-        }
-      } catch (err) {
-        console.error('Failed to fetch profiles for AI wizard', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-        setError('Failed to load connection profiles')
-      } finally {
-        setLoadingProfiles(false)
-      }
-    }
-
-    fetchProfiles()
-  }, [])
-
+  const [actionError, setError] = useState<string | null>(null)
+  const error = actionError ?? (profilesFailed ? 'Failed to load connection profiles' : null)
 
   // Computed: Vision-capable profiles
   const visionProfiles = useMemo(() => {

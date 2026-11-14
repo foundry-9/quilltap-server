@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=templates&section=roleplay-templates
+url: /settings?section=roleplay-templates
 ---
 
 # Roleplay Templates
 
-> **[Open this page in Quilltap](/settings?tab=templates&section=roleplay-templates)**
+> **[Open this page in Quilltap](/settings?section=roleplay-templates)**
 
 Roleplay templates define how the AI formats dialogue, actions, thoughts, and other narrative elements in your chats. They provide formatting instructions that shape how responses are structured and displayed, helping create consistent storytelling conventions.
 
@@ -406,7 +406,7 @@ Common elements to define:
 Your templates are available:
 
 - In chat settings when selecting a template for a chat
-- In Settings → Roleplay Templates for management
+- In Settings → Characters & Prompts → Roleplay Templates for management
 - Across all your devices when logged in
 - Only to you (not shared with others unless exported)
 
@@ -481,6 +481,6 @@ Your templates are available:
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=templates&section=roleplay-templates")`
+`help_navigate(url: "/settings?section=roleplay-templates")`
 
 Roleplay templates are powerful tools for standardizing your creative writing—invest time in creating the perfect format for your style!

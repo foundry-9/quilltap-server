@@ -1,103 +1,11 @@
 /**
- * Group Scenarios for the New Chat dialog — participant-union aggregation.
- *
- * GET /api/v1/groups/scenarios?characterIds=<id,id,...>&includeArchived=true
- *
- * Returns, for every group that ANY of the supplied (prospective) participants
- * is a member of, that group's `Scenarios/` entries — grouped under the group's
- * name. This is the ONE sanctioned exception to Groups' otherwise strict
- * per-responding-character isolation (see docs/developer/features/groups.md
- * §6/§13): scenarios are a chat-creation-time menu, not a per-turn access grant,
- * so a group's scenarios are offered to the whole New Chat dialog when a member
- * is present. Per-turn Knowledge/search/write access remains
- * responding-character-only and is resolved elsewhere (the tier resolver) — this
- * route must never feed into that path.
- *
- * Static sibling of `/api/v1/groups/[id]` — Next.js routes the static
- * `scenarios` segment ahead of the dynamic `[id]`.
+ * Deprecated path — use `GET /api/v1/groups?action=scenarios&characterIds=…`.
+ * Answers for one release (`lib/api/deprecated-path.ts`).
  */
-
-import { NextRequest } from 'next/server';
 import { createContextHandler } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/context';
-import { logger } from '@/lib/logger';
-import { successResponse } from '@/lib/api/responses';
-import { readIncludeArchived } from '@/lib/api/query-params';
-import { resolveScenarioLocation } from '@/lib/scenarios/location';
-import { groupMountsFor } from '@/lib/mount-index/reach';
+import { deprecatedPath } from '@/lib/api/deprecated-path';
+import { handleGroupScenarios } from '../actions/scenarios';
 
 export const GET = createContextHandler(
-  async (req: NextRequest, { user, repos }: RequestContext) => {
-    const includeArchived = readIncludeArchived(req);
-    const raw = req.nextUrl.searchParams.get('characterIds') ?? '';
-    const requestedIds = raw
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    if (requestedIds.length === 0) {
-      return successResponse({ groupScenarios: [] });
-    }
-
-    // Only trust character ids the caller can actually access. `repos.characters`
-    // is user-scoped (returns null for ids the user doesn't own), so resolving
-    // each id here prevents probing arbitrary UUIDs for group membership /
-    // scenario metadata via the unscoped membership table.
-    const characterIds: string[] = [];
-    for (const id of requestedIds) {
-      const character = await repos.characters.findById(id);
-      if (character) characterIds.push(id);
-    }
-    if (characterIds.length === 0) {
-      return successResponse({ groupScenarios: [] });
-    }
-
-    // Collect the distinct set of groups that ANY supplied participant belongs
-    // to. A group qualifies as long as at least one selected participant is a
-    // member — it does not matter that other participants aren't.
-    // Walked through the shared group tier (`groupMountsFor`), keeping groups
-    // whose stores an earlier group already claimed: each group's own
-    // `Scenarios/` folder is offered under its own name.
-    const groupIds = new Set<string>();
-    for (const characterId of characterIds) {
-      for (const { group } of await groupMountsFor(characterId, { includeEmpty: true })) groupIds.add(group.id);
-    }
-
-    const groupScenarios: Array<{
-      groupId: string;
-      groupName: string;
-      mountPointId: string;
-      scenarios: unknown[];
-      warnings: string[];
-    }> = [];
-
-    for (const groupId of groupIds) {
-      try {
-        // A read never provisions (#136): a group with no store yet has no scenarios.
-        const location = await resolveScenarioLocation('group', groupId, repos, user.id);
-        if (!location?.id) continue;
-
-        const { scenarios, warnings } = await location.list({ includeArchived });
-        if (scenarios.length === 0) continue;
-
-        groupScenarios.push({
-          groupId: location.id,
-          groupName: location.ownerName,
-          mountPointId: location.mountPointId,
-          scenarios,
-          warnings,
-        });
-      } catch (error) {
-        logger.warn('[Groups v1] Failed to load scenarios for a group; skipping', {
-          groupId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-
-    // Stable ordering by group name for a predictable menu.
-    groupScenarios.sort((a, b) => a.groupName.localeCompare(b.groupName));
-
-    return successResponse({ groupScenarios });
-  },
+  deprecatedPath('/api/v1/groups/scenarios', '/api/v1/groups?action=scenarios', handleGroupScenarios),
 );

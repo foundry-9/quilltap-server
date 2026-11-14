@@ -81,6 +81,8 @@ export interface HomepageCharacter {
 /** Props for WelcomeSection */
 export interface WelcomeSectionProps {
   displayName: string
+  /** No chats yet: greet a newcomer rather than welcome them "back" */
+  firstVisit?: boolean
 }
 
 /** Props for QuickActionsRow */

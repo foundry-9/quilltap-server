@@ -59,11 +59,11 @@ export function DisplayOptions({
           ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
         `}
         >
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 items-center gap-4">
             <div
               className={`
               flex-shrink-0 p-2 rounded-full
-              ${showNavThemeSelector ? 'qt-bg-primary/10 text-primary' : 'qt-bg-muted qt-text-secondary'}
+              ${showNavThemeSelector ? 'qt-bg-primary/10 qt-text-brand' : 'qt-bg-muted qt-text-secondary'}
             `}
             >
               <Icon name="themes" className="w-5 h-5" />
@@ -84,14 +84,14 @@ export function DisplayOptions({
             onClick={() => !isLoading && onNavThemeSelectorChange(!showNavThemeSelector)}
             className={`
               relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
-              transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
-              ${showNavThemeSelector ? 'bg-primary' : 'qt-bg-muted'}
+              transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 qt-focus-ring focus:ring-offset-2
+              ${showNavThemeSelector ? 'qt-bg-primary' : 'qt-toggle-off'}
               ${isLoading ? 'cursor-not-allowed' : ''}
             `}
           >
             <span
               className={`
-                pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0
+                pointer-events-none inline-block h-5 w-5 transform rounded-full qt-bg-default shadow ring-0
                 transition duration-200 ease-in-out
                 ${showNavThemeSelector ? 'translate-x-5' : 'translate-x-0'}
               `}

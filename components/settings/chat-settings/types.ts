@@ -44,6 +44,8 @@ export interface CheapLLMSettings {
    * that do have a profile take their chain from that profile instead.
    */
   allowCheapFallback?: boolean
+  /** The Green Room's own profile for choosing opening outfits; null = the cheap LLM. */
+  outfitSelectionProfileId?: string | null
   embeddingProvider: EmbeddingProvider
 }
 
@@ -80,6 +82,11 @@ export interface StoryBackgroundsSettings {
  * Re-exported from schema types; `imageProfileId: null` = the default image profile.
  */
 export type WardrobeImageSettings = WardrobeImageSettingsType
+
+export interface AutoLockSettings {
+  enabled: boolean
+  idleMinutes: number
+}
 
 export interface ChatSettings {
   id: string
@@ -137,6 +144,10 @@ export interface ChatSettings {
   answerConfirmationSettings?: AnswerConfirmationSettings
   /** Smart typography — render-time curly quotes plus type-time dashes/ellipsis. */
   smartTypographySettings?: SmartTypographySettings
+  /** The roleplay template a new chat starts with */
+  defaultRoleplayTemplateId?: string | null
+  /** Lock the app after a stretch of idleness (requires a passphrase) */
+  autoLockSettings?: AutoLockSettings
   createdAt: string
   updatedAt: string
 }

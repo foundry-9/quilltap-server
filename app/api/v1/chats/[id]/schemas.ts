@@ -10,9 +10,14 @@ import { OutfitSelectionSchema } from '@/lib/schemas/wardrobe.types';
 import { ConciergeModeSchema } from '@/lib/schemas/chat.types';
 import { ChatTurnModeSchema } from '@/lib/schemas/storyteller.types';
 
+/**
+ * `PUT` `{ chat }`. `contextSummary` is not here: a summary
+ * written straight through skipped its anchor and turn bookkeeping — rebuild
+ * one with `?action=rebuild-summary`. A `title` sent without
+ * `isManuallyRenamed` is taken as a manual rename (`withManualRenameFlag`).
+ */
 export const updateChatSchema = z.object({
   title: z.string().optional(),
-  contextSummary: z.string().optional(),
   roleplayTemplateId: z.string().nullish(),
   isPaused: z.boolean().optional(),
   storytellerInviteFilter: z.boolean().optional(), // Storyteller: weight bid invitations by talkativeness
@@ -35,6 +40,19 @@ export const updateChatSchema = z.object({
   activeTerminalSessionId: z.uuid().nullish(),
   rightPaneVerticalSplit: z.number().min(20).max(80).optional(),
 });
+
+/**
+ * A rename from the operator pins the title against the automatic retitle
+ * (`applyAutoTitle` refuses a manually renamed chat). The rename dialog says
+ * so explicitly, and may turn automatic titles back on with `false`; any other
+ * caller that sends only a title is renaming by hand.
+ */
+export function withManualRenameFlag<T extends { title?: string; isManuallyRenamed?: boolean }>(patch: T): T {
+  if (patch.title !== undefined && patch.isManuallyRenamed === undefined) {
+    return { ...patch, isManuallyRenamed: true };
+  }
+  return patch;
+}
 
 /**
  * `POST ?action=scenario` — change the scene mid-conversation.
@@ -91,10 +109,18 @@ export const addParticipantSchema = z.object({
   joinScenario: z.string().nullish(),
   controlledBy: z.enum(['llm', 'user']).optional(),
   /**
-   * Starting outfit selection for the added character. When omitted, the
-   * server applies the character's default wardrobe (`mode: 'default'`).
+   * Starting outfit selection for the added character. When omitted, the seat
+   * arrives in the one default mode (`defaultOutfitMode`,
+   * `lib/chat/opening/arrival.ts`).
    */
   outfitSelection: OutfitSelectionSchema.optional(),
+  /**
+   * Narrate the arrival: the seat is created at once and the response is an
+   * SSE stream of the Green Room's `greenRoom` frames while the character is
+   * dressed, packed and announced, ending with `done`. Without it the action
+   * answers with JSON once the arrival is complete.
+   */
+  narrate: z.boolean().optional(),
 });
 
 export const removeParticipantSchema = z.object({
@@ -121,7 +147,12 @@ export const mergeConversationSchema = z.object({
   outfitSelections: z.array(OutfitSelectionSchema).optional(),
 });
 
-export const chatUpdateRequestSchema = z.object({
+/**
+ * The whole `PUT` body. Strict: a chat field sent at the top level instead of
+ * under `chat` is a 400, not a silent strip — that is how "Announce Generated
+ * Images" never saved (#176). Clients write through `lib/chat/patch-chat.ts`.
+ */
+export const chatUpdateRequestSchema = z.strictObject({
   chat: updateChatSchema.optional(),
   updateParticipant: updateParticipantSchema.optional(),
   addParticipant: addParticipantSchema.optional(),
@@ -139,7 +170,7 @@ export const chatUpdateRequestSchema = z.object({
    */
   conciergeState: ConciergeModeSchema.optional(),
   /**
-   * Turn mode: 'rotation' or 'storyteller'. Patch-only on the chat row, so it
+   * Turn mode: 'rotation', 'turns' or 'storyteller'. Patch-only on the chat row, so it
    * is written through `ChatsRepository.setTurnMode`, never the whole-row
    * update; leaving storyteller mode closes any open round.
    */

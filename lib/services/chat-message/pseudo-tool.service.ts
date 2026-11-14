@@ -29,6 +29,8 @@ import {
   type SimpleJsonPromptOptions,
 } from '@/lib/tools'
 
+import type { ToolRulesVariant } from '@/lib/characters/kind'
+
 const logger = createServiceLogger('ToolModeService')
 
 /**
@@ -44,9 +46,12 @@ export interface EnabledToolOptions {
  * Build native tool instructions to inject into system prompt
  * Guides models with native function calling to actually invoke tools
  * rather than narrating tool usage in prose.
+ *
+ * @param variant `roleplay` for a roleplay character, `assistant` for an
+ *   assistant character or an assistant surface (from `KindPolicy.toolRules`)
  */
-export function buildNativeToolSystemInstructions(): string {
-  return buildNativeToolInstructions(true)
+export function buildNativeToolSystemInstructions(variant: ToolRulesVariant): string {
+  return buildNativeToolInstructions(variant, true)
 }
 
 /**

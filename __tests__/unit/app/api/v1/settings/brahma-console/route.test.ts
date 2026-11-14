@@ -110,8 +110,7 @@ describe('PUT', () => {
   });
 
   it.each([
-    ['below the minimum', 4],
-    ['above the maximum', 201],
+    ['below the minimum', 0],
     ['not an integer', 12.5],
     ['not a number', 'fifty'],
   ])('rejects a budget %s without writing', async (_label, maxAgentTurns) => {
@@ -123,12 +122,12 @@ describe('PUT', () => {
     expect(setSettings).not.toHaveBeenCalled();
   });
 
-  it('accepts the boundary values', async () => {
-    await PUT(req({ maxAgentTurns: 5 }));
-    await PUT(req({ maxAgentTurns: 200 }));
+  it('accepts the minimum and has no upper bound', async () => {
+    await PUT(req({ maxAgentTurns: 1 }));
+    await PUT(req({ maxAgentTurns: 5000 }));
 
-    expect(setSettings).toHaveBeenNthCalledWith(1, { maxAgentTurns: 5 });
-    expect(setSettings).toHaveBeenNthCalledWith(2, { maxAgentTurns: 200 });
+    expect(setSettings).toHaveBeenNthCalledWith(1, { maxAgentTurns: 1 });
+    expect(setSettings).toHaveBeenNthCalledWith(2, { maxAgentTurns: 5000 });
   });
 
   it('500s when the write throws', async () => {

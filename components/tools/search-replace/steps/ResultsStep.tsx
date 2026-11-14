@@ -91,7 +91,7 @@ export function ResultsStep({ result, error }: ResultsStepProps) {
           <div className="pt-2 border-t qt-border-default">
             <div className="flex justify-between font-medium">
               <span className="qt-text-primary">Total:</span>
-              <span className="text-primary">
+              <span className="qt-text-brand">
                 {totalUpdated} updated
               </span>
             </div>

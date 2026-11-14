@@ -12,6 +12,7 @@ import type { Character } from '@/lib/schemas/types';
 import type { QuilltapExport, ExportedCharacter } from '@/lib/export/types';
 import { getExportData, type ImportPreview, type ImportPreviewEntity } from './types';
 import { withStrictRepositoryFailures } from '@/lib/database/repositories/strict-failures';
+import { isHostPathStore } from './import-document-stores';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -178,7 +179,24 @@ async function previewImportStrict(
   for (const mp of data.mountPoints ?? []) {
     const exists = !!(await globalRepos.docMountPoints.findById(mp.id));
     if (exists) conflictCounts.documentStores = (conflictCounts.documentStores ?? 0) + 1;
-    documentStores.push({ id: mp.id, name: mp.name, exists });
+    if (isHostPathStore(mp)) {
+      moduleLogger.debug('Preview: host-path document store in archive', {
+        mountPointId: mp.id,
+        mountType: mp.mountType,
+        basePath: mp.basePath,
+      });
+      documentStores.push({
+        id: mp.id,
+        name: mp.name,
+        exists,
+        basePath: mp.basePath ?? '',
+        detail: exists
+          ? `${mp.mountType} store — the existing store keeps its own folder`
+          : `${mp.mountType} store — arrives disabled`,
+      });
+    } else {
+      documentStores.push({ id: mp.id, name: mp.name, exists });
+    }
   }
 
   const files: ImportPreviewEntity[] = [];

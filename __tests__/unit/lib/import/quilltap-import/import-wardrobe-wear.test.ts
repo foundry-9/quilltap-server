@@ -31,7 +31,7 @@ import {
   remapWardrobeWearRows,
   type WardrobeWearRemapContext,
 } from '@/lib/import/quilltap-import/import-wardrobe-wear';
-import { wardrobeItemIdForDocument } from '@/lib/database/repositories/vault-overlay/parsers';
+import { wardrobeItemIdForDocument } from '@/lib/wardrobe/vault-parsers';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 

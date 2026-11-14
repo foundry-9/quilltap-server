@@ -87,6 +87,24 @@ interface NanoGPTUsage extends OpenAI.CompletionUsage {
   cache_read_input_tokens?: number;
 }
 
+/**
+ * The last message index eligible for NanoGPT's automatic cache boundaries:
+ * the one before the newest user line (the last `user` message — a
+ * multi-character `[Name]` prefill may follow it), which carries the turn's
+ * trailing sections and never recurs. None in a tool loop (a tool result
+ * after the newest user line, which every later step repeats) or when there
+ * is nothing before it. Zero-based over the whole array, system included.
+ */
+export function promptCacheCutIndex(messages: ReadonlyArray<{ role?: string }>): number | undefined {
+  let latestUser = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === 'user') { latestUser = i; break; }
+  }
+  if (latestUser < 1) return undefined;
+  if (messages.slice(latestUser + 1).some((m) => m?.role === 'tool')) return undefined;
+  return latestUser - 1;
+}
+
 export class NanoGPTProvider extends OpenAICompatibleProvider {
   constructor(config?: Partial<OpenAICompatibleProviderConfig>) {
     super({
@@ -273,9 +291,26 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
     // other routes ignore it (OpenAI/Gemini upstreams already cache
     // implicitly, no flag needed). The two keys below are consumed here,
     // not allowlisted, so they never leak into the request verbatim.
+    //
+    // Where NanoGPT puts its automatic boundaries is unspecified, so cap them
+    // with `cutAfterMessageIndex` (the last message eligible for one): the
+    // message before the newest user line (promptCacheCutIndex). That line
+    // is wrapped in the turn's trailing sections, which the next turn never
+    // repeats — a breakpoint there is a write nobody reads.
     if (params.profileParameters?.enablePromptCaching === true) {
       const ttl = params.profileParameters.cacheTTL === '1h' ? '1h' : '5m';
-      body.promptCaching = { enabled: true, ttl };
+      const cutAfterMessageIndex = promptCacheCutIndex(formatted.messages);
+      body.promptCaching = {
+        enabled: true,
+        ttl,
+        ...(cutAfterMessageIndex !== undefined ? { cutAfterMessageIndex } : {}),
+      };
+      this.logger.debug('NanoGPT prompt caching requested', {
+        context: 'NanoGPTProvider.buildBody',
+        model: params.model,
+        ttl,
+        cutAfterMessageIndex,
+      });
     }
 
     this.applyProfileParams(body, params);

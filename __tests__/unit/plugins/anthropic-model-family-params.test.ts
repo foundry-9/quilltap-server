@@ -6,12 +6,12 @@
  *     `temperature` / `top_p` / `top_k` for every model, so none are sent.
  *   - The same version 400s on a `document` block placed directly in an
  *     assistant message, so those move into a user turn just ahead of it.
- *   - Sonnet 5 / Opus 4.7+ / Fable / Mythos removed fixed-budget thinking:
- *     extended thinking is requested as `{type: 'adaptive', display:
- *     'summarized'}` — the fixed-budget form 400s, and adaptive defaults
- *     display to "omitted" (empty reasoning text) unless "summarized" is
- *     asked for explicitly. Older models (Sonnet 4.6-, Opus 4.6-, Haiku 4.5)
- *     keep `{type: 'enabled', budget_tokens}`.
+ *   - Which thinking form a model takes is read from the live Models API
+ *     (`capabilities.thinking.types.enabled`), never from the model ID:
+ *     a model that accepts fixed-budget thinking gets `{type: 'enabled',
+ *     budget_tokens}`; any other — or one whose capabilities could not be
+ *     read — gets `{type: 'adaptive', display: 'summarized'}` (adaptive
+ *     defaults display to "omitted" unless "summarized" is asked for).
  *
  * The branching lives in a private helper, so — like the z-ai plugin suite —
  * we assert on the request body handed to the (mocked) Anthropic SDK. The
@@ -24,9 +24,33 @@
 // own fn, so the request body can't be captured through it).
 jest.mock('@anthropic-ai/sdk', () => {
   const create = jest.fn();
+  // What the Models API reports per model: does it accept fixed-budget
+  // ("enabled") thinking? A model missing here makes retrieve fail.
+  const acceptsBudget: Record<string, boolean> = {
+    'claude-haiku-5-5': false,
+    'claude-opus-5-5': false,
+    'claude-sonnet-5-5': false,
+    'claude-opus-4-8': false,
+    'claude-fable-5-2': false,
+    'claude-sonnet-4-6': true,
+    'claude-opus-4-6': true,
+    'claude-haiku-4-5': true,
+  };
+  const retrieve = jest.fn(async (model: string) => {
+    if (!(model in acceptsBudget)) throw new Error('not_found_error');
+    return {
+      id: model,
+      capabilities: { thinking: { supported: true, types: {
+        adaptive: { supported: !acceptsBudget[model] || model !== 'claude-haiku-4-5' },
+        between_tools: { supported: false },
+        disabled: { supported: true },
+        enabled: { supported: acceptsBudget[model] },
+      } } },
+    };
+  });
   return {
     __esModule: true,
-    default: jest.fn().mockImplementation(() => ({ messages: { create } })),
+    default: jest.fn().mockImplementation(() => ({ messages: { create }, models: { retrieve } })),
   };
 });
 
@@ -142,52 +166,43 @@ describe('AnthropicProvider — sampling params are never sent', () => {
   });
 });
 
-describe('AnthropicProvider — thinking shape by model generation', () => {
-  const NEW_GEN = [
-    'claude-sonnet-5',
-    'claude-sonnet-5-20260101',
-    'claude-opus-4-7',
-    'claude-opus-4-8',
-    'claude-fable-5',
-    'claude-mythos-5',
-    'claude-mythos-preview',
-  ];
-  const OLD_GEN = ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5', 'claude-3-5-sonnet-latest'];
+describe('AnthropicProvider — thinking shape from model capabilities', () => {
+  const ADAPTIVE_ONLY = ['claude-haiku-5-5', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-opus-4-8', 'claude-fable-5-2'];
+  const BUDGET_OK = ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5'];
 
-  it.each(NEW_GEN)('uses adaptive+summarized thinking for %s', async model => {
+  it.each(ADAPTIVE_ONLY)('uses adaptive+summarized thinking for %s', async model => {
     const body = await captureSendBody({ model, profileParameters: THINKING_ON });
     expect(body.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
   });
 
-  it('streamMessage uses adaptive thinking for a new-gen model', async () => {
+  it('streamMessage uses adaptive thinking for a model that refuses a budget', async () => {
     const body = await captureStreamBody({ model: 'claude-opus-4-8', profileParameters: THINKING_ON });
     expect(body.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
   });
 
-  it.each(OLD_GEN)('uses fixed-budget thinking for %s', async model => {
-    const body = await captureSendBody({
-      model,
-      profileParameters: { thinkingBudget: 2048 },
-    });
+  it.each(BUDGET_OK)('uses fixed-budget thinking for %s', async model => {
+    const body = await captureSendBody({ model, profileParameters: { thinkingBudget: 2048 } });
     expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: 2048 });
   });
 
-  it('streamMessage keeps fixed-budget thinking for older models', async () => {
-    const body = await captureStreamBody({
-      model: 'claude-sonnet-4-6',
-      profileParameters: { thinkingBudget: 2048 },
-    });
+  it('streamMessage keeps fixed-budget thinking where the model accepts it', async () => {
+    const body = await captureStreamBody({ model: 'claude-sonnet-4-6', profileParameters: { thinkingBudget: 2048 } });
     expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: 2048 });
   });
 
-  it('does not treat claude-opus-4-6 as new-gen', async () => {
+  it('uses the default 4096 budget from the extendedThinking flag', async () => {
     const body = await captureSendBody({ model: 'claude-opus-4-6', profileParameters: THINKING_ON });
     expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: 4096 });
   });
 
-  it('treats a dated claude-opus-4-8 snapshot as new-gen', async () => {
-    const body = await captureSendBody({ model: 'claude-opus-4-8-20260215', profileParameters: THINKING_ON });
+  it('falls back to adaptive when capabilities cannot be read', async () => {
+    const body = await captureSendBody({ model: 'claude-unlisted-model', profileParameters: THINKING_ON });
     expect(body.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+  });
+
+  it('sends no thinking field when the profile does not ask for thinking', async () => {
+    const body = await captureSendBody({ model: 'claude-haiku-5-5' });
+    expect(body.thinking).toBeUndefined();
   });
 });
 

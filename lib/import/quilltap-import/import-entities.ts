@@ -22,8 +22,13 @@ import type {
 } from '@/lib/schemas/types';
 import { stripScenarioSeededSummary } from '@/lib/chat/scenario-seeded-summary';
 import { withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
-import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
+import { type ImportOptions, type IdMappingState, type ImportCounts, countsFrom, noteWritten } from './types';
+import { insertUnderPolicy, OutcomeTally } from '@/lib/backup/insert-policy';
 import { remintChatMessageIds, remapImportedMessageId, type RemintedChatMessages } from './message-id-remap';
+import { importResolver } from './reconcile';
+import { remapEntity, type IdTarget } from '@/lib/backup/id-fields';
+
+const CHARACTER_TARGETS = { side: 'import' as const, targets: new Set<IdTarget>(['character']) };
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -35,57 +40,69 @@ export async function importTags(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  let imported = 0;
-  let skipped = 0;
-
+  const tally = new OutcomeTally();
   for (const tag of tags) {
-    try {
-      const existing = await repos.tags.findById(tag.id);
-
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.tags.set(tag.id, tag.id);
-          continue;
-        }
-
-        if (options.conflictStrategy === 'overwrite') {
-          await repos.tags.delete(tag.id);
-        }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const { id: _, userId: __, createdAt, updatedAt, ...tagData } = tag;
-          const newTag = await repos.tags.create({
-            ...tagData,
-            name: `${tagData.name} (imported)`,
-            nameLower: `${tagData.nameLower || tagData.name.toLowerCase()} (imported)`,
-          });
-          idMaps.tags.set(tag.id, newTag.id);
-          imported++;
-          continue;
-        }
-      }
-
-      const { id: _, userId: __, createdAt, updatedAt, ...tagData } = tag;
-      const createData = options.preserveIds ? { ...tagData, id: tag.id } : tagData;
-      const createOptions = getPreserveIdsCreateOptions(tag.id, options);
-      const newTag = await repos.tags.create(createData, createOptions);
-      idMaps.tags.set(tag.id, newTag.id);
-      imported++;
-    } catch (error) {
-      warnings.push(
-        `Failed to import tag "${tag.name}": ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to import tag', {
-        tagId: tag.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    const { id: _, userId: __, createdAt, updatedAt, ...tagData } = tag;
+    noteWritten(idMaps, tally.add(await insertUnderPolicy<Tag>({
+      kind: 'tag',
+      label: tag.name,
+      incomingId: tag.id,
+      strategy: options.conflictStrategy,
+      preserveIds: options.preserveIds,
+      findExisting: () => repos.tags.findById(tag.id),
+      create: ({ id, duplicate }) => repos.tags.create(
+        duplicate
+          ? {
+              ...tagData,
+              name: `${tagData.name} (imported)`,
+              nameLower: `${tagData.nameLower || tagData.name.toLowerCase()} (imported)`,
+            }
+          : tagData,
+        id ? { id } : undefined
+      ),
+      update: (existing) => repos.tags.update(existing.id, tagData),
+      idMap: idMaps.tags,
+      warnings,
+    })));
   }
+  return countsFrom(tally);
+}
 
-  return { imported, skipped };
+/**
+ * Bring a pre-delimiters template's `annotationButtons` forward to the
+ * delimiters shape, and drop the legacy `pluginName`. Mutates in place.
+ */
+function migrateLegacyTemplateFields(template: RoleplayTemplate): void {
+  const templateAny = template as Record<string, unknown>;
+  if (templateAny.annotationButtons && !template.delimiters?.length) {
+    const oldButtons = templateAny.annotationButtons as Array<{ label?: string; abbrev?: string; prefix?: string; suffix?: string }>;
+    const styleMap: Record<string, string> = {
+      'Narration': 'qt-chat-narration', 'Nar': 'qt-chat-narration',
+      'Internal Monologue': 'qt-chat-inner-monologue', 'Int': 'qt-chat-inner-monologue',
+      'Out of Character': 'qt-chat-ooc', 'OOC': 'qt-chat-ooc',
+    };
+    template.delimiters = oldButtons.map(btn => {
+      const prefix = btn.prefix || '';
+      const suffix = btn.suffix || '';
+      const name = btn.label || btn.abbrev || 'Unknown';
+      const buttonName = btn.abbrev || btn.label || '?';
+      const style = styleMap[btn.label || ''] || styleMap[btn.abbrev || ''] || 'qt-chat-narration';
+      // A prefix with no suffix is a line-start marker (e.g. "// " OOC);
+      // everything else is a wrap delimiter. Mirrors the kinds migration.
+      if (prefix && !suffix) {
+        return { kind: 'linePrefix' as const, name, buttonName, marker: prefix, style };
+      }
+      return {
+        kind: 'wrap' as const,
+        name,
+        buttonName,
+        delimiters: prefix === suffix ? prefix : ([prefix, suffix] as [string, string]),
+        style,
+      };
+    });
+    delete templateAny.annotationButtons;
+  }
+  delete templateAny.pluginName;
 }
 
 export async function importRoleplayTemplates(
@@ -96,94 +113,35 @@ export async function importRoleplayTemplates(
   globalRepos: ReturnType<typeof getRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  let imported = 0;
-  let skipped = 0;
-
+  const tally = new OutcomeTally();
   for (const template of templates) {
-    try {
-      // Backward compatibility: convert old annotationButtons to delimiters format
-      const templateAny = template as Record<string, unknown>;
-      if (templateAny.annotationButtons && !template.delimiters?.length) {
-        const oldButtons = templateAny.annotationButtons as Array<{ label?: string; abbrev?: string; prefix?: string; suffix?: string }>;
-        const styleMap: Record<string, string> = {
-          'Narration': 'qt-chat-narration', 'Nar': 'qt-chat-narration',
-          'Internal Monologue': 'qt-chat-inner-monologue', 'Int': 'qt-chat-inner-monologue',
-          'Out of Character': 'qt-chat-ooc', 'OOC': 'qt-chat-ooc',
-        };
-        template.delimiters = oldButtons.map(btn => {
-          const prefix = btn.prefix || '';
-          const suffix = btn.suffix || '';
-          const name = btn.label || btn.abbrev || 'Unknown';
-          const buttonName = btn.abbrev || btn.label || '?';
-          const style = styleMap[btn.label || ''] || styleMap[btn.abbrev || ''] || 'qt-chat-narration';
-          // A prefix with no suffix is a line-start marker (e.g. "// " OOC);
-          // everything else is a wrap delimiter. Mirrors the kinds migration.
-          if (prefix && !suffix) {
-            return { kind: 'linePrefix' as const, name, buttonName, marker: prefix, style };
-          }
-          return {
-            kind: 'wrap' as const,
-            name,
-            buttonName,
-            delimiters: prefix === suffix ? prefix : ([prefix, suffix] as [string, string]),
-            style,
-          };
-        });
-        delete templateAny.annotationButtons;
-      }
-      // Remove legacy pluginName field if present
-      delete templateAny.pluginName;
-
-      const existing = await globalRepos.roleplayTemplates.findById(template.id);
-
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.roleplayTemplates.set(template.id, template.id);
-          continue;
-        }
-
-        if (options.conflictStrategy === 'overwrite') {
-          await globalRepos.roleplayTemplates.delete(template.id);
-        }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const newId = randomUUID();
-          idMaps.roleplayTemplates.set(template.id, newId);
-          const { id: _, createdAt, updatedAt, ...templateData } = template;
-          const newTemplate = await globalRepos.roleplayTemplates.create({
-            ...templateData,
-            userId,
-            name: `${templateData.name} (imported)`,
-          });
-          imported++;
-          continue;
-        }
-      }
-
-      const { id: _, createdAt, updatedAt, ...templateData } = template;
-      const createData = options.preserveIds ? { ...templateData, id: template.id } : templateData;
-      const createOptions = getPreserveIdsCreateOptions(template.id, options);
-      const newTemplate = await globalRepos.roleplayTemplates.create(
-        { ...createData, userId },
-        createOptions
-      );
-      idMaps.roleplayTemplates.set(template.id, newTemplate.id);
-      imported++;
-    } catch (error) {
-      warnings.push(
-        `Failed to import roleplay template "${template.name}": ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to import roleplay template', {
-        templateId: template.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    migrateLegacyTemplateFields(template);
+    const { id: _, createdAt, updatedAt, isBuiltIn: _builtIn, ...templateData } = template;
+    noteWritten(idMaps, tally.add(await insertUnderPolicy<RoleplayTemplate>({
+      kind: 'roleplay template',
+      label: template.name,
+      incomingId: template.id,
+      strategy: options.conflictStrategy,
+      preserveIds: options.preserveIds,
+      findExisting: () => globalRepos.roleplayTemplates.findById(template.id),
+      create: ({ id, duplicate }) => globalRepos.roleplayTemplates.create(
+        {
+          ...templateData,
+          userId,
+          // A bundle never brings a built-in; those come from code.
+          isBuiltIn: false,
+          ...(duplicate ? { name: `${templateData.name} (imported)` } : {}),
+        },
+        id ? { id } : undefined
+      ),
+      update: (existing) => globalRepos.roleplayTemplates.update(existing.id, { ...templateData, userId }),
+      // Built-ins are read-only and come from code, never from a bundle.
+      refuseOverwrite: (existing) => (existing.isBuiltIn ? 'it is a built-in template' : null),
+      idMap: idMaps.roleplayTemplates,
+      warnings,
+    })));
   }
-
-  return { imported, skipped };
+  return countsFrom(tally);
 }
 
 export async function importProjects(
@@ -194,63 +152,30 @@ export async function importProjects(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  let imported = 0;
-  let skipped = 0;
-
+  const tally = new OutcomeTally();
   for (const project of projects) {
-    try {
-      const existing = await repos.projects.findById(project.id);
-
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.projects.set(project.id, project.id);
-          continue;
-        }
-
-        if (options.conflictStrategy === 'overwrite') {
-          await repos.projects.delete(project.id);
-        }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const newId = randomUUID();
-          idMaps.projects.set(project.id, newId);
-          // userId no longer exists on Project (projects are global). createdAt /
-      // updatedAt / officialMountPointId are excluded so create() generates
-      // fresh values and provisions a new store.
-      const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...projectData } = project;
-          const newProject = await repos.projects.create({
-            ...projectData,
-            name: `${projectData.name} (imported)`,
-          });
-          imported++;
-          continue;
-        }
-      }
-
-      // userId no longer exists on Project (projects are global). createdAt /
-      // updatedAt / officialMountPointId are excluded so create() generates
-      // fresh values and provisions a new store.
-      const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...projectData } = project;
-      const createData = options.preserveIds ? { ...projectData, id: project.id } : projectData;
-      const createOptions = getPreserveIdsCreateOptions(project.id, options);
-      const newProject = await repos.projects.create(createData, createOptions);
-      idMaps.projects.set(project.id, newProject.id);
-      imported++;
-    } catch (error) {
-      warnings.push(
-        `Failed to import project "${project.name}": ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to import project', {
-        projectId: project.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    // userId no longer exists on Project (projects are global). createdAt /
+    // updatedAt / officialMountPointId are excluded so create() generates
+    // fresh values and provisions a new store — and an overwrite keeps the
+    // store the project already has.
+    const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...projectData } = project;
+    noteWritten(idMaps, tally.add(await insertUnderPolicy<Project>({
+      kind: 'project',
+      label: project.name,
+      incomingId: project.id,
+      strategy: options.conflictStrategy,
+      preserveIds: options.preserveIds,
+      findExisting: () => repos.projects.findById(project.id),
+      create: ({ id, duplicate }) => repos.projects.create(
+        duplicate ? { ...projectData, name: `${projectData.name} (imported)` } : projectData,
+        id ? { id } : undefined
+      ),
+      update: (existing) => repos.projects.update(existing.id, projectData),
+      idMap: idMaps.projects,
+      warnings,
+    })));
   }
-
-  return { imported, skipped };
+  return countsFrom(tally);
 }
 
 export async function importGroups(
@@ -261,61 +186,38 @@ export async function importGroups(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  let imported = 0;
-  let skipped = 0;
-
+  const tally = new OutcomeTally();
   for (const group of groups) {
-    try {
-      const existing = await repos.groups.findById(group.id);
-
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.groups.set(group.id, group.id);
-          continue;
-        }
-
-        if (options.conflictStrategy === 'overwrite') {
-          await repos.groups.delete(group.id);
-        }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const newId = randomUUID();
-          idMaps.groups.set(group.id, newId);
-          // createdAt / updatedAt / officialMountPointId are excluded so create()
-          // generates fresh values and provisions a new store.
-          const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...groupData } = group;
-          const newGroup = await repos.groups.create({
-            ...groupData,
-            name: `${groupData.name} (imported)`,
-          });
-          imported++;
-          continue;
-        }
-      }
-
-      // createdAt / updatedAt / officialMountPointId are excluded so create()
-      // generates fresh values and provisions a new store.
-      const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...groupData } = group;
-      const createData = options.preserveIds ? { ...groupData, id: group.id } : groupData;
-      const createOptions = getPreserveIdsCreateOptions(group.id, options);
-      const newGroup = await repos.groups.create(createData, createOptions);
-      idMaps.groups.set(group.id, newGroup.id);
-      imported++;
-    } catch (error) {
-      warnings.push(
-        `Failed to import group "${group.name}": ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to import group', {
-        groupId: group.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    // createdAt / updatedAt / officialMountPointId are excluded so create()
+    // generates fresh values and provisions a new store; an overwrite keeps
+    // the group's own store. The export's membership / link sidecar fields
+    // are applied later, by the orchestrator.
+    const {
+      id: _,
+      createdAt,
+      updatedAt,
+      officialMountPointId: ___,
+      _memberCharacterIds: _members,
+      _linkedStoreMountPointIds: _links,
+      ...groupData
+    } = group as Group & { _memberCharacterIds?: string[]; _linkedStoreMountPointIds?: string[] };
+    noteWritten(idMaps, tally.add(await insertUnderPolicy<Group>({
+      kind: 'group',
+      label: group.name,
+      incomingId: group.id,
+      strategy: options.conflictStrategy,
+      preserveIds: options.preserveIds,
+      findExisting: () => repos.groups.findById(group.id),
+      create: ({ id, duplicate }) => repos.groups.create(
+        duplicate ? { ...groupData, name: `${groupData.name} (imported)` } : groupData,
+        id ? { id } : undefined
+      ),
+      update: (existing) => repos.groups.update(existing.id, groupData),
+      idMap: idMaps.groups,
+      warnings,
+    })));
   }
-
-  return { imported, skipped };
+  return countsFrom(tally);
 }
 
 /**
@@ -333,7 +235,13 @@ async function addImportedMessages(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<number> {
-  const toInsert = reminted ? reminted.messages : chat.messages;
+  // Character ids inside message payloads (a Carina answerer, a Host
+  // introduction, a custom announcer) follow their characters through the
+  // id-field table; one the bundle did not carry keeps its id.
+  const resolveCharacters = importResolver(idMaps);
+  const toInsert = (reminted ? reminted.messages : chat.messages).map(
+    (message) => remapEntity('message', message, resolveCharacters, CHARACTER_TARGETS).row as MessageEvent
+  );
   const landed = reminted ? new Map<string, string>() : null;
   if (landed) idMaps.messages.set(chat.id, landed);
   moduleLogger.debug('Importing chat messages', {
@@ -342,7 +250,6 @@ async function addImportedMessages(
     messageCount: toInsert.length,
     remintedMessageIds: Boolean(reminted),
     droppedMessageRefs: reminted?.droppedRefs ?? 0,
-    summaryCleared: reminted?.summaryCleared ?? false,
   });
 
   let added = 0;
@@ -376,77 +283,65 @@ export async function importChats(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  let imported = 0;
-  let skipped = 0;
+  const tally = new OutcomeTally();
   let messages = 0;
 
   for (const chat of chats) {
-    try {
-      const existing = await repos.chats.findById(chat.id);
+    const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
 
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.chats.set(chat.id, chat.id);
-          continue;
-        }
-
-        if (options.conflictStrategy === 'overwrite') {
-          await repos.chats.delete(chat.id, { syncVaults: false });
-        }
-      }
-
-      // Duplicate creates a copy beside the original under a fresh id; every
-      // other strategy reaching here inserts the bundle's chat.
-      const isDuplicate = Boolean(existing) && options.conflictStrategy === 'duplicate';
-      const keepsSourceIds = Boolean(options.preserveIds) && !isDuplicate;
-
-      const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
-      // Only a chat that keeps its source id keeps its message ids. A chat
-      // created under a fresh id gets fresh message ids too: `chat_messages.id`
-      // is global, so the duplicate's original — or an earlier import of the
-      // same bundle — already holds them (bug 228).
-      const reminted = keepsSourceIds ? null : remintChatMessageIds(chatData, chat.messages);
-      // A pre-bug-158 export carries the chat's scenario in `contextSummary` as
-      // well as `scenarioText`; the migration that cleared those rows has long
-      // since run in this instance, so the import is the only thing standing
-      // between a stale bundle and the bug coming back.
-      // …and a pre-phase-3 bundle carries only the legacy Concierge pair, so
-      // the chat's three-state posture is derived from it here.
-      // The fold passes' cursors travel on the chat under their legacy names
-      // (already remapped to the new message ids); they are written once the
-      // chat exists.
-      const { chat: bundledChat, cursors } = takeBundleCursors(
-        reminted ? { ...chatData, ...reminted.chatPatch } : chatData
-      );
-      const cleaned = withConciergeModeFromLegacy(stripScenarioSeededSummary(bundledChat));
-      const createData = keepsSourceIds
-        ? { ...cleaned, id: chat.id }
-        : isDuplicate
-          ? { ...cleaned, title: `${chatData.title} (imported)` }
-          : cleaned;
-      const createOptions = keepsSourceIds ? getPreserveIdsCreateOptions(chat.id, options) : undefined;
-      const newChat = await repos.chats.create(createData, createOptions);
-      idMaps.chats.set(chat.id, newChat.id);
-      await restoreBundleCursors(newChat.id, cursors);
-
-      messages += await addImportedMessages(newChat.id, chat, reminted, idMaps, repos, warnings);
-
-      imported++;
-    } catch (error) {
-      warnings.push(
-        `Failed to import chat "${chat.title}": ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to import chat', {
-        chatId: chat.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    const outcome = await insertUnderPolicy<ChatMetadata>({
+      kind: 'chat',
+      label: chat.title,
+      incomingId: chat.id,
+      strategy: options.conflictStrategy,
+      preserveIds: options.preserveIds,
+      findExisting: () => repos.chats.findById(chat.id),
+      // An overwrite replaces the transcript, so the chat is removed (its
+      // messages, annotations, informs and timelines with it) and created
+      // again under its own id. Document Mode pane state has no cascade.
+      remove: async (existing) => {
+        await repos.chats.delete(existing.id, { syncVaults: false });
+        await getRepositories().chatDocuments.deleteByChatId(existing.id);
+      },
+      create: async ({ id, duplicate }) => {
+        // Only a chat created under its source id keeps its message ids. Any
+        // other gets fresh message ids too: `chat_messages.id` is global, so
+        // the duplicate's original — or an earlier import of the same bundle —
+        // already holds them (bug 228).
+        const keepsSourceIds = id === chat.id;
+        const reminted = keepsSourceIds ? null : remintChatMessageIds(chatData, chat.messages);
+        // A pre-bug-158 export carries the chat's scenario in `contextSummary` as
+        // well as `scenarioText`; the migration that cleared those rows has long
+        // since run in this instance, so the import is the only thing standing
+        // between a stale bundle and the bug coming back.
+        // …and a pre-phase-3 bundle carries only the legacy Concierge pair, so
+        // the chat's three-state posture is derived from it here.
+        // The fold passes' cursors travel on the chat under their legacy names
+        // (already remapped to the new message ids); they are written once the
+        // chat exists.
+        const { chat: bundledChat, cursors } = takeBundleCursors(
+          reminted ? { ...chatData, ...reminted.chatPatch } : chatData
+        );
+        const cleaned = withConciergeModeFromLegacy(stripScenarioSeededSummary(bundledChat));
+        const newChat = await repos.chats.create(
+          duplicate ? { ...cleaned, title: `${chatData.title} (imported)` } : cleaned,
+          id ? { id } : undefined
+        );
+        await restoreBundleCursors(newChat.id, cursors);
+        messages += await addImportedMessages(newChat.id, chat, reminted, idMaps, repos, warnings);
+        return newChat;
+      },
+      idMap: idMaps.chats,
+      warnings,
+    });
+    tally.add(outcome);
+    noteWritten(idMaps, outcome);
+    if (outcome.status === 'created' || outcome.status === 'updated') {
+      idMaps.writtenChats.add(chat.id);
     }
   }
 
-  return { imported, skipped, messages };
+  return { ...countsFrom(tally), messages };
 }
 
 /**

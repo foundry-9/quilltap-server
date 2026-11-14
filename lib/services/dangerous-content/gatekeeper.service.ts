@@ -11,6 +11,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { withReasoningHeadroom } from '@/lib/llm/reasoning-headroom'
 import { createLLMProvider } from '@/lib/llm'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
@@ -415,7 +416,7 @@ async function runClassification(
         request: {
           messages: messages.map(m => ({ role: m.role, content: m.content })),
           temperature: 0.1,
-          maxTokens: 500,
+          maxTokens: withReasoningHeadroom(500),
         },
         response: answered
           ? { content: answered.content, finishReason: answered.finishReason ?? null }
@@ -437,7 +438,7 @@ async function runClassification(
           messages,
           model: cheapLLMSelection.modelName,
           temperature: 0.1, // Low temperature for consistent classification
-          maxTokens: 500,
+          maxTokens: withReasoningHeadroom(500),
           // Forward the cheap profile's provider params (e.g. DeepSeek thinking
           // mode) so a "reasoning off" setting takes effect and the classifier
           // doesn't burn its budget thinking and return empty content.

@@ -2,6 +2,9 @@
 
 import { memo } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { MentionChip } from '@/components/chat/MentionChip'
+import { useAbsentMentions } from '@/hooks/useAbsentMentions'
+import { useAtlasMentions } from '@/hooks/useAtlasMentions'
 import { formatMessageTime } from '@/lib/format-time'
 import {
   getAnnouncementSenderName,
@@ -99,24 +102,57 @@ export const AnnouncementBarContents = memo(function AnnouncementBarContents({
 })
 
 /**
+ * The name chips whose first mention in the chat falls in a collapsed
+ * announcement — most often the Host's scenario row, where a thing or an
+ * absent character is usually first named. The body is hidden, so the chips
+ * would be too; they are drawn beside the bar instead, each labelled with the
+ * name on its card. They are siblings of the bar's button, never inside it (a
+ * chip is a control of its own).
+ */
+function CollapsedMentionChips({
+  people,
+  things,
+}: {
+  people: ReturnType<typeof useAbsentMentions>
+  things: ReturnType<typeof useAtlasMentions>
+}) {
+  return (
+    <>
+      {people.map(m => (
+        <MentionChip key={`person-${m.characterId}`} mention={m}>{m.card.name}</MentionChip>
+      ))}
+      {things.map(m => (
+        <MentionChip key={`thing-${m.entryId}`} mention={m}>{m.card.name}</MentionChip>
+      ))}
+    </>
+  )
+}
+
+/**
  * A single collapsed announcement rendered as a content-width chip. Keeps the
  * `id` / `data-message-id` so deep-link and delete-next-focus scroll-to-message
- * (page.tsx, useMessageActions) still resolve. Clicking expands it.
+ * (page.tsx, useMessageActions) still resolve. Clicking expands it. Name chips
+ * first mentioned in it ride beside it (see {@link CollapsedMentionChips}).
  */
 export const AnnouncementChip = memo(function AnnouncementChip({
   message,
+  chatId,
   onToggleExpanded,
   participantNames,
   announcerNames,
 }: {
   message: Message
+  /** The chat, for the name chips first mentioned in this announcement. */
+  chatId?: string
   onToggleExpanded: (messageId: string) => void
   participantNames?: Record<string, string>
   announcerNames?: Record<string, string>
 }) {
   const accent = getAnnouncementAccentClasses(message)
   const isWhisper = !!message.targetParticipantIds?.length
-  return (
+  const people = useAbsentMentions(chatId, message.id)
+  const things = useAtlasMentions(chatId, message.id)
+  const bar = (
     <button
       type="button"
       id={`message-${message.id}`}
@@ -134,6 +170,14 @@ export const AnnouncementChip = memo(function AnnouncementChip({
       />
     </button>
   )
+  // No chips: the bar alone, exactly as before.
+  if (people.length === 0 && things.length === 0) return bar
+  return (
+    <span className="qt-chat-announcement-chip-wrap">
+      {bar}
+      <CollapsedMentionChips people={people} things={things} />
+    </span>
+  )
 })
 
 /**
@@ -142,11 +186,14 @@ export const AnnouncementChip = memo(function AnnouncementChip({
  */
 export const AnnouncementGroup = memo(function AnnouncementGroup({
   members,
+  chatId,
   onToggleSystemMessageExpanded,
   participantNames,
   announcerNames,
 }: {
   members: { message: Message }[]
+  /** The chat, for the name chips first mentioned in a collapsed announcement. */
+  chatId?: string
   onToggleSystemMessageExpanded: (messageId: string) => void
   participantNames?: Record<string, string>
   announcerNames?: Record<string, string>
@@ -157,6 +204,7 @@ export const AnnouncementGroup = memo(function AnnouncementGroup({
         <AnnouncementChip
           key={message.id}
           message={message}
+          chatId={chatId}
           onToggleExpanded={onToggleSystemMessageExpanded}
           participantNames={participantNames}
           announcerNames={announcerNames}

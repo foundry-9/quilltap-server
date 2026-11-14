@@ -28,6 +28,8 @@ interface ImageProfileModalProps {
   onSuccess: () => void
   profile?: ImageProfile
   apiKeys: ApiKey[]
+  /** Provider to preselect on a new profile (the per-provider card's Add menu). */
+  initialProvider?: string
 }
 
 export function ImageProfileModal({
@@ -36,6 +38,7 @@ export function ImageProfileModal({
   onSuccess,
   profile,
   apiKeys,
+  initialProvider,
 }: ImageProfileModalProps) {
   const handleSuccess = () => {
     onSuccess()
@@ -56,6 +59,7 @@ export function ImageProfileModal({
       <ImageProfileForm
         profile={profile}
         apiKeys={apiKeys}
+        initialProvider={initialProvider}
         onSuccess={handleSuccess}
         onCancel={handleCancel}
       />

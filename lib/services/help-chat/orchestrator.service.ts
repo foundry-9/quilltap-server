@@ -237,7 +237,7 @@ async function processHelpResponse(
   }
 
   // Build tools — agent mode always enabled for help chats, help tools always enabled
-  const { tools, modelSupportsNativeTools } = await buildTools({
+  const { tools, modelSupportsNativeTools, offer: toolOffer } = await buildTools({
     connectionProfile,
     userId,
     agentModeEnabled: true,
@@ -269,12 +269,12 @@ async function processHelpResponse(
     )
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
   } else if (tools.length > 0) {
-    toolInstructions = buildNativeToolSystemInstructions()
+    toolInstructions = buildNativeToolSystemInstructions('assistant')
   }
 
   // Build agent mode instructions (always enabled for help chats)
   const maxAgentTurns = 10
-  const agentInstructions = buildAgentModeInstructions(maxAgentTurns)
+  const agentInstructions = buildAgentModeInstructions(maxAgentTurns, 'research')
   toolInstructions = toolInstructions
     ? `${toolInstructions}\n\n${agentInstructions}`
     : agentInstructions
@@ -347,7 +347,7 @@ async function processHelpResponse(
 
     // Force final response if at turn limit
     if (agentTurnCount === maxAgentTurns) {
-      const forceMessage = buildForceFinalMessage()
+      const forceMessage = buildForceFinalMessage('research')
       conversationMessages.push({ role: 'user', content: forceMessage })
     }
 
@@ -500,6 +500,7 @@ async function processHelpResponse(
         undefined, // embeddingProfileId
         null, // projectId
       )
+      toolContext.toolOffer = toolOffer
 
       const toolResult = await processToolCalls(
         toolCallsToProcess,

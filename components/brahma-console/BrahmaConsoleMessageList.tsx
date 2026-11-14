@@ -7,6 +7,12 @@
  * voice (rendered with the console mark as its avatar) and the operator's own
  * messages. No character names, no navigation/suggested links. Reuses the
  * shared `qt-help-*` chat-bubble styling for visual consistency.
+ *
+ * In a Writing Assistant conversation the assistant's side is drawn by what
+ * each message is, never by its position: a `systemKind: 'writing-output'`
+ * message is an output card with its own toolbar; prose a model wrote beside
+ * its tool calls is working notes, small and muted; an unmarked final message
+ * (a budget salvage, an error) is a notice with no controls.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -14,7 +20,11 @@ import { Icon } from '@/components/ui/icon'
 import MessageContent from '@/components/chat/MessageContent'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import { BrahmaToolCall, parseBrahmaSqlToolMessage, type BrahmaSqlToolCallData } from './BrahmaToolCall'
-import type { StreamingToolCall } from './hooks/useBrahmaConsoleStreaming'
+import { segmentLiveRun } from './brahma-sql-tool-call'
+import type { StreamingToolBatchMark, StreamingToolCall } from './hooks/useBrahmaConsoleStreaming'
+import { WritingOutputCard } from './WritingOutputCard'
+import { ConsoleMessageAttachments, type ConsoleAttachmentView } from './ConsoleMessageAttachments'
+import { WRITING_OUTPUT_KIND, writingOutputFilename } from '@/lib/brahma-console/writing-output'
 
 interface BrahmaMessage {
   id: string
@@ -23,9 +33,19 @@ interface BrahmaMessage {
   createdAt: string
   provider?: string | null
   modelName?: string | null
-  /** Reasoning ("thinking") for the turn — DISPLAY ONLY. Rendered as a single
-   *  leading, collapsible block above the answer. */
+  /** Reasoning ("thinking") — DISPLAY ONLY. On a tool-call turn it is the
+   *  thinking that led to that turn's SQL; on the answer, the thinking since. */
   reasoningContent?: string | null
+  /** `'writing-output'` marks a Writing Assistant output. */
+  systemKind?: string | null
+  /** Operator attachments, resolved by the messages route. */
+  attachments?: ConsoleAttachmentView[] | string[] | null
+}
+
+function attachmentViews(m: BrahmaMessage): ConsoleAttachmentView[] {
+  return (m.attachments ?? []).filter(
+    (a): a is ConsoleAttachmentView => typeof a === 'object' && a !== null,
+  )
 }
 
 interface BrahmaConsoleMessageListProps {
@@ -35,8 +55,16 @@ interface BrahmaConsoleMessageListProps {
   streamingReasoning?: string
   /** Tool calls observed live this turn (run_sql cards rendered as they land). */
   streamingToolCalls?: StreamingToolCall[]
+  /** Where each live tool batch fell in the reasoning chain. */
+  streamingToolBatchMarks?: StreamingToolBatchMark[]
   isStreaming?: boolean
   isExecutingTools?: boolean
+  /** A Writing Assistant conversation. */
+  writing?: boolean
+  /** The conversation (for an output's Save). */
+  chatId?: string | null
+  /** The conversation's title (for an output's filename). */
+  chatTitle?: string | null
 }
 
 /** Normalize a live-streamed tool call into the shape BrahmaToolCall renders. */
@@ -110,8 +138,12 @@ export function BrahmaConsoleMessageList({
   streamingContent,
   streamingReasoning,
   streamingToolCalls,
+  streamingToolBatchMarks,
   isStreaming,
   isExecutingTools,
+  writing = false,
+  chatId = null,
+  chatTitle = null,
 }: BrahmaConsoleMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -120,42 +152,79 @@ export function BrahmaConsoleMessageList({
   }, [messages.length, streamingContent, streamingReasoning, streamingToolCalls])
 
   // Render items, in transcript order: user + assistant bubbles (assistant only
-  // when it carries prose, hiding empty intermediate agent turns) plus a card
-  // for each run_sql TOOL message. Other tools stay silent, as before.
+  // when it carries prose), the thinking of an intermediate tool-call turn as a
+  // standalone block, and a card for each run_sql TOOL message — so thinking
+  // and SQL interleave as they happened. Other tools stay silent, as before.
   type RenderItem =
     | { kind: 'bubble'; msg: BrahmaMessage; isUser: boolean }
+    | { kind: 'thinking'; id: string; content: string }
     | { kind: 'tool'; id: string; data: BrahmaSqlToolCallData }
+    | { kind: 'output'; msg: BrahmaMessage; ordinal: number }
+    | { kind: 'notes'; msg: BrahmaMessage }
+    | { kind: 'notice'; msg: BrahmaMessage }
 
   const renderItems: RenderItem[] = []
-  for (const m of messages) {
+  let outputOrdinal = 0
+  messages.forEach((m, index) => {
     // `getMessages` can return non-message events with no `role` (and old chats
     // predate some fields) — coerce defensively so a missing role just skips.
     const role = (m.role ?? '').toUpperCase()
     if (role === 'USER') {
       renderItems.push({ kind: 'bubble', msg: m, isUser: true })
     } else if (role === 'ASSISTANT') {
-      if (m.content && m.content.trim().length > 0) {
+      const hasProse = !!m.content && m.content.trim().length > 0
+      if (writing && m.systemKind === WRITING_OUTPUT_KIND) {
+        outputOrdinal++
+        renderItems.push({ kind: 'output', msg: m, ordinal: outputOrdinal })
+      } else if (writing && hasProse) {
+        // Prose beside tool calls is working notes; an unmarked final
+        // message (salvage, error) is a notice.
+        const next = messages[index + 1]
+        const followedByTools = (next?.role ?? '').toUpperCase() === 'TOOL'
+        renderItems.push(followedByTools ? { kind: 'notes', msg: m } : { kind: 'notice', msg: m })
+      } else if (hasProse) {
         renderItems.push({ kind: 'bubble', msg: m, isUser: false })
+      } else if (m.reasoningContent?.trim()) {
+        renderItems.push({ kind: 'thinking', id: m.id, content: m.reasoningContent })
       }
     } else if (role === 'TOOL') {
       const sqlData = parseBrahmaSqlToolMessage(m.content ?? '')
       if (sqlData) renderItems.push({ kind: 'tool', id: m.id, data: sqlData })
     }
-  }
+  })
 
-  // Live run_sql cards for the in-flight turn. When present, they supersede the
+  // Live run for the in-flight turn: thinking and run_sql cards interleaved in
+  // the order they happened. When any card is present it supersedes the
   // generic "Consulting the stacks…" indicator (each card shows its own state).
-  const liveSqlCalls = (streamingToolCalls ?? []).filter(tc => tc.name === 'run_sql')
+  const liveToolCalls = streamingToolCalls ?? []
+  const liveSqlCount = liveToolCalls.filter(tc => tc.name === 'run_sql').length
+  const liveSegments = segmentLiveRun(
+    streamingReasoning ?? '',
+    streamingToolBatchMarks ?? [],
+    liveToolCalls.length,
+  )
 
   return (
     <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
       {renderItems.length === 0 && !isStreaming && (
         <div className="text-center qt-text-secondary text-sm py-8">
-          A direct line to the engine of your choosing. Pose a question to begin.
+          {writing
+            ? 'Describe the piece you need. What comes back is the piece itself, ready to copy or file.'
+            : 'A direct line to the engine of your choosing. Pose a question to begin.'}
         </div>
       )}
 
       {renderItems.map(item => {
+        if (item.kind === 'thinking') {
+          return (
+            <div key={item.id} className="flex flex-row pl-1">
+              <div className="min-w-0 w-full" style={{ maxWidth: '92%' }}>
+                <ThinkingBlock content={item.content} collapsedByDefault align="start" />
+              </div>
+            </div>
+          )
+        }
+
         if (item.kind === 'tool') {
           return (
             <div key={item.id} className="flex flex-row pl-1">
@@ -166,7 +235,51 @@ export function BrahmaConsoleMessageList({
           )
         }
 
+        if (item.kind === 'output') {
+          return (
+            <div key={item.msg.id} className="flex flex-row pl-1">
+              <div className="min-w-0 w-full">
+                <WritingOutputCard
+                  chatId={chatId}
+                  messageId={item.msg.id}
+                  content={item.msg.content}
+                  filename={writingOutputFilename(chatTitle, item.ordinal)}
+                  reasoningContent={item.msg.reasoningContent}
+                />
+              </div>
+            </div>
+          )
+        }
+
+        if (item.kind === 'notes') {
+          return (
+            <div key={item.msg.id} className="flex flex-row pl-1">
+              <div className="min-w-0 w-full qt-console-notes" style={{ maxWidth: '92%' }}>
+                {item.msg.reasoningContent && (
+                  <ThinkingBlock content={item.msg.reasoningContent} collapsedByDefault align="start" />
+                )}
+                <span className="sr-only">Working notes: </span>
+                <MessageContent content={item.msg.content} />
+              </div>
+            </div>
+          )
+        }
+
+        if (item.kind === 'notice') {
+          return (
+            <div key={item.msg.id} className="flex flex-row pl-1">
+              <div className="min-w-0 w-full qt-console-notice" role="note" style={{ maxWidth: '92%' }}>
+                {item.msg.reasoningContent && (
+                  <ThinkingBlock content={item.msg.reasoningContent} collapsedByDefault align="start" />
+                )}
+                <MessageContent content={item.msg.content} />
+              </div>
+            </div>
+          )
+        }
+
         const { msg, isUser } = item
+        const sentAttachments = isUser ? attachmentViews(msg) : []
 
         return (
           <div
@@ -188,15 +301,18 @@ export function BrahmaConsoleMessageList({
               style={{ maxWidth: '80%' }}
             >
               {!isUser && msg.reasoningContent && (
-                <ThinkingBlock content={msg.reasoningContent} collapsedByDefault />
+                <ThinkingBlock content={msg.reasoningContent} collapsedByDefault align="start" />
               )}
-              <div
-                className={isUser ? 'qt-help-msg-user' : 'qt-help-msg-assistant'}
-                style={{ maxWidth: '100%' }}
-              >
-                <MessageContent content={msg.content} />
-              </div>
-              <CopyMarkdownButton content={msg.content} />
+              {msg.content.trim().length > 0 && (
+                <div
+                  className={isUser ? 'qt-help-msg-user' : 'qt-help-msg-assistant'}
+                  style={{ maxWidth: '100%' }}
+                >
+                  <MessageContent content={msg.content} />
+                </div>
+              )}
+              {sentAttachments.length > 0 && <ConsoleMessageAttachments attachments={sentAttachments} />}
+              {msg.content.trim().length > 0 && <CopyMarkdownButton content={msg.content} />}
             </div>
           </div>
         )
@@ -211,22 +327,44 @@ export function BrahmaConsoleMessageList({
             <path d="M10 0 L0 8 L10 16 Z" />
           </svg>
           <div className="flex flex-col gap-2 min-w-0 items-start" style={{ maxWidth: '80%' }}>
-            {streamingReasoning?.trim() && (
-              <ThinkingBlock content={streamingReasoning} streaming />
-            )}
-            {liveSqlCalls.map((tc, i) => (
-              <div key={i} className="w-full">
-                <BrahmaToolCall data={streamingToolCallToData(tc)} />
+            {liveSegments.map((seg, idx) => {
+              if (seg.kind === 'thinking') {
+                // Only the trailing stretch is still streaming (held open);
+                // thinking that already led to SQL settles collapsed.
+                return seg.isLast && !streamingContent ? (
+                  <ThinkingBlock key="thinking-live" content={seg.text} streaming align="start" />
+                ) : (
+                  <ThinkingBlock key={`thinking-${idx}`} content={seg.text} collapsedByDefault align="start" />
+                )
+              }
+              return liveToolCalls.slice(seg.start, seg.end).map((tc, j) =>
+                tc.name === 'run_sql' ? (
+                  <div key={`tool-${seg.start + j}`} className="w-full">
+                    <BrahmaToolCall data={streamingToolCallToData(tc)} />
+                  </div>
+                ) : null,
+              )
+            })}
+            {streamingContent && (writing ? (
+              // A provisional card: settles as an output or a notice on `done`,
+              // or is cleared (and reloads as working notes) if tools follow.
+              <div className="w-full">
+                <WritingOutputCard
+                  chatId={chatId}
+                  messageId={null}
+                  content={streamingContent}
+                  filename={writingOutputFilename(chatTitle, outputOrdinal + 1)}
+                  draft
+                />
               </div>
-            ))}
-            {streamingContent && (
+            ) : (
               <div className="qt-help-msg-assistant" style={{ maxWidth: '100%' }}>
                 <MessageContent content={streamingContent} />
               </div>
-            )}
-            {isExecutingTools && liveSqlCalls.length === 0 ? (
+            ))}
+            {isExecutingTools && liveSqlCount === 0 ? (
               <div className="qt-help-msg-assistant italic">Consulting the stacks…</div>
-            ) : (!streamingContent && !streamingReasoning?.trim() && liveSqlCalls.length === 0) ? (
+            ) : (!streamingContent && !streamingReasoning?.trim() && liveSqlCount === 0) ? (
               <div className="qt-help-msg-assistant italic">Thinking…</div>
             ) : null}
           </div>

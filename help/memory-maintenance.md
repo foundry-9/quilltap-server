@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=memory&section=memory-maintenance
+url: /settings?section=memory-maintenance
 ---
 
 # Memory Maintenance
 
-> **[Open this page in Quilltap](/settings?tab=memory&section=memory-maintenance)**
+> **[Open this page in Quilltap](/settings?section=memory-maintenance)**
 
 The Commonplace Book grows. Every conversation adds entries, underlines old ones, and pins related observations together. Left entirely to its own devices, a much-loved character's shelves can run to tens of thousands of items — a splendid predicament, but rather a heavy one for a local machine to lift at every turn, and a muddle besides: five notes about one long evening stay five notes, none of them aware of the others.
 
@@ -55,7 +55,7 @@ The work runs as a background job, so it never holds up a chat turn. Only one ro
 - **Consolidate** — has a switch of its own, separate from the master switch, because it costs model calls. Off by default.
 - **Archive retention** — the number of days an archived note a digest replaced is kept before **Retire** lets it go. Blank (the default) means *never*: retirement then does nothing at all. The clock starts when a note goes down to the cellar, and is not wound back by later tidying. A note the cap archived is never let go until a digest has replaced it. When an archived note does go, its digest's tally is corrected to match — though retirement never takes the digest itself, which was written precisely to outlive the notes it replaced.
 
-The switches govern every step the house decides on for itself. A step you ask for by hand — through **Run maintenance…**, the character page's **Maintenance** button, or `quilltap memories maintain` — runs regardless of them.
+The switches govern every step the house decides on for itself. A step you ask for by hand — through **Run maintenance…**, the **Maintenance** button on the **Memories** card of a character's **History** section, or `quilltap memories maintain` — runs regardless of them.
 
 ## The Cap
 
@@ -125,7 +125,7 @@ If your instance predates Quilltap 4.3, run **Repair Missing Embeddings** (just 
 
 ## Memories About Others
 
-> Deep link: [/settings?tab=memory&section=memory-extraction-grain](/settings?tab=memory&section=memory-extraction-grain)
+> Deep link: [/settings?section=memory-extraction-grain](/settings?section=memory-extraction-grain)
 
 The **Extraction Grain** card changes how often a character writes down what they notice about *other* characters. A note every turn meant a four-person room could produce a dozen fragments a turn about one thread of conversation. Now:
 
@@ -146,7 +146,7 @@ If you find yourself pressing **Run maintenance…** constantly, consider turnin
 In a character's memory list:
 
 - The **tier** filter shows *Active* memories, *Archived* ones, or both. Archived memories are dimmed and labelled.
-- An archived memory that a digest replaced has a **Superseded by a digest** link that shows you the digest.
+- An archived memory that something newer replaced has a **Superseded by a newer memory** link that shows you its replacement. Usually that is the digest it was folded into; when the consolidation found two memories contradicting one another, it is whichever carries the more recent version of the facts — and should the old fact be stated again later, the archived memory is brought back to active duty rather than being swallowed by its contradiction.
 - Digests carry a **Digest** badge and say how many notes they were made from; the source filter can show digests alone.
 - Keystones carry a **Keystone** badge, and **Keystones only** narrows the list to them.
 - **Maintenance** opens the run dialog for this character.
@@ -155,7 +155,7 @@ In a character's memory list:
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=memory&section=memory-maintenance")`
+`help_navigate(url: "/settings?section=memory-maintenance")`
 
 ## Related Settings
 

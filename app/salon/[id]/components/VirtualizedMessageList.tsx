@@ -1,6 +1,7 @@
 'use client'
 
 import type { Virtualizer } from '@tanstack/react-virtual'
+import type { EditImpactState } from '../hooks/useMessageActions'
 import ToolMessage from '@/components/chat/ToolMessage'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { TurnState } from '@/lib/chat/turn-manager'
@@ -11,6 +12,7 @@ import { isCollapsedAnnouncement, type RenderItem } from '../announcement-render
 import { Icon } from '@/components/ui/icon'
 import { MessageRow } from './MessageRow'
 import { AnnouncementGroup } from './AnnouncementChip'
+import { GreenRoomPanel } from './GreenRoomPanel'
 import { isOperatorAuthoredAnnouncement } from '../whisper-visibility'
 import { resolveToolRowAttributionMessage } from '../group-tool-messages'
 import { StreamingMessage } from './StreamingMessage'
@@ -25,6 +27,8 @@ interface VirtualizedMessageListProps {
   messages: Message[]
   /** Render-items the virtualizer indexes over: messages + packed announcement groups. */
   renderItems: RenderItem[]
+  /** Flip a docked Green Room card's record open or shut. */
+  onToggleGreenRoom: (roomId: string) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
   messagesContainerRef: React.RefObject<HTMLDivElement | null>
   messagesEndRef: React.RefObject<HTMLDivElement | null>
@@ -59,6 +63,9 @@ interface VirtualizedMessageListProps {
     startEdit: (message: Message) => void
     saveEdit: (messageId: string) => Promise<void>
     cancelEdit: () => void
+    editImpact: EditImpactState | null
+    regenerateMemoriesOnSave: boolean
+    setRegenerateMemoriesOnSave: (value: boolean) => void
     toggleSourceView: (messageId: string) => void
     deleteMessage: (messageId: string) => Promise<void>
     switchSwipe: (groupId: string, direction: 'prev' | 'next', swipeStates: Record<string, SwipeState>, setSwipeStates: (value: any) => void) => void
@@ -143,6 +150,7 @@ interface VirtualizedMessageListProps {
 export function VirtualizedMessageList({
   messages,
   renderItems,
+  onToggleGreenRoom,
   virtualizer,
   messagesContainerRef,
   messagesEndRef,
@@ -229,6 +237,27 @@ export function VirtualizedMessageList({
             const item = renderItems[virtualRow.index]
             if (!item) return null
 
+            // A docked Green Room — the record of an opening or a watched join,
+            // at the head of its part of the conversation. UI only.
+            if (item.kind === 'green-room') {
+              return (
+                <div
+                  key={item.id}
+                  data-index={virtualRow.index}
+                  ref={measureRow}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <GreenRoomPanel state={item.room} onToggle={onToggleGreenRoom} />
+                </div>
+              )
+            }
+
             // Packed run of consecutive collapsed announcements — one virtual row
             // of flex-wrapping chips.
             if (item.kind === 'announcement-group') {
@@ -247,6 +276,7 @@ export function VirtualizedMessageList({
                 >
                   <AnnouncementGroup
                     members={item.members}
+                    chatId={chatId}
                     onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
                     participantNames={participantNames}
                     announcerNames={announcerNames}
@@ -322,6 +352,8 @@ export function VirtualizedMessageList({
                   messageIndex={messageIndex}
                   isEditing={isEditing}
                   editContent={editContent}
+                  editImpact={isEditing ? messageActions.editImpact : null}
+                  regenerateMemoriesOnSave={messageActions.regenerateMemoriesOnSave}
                   viewSourceMessageIds={viewSourceMessageIds}
                   isSystemMessageCollapsed={
                     // Same rule that packs chip groups, so an always-expanded
@@ -353,6 +385,7 @@ export function VirtualizedMessageList({
                   onEditSave={messageActions.saveEdit}
                   onEditCancel={messageActions.cancelEdit}
                   onEditChange={setEditContent}
+                  onRegenerateMemoriesChange={messageActions.setRegenerateMemoriesOnSave}
                   onToggleSourceView={messageActions.toggleSourceView}
                   onDelete={messageActions.deleteMessage}
                   onGenerateSwipe={onRegenerate}

@@ -70,7 +70,7 @@ jest.mock('@/lib/logger', () => ({
   },
 }))
 
-import { policyProtectionOf, partitionByPolicyProtection } from '@/lib/memory/policy-protection'
+import { policyProtectionOf } from '@/lib/memory/policy-protection'
 import { retireChatMemories } from '@/lib/memory/retire'
 import { planNearDuplicateFolds, applyNearDuplicateFolds } from '@/lib/memory/maintenance/fold-near-duplicates'
 import { ADMISSION_THRESHOLDS } from '@/lib/memory/settings-defaults'
@@ -145,19 +145,9 @@ describe('policyProtectionOf', () => {
     expect(policyProtectionOf({ source: 'AUTO', tier: 'hot' })).toBeNull()
   })
 
-  it('partitions and counts', () => {
-    const { actionable, spared, sparedBy } = partitionByPolicyProtection([
-      row('a'),
-      row('m', { source: 'MANUAL' }),
-      row('d', { source: 'CONSOLIDATED' }),
-      row('c', { tier: 'cold' }),
-      row('k', { keystone: true }),
-      row('mk', { source: 'MANUAL', keystone: true }),
-    ])
-    expect(actionable.map(m => m.id)).toEqual(['a'])
-    expect(spared.map(m => m.id)).toEqual(['m', 'd', 'c', 'k', 'mk'])
-    // A keystone is counted as a keystone, whatever its source.
-    expect(sparedBy).toEqual({ keystone: 2, manual: 1, digest: 1, cold: 1 })
+  it('names a keystone a keystone, whatever its source', () => {
+    expect(policyProtectionOf({ source: 'AUTO', tier: 'hot', keystone: true })).toBe('keystone')
+    expect(policyProtectionOf({ source: 'MANUAL', tier: 'hot', keystone: true })).toBe('keystone')
   })
 })
 

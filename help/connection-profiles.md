@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers&section=connection-profiles
+url: /settings?section=connection-profiles
 ---
 
 # Connection Profiles
 
-> **[Open this page in Quilltap](/settings?tab=providers&section=connection-profiles)**
+> **[Open this page in Quilltap](/settings?section=connection-profiles)**
 
 Connection Profiles are where you configure your AI language models (LLMs) for use in Quilltap chats. A connection profile links together an API key, a provider, and a specific model, allowing Quilltap to communicate with the AI service.
 
@@ -24,15 +24,23 @@ You can create multiple profiles for different purposes, such as:
 - A profile for specialized tasks (coding, creative writing)
 - Different profiles for different API accounts
 
-## Accessing Connection Profiles
+## Finding Your Connection Profiles
+
+Connection profiles live with the providers they telephone, under **Settings → Connections → Providers**:
 
 1. Click **Settings** (gear icon) in the left sidebar
-2. Click the **Connection Profiles** tab
-3. You'll see existing profiles (if any) and options to create new ones
+2. Choose the **Connections** group and open the **Providers** card
+3. With the view set to **By provider** (the default), open the card of the provider in question — Anthropic, OpenAI, Ollama, and so forth
 
-## Viewing Connection Profiles
+A provider gets a card if it holds a key *or* if any profile names it, so a keyless establishment such as Ollama on your own machine is listed as readily as the grand hotels. Inside each card the provider's keys come first, and below them every profile that uses the provider — connection, image and embedding alike — in one column. Connection profiles wear a **Connection** badge and the Forge's portrait, the Forge being the member of staff who keeps the wires humming. Each row shows the profile's name and model; click it to open the profile.
 
-The profiles list shows:
+### The other way of looking at it: By kind
+
+When you want the whole switchboard at once — every connection profile, whatever its provider — click **By kind** at the top of the Providers card and open **Connection Profiles**. That is the list Quilltap has always shown: drag-to-reorder, health badges, tags, auto-configure and all. A link straight to this page (the one at the top, for example) opens *By kind* with **Connection Profiles** already unfolded, and Quilltap remembers whichever view you chose last, on this browser.
+
+## What the By-Kind List Shows
+
+The full Connection Profiles list shows:
 
 - **Profile Name** — The name you gave the profile
 - **Provider** — Which AI service (OpenAI, Anthropic, etc.)
@@ -54,17 +62,18 @@ Should an import or a restoration arrive bearing a name already taken, Quilltap 
 
 ### Step 1: Prepare Your API Key
 
-Before creating a connection profile, you need an API key:
+Before creating a connection profile for a hosted provider, you need an API key (a local provider such as Ollama needs none — skip ahead):
 
-1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=api-keys`) and expand **API Keys**
+1. If the provider already has a card under **Settings → Connections → Providers**, open it and choose **+ Add → API key**; otherwise use **Add an API key** on the **Add a provider** card at the end of the list
 2. Add your API key from the provider
-3. Test the key to verify it works
-4. Return to Connection Profiles tab
+3. Click **Test** on the new key row to verify it works
+
+See [API Keys](api-keys-settings.md) for the particulars. If you would rather be walked through key, model and profile in one guided promenade, the **Setup Wizard** (on the same **Add a provider** card, and in its own card above Providers) will do the lot.
 
 ### Step 2: Create the Profile
 
-1. Click **Add Connection Profile**
-2. A form appears with these fields:
+1. On the provider's card, click **+ Add** and choose **Connection profile**. The form opens with that provider already selected — exactly as though you had picked it from the dropdown yourself, so a provider's default base URL and tool-use habits are filled in — and, if the provider holds exactly one key, that key is chosen too. (From *By kind*, the **Add Connection Profile** button opens the same form with no provider chosen.)
+2. The form's fields:
 
    **Basic Information:**
    - **Profile Name** — Give this configuration a name (e.g., "GPT-4 Production", "Claude Fast"). It must be unique — see [A Note on Names](#a-note-on-names) above. (Leave it blank and Quilltap will suggest one for you, suffixing a numeral should the obvious choice already be taken.)
@@ -95,8 +104,8 @@ Before creating a connection profile, you need an API key:
 
 Before using in chats, verify it works:
 
-1. Find your new profile in the list
-2. Click **Test Connection** button
+1. Open your new profile — its row on the provider's card, or **Edit** in *By kind*
+2. Click **Test Connection**
 3. Quilltap sends a test message to verify:
    - ✓ API key is valid
    - ✓ Model is accessible
@@ -107,24 +116,23 @@ Before using in chats, verify it works:
 
 To change an existing profile:
 
-1. Find the profile in the list
-2. Click **Edit** button (pencil icon)
-3. Update any of these settings:
+1. Click its row on the provider's card — or, in *By kind*, its **Edit** button
+2. Update any of these settings:
    - Profile name
    - API key (switch to a different one)
    - Model (select a different model)
    - Advanced settings (temperature, tokens, etc.)
    - Tags for organization
-4. Click **Save Changes**
+3. Click **Save Changes**
 
 ## Deleting a Connection Profile
 
 To remove a profile:
 
-1. Find the profile in the list
-2. Click **Delete** button (trash icon)
-3. A confirmation dialog appears (showing if it's in use)
-4. Click **Confirm Delete** to remove it
+1. Switch the Providers card to **By kind** and open **Connection Profiles** — deletion is done from the full list
+2. Click **Delete** on the profile
+3. A confirmation appears (showing if it's in use)
+4. Confirm to remove it
 
 **Warning:** If the profile is used in active chats, those chats will need a new profile assigned.
 
@@ -251,7 +259,7 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - Routed thinking models stream their deliberations into the Salon's thinking fold (display only — never fed back), just as they would at the front door of their own establishments. A model id wearing the `:thinking` suffix is the reasoning variant of its house and deliberates without being asked
 - **Reasoning Effort** — NanoGPT's one dial for the whole arcade. Any setting other than *None* asks the routed model to reason, from *Minimal* through *XHigh* (NanoGPT translates the scale into each establishment's own dialect); *None* asks it to come straight to the point; and *(model default)* leaves the matter to the model — a `:thinking` id thinks, the rest generally do not. Two candles of caution: not every model shows its working even when it reasons, and reasoning tokens bill as output tokens, so a generous effort on a verbose model makes for a generous invoice
 - Multi-character scenes mind the same etiquette here as everywhere: a profile that will run a thinking turn — by an effort you set, or by a `:thinking` model's own habit — anchors turns in prose rather than with the `[Name]` prefill some reasoning models refuse mid-thought
-- **Enable Prompt Caching** — the OpenAI- and Gemini-routed houses cache repeated context of their own accord, gratis; the Anthropic-routed (Claude) models wait to be asked. Tick this and NanoGPT sets the cache checkpoints itself, so a long chat re-reads its own history at roughly a tenth the usual rate from the second turn onward. Writing the cache carries a modest premium over plain input, so the economy is in the return visits. Models routed elsewhere simply pay it no mind
+- **Enable Prompt Caching** — the OpenAI- and Gemini-routed houses cache repeated context of their own accord, gratis; the Anthropic-routed (Claude) models wait to be asked. Tick this and NanoGPT sets the cache checkpoints itself, so a long chat re-reads its own history at roughly a tenth the usual rate from the second turn onward. Writing the cache carries a modest premium over plain input, so the economy is in the return visits. The bookmarks are kept clear of your newest line, which wears the moment's particulars and is never repeated. Mind the subscription, too: NanoGPT bills an explicitly cached request pay-as-you-go, outside any subscription that would otherwise cover the model. Models routed elsewhere simply pay it no mind
 - **Cache Duration** *(visible only when Prompt Caching is enabled)* — five minutes is the default and the cheapest entry in the ledger (1.25x to write); one hour costs more upfront (2x) but suits the slow, deliberate session that outlives the five-minute window
 
 - Multiple model sizes (Flash, Pro)
@@ -265,6 +273,9 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - **Enable Zero Data Retention (ZDR)** — instructs OpenRouter to route only through providers that promise not to store or log your prompts. Worth ticking for sensitive writing.
 - **Use Custom Model ID** — when ticked, the *Model* field becomes a free-text input so you can supply an obscure model identifier that hasn't yet appeared in OpenRouter's fetched list. Untick it to return to the model selector.
 - **Fallback Models** — pick up to two models OpenRouter will fall back to if the primary fails (rate-limited, down for maintenance, etc.). Available only after *Fetch Models* has populated the list.
+- **Prompt caching, the house's own part.** OpenAI, Gemini, DeepSeek, Grok, Moonshot and their kin cache repeated context of their own accord. OpenRouter, however, serves each model from several establishments at once, and a cache kept at one is no use at another; Quilltap now hands OpenRouter a per-character ticket with every call, so each character is shown back to the same establishment from the very first turn and finds the shelf still warm. One caution: if you pin a *provider order* on the profile, OpenRouter honours your order instead and the ticket goes unread.
+- **Enable Prompt Caching** — Claude waits to be asked. Tick this and Quilltap leaves the cache bookmarks itself: after the house rules, after the conversation so far, and after each tool result while a chain of tool calls is under way — but never on your newest line, which arrives wrapped in the moment's particulars and is never seen again. Each turn then re-reads the previous one's history at about a tenth the usual rate. Writing the cache carries a premium (1.25x for five minutes, 2x for the hour), so the economy is in the return visits. Other models pay it no mind
+- **Cache Duration** *(visible only when Prompt Caching is enabled)* — five minutes is the default and the cheapest to write; one hour costs more upfront but suits the slow, deliberate session that outlives the five-minute window
 
 ### Local Providers (Ollama)
 
@@ -288,7 +299,7 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 ### OpenAI-Compatible Endpoints (llama-server, vLLM, LM Studio, and kin)
 
 - Point *Base URL* at your server's OpenAI-compatible route — `http://localhost:8080/v1` for `llama-server`, and whatever your runtime advertises otherwise. An API key is optional.
-- **And optional now means offered, as of 4.9.** This is the one provider that keeps a foot in both camps — the unbolted llama.cpp on your own desk, and a hosted service that will not exchange a syllable without a bearer token — and until now Quilltap had only one word for the matter and used it wrongly. Because no key was *required*, the *API Key* field was not shown at all, and **OpenAI-Compatible** was absent from the Add-New-API-Key list besides, so no such key could be brought into existence in the first place. Anyone aiming this provider at Together, Fireworks, Groq, DeepInfra, a vLLM behind a door, or a corporate gateway was answered with a flat 401 and given nothing to do about it. The two questions are now asked separately: the field appears, unstarred, and you may fill it or leave it empty as your endpoint requires. Create the key first under **Settings → AI Providers → API Keys**, choosing **OpenAI-Compatible** as its provider, and then select it here. A local server that wants no key wants none still — leave the field on *None* and nothing is sent.
+- **And optional now means offered, as of 4.9.** This is the one provider that keeps a foot in both camps — the unbolted llama.cpp on your own desk, and a hosted service that will not exchange a syllable without a bearer token — and until now Quilltap had only one word for the matter and used it wrongly. Because no key was *required*, the *API Key* field was not shown at all, and **OpenAI-Compatible** was absent from the Add-New-API-Key list besides, so no such key could be brought into existence in the first place. Anyone aiming this provider at Together, Fireworks, Groq, DeepInfra, a vLLM behind a door, or a corporate gateway was answered with a flat 401 and given nothing to do about it. The two questions are now asked separately: the field appears, unstarred, and you may fill it or leave it empty as your endpoint requires. Create the key first — **+ Add → API key** on the OpenAI-Compatible card under **Settings → Connections → Providers**, or **Add an API key** on the **Add a provider** card if it has none yet — and then select it here. A local server that wants no key wants none still — leave the field on *None* and nothing is sent.
 - **Endpoint Options** — a group of provider settings that, until 4.9, this provider had never had at all. *Reasoning Effort* (from *None* through *Extra high*) tells a reasoning model how long it may think; *Top K*, *Min P*, *Repeat Penalty*, *Presence Penalty*, *Frequency Penalty* and *Seed* are the sampling settings your model's publisher specifies; *Reuse Cached Prompt* is an escape hatch for servers that do not already reuse the part of a prompt they have processed before (`llama-server` does, so most people can leave it alone). Everything here is sent only when you fill it in, and an endpoint that does not recognise a setting generally ignores it.
 - **Tool use is now yours to grant.** Because this provider points at an endpoint of unknown character, new profiles start with *Allow tool use* unticked and Prospero falls back to its pseudo-tool formats. If your server does speak native function calling — `llama-server --jinja`, vLLM, LM Studio — tick the box, and Quilltap will send the tool definitions and act on the calls that come back. Should the endpoint prove to have been boasting, the error is shown rather than swallowed.
 - **Strict chat templates no longer strangle the conversation at the second turn.** Certain model templates — the Qwen family most insistently, and a number of Llama- and Gemma-derived ones — will accept a system message only as the very first item on the programme and raise a formal objection to any that follows. Quilltap assembles the head of a turn in up to three separate system blocks, for excellent reasons to do with prompt caching on the hosted services, and the consequence was a chat that greeted you charmingly and then fell silent forever: every turn after the opening was refused outright by the server before a single token was generated. The blocks are now folded into one on their way to a local endpoint, in the order they were written and with nothing left out. The hosted providers keep their three, and their caches with them.
@@ -371,6 +382,18 @@ The Simple JSON surface was designed for smaller and local models that lack nati
 
 When in doubt, leave the setting on **Auto**. The keeper of the keys can always rearrange the silverware later.
 
+### Keep tool results in full for (turns)
+
+Beneath the Tool format selector sits a small numeric field, **Keep tool results in full for (turns)**, which arrives set to **3**. A search, a reading of a document, a rummage through the Commonplace Book — each comes back as a report, and some reports run to many pages. Rather than carry every page forward forever, Quilltap folds a report down to a single line once that many turns have passed since it arrived: the tool's name, what was asked of it, and a polite note that the model may ask again if it wishes to see the rest. (The fold happens only on the way to the model; the full report stays in the transcript, and the Salon shows it as it always did.)
+
+Folding keeps a long conversation lean, and for a model that pays full freight on every word it is usually the right economy. But it has a cost of its own with a model that offers a **prompt cache** — Anthropic, chiefly, when *Enable Prompt Caching* is ticked. A cache only helps when the conversation reads exactly as it did last time up to some point, and each fold alters a passage partway up the history; everything after that passage must be cached afresh, at a premium. A busy, tool-happy chat can fold something nearly every turn and so pay that premium nearly every turn.
+
+- **0** keeps every report in full, forever. Kindest to a cached model, provided your reports are not enormous; the cached copy is read back at a tenth of the price.
+- **A larger number** (ten, say, or twenty) folds less often, which keeps most of the cache's savings while still retiring truly ancient reports.
+- **The default of 3** suits models without a cache, where every carried word is paid in full on every turn.
+
+The count is in the model's own replies, so in a crowded room with several characters speaking it passes faster than your own turns do. Each character's history is built with their own profile's figure. A turn that fails over to an understudy profile keeps the history its first profile assembled.
+
 ## Announcing the Speaker in Multi-Character Scenes
 
 When several characters share a room, each reply must be pinned to exactly one of them, or the model will cheerfully write the whole cast's evening for you. Quilltap has two ways of pinning it, and the **Announce the speaker in multi-character scenes ([Name] prefill)** checkbox decides which one this profile uses.
@@ -378,6 +401,8 @@ When several characters share a room, each reply must be pinned to exactly one o
 **Ticked** — the turn is handed to the model already opened, with `[Marie]` written at the top of a reply she has not begun. Structurally she cannot be anyone else; the model has no choice but to continue the line it has been handed. The tag never reaches the transcript — Quilltap strips it on the way back. This is the firmer of the two grips, and it is where most profiles begin.
 
 **Unticked** — the same instruction is delivered in prose, appended quietly to the system prompt: *respond as Marie and only Marie, and never label anything with another participant's name.* The conversation is left ending on the user's turn, and the model begins its reply itself. A polite request rather than a hand on the elbow — but some models will not tolerate the hand.
+
+**Should a turn fail over to an understudy**, the understudy is pinned by *its own* profile's setting, not the first profile's. A ticked OpenAI profile may hand its turn to an unticked Anthropic understudy, and the understudy receives the prose instruction rather than the `[Marie]` it would have flatly refused.
 
 **Quilltap unticks it for you in two cases.** A new profile arrives with the box already settled, and it settles it against the prefill when either of these holds:
 
@@ -520,6 +545,21 @@ see is passed over. The picture has already been packed into the request, and
 handing it to a model with no eyes would be refused at the door — so the turn
 goes to the next candidate rather than being spent on a certainty.
 
+Tools travel properly with the understudy, too. Each provider expects the
+character's instruments laid out in its own particular fashion, and an
+understudy from another house is now handed them in *its* fashion rather than
+the one the original performer was used to — so a chat with tools switched on
+fails over between providers as readily as one without. An understudy who
+answers by reaching straight for a tool, without a word of prose first, is
+taken at their word: the tool is used and the scene continues, exactly as it
+would have for the performer you cast.
+
+One case is still passed over. Some models are taught their tools in the prompt
+itself rather than handed them natively, and the prompt for this turn was
+written for whichever arrangement the profile you cast prefers. An understudy
+who would need the *other* arrangement is skipped, and the reply's list marks
+them so, rather than being sent a set of instructions meant for someone else.
+
 ### What counts as an indisposition
 
 A fallback fires for problems of *availability*: a rejected key, a rate limit, a
@@ -599,7 +639,7 @@ Check your provider's documentation for the exact list of supported file types a
 
 **Solution:**
 
-- Check API Keys tab — make sure you created the key
+- Open the provider's card and check its key is there — and press **Test** on it
 - Verify the key is still valid with your provider
 - Delete and re-add the key from the provider's website
 
@@ -625,15 +665,14 @@ Check your provider's documentation for the exact list of supported file types a
 - Use a different provider
 - Use a "cheap" profile for fast responses
 
-### Can't create new profiles (greyed out button)
+### Can't add a profile (greyed-out menu entry)
 
-**Reason:** No API keys available
+**Reason:** On a provider's card, an **+ Add** entry is greyed out when the provider cannot do that kind of work — *Connection profile* on a search-only provider, *Image profile* on one that paints nothing, *API key* on one that takes no key.
 
 **Solution:**
 
-- Go to API Keys tab
-- Add at least one API key
-- Return to Connection Profiles
+- Pick a provider that offers what you want, or add one with the **Add a provider** card
+- A hosted provider needs a key before its profile can connect: add one with **+ Add → API key** first
 
 ## In-Chat Settings Access
 
@@ -643,7 +682,7 @@ Characters with help tools enabled can read your configured connection profiles 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=providers&section=connection-profiles")`
+`help_navigate(url: "/settings?section=connection-profiles")`
 
 ## Related Settings
 

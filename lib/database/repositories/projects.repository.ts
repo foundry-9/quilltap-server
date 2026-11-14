@@ -48,7 +48,7 @@ export class ProjectsRepository extends AbstractStoreBackedRepository<Project> {
     applyOverlayOne: applyProjectStoreOverlayOne,
     applyWriteOverlay: applyProjectStoreWriteOverlay,
     writeManagedFields: writeProjectStoreManagedFields,
-    ensureOfficialStore: (id, name) => ensureOwnerOfficialStore('project', id, name),
+    ensureOfficialStore: (project) => ensureOwnerOfficialStore('project', project.id, project.name),
   };
 
   /** Seed the roster defaults a fresh project needs before its row is written. */

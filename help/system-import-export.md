@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system&section=import-export
+url: /settings?section=import-export
 ---
 
 # Import & Export Data
 
-> **[Open this page in Quilltap](/settings?tab=system&section=import-export)**
+> **[Open this page in Quilltap](/settings?section=import-export)**
 
 The Import & Export tool lets you save your Quilltap data to files and load data from files back into your system.
 
@@ -44,7 +44,7 @@ cellar with no bell-pull:
 
 **Step-by-Step:**
 
-1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
+1. **Go to the Settings page, and open the *Data & Maintenance* group** (`/settings?section=import-export`)
 
 2. **Find the Import / Export card**
 
@@ -101,7 +101,7 @@ Import lets you load exported data from `.quilltap` files back into your system.
 
 **Step-by-Step:**
 
-1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
+1. **Go to the Settings page, and open the *Data & Maintenance* group** (`/settings?section=import-export`)
 
 2. **Find the Import / Export card**
 
@@ -149,12 +149,16 @@ Import lets you load exported data from `.quilltap` files back into your system.
 - If you already have a character named "Alice", the import is skipped
 - Use this to add new items without overwriting
 - Safe option that won't lose existing work
+- A chat that is kept keeps its own annotations, Informs, outfit history and Document Mode panes; importing the same bundle twice adds none of them a second time
 
 **Replace (Recommended for updating):**
 
 - If you already have a character named "Alice", it's overwritten with the imported version
 - Use this to update items with newer versions
 - Replaces completely, no merging
+- The item keeps its place in the household: chats, memories, projects and groups that name it still find it afterwards, for it is rewritten under its own identity rather than torn down and rebuilt as a stranger
+- A connection or image profile keeps the API key it already had; keys never travel in a bundle
+- The built-in roleplay templates are never overwritten; a bundle's copy of one is quietly passed over
 
 **Create New (Recommended for duplicating):**
 
@@ -285,6 +289,8 @@ the exporting instance, Quilltap cannot tell which settings are sensitive and
 therefore withholds all of them: it would rather ask you to re-enter a harmless
 setting than gamble with a live one.
 
+**Document stores arrive shuttered.** A filesystem or Obsidian store in a `.qtap` import comes in disabled, and the preview names the folder it points at; once you are satisfied that the folder is one you recognise, enable the store in the Scriptorium. Choosing Overwrite never alters an existing store's folder or type. Exports likewise leave out any plugin setting marked secret, the MCP server list among them.
+
 **Instance settings overwrite, on purpose.** That is what "move my setup" means.
 A handful of keys never travel regardless — the pointers to this instance's own
 document stores, the housekeeping clock, and the version guard — because they
@@ -335,6 +341,8 @@ instance cannot reach the outside world; otherwise a refresh knows better.
 - Check that file hasn't been corrupted (a truncated NDJSON file will report a specific line number)
 - An export that fails with **"doc_mount_blob_chunk received without preceding doc_mount_blob"** was written by a build predating this fix and read by one predating it too; the file itself is sound. Import it again on a current build and its large attachments will arrive whole
 - A genuinely truncated export now says so plainly — *"NDJSON export truncated"*, naming the attachments that never finished arriving — rather than complaining about an orphaned chunk
+- An export that simply stops before its final line is refused as *"truncated — it ends before its __footer__ record"* rather than imported halfway and declared a success; fetch a fresh copy and try again
+- A groups export carries the groups but not their members or linked stores. Members and stores already in this instance are reattached; any that cannot be found are named in the warnings
 - Very old exports above ~450 MB that used the monolithic JSON format are too large to import on modern runtimes — re-export them from a newer Quilltap build first
 - A bundle that has been opened up and edited by hand — or written by some other establishment's tooling — may carry a record whose fields are not the shape Quilltap expects. Such a record is named in the warnings and set aside; the rest of the bundle arrives as usual. Should a whole import fall over on account of one such item, you are running a build predating version 4.9, and a newer one will take the same file in stride
 - Try changing conflict resolution strategy
@@ -359,7 +367,7 @@ instance cannot reach the outside world; otherwise a refresh knows better.
   embedding profile rather than arriving with the sender's. Check the Tasks
   Queue — search over them warms up as the re-indexing jobs drain
 - If the import warned that no embedding profile is configured, set one in the
-  Commonplace Book tab; the memories are indexed once one exists
+  Connections group of Settings (under Providers, By kind: Embedding Profiles); the memories are indexed once one exists
 - The memories themselves are present and readable throughout; it is only
   semantic search that has to catch up
 
@@ -413,7 +421,7 @@ instance cannot reach the outside world; otherwise a refresh knows better.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system&section=import-export")`
+`help_navigate(url: "/settings?section=import-export")`
 
 ## Related Topics
 

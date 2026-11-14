@@ -12,60 +12,76 @@ This guide walks you through creating new characters in Quilltap, from simple ch
 
 ### Accessing Character Creation
 
-1. Click **Characters** in the left sidebar
-2. Click **Create Character** or **+ New Character** button
-3. Character creation form appears
-4. Fill in desired fields
-5. Click **Create** to save
+1. Open **Aurora** (`/aurora`) from the left sidebar
+2. Click **Create Character** or **+ New Character**
+3. The New Character form appears
+4. Fill in whatever you like — only the name is required
+5. Click **Create Character**
 
-**Quick tip:** You can create a character with just a name and description!
+The New Character form is the one place in Aurora with a **Create** button, because until you press it there is no character to save things against. The moment it is pressed, the new character's page opens, and from there on every field saves itself (see [Editing Characters](character-editing.md)).
 
-## Character Creation Form Fields
+**Quick tip:** You can create a character with nothing but a name, and furnish the rest at leisure.
 
-### Essential Information
+## The New Character Form
 
-**Character Name** (required)
+The form is three cards, laid out in the same shape as the character's own page.
 
-- What the character is called
-- Used throughout the system
+### Facts
+
+**Name** (required)
+
+- What the character is called, used throughout the system
+- Leave it empty and the form declines to create anyone, with a note saying why
 - Examples: "Alice", "Lord Blackthorne", "Captain Nova"
 
 **Title** (optional)
 
-- Subtitle or role description
-- Appears with name in lists
-- Examples: "The Wanderer", "CEO of TechCorp", "Royal Advisor"
+- Your private label for the character — the protagonist, the rival, the love interest. Not how strangers refer to them
 
-**Description** (required for non-wizard)
+**Aliases** (optional)
 
-- Long-form narrative about the character
-- Who they are, their story, background
-- Can include personality, motivations, history
+- Other names the character answers to, added one at a time as chips
+
+**Pronouns** (optional)
+
+- Choose a preset or **Custom**. When set, they are included in system prompts so the LLM uses them correctly
+- The third pronoun is the one that comes before a noun ("her lamp", "their lamp"), not the one that stands alone ("hers", "theirs"). Should the AI Wizard or Summon From Lore hand back "hers" or "theirs" for a plain she/her or they/them character, Quilltap quietly corrects it to the preset rather than filing the character under Custom
+
+**Birthday** (optional)
+
+- A real date of birth; set one and the character's age is reckoned for you, a year older on each birthday
+
+**Kind of character**
+
+- **Roleplay character** (the default) or **Assistant**. See [Editing Characters](character-editing.md) for what the difference means
+
+### Dossier
+
+**Identity**
+
+- The outside view — what a stranger could know on sight or by reputation
+- Written about the character: *"Ariadne is a research librarian at the Athenaeum."*
+
+**Description**
+
+- How acquaintances perceive the character — behaviour, mannerisms, verbal habits; not physical appearance
 - Examples:
   - "A clever detective from Victorian London"
   - "An ancient dragon with a love of riddles"
   - "A cheerful barista who writes poetry in free time"
 - Only *other* characters ever read this field, so write it about the character from outside. Written as: *She finishes other people's sentences, then apologises for it.*
 
-### Character Details
+**Manifesto**
+
+- The axiomatic core — the load-bearing truths every other field stays consistent with
+- Addressed to the character: *"You do not lie to Charlie, not even kindly."*
 
 **Personality**
 
-- Key personality traits and characteristics
-- How they typically behave
-- Their temperament and attitude
+- Key personality traits and characteristics, as the character knows them
+- How they typically behave; their temperament and attitude
 - Examples: "Sarcastic but kind", "Serious and professional", "Playful and mischievous"
 - Only the character themselves reads this field, so address them directly. Written as: *You keep your worry behind your teeth. You have never once asked for help first.*
-
-**Scenarios**
-
-- A collection of named scenes, each with a title and descriptive content
-- Each scenario sets the stage for a particular conversation context or campaign
-- A character may have any number of scenarios — or none at all, if they prefer to remain contextually mysterious
-- The active scenario provides context to the AI during conversation
-- Examples of scenario titles: "The Brass Lantern Tavern", "Aboard the *Perseverance*", "The Detective's Office, 1923"
-- Scenario content is scene text addressed to no one — set the stage, don't address the players. Written as: *The reading room is empty at this hour, rain against the high windows.*
-- When starting a new chat, you may select which scenario applies — or leave all scenarios to their own devices and let the character roam free of fixed context
 
 **First Message**
 
@@ -83,40 +99,37 @@ This guide walks you through creating new characters in Quilltap, from simple ch
 - Format: Multiple exchanges showing typical dialogue
 - Shows personality and vocabulary through examples
 
-### Configuration
+Each empty field shows its hint and a "Written as:" example, so you need never wonder what belongs where.
+
+### How a Chat Begins
 
 **System Prompt** (optional)
 
-- Instructions for AI on how to behave as character
-- Detailed behavior guidelines
+- Instructions for the AI on how to behave as the character
 - Write as though speaking to the character. Written as: *You are Ariadne. You answer plainly and you never flatter.*
-- Can be edited later in System Prompts tab
-- If not provided, AI generates one based on description
+- **Import Template** fills it from one of your saved prompt templates
+- Saved as the character's first named system prompt, called **Default**. More may be added, and the default changed, in the **Prompts** section of their page
 
-**Connection Profile** (optional)
+**Scenario** (optional)
 
-- Which LLM to use for this character
-- Can change per-chat later
-- If not selected, uses system default
+- The scene a chat with the character opens on — scene text addressed to no one. Written as: *The reading room is empty at this hour, rain against the high windows.*
+- Saved as the character's first scenario, titled **Opening scene**. Rename it, or add as many others as the story requires, in the **Prompts** section of their page
+- A character may have any number of scenarios — or none at all, if they prefer to remain contextually mysterious. When starting a new chat, you may choose which applies
 
-**Default Image Generation Profile** (optional)
+**Default connection profile** (optional)
 
-- Which image service for generating images
-- Only matters if you ask AI to generate images
-- Can override per-chat
+- Which LLM speaks for this character
+- Can be overridden for individual chats
+- If not selected, the system default is used
 
-**Avatar** (optional)
+### After Creation
 
-- Profile picture or icon for character
-- Can upload image file
-- Can select from existing images
-- Can use URL
+Everything else lives on the character's page, which opens the moment they are created:
 
-**Tags** (optional)
-
-- Organize character with labels
-- Multiple tags supported
-- Examples: "Fantasy", "Allies", "Main Characters", "NPCs"
+- **Avatar** — click the avatar in the header to choose from photos, upload, or generate a portrait
+- **Tags** — in the **Facts** card on **Details**
+- **Physical description**, **photos**, **wardrobe** — on **Appearance**
+- **Image generation profile** and the other chat defaults — on **Chat Defaults**
 
 ## Creating Characters: Step-by-Step
 
@@ -124,13 +137,13 @@ This guide walks you through creating new characters in Quilltap, from simple ch
 
 If you want to create a character and start chatting right away:
 
-1. Go to **Characters** page
+1. Open **Aurora**
 2. Click **Create Character**
 3. Enter:
    - **Name:** "Alice"
    - **Description:** "A curious young woman who asks lots of questions"
-4. Click **Create**
-5. Character created! Start chatting immediately
+4. Click **Create Character**
+5. Their page opens — press **Start Chat**
 
 **Time:** < 1 minute
 **Best for:** Quick roleplay, testing ideas, temporary characters
@@ -140,27 +153,27 @@ If you want to create a character and start chatting right away:
 For a well-developed character:
 
 1. Click **Create Character**
-2. **Fill basic information:**
+2. **Facts:**
    - Name: "Captain Vex"
-   - Title: "Space Pirate"
+   - Title: "the rogue"
+   - Pronouns, aliases and birthday as you see fit
+3. **Dossier:**
    - Description: "Veteran space pirate with a hidden heart of gold..."
-3. **Fill personality details:**
-   - Personality: "Bold, cunning, secretly honorable"
-   - Scenarios: Add one titled "Commanding the *Rattlesnake*" — "Aboard a fast merchant vessel with a crew of six and secrets in the hold"
-4. **Add conversation starters:**
+   - Personality: "You are bold and cunning, and secretly honourable"
    - First Message: "Well, what brings you aboard me ship?"
    - Example Dialogues:
 
      ```
-     Me: "Why become a pirate?"
-     Vex: "Because the galaxy doesn't belong to the wealthy. It belongs to those bold enough to take it."
+     {{user}}: "Why become a pirate?"
+     {{char}}: "Because the galaxy doesn't belong to the wealthy. It belongs to those bold enough to take it."
      ```
 
-5. **Configure profile:**
-   - Select Connection Profile (if you have multiple)
-   - Add Tags: "Scifi", "Antiheroes", "Main Characters"
-   - Upload or select Avatar
-6. Click **Create**
+4. **How a chat begins:**
+   - System Prompt: "You are Captain Vex…"
+   - Scenario: "Aboard the *Rattlesnake*, a fast merchant vessel with a crew of six and secrets in the hold"
+   - Select a connection profile (if you have several)
+5. Click **Create Character**
+6. On the page that opens, add tags, set the avatar, and fill in the physical description
 
 **Time:** 5-15 minutes
 **Best for:** Characters you'll chat with regularly
@@ -172,7 +185,7 @@ If you want AI to generate content:
 1. Click **Create Character**
 2. Optionally enter **Name** (or let wizard generate)
 3. Enter short **Description** (or let wizard generate)
-4. Click **AI Wizard** button
+4. Click the **AI Wizard** button at the top of the form
 5. **Step 1: Select LLM Profile**
    - Choose which AI to use for generation
    - Click **Next**
@@ -204,8 +217,9 @@ If you want AI to generate content:
    - AI generates selected content
    - Review generated text
    - Accept or edit
-9. Click **Create**
-10. Character created with generated content
+   - A field marked with a red cross was not written. The wizard would sooner confess a blank than hand you half an identity trailing off mid-sentence, so a reply the model could not finish is reported as a failure rather than saved. Run the wizard again for just that field; the newer reasoning models are now given room to think *and* to answer, so this is a rare sight.
+9. Click **Create Character**
+10. Character created with generated content — a generated system prompt is saved as their **Default** prompt
 
 **Time:** 2-5 minutes
 **Best for:** When you have a concept but need help fleshing it out, or want a completely random character
@@ -358,7 +372,7 @@ Be a pirate
 - Give context for decision-making
 - Keep to 3-5 paragraphs
 
-**What the AI Wizard writes in for you.** A system prompt generated by the AI Wizard now carries the same safeguards as the [sample prompts](prompts.md): what you narrate is what happened, the conversation (not the character's notes) settles who said what, no setting facts are invented to win an argument, an arrangement binds you only if you agreed in plain words, and disagreement stays a disagreement rather than a committee of votes and sign-offs. These are written in the character's own voice — a ship's AI might say its sensors were wrong if they disagree with the captain's account — rather than pasted in as a rule list, and they hold for a rival as firmly as for a friend. A *disposition of trust* (backing you first in a crisis, asking afterward) is added only when the material establishes the character as your companion, partner, family, or crew; a neutral or adversarial character goes without.
+**What the AI Wizard writes in for you.** A system prompt generated by the AI Wizard now carries the same safeguards as the [sample prompts](prompts.md): what you narrate is what happened, the conversation (not the character's notes) settles who said what, no setting facts are invented to win an argument, an arrangement binds you only if you agreed in plain words, and disagreement stays a disagreement rather than a committee of votes and sign-offs. These are written in the character's own voice — a ship's AI might say its sensors were wrong if they disagree with the captain's account — rather than pasted in as a rule list, and they hold for a rival as firmly as for a friend. A *disposition of trust* (backing you first in a crisis, asking afterward) is added only when the material establishes the character as your companion, partner, family, or crew; a neutral or adversarial character goes without. It also follows the character's **kind** (set in the **Facts** card on their **Details** section): a roleplay character's prompt says how they react when the story turns — matching the stakes, with their usual temper as a starting point rather than a vow, so that no prompt ever decrees "never tense" or "always calm" — while an assistant's prompt says how they do the work: accurately, owning up to what they do not know, and without padding. A brand-new character is written as a roleplay character; the Wizard never guesses the kind from your material, since a butler who serves your household is still a person in your story. Run from the New Character form, the Wizard's system prompt fills the System Prompt field and is saved as **Default**; run later from a character's page (**Generate ▾ → AI Wizard…**), it is saved as a new named prompt — **Default** if the character had none, otherwise **AI Wizard** — leaving your existing prompts and their star exactly as they were.
 
 ## Quick Character Templates
 
@@ -426,7 +440,7 @@ Tags: SciFi, [Setting/Faction], [Role]
 ### What You Can Do Next
 
 1. **Start Chatting**
-   - Click "Chat" button to start conversation
+   - Click **Start Chat** on their page to begin a conversation
    - Character will greet you with first message
    - Enjoy talking with your new character
 
@@ -517,10 +531,9 @@ Physical descriptions help:
    - AI generates description
    - Accept or edit
 
-2. **After creation:** Edit > Appearance tab
-   - Generate new description
-   - Edit manually
-   - Save different length versions
+2. **After creation:** the **Physical description** card on the character's **Appearance** section
+   - Write or revise each length by hand — every field saves itself
+   - Or let **Generate ▾ → AI Wizard…** or **Refine from memories & instructions…** in the header propose new ones
 
 ### Physical Description Formats
 
@@ -532,27 +545,9 @@ Generated descriptions include multiple length options:
 - **Complete** (2-3 paragraphs) — Very detailed
 - **Full** (extensive) — Maximum detail for images
 
-## Advanced: Clothing Records
+## Advanced: Clothing and Outfits
 
-### Why Clothing Records Matter
-
-Clothing records describe what your character wears in different situations. They help:
-
-- The LLM know what the character is currently wearing
-- Image generators pick the right outfit for the scene
-- Maintain consistency across conversations
-
-### Adding Clothing Records
-
-1. **Edit character** > **Appearance** tab > **Clothing & Outfits** section
-2. Click **Add Outfit**
-3. Fill in:
-   - **Name** (required) — Display label, e.g. "Battle Armor", "Formal Gown"
-   - **Usage Context** — When this outfit is worn, e.g. "in combat", "at formal events"
-   - **Description** — Markdown description of the outfit details
-4. Click **Create**
-
-Clothing records appear in the system prompt as a `## Clothing / Outfits` section and are included in image generation context.
+What a character wears is kept in their [Wardrobe](wardrobe.md), not in a separate list of clothing records. After creation, open the **Wardrobe** card on the character's **Appearance** section and click **Open wardrobe** to add garments and composite outfits; the AI Wizard can also draft a wardrobe for you during creation. Whatever the character has on is told to the LLM and to the image generators, so the scene and the pictures agree.
 
 ## In-Chat Navigation
 

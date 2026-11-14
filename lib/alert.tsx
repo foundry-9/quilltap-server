@@ -10,13 +10,11 @@ import { PromptDialog } from '@/components/prompt-dialog'
  * @param buttons - Optional array of button labels. If not provided, defaults to ['Close']
  * @returns A promise that resolves with the clicked button label when the dialog is closed
  */
+// The dialog components are BaseModals: the shell draws the backdrop (a click
+// on it closes the dialog) and portals it to the body, so each call mounts one
+// React root and nothing else.
 export function showAlert(message: string, buttons?: string[]): Promise<string | undefined> {
   return new Promise((resolve) => {
-    const overlay = document.createElement('div')
-    overlay.setAttribute('role', 'alert-dialog-overlay')
-    document.body.appendChild(overlay)
-    const overlayRoot = createRoot(overlay)
-
     const container = document.createElement('div')
     container.setAttribute('role', 'alert-dialog-content')
     document.body.appendChild(container)
@@ -25,24 +23,11 @@ export function showAlert(message: string, buttons?: string[]): Promise<string |
 
     const handleClose = (buttonLabel?: string) => {
       root.unmount()
-      overlayRoot.unmount()
       if (container.parentNode) {
         container.parentNode.removeChild(container)
       }
-      if (overlay.parentNode) {
-        overlay.parentNode.removeChild(overlay)
-      }
       resolve(buttonLabel)
     }
-
-    overlayRoot.render(
-      <button
-        type="button"
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-[100]"
-        onClick={() => handleClose()}
-        aria-label="Close dialog"
-      />
-    )
 
     root.render(
       <AlertDialog
@@ -78,11 +63,6 @@ export function showConfirmation(message: string): Promise<boolean> {
  */
 export function showPrompt(message: string, defaultValue?: string): Promise<string | undefined> {
   return new Promise((resolve) => {
-    const overlay = document.createElement('div')
-    overlay.setAttribute('role', 'prompt-dialog-overlay')
-    document.body.appendChild(overlay)
-    const overlayRoot = createRoot(overlay)
-
     const container = document.createElement('div')
     container.setAttribute('role', 'prompt-dialog-content')
     document.body.appendChild(container)
@@ -91,24 +71,11 @@ export function showPrompt(message: string, defaultValue?: string): Promise<stri
 
     const handleClose = (value: string | undefined) => {
       root.unmount()
-      overlayRoot.unmount()
       if (container.parentNode) {
         container.parentNode.removeChild(container)
       }
-      if (overlay.parentNode) {
-        overlay.parentNode.removeChild(overlay)
-      }
       resolve(value)
     }
-
-    overlayRoot.render(
-      <button
-        type="button"
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-[100]"
-        onClick={() => handleClose(undefined)}
-        aria-label="Close dialog"
-      />
-    )
 
     root.render(
       <PromptDialog

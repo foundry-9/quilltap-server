@@ -15,7 +15,8 @@ import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { FileContentMissingError } from '@/lib/file-storage/errors';
-import { buildContentDisposition, dispositionFor } from '@/lib/api/content-disposition';
+import { dispositionFor } from '@/lib/api/content-disposition';
+import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
 
 /**
  * GET /api/v1/files/proxy/[...key]
@@ -64,21 +65,14 @@ async function handleGet(
       return serverError('Failed to download file');
     }
 
-    // Return the file with proper headers
-    return new NextResponse(new Uint8Array(buffer), {
-      headers: {
-        'Content-Type': fileEntry.mimeType,
-        'Content-Length': buffer.length.toString(),
-        // `?download=1` saves rather than renders; see lib/api/content-disposition.
-        'Content-Disposition': buildContentDisposition(
-          fileEntry.originalFilename,
-          dispositionFor(request)
-        ),
-        'Cache-Control': 'public, max-age=31536000, immutable',
-        // Allow embedding in same-origin iframes (for file preview modal)
-        'X-Frame-Options': 'SAMEORIGIN',
-        'Content-Security-Policy': "frame-ancestors 'self'",
-      },
+    // `?download=1` saves rather than renders; only passive types are ever
+    // inline (lib/api/serve-stored-bytes).
+    logger.debug('[Files v1] Proxy: serving file bytes', { fileId: fileEntry.id, mimeType: fileEntry.mimeType });
+    return serveStoredBytes(new Uint8Array(buffer), {
+      mimeType: fileEntry.mimeType,
+      filename: fileEntry.originalFilename,
+      requested: dispositionFor(request),
+      cacheControl: 'public, max-age=31536000, immutable',
     });
   } catch (error) {
     logger.error('[Files v1] Proxy: Error serving file', {}, error instanceof Error ? error : undefined);

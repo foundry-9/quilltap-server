@@ -89,12 +89,13 @@ function mockQueueNetwork(queueResponses: QueueData[] = [defaultQueue]) {
       return jsonResponse(response)
     }
 
-    if (url === '/api/v1/system/tools?action=tasks-queue' && method === 'POST') {
-      const body = init?.body ? JSON.parse(init.body as string) : {}
+    const control = /^\/api\/v1\/system\/tools\?action=tasks-queue-(start|stop)$/.exec(url)
+    if (control && method === 'POST') {
+      const action = control[1]
       return jsonResponse({
         success: true,
-        action: body.action,
-        processorStatus: { running: body.action === 'start', processing: false },
+        action,
+        processorStatus: { running: action === 'start', processing: false },
       })
     }
 
@@ -150,11 +151,8 @@ describe('TasksQueueCard', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/v1/system/tools?action=tasks-queue',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ action: 'start' }),
-        })
+        '/api/v1/system/tools?action=tasks-queue-start',
+        expect.objectContaining({ method: 'POST' })
       )
     })
     // Initial GET + refresh after start

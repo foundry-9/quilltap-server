@@ -25,7 +25,8 @@ import { Icon } from '@/components/ui/icon'
 import { folderName, folderSegments, isSameFolder, joinFolder } from '@/lib/mount-index/item-folders'
 import { showErrorToast } from '@/lib/toast'
 
-export type DestinationMode = 'move' | 'copy' | 'link'
+/** `save` writes something new (a Console output) into the chosen folder. */
+export type DestinationMode = 'move' | 'copy' | 'link' | 'save'
 
 export interface DestinationPickerDialogProps {
   isOpen: boolean
@@ -53,12 +54,17 @@ export interface DestinationPickerDialogProps {
   onSubmit: (folder: string) => void | Promise<void>
   /** Extra choices shown under the list (the wardrobe's components fieldset). */
   children?: ReactNode
+  /** The caller's own fields are not ready (an empty filename): hold the submit. */
+  submitBlocked?: boolean
+  /** Extra overlay classes (a raised layer when opened over a floating surface). */
+  overlayClassName?: string
 }
 
 const VERBS: Record<DestinationMode, { verb: string; working: string; title: string }> = {
   move: { verb: 'Move', working: 'Moving…', title: 'Move' },
   copy: { verb: 'Copy', working: 'Copying…', title: 'Copy' },
   link: { verb: 'Link', working: 'Linking…', title: 'Hard link' },
+  save: { verb: 'Save', working: 'Saving…', title: 'Save' },
 }
 
 export function DestinationPickerDialog({
@@ -78,9 +84,12 @@ export function DestinationPickerDialog({
   onClose,
   onSubmit,
   children,
+  submitBlocked = false,
+  overlayClassName,
 }: DestinationPickerDialogProps) {
   const [highlight, setHighlight] = useState<{ key: string; path: string | null }>({ key: containerKey, path: null })
-  const highlighted = highlight.key === containerKey ? highlight.path : null
+  // A save starts at the top of the store; the others wait for a choice.
+  const highlighted = highlight.key === containerKey ? highlight.path : (mode === 'save' ? '' : null)
   const setHighlighted = (path: string | null) => setHighlight({ key: containerKey, path })
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
@@ -93,7 +102,7 @@ export function DestinationPickerDialog({
   const isCurrent = (path: string): boolean =>
     mode === 'move' && currentFolder !== null && isSameFolder(path, currentFolder)
   const target = highlighted
-  const canSubmit = target !== null && !isCurrent(target) && !working
+  const canSubmit = target !== null && !isCurrent(target) && !working && !submitBlocked
   const { verb, working: workingLabel, title } = VERBS[mode]
 
   const submitNewFolder = async (): Promise<void> => {
@@ -147,6 +156,7 @@ export function DestinationPickerDialog({
       onClose={onClose}
       title={`${title} ${subject} to a folder`}
       maxWidth="md"
+      overlayClassName={overlayClassName}
       closeOnClickOutside={!working}
       closeOnEscape={!working}
       footer={(
@@ -194,7 +204,7 @@ export function DestinationPickerDialog({
                   disabled={current}
                   onClick={() => setHighlighted(row.path)}
                   className={`w-full text-left px-2 py-1 rounded text-sm ${
-                    selected ? 'qt-bg-muted text-foreground' : 'qt-text-secondary'
+                    selected ? 'qt-bg-muted qt-text' : 'qt-text-secondary'
                   } disabled:opacity-50`}
                   style={{ paddingLeft: `${row.depth * 16 + 8}px` }}
                   title={current ? 'Already here' : undefined}

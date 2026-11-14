@@ -13,6 +13,7 @@ import { Readable } from 'stream';
 import { createContextParamsHandler } from '@/lib/api/middleware';
 import { retrieveTemporaryBackup } from '@/lib/backup/temporary-storage';
 import { logger } from '@/lib/logger';
+import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { notFound, serverError } from '@/lib/api/responses';
 
 /**
@@ -80,7 +81,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
         status: 200,
         headers: {
           'Content-Type': 'application/zip',
-          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Content-Disposition': buildContentDisposition(filename, 'attachment'),
           'Content-Length': stat.size.toString(),
         },
       });

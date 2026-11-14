@@ -26,14 +26,14 @@ export function ImportOptionsStep({
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor={`${id}-conflict-strategy`} className="block qt-label text-foreground mb-2">
+        <label htmlFor={`${id}-conflict-strategy`} className="block qt-label qt-text mb-2">
           Conflict Strategy
         </label>
         <select
           id={`${id}-conflict-strategy`}
           value={conflictStrategy}
           onChange={(e) => onConflictStrategyChange(e.target.value as ConflictStrategy)}
-          className="w-full px-3 py-2 border qt-border-default rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          className="qt-select"
         >
           <option value="skip">Skip existing entities (default)</option>
           <option value="overwrite">Overwrite existing entities</option>
@@ -47,7 +47,7 @@ export function ImportOptionsStep({
       </div>
 
       {hasMemories && (
-        <label className="flex items-start gap-3 p-4 border qt-border-default rounded-lg cursor-pointer hover:qt-bg-muted/50">
+        <label className="flex items-start gap-3 border qt-border-default rounded-lg p-4 cursor-pointer hover:qt-bg-muted/50">
           <input
             type="checkbox"
             checked={importMemories}
@@ -55,7 +55,7 @@ export function ImportOptionsStep({
             className="w-4 h-4 mt-1"
           />
           <div className="flex-1">
-            <p className="font-medium text-foreground">
+            <p className="font-medium qt-text">
               Import associated memories
             </p>
             <p className="qt-text-small qt-text-secondary mt-1">

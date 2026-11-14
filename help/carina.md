@@ -77,13 +77,12 @@ This is chiefly of interest in autonomous rooms or multi-character scenarios whe
 
 Not every character is available for `@Name` consultation by default. To designate a character as a Carina answerer:
 
-1. Open **Aurora** (`/aurora`) and find the character you wish to designate
-2. Click **Edit** to open the character edit form
-3. Scroll to the control flags section — where you will find options such as system transparency, wardrobe controls, and similar
-4. Enable the toggle labelled **"Can answer @-queries (Carina)"**
-5. Save the character
+1. Open **Aurora** (`/aurora`) and click the character you wish to designate
+2. Go to the **Abilities** section of their page
+3. In the **Tools & talents** card, tick **Can answer @-queries (Carina)**
+4. That is all — it saves the moment you tick it, and a **Carina** badge appears in the character's header
 
-For a quicker enrolment, you may skip the edit form entirely: a small **console** switch sits among the toggles in the upper right of every character card — both on the Aurora roster and atop a character's own page, tucked between the favourite star and the user-control figure. Click it to enlist or dismiss the character as a Carina answerer on the spot; the console glows when the character is enrolled, and the change is saved at once with no further ceremony.
+For a quicker enrolment still, a small **console** switch sits among the toggles in the upper right of every character card on the Aurora roster. Click it to enlist or dismiss the character as a Carina answerer on the spot; the console glows when the character is enrolled, and the change is saved at once with no further ceremony.
 
 A character with this flag enabled may be invoked by `@Name` from any chat — they need not be a participant in the chat to answer. If no answerer by the requested name can be found, or if the character in question lacks an LLM connection, Prospero will report the difficulty.
 
@@ -109,9 +108,11 @@ Brahma is a creature apart, and a few particulars follow from that:
 - **It keeps no memories.** Nothing asked of Brahma is filed away, and nothing it has answered before colours a later reply. Each consultation stands entirely alone — Brahma does not even recall the rest of the present conversation, only the single question you put to it.
 - **It appears on no roster.** Brahma is not a character; you will not find it in Aurora, in a participant list, or anywhere a character might ordinarily be enrolled. It exists only at the moment it is consulted.
 - **It answers with the Console's full powers** — the same read-only inspection of your records and access to your document stores that the standalone Console enjoys.
-- **It answers with the engine you appoint.** **Settings → Chat → Brahma Console** names the connection profile for `@Brahma` (your default, unless you choose otherwise), and a project's **Model Behavior** card may overrule it for that project's chats. See [Brahma Console](brahma-console.md).
+- **It answers with the engine you appoint.** **Settings → Games & Tools → Brahma Console** names the connection profile for `@Brahma` (your default, unless you choose otherwise), and a project's **Model Behavior** card may overrule it for that project's chats. See [Brahma Console](brahma-console.md).
 
 Because those powers are considerable, **not everyone may ring Brahma's bell.** The line opens for you, the proprietor, whenever you type the markup yourself; for your own user-controlled persona; and for any character granted **system transparency** (the same covenant that lets a character see behind the establishment's staff curtain). A character without that standing who writes `@Brahma:` — or reaches for the tool — receives the very same "no answerer by that name" reply as if Brahma had never existed. The Console stays invisible to those not in the know.
+
+In a turn limited to looking things up (a Storyteller bid, or an autonomous room's capped turn), asking Brahma is refused and Prospero says so; every other answerer works under the same limit as the turn that asked.
 
 Finally, a point of precedence: should you happen to keep a real character of your own named "Brahma," **your character wins.** The Console only answers to the name when no character of yours bears it, so your own creations are never shadowed.
 

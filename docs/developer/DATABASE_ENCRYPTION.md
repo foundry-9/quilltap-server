@@ -16,7 +16,7 @@ All Quilltap databases are encrypted at rest using **ChaCha20-Poly1305**, the de
 
 All three databases — main (`quilltap.db`), LLM logs (`quilltap-llm-logs.db`), and mount index (`quilltap-mount-index.db`) — open with the same pepper, unwrapped from the one `quilltap.dbkey`. Each client module reads `ENCRYPTION_MASTER_PEPPER` rather than a key file of its own.
 
-> **Historical note.** Before 4.8.1, `changePassphrase()` also wrote a byte-identical copy to `quilltap-llm-logs.dbkey` — the remnant of a per-database-key design that was never built. Nothing ever read it, and because the other two writers of the main key file (`setupDbKey`, `storeEnvPepperInDbKey`) did not touch it, it could hold a stale wrapping. The write was removed; the file is inert wherever it still exists. See [Bug 60](bugs/fixed/bug-60-phantom-per-database-key-files.md).
+> **Historical note.** Before 4.8.1, `changePassphrase()` also wrote a byte-identical copy to `quilltap-llm-logs.dbkey` — the remnant of a per-database-key design that was never built. Nothing ever read it, and because the other two writers of the main key file (`setupDbKey`, `storeEnvPepperInDbKey`) did not touch it, it could hold a stale wrapping. The write was removed; the file is inert wherever it still exists. See [Bug 60](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-60-phantom-per-database-key-files.md).
 
 ## Architecture
 

@@ -96,8 +96,9 @@ interface JobScope {
    * Read-your-writes overlay for memory rows, keyed by memory id. A later step
    * of a job must see the job's own buffered inserts, links, footnotes, counts,
    * tier moves and deletes (bug 209). Admission no longer writes from here —
-   * it runs in the parent over host-RPC (`admitMemory`) — but consolidation,
-   * housekeeping, the fold passes and `retireMemories` still do.
+   * it runs in the parent over host-RPC (`admitMemory`), as do the
+   * near-duplicate fold and consolidation's writes — but housekeeping, the
+   * episode pass and `retireMemories` still do.
    */
   memories: Map<string, MemoryOverlayEntry>;
   /**

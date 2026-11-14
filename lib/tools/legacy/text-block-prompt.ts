@@ -144,7 +144,7 @@ Categories: overview, chat, connections, embeddings, images, appearance, templat
     toolDocs.push(`
 ### Help Navigate
 Navigate the user's browser to a specific Quilltap page or settings section.
-Format: [[HELP_NAVIGATE url="/settings?tab=concierge&section=uncensored-desk" /]]`)
+Format: [[HELP_NAVIGATE url="/settings?section=uncensored-desk" /]]`)
   }
 
   if (options.createNote) {

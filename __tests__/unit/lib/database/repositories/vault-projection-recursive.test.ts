@@ -42,7 +42,7 @@ jest.mock('@/lib/mount-index/folder-paths', () => ({
   ensureFolderPath: (...args: unknown[]) => ensureFolderPathMock(...args),
 }));
 
-import { projectArrayIntoVaultFolder } from '@/lib/database/repositories/vault-overlay/vault-projection';
+import { projectArrayIntoVaultFolder } from '@/lib/mount-index/vault-projection';
 
 function existingDoc(relativePath: string) {
   return { id: `doc-${relativePath}`, relativePath };

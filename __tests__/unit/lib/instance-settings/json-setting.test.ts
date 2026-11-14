@@ -77,7 +77,7 @@ describe('JSON instance settings (shared reader/writer)', () => {
   })
 
   it('setters refuse an invalid value before touching the database', async () => {
-    await expect(setBrahmaConsoleSettings({ maxAgentTurns: 1 })).rejects.toThrow()
+    await expect(setBrahmaConsoleSettings({ maxAgentTurns: 0 })).rejects.toThrow()
     expect(mockRawQuery).not.toHaveBeenCalled()
   })
 

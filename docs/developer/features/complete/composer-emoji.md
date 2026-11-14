@@ -355,7 +355,7 @@ Bail conditions, in order — **these mirror Layer 1.5's exactly and must not dr
    const block = anchorNode.getTopLevelElement()
    if (!block || !$isElementNode(block) || $isCodeNode(block)) return false
    ```
-5. Cursor is inside inline code: `anchorNode.hasFormat('code')`. **Note:** `TextReplacementPlugin` performs neither check 4 nor check 5, so text replacements currently fire inside code. That is a latent Layer 1.5 defect and its own bug — file it per [CLAUDE.md → Filing bugs](../../../../CLAUDE.md), taking the next unused number from the [Status table](../../bugs.md#status) at the time you file (62 is taken), and fix it in the same change; the two plugins sharing one `isInCodeContext(selection)` helper is the right shape.
+5. Cursor is inside inline code: `anchorNode.hasFormat('code')`. **Note:** `TextReplacementPlugin` performs neither check 4 nor check 5, so text replacements currently fire inside code. That is a latent Layer 1.5 defect and its own bug — file it per [CLAUDE.md → Filing bugs](../../../../CLAUDE.md), taking the next unused number from the [Status table](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs.md#status) at the time you file (62 is taken), and fix it in the same change; the two plugins sharing one `isInCodeContext(selection)` helper is the right shape.
 6. Index not yet loaded — kick off the lazy load and return `false`.
 
 Menu rendering: each row shows the glyph, the CLDR name, and the primary `:shortcode:` in muted text. Cap at 10 visible rows with keyboard scroll. Empty state: "No emoji found".
@@ -544,7 +544,7 @@ Everything in [2.3](#23-unit-tests) and [4.3](#43-plugin-tests), plus the round-
 - `components/settings/chat-settings/types.ts`, `hooks/useChatSettings.ts`, the Composer card on the Chat tab
 - `components/chat/FormattingToolbar.tsx` — the emoji button
 - `components/chat/lexical/LexicalComposerWrapper.tsx`, `app/salon/[id]/components/DocumentPane.tsx` — mount the plugin
-- `components/chat/lexical/plugins/TextReplacementPlugin.tsx` — extract and share `isInCodeContext()` (and thereby fix the latent code-context defect; **file the bug first**, taking the next unused number from the [Status table](../../bugs.md#status) — 62 is taken — with a two-or-three-word dashed slug per CLAUDE.md)
+- `components/chat/lexical/plugins/TextReplacementPlugin.tsx` — extract and share `isInCodeContext()` (and thereby fix the latent code-context defect; **file the bug first**, taking the next unused number from the [Status table](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs.md#status) — 62 is taken — with a two-or-three-word dashed slug per CLAUDE.md)
 - `app/styles/qt-components/_surfaces.css`, `_chat.css`
 - `packages/theme-storybook/src/css/qt-components.css` + `src/stories/components/Chat.tsx` + package version bump (**publish gates the commit**)
 - `help/chat-settings.md`, `docs/CHANGELOG.md`

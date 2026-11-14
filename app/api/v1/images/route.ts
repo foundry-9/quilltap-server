@@ -34,6 +34,7 @@ import { generateImageWithConciergeFailover } from '@/lib/services/dangerous-con
 import { resolveUncensoredTextUnderstudy } from '@/lib/services/dangerous-content/understudy';
 import { supportsImageGeneration } from '@/lib/llm/image-capable';
 import type { ConnectionProfile } from '@/lib/schemas/types';
+import { appendKnownThings, loadImageAtlasView, resolveAtlasImageReferences } from '@/lib/atlas/image-reference';
 
 const importFromUrlSchema = z.object({
   url: z.url(),
@@ -199,7 +200,7 @@ export const POST = createContextHandler(async (request, { user, repos }) =>
 
 async function handleGenerateImage(request: NextRequest, user: { id: string }, repos: any): Promise<NextResponse> {
   const body = await request.json();
-  const { prompt, profileId, chatId, tags, options = {} } = generateImageSchema.parse(body);
+  const { prompt: typedPrompt, profileId, chatId, tags, options = {} } = generateImageSchema.parse(body);
 
   // Load and validate connection profile
   let profile = await repos.connections.findById(profileId);
@@ -226,6 +227,30 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
     });
   }
   const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chatForConcierge);
+
+  // The Atlas: the operator typed this prompt and no crafter runs, so a thing
+  // it names is in the picture by their own word — its look is appended.
+  // General, plus the chat's project when a chat asked. Never fails the call.
+  let prompt = typedPrompt;
+  try {
+    const view = await loadImageAtlasView(repos, { projectId: chatForConcierge?.projectId ?? null, path: 'image-dialog' });
+    if (view.entries.length > 0) {
+      const people = (await repos.characters.findByUserId(user.id)) as Array<{ name: string; aliases?: string[] | null }>;
+      const things = resolveAtlasImageReferences({ view, texts: [typedPrompt], people, path: 'image-dialog' });
+      if (things.length > 0) {
+        prompt = appendKnownThings(typedPrompt, things);
+        logger.debug('[Images v1] Generate: appended Atlas things to the typed prompt', {
+          chatId: chatId ?? null,
+          things: things.map((t) => t.name),
+        });
+      }
+    }
+  } catch (error) {
+    logger.warn('[Images v1] Could not read the Atlas for the prompt; using it as typed', {
+      chatId: chatId ?? null,
+      error: getErrorMessage(error),
+    });
+  }
   logger.debug('[Images v1] Generate: resolved Concierge policy', {
     chatId: chatId ?? null,
     conciergeSource: conciergePolicy.source,

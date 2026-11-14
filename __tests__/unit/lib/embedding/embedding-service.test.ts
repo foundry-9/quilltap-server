@@ -32,11 +32,9 @@ const {
   generateEmbedding,
   generateEmbeddingForUser,
   extractSearchTerms,
-  prepareForSearch,
   cosineSimilarity,
   textSimilarity,
   isEmbeddingAvailable,
-  getUserEmbeddingProfiles,
 } = embeddingService
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
@@ -192,28 +190,6 @@ describe('embedding service', () => {
     expect(result.usedEmbedding).toBe(false)
   })
 
-  it('prepares embeddings for search when generation succeeds', async () => {
-    const profile = makeProfile({ provider: 'OLLAMA', baseUrl: 'http://localhost:11434', apiKeyId: null })
-    mockRepos.embeddingProfiles.findDefault.mockResolvedValue(profile)
-
-    const mockProvider = createMockEmbeddingProvider([0, 1])
-    mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
-    mockGetProvider.mockReturnValue({ config: { requiresApiKey: false } } as any)
-
-    const result = await prepareForSearch('embed me', userId)
-    expect(result.usedEmbedding).toBe(true)
-    if (result.usedEmbedding) {
-      expect(Array.from(result.embedding.embedding)).toEqual([0, 1])
-    }
-  })
-
-  it('falls back to keyword extraction when embedding fails', async () => {
-    mockRepos.embeddingProfiles.findDefault.mockResolvedValue(null)
-    const result = await prepareForSearch('fallback search content', userId)
-    expect(result.usedEmbedding).toBe(false)
-    expect(result.keywords.length).toBeGreaterThan(0)
-  })
-
   it('computes cosine similarity and keyword similarity scores', () => {
     expect(cosineSimilarity([1, 0], [1, 0])).toBe(1)
 
@@ -233,10 +209,8 @@ describe('embedding service', () => {
 
   it('exposes helper accessors for profiles', async () => {
     const profile = makeProfile()
-    mockRepos.embeddingProfiles.findByUserId.mockResolvedValue([profile])
     mockRepos.embeddingProfiles.findById.mockResolvedValue(profile)
 
-    expect(await getUserEmbeddingProfiles(userId)).toEqual([profile])
     expect(await getDefaultEmbeddingProfile(userId)).toBeNull()
     expect(await getEmbeddingProfile(profile.id)).toBe(profile)
   })

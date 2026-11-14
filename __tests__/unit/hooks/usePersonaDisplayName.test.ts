@@ -31,7 +31,7 @@ describe('useUserCharacterDisplayName', () => {
     it('should start in loading state', () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [],
+        json: async () => ({ characters: [] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -42,7 +42,7 @@ describe('useUserCharacterDisplayName', () => {
     it('should fetch user-controlled characters', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [],
+        json: async () => ({ characters: [] }),
       } as Response)
 
       renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -58,7 +58,7 @@ describe('useUserCharacterDisplayName', () => {
     it('should set loading to false after fetch', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [],
+        json: async () => ({ characters: [] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -73,10 +73,10 @@ describe('useUserCharacterDisplayName', () => {
     it('should format name without title when no duplicates', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [
+        json: async () => ({ characters: [
           { id: '1', name: 'Alice', title: 'Warrior' },
           { id: '2', name: 'Bob', title: 'Mage' },
-        ],
+        ] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -97,10 +97,10 @@ describe('useUserCharacterDisplayName', () => {
     it('should format name with title when duplicates exist', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [
+        json: async () => ({ characters: [
           { id: '1', name: 'Alice', title: 'Warrior' },
           { id: '2', name: 'Alice', title: 'Mage' },
-        ],
+        ] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -121,7 +121,7 @@ describe('useUserCharacterDisplayName', () => {
     it('should return empty string for null character', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [],
+        json: async () => ({ characters: [] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -138,7 +138,7 @@ describe('useUserCharacterDisplayName', () => {
     it('should return empty string for undefined character', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [],
+        json: async () => ({ characters: [] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -155,10 +155,10 @@ describe('useUserCharacterDisplayName', () => {
     it('should not add title when character has no title', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [
+        json: async () => ({ characters: [
           { id: '1', name: 'Alice' },
           { id: '2', name: 'Alice' },
-        ],
+        ] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -178,10 +178,10 @@ describe('useUserCharacterDisplayName', () => {
     it('should handle null title', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [
+        json: async () => ({ characters: [
           { id: '1', name: 'Alice', title: null },
           { id: '2', name: 'Alice', title: null },
-        ],
+        ] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -204,10 +204,10 @@ describe('useUserCharacterDisplayName', () => {
     it('should return true for duplicate names', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [
+        json: async () => ({ characters: [
           { id: '1', name: 'Alice', title: 'Warrior' },
           { id: '2', name: 'Alice', title: 'Mage' },
-        ],
+        ] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -222,10 +222,10 @@ describe('useUserCharacterDisplayName', () => {
     it('should return false for unique names', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [
+        json: async () => ({ characters: [
           { id: '1', name: 'Alice', title: 'Warrior' },
           { id: '2', name: 'Bob', title: 'Mage' },
-        ],
+        ] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -310,10 +310,10 @@ describe('useUserCharacterDisplayName', () => {
     it('should handle array response format', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [
+        json: async () => ({ characters: [
           { id: '1', name: 'Alice', title: 'Warrior' },
           { id: '2', name: 'Bob', title: 'Mage' },
-        ],
+        ] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -348,7 +348,7 @@ describe('useUserCharacterDisplayName', () => {
     it('should handle empty response', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [],
+        json: async () => ({ characters: [] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
@@ -365,11 +365,11 @@ describe('useUserCharacterDisplayName', () => {
     it('should handle three characters with same name', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => [
+        json: async () => ({ characters: [
           { id: '1', name: 'Alice', title: 'Warrior' },
           { id: '2', name: 'Alice', title: 'Mage' },
           { id: '3', name: 'Alice', title: 'Thief' },
-        ],
+        ] }),
       } as Response)
 
       const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })

@@ -14,19 +14,29 @@ import { escapeRegex } from '@/lib/utils/regex'
 /**
  * A global matcher for any of `names` (a name and its aliases), or null when
  * none is usable. Callers reset `lastIndex` before reuse.
+ *
+ * `caseInsensitive` (default `false`, which every people-matcher keeps) folds
+ * case: the Atlas's things are common nouns ("the car", "Car"), where a
+ * person's alias is not (`lib/atlas/match.ts`).
  */
-export function buildNameMatcher(names: ReadonlyArray<string | null | undefined>): RegExp | null {
-  const tokens = new Set<string>()
+export function buildNameMatcher(
+  names: ReadonlyArray<string | null | undefined>,
+  opts: { caseInsensitive?: boolean } = {},
+): RegExp | null {
+  const caseInsensitive = opts.caseInsensitive === true
+  const tokens = new Map<string, string>()
   for (const token of names) {
     const trimmed = token?.trim()
-    if (trimmed) tokens.add(trimmed)
+    if (!trimmed) continue
+    const key = caseInsensitive ? trimmed.toLowerCase() : trimmed
+    if (!tokens.has(key)) tokens.set(key, trimmed)
   }
   if (tokens.size === 0) return null
-  const alternation = Array.from(tokens)
+  const alternation = Array.from(tokens.values())
     .sort((a, b) => b.length - a.length)
     .map(escapeRegex)
     .join('|')
-  return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${alternation})(?![\\p{L}\\p{N}_])`, 'gu')
+  return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${alternation})(?![\\p{L}\\p{N}_])`, caseInsensitive ? 'giu' : 'gu')
 }
 
 /** The first match of `matcher` in `text`, or null. */

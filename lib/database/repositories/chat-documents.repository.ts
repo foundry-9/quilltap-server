@@ -255,14 +255,17 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
 
   /**
    * Every row (any chat, any scope) whose filePath sits under `folderPath/`.
-   * The folder counterpart of {@link findByFilePath}.
+   * The folder counterpart of {@link findByFilePath}. Matched
+   * case-insensitively: every store treats `notes` and `Notes` as one folder
+   * (NOCASE rows, case-insensitive disks), so a row recorded in either casing
+   * is under it (#147).
    */
   async findUnderFolder(folderPath: string): Promise<ChatDocument[]> {
     return this.safeQuery(
       async () => {
-        const prefix = folderPath.endsWith('/') ? folderPath : `${folderPath}/`;
+        const prefix = (folderPath.endsWith('/') ? folderPath : `${folderPath}/`).toLowerCase();
         const all = await this.findAll();
-        return all.filter(r => r.filePath.startsWith(prefix));
+        return all.filter(r => r.filePath.toLowerCase().startsWith(prefix));
       },
       'Error finding chat documents under a folder',
       { folderPath },

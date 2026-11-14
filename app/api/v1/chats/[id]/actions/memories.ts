@@ -19,7 +19,7 @@ import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/back
 import {
   buildExtractionContext,
   ExtractionContextError,
-  pickExtractionConnectionProfileId,
+  resolveChatExtractionProfileId,
   runExtractionDryRun,
   toExtractedCandidate,
 } from '@/lib/memory/extraction';
@@ -27,30 +27,9 @@ import { listExtractionTurns, loadChatMessageEvents } from '@/lib/services/chat-
 import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
 
-/**
- * The connection profile a chat's extraction runs against — the same one the
- * live pipeline uses: an LLM seat's profile, else any seat's. A chat with no
- * seat profile falls back to the user's configured cheap profile. Null when
- * neither exists.
- */
-async function resolveExtractionProfileId(
-  chat: ChatMetadata,
-  ctx: RequestContext,
-): Promise<string | null> {
-  const seatProfileId = pickExtractionConnectionProfileId(chat);
-  if (seatProfileId) return seatProfileId;
-
-  const { user, repos } = ctx;
-  const cheapLLMSettings = (await repos.chatSettings.findByUserId(user.id))?.cheapLLMSettings;
-  for (const id of [
-    cheapLLMSettings?.defaultCheapProfileId,
-    cheapLLMSettings?.strategy === 'USER_DEFINED' ? cheapLLMSettings.userDefinedProfileId : null,
-  ]) {
-    if (!id) continue;
-    const profile = await repos.connections.findById(id);
-    if (profile && profile.userId === user.id) return id;
-  }
-  return null;
+/** The connection profile a chat's extraction runs against (`resolveChatExtractionProfileId`). */
+function resolveExtractionProfileId(chat: ChatMetadata, ctx: RequestContext): Promise<string | null> {
+  return resolveChatExtractionProfileId(chat, ctx.user.id);
 }
 
 /**

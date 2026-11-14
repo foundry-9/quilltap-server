@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=images&section=default-aesthetics
+url: /settings?section=default-aesthetics
 ---
 
 # Default Aesthetics — A House Style for Every Picture
@@ -15,7 +15,7 @@ The two resolve **independently**, so you may dress your people in one tradition
 
 ## Where they live
 
-Both fields await you on the **Images** settings tab, in the **Default Aesthetics** card. Each is a proper Markdown editor; write as plainly or as floridly as you please, and press **Save**. Clearing a field and saving removes the instruction altogether.
+Both fields await you in the **Images** group of Settings, on the **Default Aesthetics** card. Each is a proper Markdown editor; write as plainly or as floridly as you please, and press **Save**. Clearing a field and saving removes the instruction altogether.
 
 These are not hidden settings squirreled away in some ledger — each field is simply a tidy view onto a file in your **Quilltap General** document store (`lantern-aesthetics.md` and `aurora-aesthetics.md`). Should you prefer to drop those files in by hand, through the Scriptorium or otherwise, they will be honored exactly the same.
 
@@ -25,7 +25,7 @@ A project may keep its own house style. Visit the project's page (Prospero), ope
 
 ## The Ariel Clause — a character's own terms
 
-Some characters care a great deal about how they are shown — and not as a matter of mere taste, but as a standing condition. For these, place a file named **`depiction-guidelines.md`** in the character's own vault (via the **Depiction Guidelines** field on the character's edit page, under *Descriptions*, or by dropping the file in directly).
+Some characters care a great deal about how they are shown — and not as a matter of mere taste, but as a standing condition. For these, place a file named **`depiction-guidelines.md`** in the character's own vault (via the **Depiction guidelines** card in the **Appearance** section of the character's page, which saves as you write, or by dropping the file in directly).
 
 Whenever that character appears in a **story background** or an **ad-hoc image**, their guidelines are passed along to the image-prompt writer as a **mandatory instruction**, plainly attributed to them by name. They are never quietly omitted, they never replace the general aesthetic — they sit atop it — and where the two disagree, the character's own terms prevail. Should several such characters share a frame, each one's guidelines travel with them.
 
@@ -38,5 +38,5 @@ A few points of etiquette worth remembering:
 ## In-Chat Navigation
 
 ```
-help_navigate(url: "/settings?tab=images&section=default-aesthetics")
+help_navigate(url: "/settings?section=default-aesthetics")
 ```

@@ -12,11 +12,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { logger } from '@/lib/logger';
+import { safeFetch, SafeFetchError } from '@/lib/net/safe-fetch';
 import { getThemesDir } from '@/lib/paths';
 import { getErrorMessage } from '@/lib/error-utils';
 import { parseVersion } from '@/lib/utils/semver';
 import { installThemeBundle } from '@/lib/themes/bundle-loader';
-import { hashBuffer, verifyRegistryIndex, OFFICIAL_REGISTRY_PUBLIC_KEY, OFFICIAL_REGISTRY_URL } from '@/lib/themes/crypto';
+import { hashBuffer, OFFICIAL_REGISTRY_PUBLIC_KEY, OFFICIAL_REGISTRY_URL } from '@/lib/themes/crypto';
+import { assessRegistryIndex, checkBundleSignature, RegistryVerificationError } from '@/lib/themes/registry-trust';
 import {
   type RegistrySource,
   type RegistrySources,
@@ -38,6 +40,8 @@ const registryLogger = logger.child({ module: 'theme-registry-client' });
 const SOURCES_FILENAME = 'sources.json';
 const CACHE_DIR_NAME = '.cache';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const MAX_INDEX_BYTES = 10 * 1024 * 1024; // registry index
+const MAX_BUNDLE_DOWNLOAD_BYTES = 50 * 1024 * 1024; // matches the bundle loader's limit
 const INDEX_FILENAME = 'themes-index.json';
 
 // ============================================================================
@@ -249,26 +253,43 @@ export async function fetchRegistryIndex(
     const age = Date.now() - stat.mtimeMs;
     if (age < CACHE_TTL_MS) {
       const cachedData = await fs.readFile(cachePath, 'utf-8');
-      const cachedIndex = JSON.parse(cachedData) as { index: RegistryIndex; verified: boolean };
-      registryLogger.debug('Using cached registry index', {
-        source: source.name,
-        ageMs: age,
-      });
-      return cachedIndex;
+      const cached = JSON.parse(cachedData) as { index?: unknown };
+      // A cached index is re-validated and re-verified on every read; the
+      // stored `verified` flag is never trusted.
+      const cachedParse = RegistryIndexSchema.safeParse(cached?.index);
+      if (cachedParse.success) {
+        try {
+          const { verified } = assessRegistryIndex(cachedParse.data, source);
+          registryLogger.debug('Using cached registry index', {
+            source: source.name,
+            ageMs: age,
+            verified,
+          });
+          return { index: cachedParse.data, verified };
+        } catch (err) {
+          if (!(err instanceof RegistryVerificationError)) throw err;
+          registryLogger.debug('Cached registry index failed verification; refetching', { source: source.name });
+        }
+      } else {
+        registryLogger.debug('Cached registry index is invalid; refetching', { source: source.name });
+      }
+      await fs.unlink(cachePath).catch(() => undefined);
+    } else {
+      registryLogger.debug('Cache expired for registry', { source: source.name, ageMs: age });
     }
-    registryLogger.debug('Cache expired for registry', { source: source.name, ageMs: age });
   } catch {
     registryLogger.debug('No cache found for registry', { source: source.name });
   }
 
   // Fetch from remote
   registryLogger.info('Fetching registry index', { source: source.name, url: source.url });
-  const response = await fetch(source.url);
+  // Registries are public hosts; private and loopback destinations are refused.
+  const response = await safeFetch(source.url, { maxBytes: MAX_INDEX_BYTES, timeoutMs: 30_000 });
   if (!response.ok) {
     throw new Error(`Failed to fetch registry index: HTTP ${response.status} from ${source.url}`);
   }
 
-  const rawData = await response.json();
+  const rawData = response.json();
   const parseResult = RegistryIndexSchema.safeParse(rawData);
   if (!parseResult.success) {
     const errors = parseResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`);
@@ -278,19 +299,9 @@ export async function fetchRegistryIndex(
 
   const index = parseResult.data;
 
-  // Verify signature if public key is available
-  let verified = false;
-  if (source.publicKey) {
-    verified = verifyRegistryIndex(index, source.publicKey);
-    if (!verified) {
-      registryLogger.warn('Registry signature verification failed', {
-        source: source.name,
-        url: source.url,
-      });
-    } else {
-      registryLogger.info('Registry signature verified', { source: source.name });
-    }
-  }
+  // A source with a public key must verify; a failure throws here, before
+  // anything is cached, so the index is never used.
+  const { verified } = assessRegistryIndex(index, source);
 
   // Cache the result
   const cacheData = { index, verified };
@@ -448,13 +459,20 @@ export async function installFromRegistry(
       url: registryTheme.downloadUrl,
     });
 
-    const response = await fetch(registryTheme.downloadUrl);
+    let response;
+    try {
+      response = await safeFetch(registryTheme.downloadUrl, { maxBytes: MAX_BUNDLE_DOWNLOAD_BYTES, timeoutMs: 60_000 });
+    } catch (err) {
+      if (err instanceof SafeFetchError && err.code === 'TOO_LARGE') {
+        return { success: false, error: 'Download exceeds the maximum bundle size' };
+      }
+      throw err;
+    }
     if (!response.ok) {
       return { success: false, error: `Download failed: HTTP ${response.status}` };
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = response.body;
 
     // Verify SHA-256 hash
     const actualHash = hashBuffer(buffer);
@@ -467,6 +485,26 @@ export async function installFromRegistry(
       return { success: false, error: 'SHA-256 hash verification failed — the downloaded file may be corrupted or tampered with' };
     }
     registryLogger.debug('SHA-256 hash verified', { themeId, hash: actualHash });
+
+    // A bundle that carries its own signature must verify under the source's
+    // key before it is installed.
+    const bundleSignature = await checkBundleSignature(buffer, source);
+    if (!bundleSignature.ok) {
+      registryLogger.error('Bundle signature verification failed', {
+        themeId,
+        source: source.name,
+        errors: bundleSignature.errors,
+      });
+      return {
+        success: false,
+        error: `Bundle signature verification failed: ${bundleSignature.errors.join('; ') || 'unknown error'}`,
+      };
+    }
+    registryLogger.debug('Bundle signature check passed', {
+      themeId,
+      signed: bundleSignature.signed,
+      verified: bundleSignature.verified,
+    });
 
     // Write to temp file
     await fs.writeFile(tempFile, buffer);

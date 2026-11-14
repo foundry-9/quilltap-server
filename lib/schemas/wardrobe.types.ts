@@ -197,7 +197,7 @@ export const createWardrobeSchema = wardrobeItemFieldsSchema;
 /**
  * Body schema for updating a project or group wardrobe item (all fields
  * optional), plus the `archived` boolean the item routes translate into
- * `archivedAt` via `lib/wardrobe/archived-patch`.
+ * `archivedAt` via `archivedPatch` (`lib/mount-index/item-rules`).
  */
 export const updateWardrobeSchema = wardrobeItemFieldsSchema.partial().extend({
   archived: z.boolean().optional(),
@@ -245,6 +245,26 @@ export const copyWardrobeItemsSchema = z.object({
   itemIds: z.array(z.string().min(1)).min(1, 'At least one item is required').max(500),
   folder: WardrobeFolderInputSchema,
   components: z.enum(['copy', 'none']).optional(),
+});
+
+/**
+ * `POST /api/v1/characters/[id]/wardrobe?action=optimize-image-prompts` body:
+ * optionally limit the review to these items (default: every garment the
+ * character owns that is neither archived nor a composite).
+ */
+export const optimizeWardrobeImagePromptsSchema = z.object({
+  itemIds: z.array(z.string().min(1)).max(1000).optional(),
+});
+
+/**
+ * `POST /api/v1/characters/[id]/wardrobe?action=apply-image-prompts` body: the
+ * recommendations the operator chose, each clamped to the cap on write.
+ */
+export const applyWardrobeImagePromptsSchema = z.object({
+  changes: z
+    .array(z.object({ itemId: z.string().min(1), imagePrompt: z.string().max(2000) }))
+    .min(1, 'At least one change is required')
+    .max(1000),
 });
 
 /** `POST …/wardrobe?action=duplicate` body: the item to copy beside itself. */

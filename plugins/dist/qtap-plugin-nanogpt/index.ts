@@ -162,7 +162,7 @@ const optionsSchema: ProviderOptionsSchema = {
     {
       title: 'Prompt Caching',
       helpText:
-        'NanoGPT\'s OpenAI- and Gemini-routed models cache repeated context on their own, gratis and automatic. Anthropic-routed (Claude) models want asking: switch this on and NanoGPT places the cache checkpoints itself, so a long-running conversation re-reads its history at a tenth the price. The ledger\'s honest caveat — writing the cache costs a premium over plain input (1.25x for the five-minute shelf, 2x for the hour), so the savings arrive from the second turn onward.',
+        'NanoGPT\'s OpenAI- and Gemini-routed models cache repeated context on their own, gratis and automatic. Anthropic-routed (Claude) models want asking: switch this on and NanoGPT places the cache checkpoints itself, so a long-running conversation re-reads its history at a tenth the price. The ledger\'s honest caveat — writing the cache costs a premium over plain input (1.25x for the five-minute shelf, 2x for the hour), so the savings arrive from the second turn onward. Mind the subscription, too: NanoGPT bills an explicitly cached request pay-as-you-go, outside any subscription that would otherwise cover the model.',
       fields: [
         {
           key: 'enablePromptCaching',

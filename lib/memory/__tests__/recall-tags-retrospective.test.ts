@@ -168,13 +168,14 @@ describe('buildTurnRecallContext (shared per-turn context assembly)', () => {
   const chat = {
     id: 'chat-1',
     projectId: 'proj-1',
-    commonplaceRecallHistory: { turns: [['mem-a', 'mem-b'], ['mem-c']] },
+    commonplaceRecallHistory: { byCharacter: { 'char-1': [['mem-a', 'mem-b'], ['mem-c']], 'char-2': [['mem-z']] } },
   }
   const recallSettings = { scopePolicy: 'exclude' as const, expandRelated: true }
 
   it('threads every field through, including the whispered-id set and the echo guard', () => {
     const ctx = buildTurnRecallContext({
       chat,
+      characterId: 'char-1',
       recallSettings,
       turnContext: 'history',
       turnTemporal: 'past',
@@ -199,6 +200,7 @@ describe('buildTurnRecallContext (shared per-turn context assembly)', () => {
   it('leaves the retrospective flag off entirely when omitted (the replay\'s inert old path)', () => {
     const ctx = buildTurnRecallContext({
       chat: { id: 'chat-1' },
+      characterId: 'char-1',
       recallSettings,
       turnContext: null,
       turnTemporal: null,

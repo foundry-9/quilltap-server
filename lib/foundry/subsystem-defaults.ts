@@ -9,6 +9,8 @@
  * @module lib/foundry/subsystem-defaults
  */
 
+import { settingsPersonaHref } from '@/lib/settings/hrefs';
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -28,6 +30,7 @@ export type SubsystemId =
   | 'lantern'
   | 'pascal'
   | 'saquel'
+  | 'brahma'
   | 'scriptorium';
 
 /**
@@ -55,8 +58,8 @@ export interface SubsystemDefinition {
 /**
  * Default definitions for all Foundry subsystems.
  *
- * The `foundry` entry is the hub page itself; the remaining 10 entries
- * are the child subsystem pages displayed as cards on the hub.
+ * The `foundry` entry is the Settings page itself; `scriptorium` has its own
+ * page; the rest are the personas whose badges the settings cards wear.
  */
 export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinition> = {
   foundry: {
@@ -70,40 +73,40 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
   aurora: {
     id: 'aurora',
     name: 'Aurora',
-    description: 'Roleplay templates and prompt configuration',
-    href: '/settings?tab=templates',
+    description: 'Roleplay templates, prompts, the Core whisper, and avatars',
+    href: settingsPersonaHref('aurora'),
     thumbnail: '/images/thumbnails/aurora.webp',
     backgroundImage: '/images/aurora.webp',
   },
   forge: {
     id: 'forge',
     name: 'The Forge',
-    description: 'API keys, connections, plugins, storage, and data management',
-    href: '/settings?tab=providers',
+    description: 'Providers, connection profiles, the cheap LLM, and plugins',
+    href: settingsPersonaHref('forge'),
     thumbnail: '/images/thumbnails/foundry.webp',
     backgroundImage: '/images/foundry.webp',
   },
   salon: {
     id: 'salon',
     name: 'The Salon',
-    description: 'Chat behavior, avatars, compression, and automation settings',
-    href: '/settings?tab=chat',
+    description: 'The composer, how the conversation is shown, context, Taboo, and the autonomous rooms',
+    href: settingsPersonaHref('salon'),
     thumbnail: '/images/thumbnails/salon.webp',
     backgroundImage: '/images/salon.webp',
   },
   'commonplace-book': {
     id: 'commonplace-book',
     name: 'The Commonplace Book',
-    description: 'Embedding profiles and memory deduplication',
-    href: '/settings?tab=memory',
+    description: 'Memory: embeddings, extraction, recall, and maintenance',
+    href: settingsPersonaHref('commonplace-book'),
     thumbnail: '/images/thumbnails/commonplace_book.webp',
     backgroundImage: '/images/commonplace_book.webp',
   },
   prospero: {
     id: 'prospero',
     name: 'Prospero',
-    description: 'Task queue, capabilities report, and LLM logs',
-    href: '/settings?tab=system',
+    description: 'Agent mode, backups, logs, the task queue, and the Almanack',
+    href: settingsPersonaHref('prospero'),
     thumbnail: '/images/thumbnails/prospero.webp',
     backgroundImage: '/images/prospero.webp',
   },
@@ -111,23 +114,23 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
     id: 'concierge',
     name: 'The Concierge',
     description: 'Who gets asked when the usual providers refuse, and how flagged content is shown',
-    href: '/settings?tab=concierge',
+    href: settingsPersonaHref('concierge'),
     thumbnail: '/images/thumbnails/concierge.webp',
     backgroundImage: '/images/concierge.webp',
   },
   calliope: {
     id: 'calliope',
     name: 'Calliope',
-    description: 'Appearance, themes, and tag management',
-    href: '/settings?tab=appearance',
+    description: 'Themes, appearance, and tags',
+    href: settingsPersonaHref('calliope'),
     thumbnail: '/images/thumbnails/calliope.webp',
     backgroundImage: '/images/calliope.webp',
   },
   lantern: {
     id: 'lantern',
     name: 'The Lantern',
-    description: 'Image profiles and story background settings',
-    href: '/settings?tab=images',
+    description: 'Image profiles, story backgrounds, wardrobe pictures, and image description',
+    href: settingsPersonaHref('lantern'),
     thumbnail: '/images/thumbnails/lantern.webp',
     backgroundImage: '/images/lantern.webp',
   },
@@ -135,17 +138,25 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
     id: 'pascal',
     name: 'Pascal the Croupier',
     description: 'Random number generation, dice, and game state tracking',
-    href: '/settings?tab=chat',
+    href: settingsPersonaHref('pascal'),
     thumbnail: '/images/thumbnails/pascal.webp',
     backgroundImage: '/images/pascal.webp',
   },
   saquel: {
     id: 'saquel',
     name: 'Saquel Ytzama the Keeper of Secrets',
-    description: 'API key management, encryption, and secrets',
-    href: '/settings?tab=system',
+    description: 'API keys, the encryption passphrase, and the auto-lock',
+    href: settingsPersonaHref('saquel'),
     thumbnail: '/images/thumbnails/saquel.webp',
     backgroundImage: '/images/saquel.webp',
+  },
+  brahma: {
+    id: 'brahma',
+    name: 'Brahma',
+    description: 'The Console — a plain model surface with no character and no memory',
+    href: settingsPersonaHref('brahma'),
+    thumbnail: '/images/thumbnails/brahma.webp',
+    backgroundImage: '/images/brahma.webp',
   },
   scriptorium: {
     id: 'scriptorium',
@@ -158,17 +169,21 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
 };
 
 /**
- * Ordered list of child subsystem IDs shown as settings tabs.
- * pascal and saquel are still valid SubsystemIds (for theme
- * compatibility) but are merged into other tabs.
+ * Ordered list of the personas shown in the Foundry's persona row on
+ * `/settings`. Each one is a lens over the whole page (`?persona=<id>`):
+ * choosing it filters every group to that persona's cards, wherever they live.
+ * Every id here must own at least one card in `lib/settings/registry.ts`.
  */
 export const CHILD_SUBSYSTEM_IDS: SubsystemId[] = [
   'forge',
+  'saquel',
   'salon',
+  'commonplace-book',
+  'aurora',
+  'lantern',
+  'pascal',
+  'prospero',
+  'brahma',
   'concierge',
   'calliope',
-  'commonplace-book',
-  'lantern',
-  'aurora',
-  'prospero',
 ];

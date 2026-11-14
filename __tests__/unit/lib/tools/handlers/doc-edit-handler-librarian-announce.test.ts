@@ -94,10 +94,16 @@ jest.mock('@/lib/mount-index/embedding-scheduler', () => ({
 jest.mock('@/lib/repositories/factory', () => {
   const characters = { findById: jest.fn() };
   const chats = { findById: jest.fn() };
-  const docMountBlobs = { create: jest.fn(), deleteByMountPointAndPath: jest.fn() };
+  // doc_delete_blob deletes only a file that carries blob bytes and no document.
+  const docMountBlobs = {
+    create: jest.fn(),
+    deleteByMountPointAndPath: jest.fn(),
+    findByMountPointAndPath: jest.fn(async (_mp: string, relativePath: string) => ({ fileId: 'f-blob', relativePath })),
+  };
+  const docMountDocuments = { findByFileId: jest.fn().mockResolvedValue(null) };
   const docMountPoints = { findById: jest.fn(), refreshStats: jest.fn().mockResolvedValue(undefined) };
   const docMountFileLinks = { findByMountPointAndPath: jest.fn().mockResolvedValue(null), findByMountPointId: jest.fn().mockResolvedValue([]) };
-  return { getRepositories: () => ({ characters, chats, docMountBlobs, docMountPoints, docMountFileLinks }) };
+  return { getRepositories: () => ({ characters, chats, docMountBlobs, docMountDocuments, docMountPoints, docMountFileLinks }) };
 });
 
 jest.mock('@/lib/services/librarian-notifications/writer', () => ({

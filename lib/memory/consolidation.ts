@@ -28,9 +28,13 @@
  *      nothing is written for it, and its rows stay unconsidered so the next
  *      run retries them.
  *   4. **Plan, then write** (`consolidation-plan.ts`, pure). The whole batch is
- *      computed before a single write is issued. Digests are inserted directly
- *      with their embedding — never through admission, which would absorb a
- *      digest into its own members.
+ *      computed before a single write is issued; the writes then land in the
+ *      parent (`admission/consolidation-writes.ts`, over host-RPC from the
+ *      job child), one cluster at a time under admission's lock, as deltas
+ *      against the rows re-read there — a cluster whose rows changed since
+ *      the read is skipped and retried next run (A9). Digests are inserted
+ *      directly with their embedding — never through admission, which would
+ *      absorb a digest into its own members.
  *
  * It announces nothing: the frozen-archive invalidation, the realtime hint and
  * the `Commonplace/` mirror are the maintenance run's effects, after commit.
@@ -60,7 +64,8 @@ import { resolveMaxTokens } from '@/lib/llm/model-context-data'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { getConciergeState, shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
-import { memoryIndex, embeddingTextFor, lexicalEmbeddingTextFor } from './index-store'
+import { embeddingTextFor, lexicalEmbeddingTextFor } from './index-store'
+import { applyConsolidationWrites, type AppliedConsolidation } from './admission/consolidation-writes'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { resolveClusterThreshold } from './settings-defaults'
 import {
@@ -139,9 +144,11 @@ export interface ConsolidationClusterReport {
   /**
    * 'planned' (dry run), 'written', 'failed' (the call failed or timed out),
    * 'invalid' (the answer failed the schema or membership rules),
-   * 'embedding-failed' (a digest could not be embedded — nothing written).
+   * 'embedding-failed' (a digest could not be embedded — nothing written),
+   * 'changed' (its rows changed between the read and the write — nothing
+   * written; the next run takes it up again).
    */
-  status: 'planned' | 'written' | 'failed' | 'invalid' | 'embedding-failed'
+  status: 'planned' | 'written' | 'failed' | 'invalid' | 'embedding-failed' | 'changed'
   error?: string
 }
 
@@ -165,6 +172,8 @@ export interface ConsolidationStats {
   clustersSucceeded: number
   clustersFailed: number
   clustersLostToTimeout: number
+  /** Clusters planned but not written: their rows changed before the write (A9). */
+  clustersChangedBeforeWrite: number
   digestsCreated: number
   digestsUpdated: number
   membersSuperseded: number
@@ -248,6 +257,7 @@ export function createConsolidationStats(): ConsolidationStats {
     clustersSucceeded: 0,
     clustersFailed: 0,
     clustersLostToTimeout: 0,
+    clustersChangedBeforeWrite: 0,
     digestsCreated: 0,
     digestsUpdated: 0,
     membersSuperseded: 0,
@@ -409,7 +419,7 @@ async function describeBuckets(
     const subjectId = bucket.ref.subjectCharacterId as string
     // The overlay read carries the vault-managed identity/description; a
     // broken vault throws, so fall back to the raw row for name-only canon.
-    let subject: Character | null = null
+    let subject: Pick<Character, 'id' | 'name' | 'identity' | 'description'> | null = null
     try {
       subject = await repos.characters.findById(subjectId)
     } catch {
@@ -417,7 +427,9 @@ async function describeBuckets(
     }
     if (!subject) {
       try {
-        subject = await repos.characters.findByIdRaw(subjectId)
+        // The row has no content: a broken vault leaves name-only canon.
+        const row = await repos.characters.findByIdRaw(subjectId)
+        subject = row ? { id: row.id, name: row.name, identity: null, description: null } : null
       } catch {
         subject = null
       }
@@ -469,65 +481,6 @@ function digestReport(d: PlannedDigest): ConsolidationDigestReport {
   }
 }
 
-/** Issue a plan's writes. In the job child every call buffers; the parent commits them as one batch. */
-async function executePlan(
-  characterId: string,
-  plan: ConsolidationWritePlan,
-  extraConsidered: readonly string[],
-  nowIso: string,
-): Promise<void> {
-  const repos = getRepositories()
-
-  for (const create of plan.creates) {
-    // The vector rides in the create itself, so a digest never exists
-    // without it; the index then caches it without a second write.
-    await repos.memories.create(
-      create.embedding ? { ...create.data, embedding: create.embedding } : create.data,
-      { id: create.id, createdAt: nowIso, updatedAt: nowIso },
-    )
-    if (create.embedding) {
-      await memoryIndex.indexInserted(characterId, [{ id: create.id, embedding: create.embedding, tier: 'hot' }])
-    }
-    log.debug('Digest created', { characterId, memoryId: create.id, members: create.memberIds.length })
-  }
-
-  for (const update of plan.updates) {
-    if (update.embedding) {
-      // The revised text and its vector land in one row update.
-      await memoryIndex.upsert(characterId, [
-        { id: update.id, embedding: update.embedding, tier: 'hot', alongside: update.patch },
-      ])
-    } else {
-      await repos.memories.updateForCharacter(characterId, update.id, update.patch)
-    }
-    log.debug('Digest revised in place', { characterId, memoryId: update.id, newMembers: update.memberIds.length })
-  }
-
-  for (const move of plan.tierMoves) {
-    await memoryIndex.setTier(characterId, move.ids, 'cold', {
-      supersededById: move.supersededById,
-      consolidatedAt: nowIso,
-    })
-  }
-
-  const considered = Array.from(new Set([...plan.considered, ...extraConsidered]))
-  if (considered.length > 0) {
-    await repos.memories.markConsidered(characterId, considered, nowIso)
-  }
-
-  for (const rewrite of plan.linkRewrites) {
-    await repos.memories.updateForCharacter(characterId, rewrite.id, { relatedMemoryIds: rewrite.relatedMemoryIds })
-  }
-
-  // Keywords are not embedded (embeddingTextFor), so this is a plain field write.
-  for (const mark of plan.resolvedMarks) {
-    await repos.memories.updateForCharacter(characterId, mark.id, { keywords: mark.keywords })
-  }
-  if (plan.resolvedMarks.length > 0) {
-    log.debug('Resolved grievances marked', { characterId, count: plan.resolvedMarks.length })
-  }
-}
-
 /**
  * The digest subjects a plan touches — the buckets whose Commonplace files the
  * run changes. The no-subject bucket has no mirror and is left out.
@@ -536,9 +489,11 @@ function touchedSubjects(
   buckets: Map<string, ConsolidationBucket>,
   plan: ConsolidationWritePlan,
   bucketKeyByOutcome: readonly string[],
+  landed: ReadonlySet<number> | null,
 ): string[] {
   const subjects = new Set<string>()
   for (const digest of [...plan.creates, ...plan.updates]) {
+    if (landed && !landed.has(digest.clusterIndex)) continue
     const bucket = buckets.get(bucketKeyByOutcome[digest.clusterIndex])
     if (bucket?.aboutCharacterId) subjects.add(bucket.aboutCharacterId)
   }
@@ -568,6 +523,8 @@ export interface ConsolidationRun {
   belowMinConsidered: string[]
   /** Digest subjects whose Commonplace files the run changes. */
   touchedSubjects: string[]
+  /** What the writer did (null in a dry run): the batches that landed, and the rows as they now stand. */
+  applied: AppliedConsolidation | null
 }
 
 /**
@@ -703,6 +660,8 @@ export async function consolidate(
     ? await describeBuckets(holder, buckets, new Set(selection.selected.map((c) => c.bucketKey)))
     : new Map<string, string | null>()
   const chatCache = new Map<string, ChatMetadata | null>()
+  // Member dates print on the memory calendar (#187; cold cache in the child).
+  const memoryTimeZoneForPrompts = route ? await refreshMemoryTimeZone() : undefined
 
   for (let i = 0; route && i < selection.selected.length; i++) {
     if (opts.timeBudgetMs !== undefined && Date.now() - startedMs > opts.timeBudgetMs) {
@@ -724,6 +683,7 @@ export async function consolidate(
     const existingDigest = cluster.digestId ? digestsById.get(cluster.digestId) ?? null : null
     const handleToId = new Map<string, string>()
     const callInput: ConsolidationCallInput = {
+      timeZone: memoryTimeZoneForPrompts,
       holderName: holder.name,
       subjectName: bucket.ref.subjectName,
       bucket: bucket.ref.kind,
@@ -893,10 +853,37 @@ export async function consolidate(
   stats.linksRewired = plan.linkRewrites.length
   stats.rowsMarkedConsidered = new Set([...plan.considered, ...belowMinConsidered]).size
 
+  // The writes land in the parent, cluster by cluster under admission's lock,
+  // as deltas against the rows as they stand then (A9).
+  let applied: AppliedConsolidation | null = null
   if (!dryRun) {
-    await executePlan(characterId, plan, belowMinConsidered, nowIso)
+    applied = await applyConsolidationWrites({ characterId, plan, extraConsidered: belowMinConsidered, nowIso })
+    if (applied.staleClusters.length > 0) {
+      const stale = new Set(applied.staleClusters)
+      for (const idx of stale) {
+        const report = clusterReports[finalReportIndex[idx]]
+        report.status = 'changed'
+        report.error = 'rows changed before the write; retried next run'
+      }
+      const landedDigests = [...plan.creates, ...plan.updates].filter((d) => !stale.has(d.clusterIndex))
+      stats.clustersChangedBeforeWrite = stale.size
+      stats.clustersSucceeded = finalOutcomes.length - stale.size
+      stats.digestsCreated = landedDigests.filter((d) => d.action === 'create').length
+      stats.digestsUpdated = landedDigests.filter((d) => d.action === 'update').length
+      stats.membersSuperseded = plan.tierMoves
+        .filter((m) => !stale.has(m.clusterIndex))
+        .reduce((sum, m) => sum + m.ids.length, 0)
+      stats.contradictionsApplied = finalOutcomes
+        .filter((_, idx) => !stale.has(idx))
+        .reduce((sum, o) => sum + o.contradictions.length, 0)
+      stats.rowsMarkedConsidered = new Set([
+        ...plan.consideredByCluster.flatMap((ids, idx) => (stale.has(idx) ? [] : ids)),
+        ...belowMinConsidered,
+      ]).size
+    }
+    stats.linksRewired = applied.linksRewired
   }
-  const touched = touchedSubjects(buckets, plan, finalBucketKey)
+  const touched = touchedSubjects(buckets, plan, finalBucketKey, applied ? new Set(applied.landedClusters) : null)
 
   const report = finish(route || selection.selected.length === 0 ? {} : { skippedReason: 'no-llm' })
   log.info('Consolidation run complete', {
@@ -912,6 +899,7 @@ export async function consolidate(
     clustersSucceeded: stats.clustersSucceeded,
     clustersFailed: stats.clustersFailed,
     clustersDeferred: stats.clustersDeferred,
+    clustersChangedBeforeWrite: stats.clustersChangedBeforeWrite,
     digestsCreated: stats.digestsCreated,
     digestsUpdated: stats.digestsUpdated,
     membersSuperseded: stats.membersSuperseded,
@@ -920,5 +908,5 @@ export async function consolidate(
     budgetExhausted: stats.budgetExhausted,
     durationMs: stats.durationMs,
   })
-  return { report, plan, belowMinConsidered, touchedSubjects: touched }
+  return { report, plan, belowMinConsidered, touchedSubjects: touched, applied }
 }

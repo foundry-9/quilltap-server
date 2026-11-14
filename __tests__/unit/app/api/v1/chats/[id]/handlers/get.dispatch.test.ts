@@ -61,6 +61,7 @@ jest.mock('@/lib/photos/chat-gallery', () => ({
 
 jest.mock('@/app/api/v1/chats/[id]/actions', () => ({
   handleGetAvatars: jest.fn(),
+  handleGetAvatarTimeline: jest.fn(),
   handleGetState: jest.fn(),
   handleGetOutfit: jest.fn(),
   handleGetOutfitSummary: jest.fn(),
@@ -84,6 +85,7 @@ const GET_ACTIONS = [
   'export',
   'export-markdown',
   'get-avatars',
+  'avatar-timeline',
   'get-state',
   'outfit',
   'outfit-summary',
@@ -99,6 +101,7 @@ const GET_ACTIONS = [
   'gallery',
   'scenario-source',
   'absent-mentions',
+  'atlas-mentions',
   'cost',
 ]
 
@@ -118,6 +121,7 @@ function buildCtx() {
         getMessages: jest.fn().mockResolvedValue([]),
         getTranscriptVersion: jest.fn().mockResolvedValue(3),
         getModerationRefusalLedger: jest.fn().mockResolvedValue({ count: 0, lastAt: null }),
+        getOpeningState: jest.fn().mockResolvedValue({ state: 'done', phase: null, plan: null }),
       },
       projects: { findById: jest.fn() },
       characters: { findById: jest.fn(), findByIds: jest.fn().mockResolvedValue([]) },

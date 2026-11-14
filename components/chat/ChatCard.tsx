@@ -6,7 +6,7 @@
  * Used across multiple pages to display chat items in a consistent way:
  * - /chats - Main chats list
  * - /projects/[id] - Project detail page chats section
- * - /characters/[id]/view - Character conversations tab
+ * - /aurora/[id]?section=history - the character page's History section
  *
  * Configure via props to show/hide features based on context.
  */

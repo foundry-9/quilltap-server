@@ -7,14 +7,17 @@
  * normal conversation history.
  *
  * Add announcements include the joining character's avatar (as inline markdown)
- * and either their identity (if a character vault is present and exposes
- * `identity.md`) or their `description` field — preferring identity, never both.
+ * and their public identity — what is known from other fields (age, public
+ * progressions, pronouns; `lib/characters/public-identity.ts`) followed by
+ * `identity.md` — or, when the vault has no identity text, their
+ * `description` field.
  * Remove and status-change announcements are text-only.
  *
  * Errors never propagate — participant operations must never fail because an
  * announcement couldn't be written.
  */
 
+import { CHARACTER_IDENTITY_MD_PATH } from '@/lib/characters/vault/layout';
 import {
   HOST_KIND_OFF_SCENE_CHARACTERS,
   HOST_KIND_OFF_SCENE_LEFT_BEHIND,
@@ -29,6 +32,11 @@ import type { MessageEvent } from '@/lib/schemas/types';
 import type { Character } from '@/lib/schemas/character.types';
 import type { ChatParticipantBase, ParticipantStatus } from '@/lib/schemas/chat.types';
 import type { OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
+import {
+  composePublicIdentity,
+  publicIdentityFacts,
+  renderPublicIdentityFacts,
+} from '@/lib/characters/public-identity';
 
 /**
  * Replace `{{char}}` and `{{user}}` template tokens in a character-derived
@@ -122,13 +130,42 @@ async function readVaultIdentity(character: Character): Promise<string | null> {
   try {
     const { content } = await readDatabaseDocument(
       character.characterDocumentMountPointId,
-      'identity.md',
+      CHARACTER_IDENTITY_MD_PATH,
     );
     const trimmed = content.trim();
     return trimmed.length > 0 ? trimmed : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * The joining character's particulars: the public identity (age, public
+ * progressions, pronouns, then `identity.md`) under **Identity:**, and the
+ * `description` under **Description:** only when there is no identity text to
+ * stand in for it — identity is preferred, never both.
+ */
+async function identityOrDescriptionLines(
+  character: Character,
+  userCharacterName?: string | null,
+): Promise<string[]> {
+  const vaultIdentity = await readVaultIdentity(character);
+  const identity = composePublicIdentity(
+    character,
+    vaultIdentity ? applyHostTemplates(vaultIdentity, character.name, userCharacterName) : '',
+  );
+  const lines: string[] = [];
+  if (identity) {
+    lines.push('**Identity:**', '', identity);
+  }
+  if (!vaultIdentity) {
+    const description = (character.description ?? '').trim();
+    if (description.length > 0) {
+      if (lines.length > 0) lines.push('');
+      lines.push('**Description:**', '', applyHostTemplates(description, character.name, userCharacterName));
+    }
+  }
+  return lines;
 }
 
 export async function buildAddContent(
@@ -139,19 +176,7 @@ export async function buildAddContent(
   lines.push(`The Host welcomes ${character.name} to the Salon.`);
   lines.push('');
 
-  const identity = await readVaultIdentity(character);
-  if (identity) {
-    lines.push('**Identity:**');
-    lines.push('');
-    lines.push(applyHostTemplates(identity, character.name, userCharacterName));
-  } else {
-    const description = (character.description ?? '').trim();
-    if (description.length > 0) {
-      lines.push('**Description:**');
-      lines.push('');
-      lines.push(applyHostTemplates(description, character.name, userCharacterName));
-    }
-  }
+  lines.push(...(await identityOrDescriptionLines(character, userCharacterName)));
 
   return lines.join('\n').trimEnd();
 }
@@ -168,19 +193,7 @@ export async function buildAddOpaqueContent(
   lines.push(`${character.name} has joined the scene.`);
   lines.push('');
 
-  const identity = await readVaultIdentity(character);
-  if (identity) {
-    lines.push('**Identity:**');
-    lines.push('');
-    lines.push(applyHostTemplates(identity, character.name, userCharacterName));
-  } else {
-    const description = (character.description ?? '').trim();
-    if (description.length > 0) {
-      lines.push('**Description:**');
-      lines.push('');
-      lines.push(applyHostTemplates(description, character.name, userCharacterName));
-    }
-  }
+  lines.push(...(await identityOrDescriptionLines(character, userCharacterName)));
 
   return lines.join('\n').trimEnd();
 }
@@ -829,6 +842,9 @@ export interface OffSceneCharacterCard {
   name: string;
   aliases?: string[];
   pronouns?: { subject: string; object: string; possessive: string } | null;
+  birthday?: string | null;
+  /** For the public progressions only; raw metadata never reaches a model. */
+  metadata?: unknown;
   identity?: string | null;
   description?: string | null;
 }
@@ -839,7 +855,8 @@ export interface OffSceneCharacterCard {
  */
 /**
  * An absent character's particulars, as the model is told them: name, aliases,
- * pronouns and the body (identity, else description) with `{{char}}` /
+ * the known facts (age, public progressions, pronouns) and the body (identity,
+ * else description) with `{{char}}` /
  * `{{user}}` bound. The one source for the card in the referent ledger
  * ({@link renderOffSceneCard}), the left-behind notice and the Salon's
  * name-chip popup (`lib/chat/absent-mentions.ts`).
@@ -849,6 +866,12 @@ export interface OffSceneCardFields {
   aliases: string[];
   /** `subject/object/possessive`, or null when none are recorded. */
   pronouns: string | null;
+  /**
+   * What is known from other fields besides pronouns, as lines — age, then
+   * public progressions (`lib/characters/public-identity.ts`). The card puts
+   * them before the pronouns.
+   */
+  facts: string[];
   body: string;
 }
 
@@ -857,10 +880,12 @@ export function offSceneCardFields(
   userCharacterName?: string | null,
 ): OffSceneCardFields {
   const body = ((c.identity ?? '').trim() || (c.description ?? '').trim());
+  const facts = publicIdentityFacts(c);
   return {
     name: c.name,
     aliases: c.aliases ?? [],
-    pronouns: c.pronouns ? `${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}` : null,
+    pronouns: facts.pronouns,
+    facts: renderPublicIdentityFacts({ ...facts, pronouns: null }),
     body: body.length > 0 ? applyHostTemplates(body, c.name, userCharacterName) : '',
   };
 }
@@ -872,6 +897,7 @@ export function renderOffSceneCard(
   const fields = offSceneCardFields(c, userCharacterName);
   const lines: string[] = [`### ${fields.name}`];
   if (fields.aliases.length > 0) lines.push(`Aliases: ${fields.aliases.join(', ')}`);
+  lines.push(...fields.facts);
   if (fields.pronouns) lines.push(`Pronouns: ${fields.pronouns}`);
   if (fields.body) lines.push(fields.body);
   return lines.join('\n');
@@ -1200,73 +1226,4 @@ export async function postHostMergeToAnnouncement(
     HOST_KIND_MERGE_TO,
     null,
   );
-}
-
-// ---------------------------------------------------------------------------
-// "No user character attached" advisory whisper.
-//
-// The auto-memory pipeline emits this whisper the first time it encounters a
-// chat with no resolvable user-controlled character. It is idempotent — once
-// posted, subsequent calls in the same chat are no-ops — so it appears at most
-// once per chat regardless of how many turns proceed in that state.
-// ---------------------------------------------------------------------------
-
-const HOST_KIND_NO_USER_CHARACTER = 'no-user-character';
-
-function buildNoUserCharacterContent(): string {
-  return [
-    'The Host clears their throat with the gentlest of coughs.',
-    '',
-    'No user-controlled character has been attached to this conversation, so the Commonplace Book cannot record what your characters come to know about *you* — only what they come to know about themselves.',
-    '',
-    'To begin gathering memories about the user, attach (or create) a user-controlled character via the Participants sidebar.',
-  ].join('\n');
-}
-
-export interface HostNoUserCharacterAnnouncement {
-  chatId: string;
-}
-
-/**
- * Post the "no user-character attached" whisper, but only if no such whisper
- * has already been posted to this chat. Designed to be called from the auto-
- * memory pipeline, which fires once per turn — without this idempotence guard
- * the chat would fill up with duplicates.
- */
-export async function postHostNoUserCharacterAnnouncement(
-  params: HostNoUserCharacterAnnouncement,
-): Promise<MessageEvent | null> {
-  try {
-    const repos = getRepositories();
-    const chat = await repos.chats.findById(params.chatId);
-    if (!chat) return null;
-
-    const messages = (chat as { messages?: unknown[] }).messages ?? [];
-    const alreadyPosted = messages.some((m) => {
-      if (!m || typeof m !== 'object') return false;
-      const msg = m as { type?: unknown; systemSender?: unknown; systemKind?: unknown };
-      return (
-        msg.type === 'message' &&
-        msg.systemSender === 'host' &&
-        msg.systemKind === HOST_KIND_NO_USER_CHARACTER
-      );
-    });
-    if (alreadyPosted) return null;
-
-    return postHostMessageWithTargets(
-      params.chatId,
-      buildNoUserCharacterContent(),
-      // No opaque variant: this whisper is for the operator only, never reaches a character's LLM context.
-      null,
-      HOST_KIND_NO_USER_CHARACTER,
-      null,
-    );
-  } catch (error) {
-    logger.warn('[HostNotification] No-user-character whisper skipped (non-fatal)', {
-      context: 'host-notifications',
-      chatId: params.chatId,
-      error: getErrorMessage(error),
-    });
-    return null;
-  }
 }

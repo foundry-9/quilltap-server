@@ -74,7 +74,15 @@ describe('buildContinueMessageOptions', () => {
       respondingParticipantId: 'p-3',
       speakingAsParticipantId: 'p-4',
       nudge: 'Say more about the cellar.',
+      opening: undefined,
       browserUserAgent: 'Safari/2',
+    })
+  })
+
+  it('forwards the opening flag, so the Salon\'s opening stream runs the opening', () => {
+    expect(buildContinueMessageOptions({ continueMode: true, opening: true } as never)).toMatchObject({
+      continueMode: true,
+      opening: true,
     })
   })
 

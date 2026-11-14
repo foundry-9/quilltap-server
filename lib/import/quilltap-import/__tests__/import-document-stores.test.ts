@@ -20,16 +20,12 @@ const globalRepos = {
     update: jest.fn(),
     create: jest.fn(),
   },
-  docMountDocuments: { deleteByMountPointId: jest.fn() },
   docMountBlobs: {
-    deleteByMountPointId: jest.fn(),
     create: jest.fn(),
     updateExtractedText: jest.fn(),
   },
-  docMountChunks: { deleteByMountPointId: jest.fn() },
-  docMountFiles: { deleteByMountPointId: jest.fn() },
   docMountFolders: { deleteByMountPointId: jest.fn(), create: jest.fn() },
-  docMountFileLinks: { linkDocumentContent: jest.fn(), bindLinkGroup: jest.fn() },
+  docMountFileLinks: { linkDocumentContent: jest.fn(), bindLinkGroup: jest.fn(), deleteByMountPointId: jest.fn() },
 };
 
 jest.mock('@/lib/repositories/factory', () => ({
@@ -51,6 +47,8 @@ function makeIdMaps(): IdMappingState {
     preserveIdsSkips: new Set(),
     wardrobeItems: new Map(),
     messages: new Map(),
+    writtenChats: new Set(),
+    writtenRows: new Set(),
   };
 }
 
@@ -81,9 +79,8 @@ beforeEach(() => {
     id: options?.id ?? 'freshly-minted-id',
     ...data,
   }));
-  for (const child of ['docMountDocuments', 'docMountBlobs', 'docMountChunks', 'docMountFiles', 'docMountFolders'] as const) {
-    (globalRepos as any)[child].deleteByMountPointId.mockResolvedValue(0);
-  }
+  globalRepos.docMountFolders.deleteByMountPointId.mockResolvedValue(0);
+  globalRepos.docMountFileLinks.deleteByMountPointId.mockResolvedValue({ linksDeleted: 0, filesGC: 0 });
   let folderSeq = 0;
   globalRepos.docMountFolders.create.mockImplementation(async (data: any, options?: { id?: string }) => ({
     id: options?.id ?? `fresh-folder-${++folderSeq}`,
@@ -129,9 +126,11 @@ it('overwrites the store matched by id — even after an in-app rename — and c
   // Matched by id → update the renamed store, not create a stranger.
   expect(globalRepos.docMountPoints.update).toHaveBeenCalledWith('store-X', expect.objectContaining({ name: 'Lore' }));
   expect(globalRepos.docMountPoints.create).not.toHaveBeenCalled();
-  // Folders are cleared on overwrite (fix 1) alongside documents/blobs/files/chunks.
+  // Folders are cleared on overwrite (fix 1) alongside the store's links,
+  // chunks and exclusive content — through the link repo's shared-content-safe
+  // clear, never a per-table delete (#191).
   expect(globalRepos.docMountFolders.deleteByMountPointId).toHaveBeenCalledWith('store-X');
-  expect(globalRepos.docMountDocuments.deleteByMountPointId).toHaveBeenCalledWith('store-X');
+  expect(globalRepos.docMountFileLinks.deleteByMountPointId).toHaveBeenCalledWith('store-X');
   expect(idMaps.mountPoints.get('store-X')).toBe('store-X');
 });
 
@@ -377,4 +376,52 @@ it('mints a fresh id under the duplicate strategy when the archive id already ex
   // The archive id is taken, so create must NOT preserve it.
   expect(createOptions).toBeUndefined();
   expect(idMaps.mountPoints.get('store-X')).toBe('freshly-minted-id');
+});
+
+describe('host-path stores', () => {
+  it('imports a filesystem store disabled, keeping its basePath for the operator to review', async () => {
+    globalRepos.docMountPoints.findAll.mockResolvedValue([]);
+    const warnings: string[] = [];
+    await importDocumentStores(
+      [store({ id: 'fs-1', name: 'Notes', mountType: 'filesystem', basePath: '/home/someone', enabled: true })],
+      [], [], [], [], opts('overwrite'), {} as never, makeIdMaps(), warnings
+    );
+    const [data] = globalRepos.docMountPoints.create.mock.calls[0];
+    expect(data).toEqual(expect.objectContaining({ mountType: 'filesystem', basePath: '/home/someone', enabled: false }));
+    expect(warnings.some((w) => w.includes('/home/someone') && w.includes('disabled'))).toBe(true);
+  });
+
+  it('imports an obsidian store disabled', async () => {
+    globalRepos.docMountPoints.findAll.mockResolvedValue([]);
+    await run([store({ id: 'ob-1', mountType: 'obsidian', basePath: '/vault', enabled: true })], opts('skip'), makeIdMaps());
+    const [data] = globalRepos.docMountPoints.create.mock.calls[0];
+    expect(data.enabled).toBe(false);
+  });
+
+  it('keeps a database store enabled as archived', async () => {
+    globalRepos.docMountPoints.findAll.mockResolvedValue([]);
+    await run([store({ id: 'db-1', mountType: 'database', basePath: '/ignored', enabled: true })], opts('skip'), makeIdMaps());
+    const [data] = globalRepos.docMountPoints.create.mock.calls[0];
+    expect(data).toEqual(expect.objectContaining({ basePath: '', enabled: true }));
+  });
+
+  it('never replaces an existing store\'s basePath or mountType on overwrite', async () => {
+    globalRepos.docMountPoints.findAll.mockResolvedValue([
+      { id: 'store-X', name: 'Lore', mountType: 'database', basePath: '', storeType: 'documents', enabled: true },
+    ]);
+    await run([store({ id: 'store-X', mountType: 'filesystem', basePath: '/etc', enabled: true })], opts('overwrite'), makeIdMaps());
+    const [, patch] = globalRepos.docMountPoints.update.mock.calls[0];
+    expect(patch).not.toHaveProperty('basePath');
+    expect(patch).not.toHaveProperty('mountType');
+  });
+
+  it('keeps an existing host-path store\'s enabled flag on overwrite', async () => {
+    globalRepos.docMountPoints.findAll.mockResolvedValue([
+      { id: 'fs-1', name: 'Notes', mountType: 'filesystem', basePath: '/mine', storeType: 'documents', enabled: false },
+    ]);
+    await run([store({ id: 'fs-1', name: 'Notes', mountType: 'filesystem', basePath: '/theirs', enabled: true })], opts('overwrite'), makeIdMaps());
+    const [, patch] = globalRepos.docMountPoints.update.mock.calls[0];
+    expect(patch.enabled).toBe(false);
+    expect(patch).not.toHaveProperty('basePath');
+  });
 });

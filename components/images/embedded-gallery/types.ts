@@ -42,6 +42,11 @@ export interface EmbeddedPhotoGalleryProps {
   currentAvatarId?: string
   onAvatarChange?: (imageId: string | null) => void
   onRefresh?: () => void
+  /**
+   * An anchor id whose navigation (`revealAnchor`) opens the album, which
+   * otherwise starts collapsed like the avatar rolls and wardrobe pictures.
+   */
+  revealAnchor?: string
 }
 
 /**

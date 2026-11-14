@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=memory&section=conversation-summaries-regenerate
+url: /settings?section=conversation-summaries-regenerate
 ---
 
 # Regenerate Conversation Summaries
 
-> **[Open this page in Quilltap](/settings?tab=memory&section=conversation-summaries-regenerate)**
+> **[Open this page in Quilltap](/settings?section=conversation-summaries-regenerate)**
 
 Every conversation a character takes part in leaves behind a tidy little dossier — a rolling summary of all that transpired — and a fair copy of that dossier is filed away on the character's own shelves, in a folder marked *Conversation Summaries*. The Commonplace Book consults those files before a character speaks, leafing through past dialogues for the ones that bear on the present moment and slipping the most pertinent into the character's ear. It is a quietly clever arrangement: a character may not remember every word of a chat from a fortnight ago, but they can be reminded that the chat happened, and pull the full transcript at will.
 
@@ -36,7 +36,7 @@ While the regeneration runs, the *Sum* badge in the page header shows the queue 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=memory&section=conversation-summaries-regenerate")`
+`help_navigate(url: "/settings?section=conversation-summaries-regenerate")`
 
 ## Related Settings
 

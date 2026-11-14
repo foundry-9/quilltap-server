@@ -5,9 +5,8 @@
  * Allows selecting an image from the gallery to use as an avatar
  */
 
-import { useId, useRef, useState } from 'react';
-import { useDialogFocus } from '@/hooks/useDialogFocus';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { useState } from 'react';
+import { BaseModal } from '@/components/ui/BaseModal';
 import { ImageGallery, ImageData } from './image-gallery';
 import { ImageUploadDialog } from './image-upload-dialog';
 
@@ -33,10 +32,6 @@ export function AvatarSelector({
   );
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [galleryKey, setGalleryKey] = useState(0);
-  const titleId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen);
-  useEscapeKey(handleClose, isOpen && !showUploadDialog);
 
   if (!isOpen) return null;
 
@@ -68,41 +63,23 @@ export function AvatarSelector({
 
   return (
     <>
-      <div className="qt-dialog-overlay" onClick={handleClose}>
-        <div
-          className="qt-dialog max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col"
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          onKeyDown={handleFocusKeyDown}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="qt-dialog-header flex items-center justify-between">
-            <h2 id={titleId} className="qt-dialog-title">Select Avatar</h2>
-            <button
-              onClick={() => setShowUploadDialog(true)}
-              className="qt-button qt-button-primary"
-            >
-              Import Image
-            </button>
-          </div>
-
-          {/* Body */}
-          <div className="qt-dialog-body flex-1 overflow-y-auto">
-            <ImageGallery
-              key={galleryKey}
-              tagType={contextType}
-              tagId={contextId}
-              onSelectImage={handleSelectImage}
-              selectedImageId={selectedImageId}
-            />
-          </div>
-
-          {/* Footer */}
-          <div className="qt-dialog-footer flex justify-between items-center">
+      <BaseModal
+        isOpen={isOpen}
+        onClose={handleClose}
+        title="Select Avatar"
+        maxWidth="4xl"
+        className="w-full mx-4 overflow-hidden"
+        headerActions={
+          <button
+            onClick={() => setShowUploadDialog(true)}
+            className="qt-button qt-button-primary"
+          >
+            Import Image
+          </button>
+        }
+        footerClassName="qt-dialog-footer flex justify-between items-center"
+        footer={
+          <>
             <button
               onClick={() => {
                 setSelectedImageId(undefined);
@@ -128,9 +105,17 @@ export function AvatarSelector({
                 Set as Avatar
               </button>
             </div>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      >
+        <ImageGallery
+          key={galleryKey}
+          tagType={contextType}
+          tagId={contextId}
+          onSelectImage={handleSelectImage}
+          selectedImageId={selectedImageId}
+        />
+      </BaseModal>
 
       {/* Upload Dialog */}
       <ImageUploadDialog

@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers
+url: /settings?group=connections
 ---
 
 # Configuring Chat Tools
 
-> **[Open this page in Quilltap](/settings?tab=providers)**
+> **[Open this page in Quilltap](/settings?group=connections)**
 
 This guide explains how to enable and disable AI tools for individual chats in Quilltap.
 
@@ -58,6 +58,8 @@ The Tool Settings modal displays:
 
 - Tools may be organized by category (Built-in, Memory, Search, Project, Files, etc.)
 - Plugins tools appear under their plugin names
+
+**Every tool a character is offered now has its place on the list.** Until lately a handful were offered to characters without ever presenting themselves here — a guest who dines nightly but never signs the book — and so could not be switched off. They are now listed like the rest: **Read Conversation**, **Annotate Conversation** and **Remove Annotation** (the Scriptorium's transcript and its margin notes), **List Terminals** and **Read Terminal** (Ariel's read-only view of the chat's terminals), and **Open Document**, **Close Document** and **Focus Document** (the Document Mode panes, available, like the other document tools, only when the chat's project has linked stores). The only tools still absent are those no character is ever offered: the Console's own instruments, two internal mechanisms, and a few document tools held in reserve.
 
 ## Enabling and Disabling Tools
 
@@ -122,7 +124,7 @@ Some tools show as unavailable (grayed out). This means the tool **cannot be use
 **Search Web - Unavailable**
 
 - Reason: Web search is not enabled in the connection profile, or no search provider API key is configured
-- Solution: Enable web search in your connection profile settings and add a search provider API key (e.g., Serper) in Settings > API Keys
+- Solution: Enable web search in your connection profile settings and add a search provider API key (e.g., Serper) in Settings → Connections → Providers → API Keys
 
 If a tool you need is unavailable, the dialog shows the reason. Take the suggested action to make it available.
 
@@ -212,7 +214,7 @@ An MCP server's tools inherit one effect, which you set in the MCP plugin's conf
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=providers")`
+`help_navigate(url: "/settings?group=connections")`
 
 ## Related Topics
 

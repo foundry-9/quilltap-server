@@ -17,6 +17,8 @@
  * @module lib/tools/almanack/phase4-scriptorium
  */
 
+import { getLastCharacterVaultBackfill } from '@/lib/startup/backfill-character-vaults';
+import { CHARACTER_VAULT_ANCHOR_PATH, CHARACTER_METADATA_JSON_PATH } from '@/lib/characters/vault/layout';
 import { logger } from '@/lib/logger';
 import {
   getGeneralMountPointId,
@@ -40,9 +42,9 @@ const WARDROBE_FOLDER = 'Wardrobe';
 /** Root-level folder holding one markdown file per scenario. */
 const SCENARIOS_FOLDER = 'Scenarios';
 /** The keystone file: a vault without it reads as broken (a hard 503). */
-const VAULT_KEYSTONE = 'properties.json';
+const VAULT_KEYSTONE = CHARACTER_VAULT_ANCHOR_PATH;
 /** Optional per-character free-form metadata document. */
-const VAULT_METADATA = 'metadata.json';
+const VAULT_METADATA = CHARACTER_METADATA_JSON_PATH;
 
 /** Which mount ids belong to which tier, read from the main database. */
 interface MountOwnership {
@@ -189,7 +191,7 @@ export function emptyScriptorium(): ScriptoriumInfo {
       policyCharacterReadDenied: 0,
       policyCharacterWriteDenied: 0,
     },
-    characterVaults: { total: 0, withKeystone: 0, missingKeystone: 0, withMetadata: 0 },
+    characterVaults: { total: 0, withKeystone: 0, missingKeystone: 0, invalidKeystone: [], withMetadata: 0 },
     wardrobe: [],
     customTools: {
       total: 0,
@@ -557,6 +559,11 @@ export async function collectScriptorium(
       // makes `findById` throw CharacterVaultUnavailableError — a 503 for that
       // character. Worth a line of its own.
       missingKeystone: Math.max(0, vaultIds.size - withKeystone),
+      // The boot heal reports a present-but-invalid keystone and leaves it
+      // alone (#148); this is where the operator hears of it.
+      invalidKeystone: (getLastCharacterVaultBackfill()?.invalidKeystones ?? []).map(
+        ({ characterId, name, detail }) => ({ characterId, name, detail }),
+      ),
       withMetadata,
     },
     wardrobe,

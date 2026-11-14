@@ -1,5 +1,5 @@
 ---
-url: /aurora/:id/edit
+url: /aurora/:id?section=details
 ---
 
 # Progressions — Things That Take Time
@@ -34,10 +34,9 @@ Nobody guessed at either of those numbers. They were counted.
 
 ## Where To Find Them
 
-The **Progressions** card lives on the **System Prompts** tab of a
-character's edit page, below their subprompts — the company it keeps is the
-other things a character *carries* into a room rather than the prose that
-describes them.
+The **Progressions** card lives in the **Details** section of a character's
+page, beneath the Dossier — beside the birthday, its nearest relation, since a
+progression is a reckoned fact about the character rather than a prompt.
 
 Each entry shows its name, the identifier a tool would address it by, a pill
 saying whether it has begun, and the exact line your character will read,
@@ -78,6 +77,34 @@ described further down.
 
 **Once it finishes.** Whether the completed state keeps being reported, or is
 announced exactly once and then goes politely quiet.
+
+**Public.** Whether anyone else may know of it. Ticked by default; see
+[Public Or Private](#public-or-private) below.
+
+## Public Or Private
+
+A pregnancy at six months is not a secret from anybody with eyes. A curse
+that lifts at the full moon very likely is. So every progression is marked
+**public** or **private**, and starts out public.
+
+A **public** progression becomes part of what *others* are told about your
+character — the Host's introduction when they join a room, the card the
+cast is given for someone mentioned but not present, the identity Carina's
+answerer is shown, and the identity a tool looks up. It appears there in
+plain, fixed, third-person wording:
+
+> *Pregnancy: 13 weeks, 1 day elapsed, 25 weeks, 6 days remaining.*
+
+Your description and your template are never used for this. They are written
+*to* the character, in the second person, and "You are carrying Charlie's
+daughter" reads very strangely when addressed to a stranger. A completed
+progression set to go quiet once it finishes drops out of the public view at
+the same moment it falls silent for the character.
+
+A **private** progression is reported to the character themselves exactly as
+before, and to nobody else at all. The card marks it *private*, and the
+editor's preview shows you both versions — what the character reads, and what
+others are told — side by side.
 
 ## Cadence — How Often To Say So
 
@@ -225,7 +252,8 @@ and is never validated; this one alone has a shape.
       "percentageReport": true,
       "reportFrequency": "turn",
       "quantity": { "total": 1.0, "unit": "MJ", "precision": 1 },
-      "onComplete": "once"
+      "onComplete": "once",
+      "public": true
     }
   }
 }
@@ -248,7 +276,7 @@ A single mistyped date has never yet been worth losing a character over.
 
 ## Related Topics
 
-- [Editing Characters](character-editing.md) — the rest of the edit page
+- [Editing Characters](character-editing.md) — the rest of the character's page
 - [Custom Tools](custom-tools.md) — reading and adjusting progressions from a tool
 - [Pascal's Workbench](pascals-workbench.md) — writing those tools
 - [Shared Character Vaults](shared-character-vaults.md) — where `metadata.json` lives
@@ -257,4 +285,4 @@ A single mistyped date has never yet been worth losing a character over.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/aurora/:id/edit")`
+`help_navigate(url: "/aurora/:id?section=details")`

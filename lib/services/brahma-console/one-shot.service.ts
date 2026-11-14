@@ -22,6 +22,9 @@
  *    console. The caller (`runCarinaQuery`) gates reachability to the operator,
  *    user-controlled personas, and `systemTransparency` characters BEFORE
  *    calling here, because Brahma answers run at full operator privilege.
+ *    The asking turn's effect ceiling travels with the query
+ *    (`RunBrahmaQueryOptions.effectCeiling`): the tool list and every call run
+ *    under it, and the Carina caller refuses Brahma outright below `write`.
  *
  * `processBrahmaResponse` is NOT refactored into a shared core: it was recently
  * stabilised and the divergences above are exactly the parts that make sharing
@@ -44,6 +47,7 @@ import {
 import { buildBrahmaSystemPrompt } from '@/lib/brahma-console/system-prompt-builder'
 import { resolveInlineBrahmaConnectionProfile } from './inline-profile'
 import { resolveBrahmaMaxAgentTurns } from './turn-budget'
+import type { ToolEffect } from '@/lib/tools/effects'
 
 const logger = createServiceLogger('BrahmaOneShot')
 
@@ -54,6 +58,12 @@ export interface RunBrahmaQueryOptions {
   chatId: string
   /** The standalone question to put to the console. */
   question: string
+  /**
+   * The asking turn's effect ceiling. The console's tool list and every call it
+   * makes run under it; unset = no ceiling. (The Carina caller refuses Brahma
+   * outright below `write`.)
+   */
+  effectCeiling?: ToolEffect
 }
 
 export type BrahmaQueryResult =
@@ -67,7 +77,7 @@ export type BrahmaQueryResult =
  * error; anything else is an llm-failed detail string.
  */
 export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<BrahmaQueryResult> {
-  const { repos, userId, chatId, question } = opts
+  const { repos, userId, chatId, question, effectCeiling } = opts
 
   // Profile (model): project override → global inline setting → the user's
   // default. The standalone Console's per-chat picker does not apply here.
@@ -98,6 +108,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     includeWorkspaceTools: false, // stripped for the console
     excludeMemorySearch: true, // no memory source
     sqlAccess: true, // read-only run_sql
+    effectCeiling, // the asking turn's ceiling travels with the query
   })
 
   // Operator-set turn budget (Settings → Chat → Brahma Console); shared with the
@@ -145,8 +156,13 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     chatId,
     userId,
     operatorSurface: true,
+    toolOffer: built.offer,
+    customToolEffects: built.customToolEffects,
+    pluginToolEffects: built.pluginToolEffects,
+    ...(effectCeiling ? { effectCeiling } : {}),
     ...newWardrobeTurnContainers(),
   }
+  logger.debug('Brahma one-shot tool context built', { chatId, effectCeiling: effectCeiling ?? null })
 
   // ISOLATION: the loop's slate is system + the single question only — never
   // the Salon transcript. No controller: nothing is surfaced live.

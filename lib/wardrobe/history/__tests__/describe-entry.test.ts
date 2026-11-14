@@ -8,7 +8,6 @@
 import {
   changedByLabel,
   resolveHistorySlots,
-  staleItemsOf,
   summarizeHistorySlots,
 } from '@/lib/wardrobe/history/describe-entry'
 import { makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types'
@@ -30,7 +29,6 @@ describe('describe-entry', () => {
       { itemId: 'coat', title: 'Greatcoat', archived: true, missing: false },
     ])
     expect(resolved.accessories).toEqual([{ itemId: 'gone', title: null, archived: false, missing: true }])
-    expect(staleItemsOf(resolved).map((i) => i.itemId)).toEqual(['coat', 'gone'])
   })
 
   it('summarizes on one plain line, with no Markdown', () => {

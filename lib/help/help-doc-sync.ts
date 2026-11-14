@@ -429,6 +429,17 @@ async function enqueueHelpDocEmbeddings(docIds: string[]): Promise<void> {
       return
     }
 
+    // An unfitted Built-in profile would fail every job; its first fit
+    // enqueues a full reindex, which covers these.
+    const { isEmbeddingProfileReady } = await import('@/lib/embedding/profile-readiness')
+    if (!(await isEmbeddingProfileReady(defaultProfile, repos))) {
+      logger.debug('[HelpDocSync] Help docs wait for the Built-in vocabulary to be fitted', {
+        context: 'enqueueHelpDocEmbeddings',
+        needEmbedding: docIds.length,
+      })
+      return
+    }
+
     const users = await repos.users.findAll()
     const userId = users[0]?.id
     if (!userId) {

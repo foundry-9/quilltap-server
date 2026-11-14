@@ -230,19 +230,19 @@
   --qt-badge-user-character-bg: hsl(270 70% 60% / 0.15);
   --qt-badge-user-character-fg: hsl(270 70% 45%);
   --qt-badge-chat-bg: hsl(142 76% 36% / 0.15);
-  --qt-badge-chat-fg: hsl(142 76% 30%);
+  --qt-badge-chat-fg: hsl(142 76% 26%);
   --qt-badge-tag-bg: hsl(25 95% 53% / 0.15);
-  --qt-badge-tag-fg: hsl(25 95% 40%);
+  --qt-badge-tag-fg: hsl(25 95% 34%);
   --qt-badge-memory-bg: hsl(330 80% 60% / 0.15);
   --qt-badge-memory-fg: hsl(330 80% 40%);
   --qt-badge-message-bg: hsl(45 70% 48% / 0.12);
-  --qt-badge-message-fg: hsl(45 70% 35%);
+  --qt-badge-message-fg: hsl(45 70% 29.5%);
   --qt-badge-project-bg: hsl(185 80% 40% / 0.15);
-  --qt-badge-project-fg: hsl(185 80% 30%);
+  --qt-badge-project-fg: hsl(185 80% 26.5%);
 
   /* Status badge colors */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.15);
-  --qt-badge-enabled-fg: hsl(142 76% 30%);
+  --qt-badge-enabled-fg: hsl(142 76% 26%);
   --qt-badge-related-bg: hsl(270 70% 60% / 0.15);
   --qt-badge-related-fg: hsl(270 70% 45%);
   --qt-badge-manual-bg: hsl(270 70% 60% / 0.15);
@@ -254,7 +254,7 @@
   --qt-badge-source-npm-bg: hsl(0 84% 60% / 0.15);
   --qt-badge-source-npm-fg: hsl(0 84% 40%);
   --qt-badge-source-git-bg: hsl(25 95% 53% / 0.15);
-  --qt-badge-source-git-fg: hsl(25 95% 40%);
+  --qt-badge-source-git-fg: hsl(25 95% 34%);
 
   /* Capability badge colors */
   --qt-badge-capability-bg: hsl(217 91% 60% / 0.1);
@@ -404,29 +404,29 @@
 
   /* Entity badge tokens - brighter for dark backgrounds */
   --qt-badge-character-bg: hsl(217 91% 60% / 0.3);
-  --qt-badge-character-fg: hsl(217 91% 70%);
+  --qt-badge-character-fg: hsl(217 91% 72%);
   --qt-badge-user-character-bg: hsl(270 70% 60% / 0.3);
-  --qt-badge-user-character-fg: hsl(270 70% 70%);
+  --qt-badge-user-character-fg: hsl(270 70% 73.5%);
   --qt-badge-chat-bg: hsl(142 76% 36% / 0.3);
   --qt-badge-chat-fg: hsl(142 76% 65%);
   --qt-badge-tag-bg: hsl(25 95% 53% / 0.3);
   --qt-badge-tag-fg: hsl(25 95% 65%);
   --qt-badge-memory-bg: hsl(330 80% 60% / 0.3);
-  --qt-badge-memory-fg: hsl(330 80% 70%);
+  --qt-badge-memory-fg: hsl(330 80% 72%);
 
   /* Status badge tokens */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.3);
   --qt-badge-enabled-fg: hsl(142 76% 65%);
   --qt-badge-related-bg: hsl(270 70% 60% / 0.3);
-  --qt-badge-related-fg: hsl(270 70% 70%);
+  --qt-badge-related-fg: hsl(270 70% 73.5%);
   --qt-badge-manual-bg: hsl(270 70% 60% / 0.3);
-  --qt-badge-manual-fg: hsl(270 70% 70%);
+  --qt-badge-manual-fg: hsl(270 70% 73.5%);
 
   /* Plugin source badge tokens */
   --qt-badge-source-included-bg: hsl(270 70% 60% / 0.3);
-  --qt-badge-source-included-fg: hsl(270 70% 70%);
+  --qt-badge-source-included-fg: hsl(270 70% 73.5%);
   --qt-badge-source-npm-bg: hsl(0 84% 60% / 0.3);
-  --qt-badge-source-npm-fg: hsl(0 84% 70%);
+  --qt-badge-source-npm-fg: hsl(0 84% 73%);
   --qt-badge-source-git-bg: hsl(25 95% 53% / 0.3);
   --qt-badge-source-git-fg: hsl(25 95% 65%);
 

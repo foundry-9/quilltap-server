@@ -61,6 +61,9 @@ import { getRepositories, type RepositoryContainer } from '@/lib/repositories/fa
 
 export type { GroupMounts, MountTier, TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 
+/** A project's stores, official first then every linked store (the project tier). */
+export { resolveProjectMountPointIds };
+
 const errMsg = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /** The four owners a store can belong to. */
@@ -450,7 +453,7 @@ export async function classifyMount(
   if (mountPointId === (await getGeneralMountPointId())) {
     return { scope: 'general', ownerId: null, ownerName: 'Quilltap General', archived: false };
   }
-  const character = (await repos.characters.findByDocumentMountPointIdRaw(mountPointId)) as ReachCharacterRow | null;
+  const character = (await repos.characters.findByStorePointerRaw(mountPointId)) as ReachCharacterRow | null;
   if (character) {
     return {
       scope: 'character',
@@ -460,9 +463,9 @@ export async function classifyMount(
       character,
     };
   }
-  const project = await repos.projects.findByOfficialMountPointIdRaw(mountPointId);
+  const project = await repos.projects.findByStorePointerRaw(mountPointId);
   if (project) return { scope: 'project', ownerId: project.id, ownerName: project.name, archived: false };
-  const group = await repos.groups.findByOfficialMountPointIdRaw(mountPointId);
+  const group = await repos.groups.findByStorePointerRaw(mountPointId);
   if (group) return { scope: 'group', ownerId: group.id, ownerName: group.name, archived: false };
   return null;
 }

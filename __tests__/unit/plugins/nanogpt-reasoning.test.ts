@@ -23,7 +23,7 @@
  *      from prompt/total — the house rule every provider plugin follows.
  */
 
-import { NanoGPTProvider } from '@/plugins/dist/qtap-plugin-nanogpt/provider';
+import { NanoGPTProvider, promptCacheCutIndex } from '@/plugins/dist/qtap-plugin-nanogpt/provider';
 import { plugin } from '@/plugins/dist/qtap-plugin-nanogpt/index';
 import { STATIC_MODELS } from '@/plugins/dist/qtap-plugin-nanogpt/models';
 
@@ -356,5 +356,43 @@ describe('NanoGPT prompt caching', () => {
 
     expect(response.cacheUsage).toBeUndefined();
     expect(response.usage.promptTokens).toBe(10);
+  });
+});
+
+describe('NanoGPT prompt-cache cut index', () => {
+  it('caps automatic boundaries before the turn-variable final message', async () => {
+    const create = jest.fn().mockResolvedValue({
+      choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    });
+    mockClient(create);
+
+    await new NanoGPTProvider().sendMessage(
+      {
+        model: 'anthropic/claude-sonnet-5',
+        messages: [
+          { role: 'system', content: 'identity' },
+          { role: 'user', content: 'first' },
+          { role: 'assistant', content: 'reply' },
+          { role: 'user', content: 'newest' },
+        ],
+        profileParameters: { enablePromptCaching: true },
+      } as never,
+      'test-key'
+    );
+    const body = create.mock.calls[0][0];
+    expect(body.promptCaching).toEqual({ enabled: true, ttl: '5m', cutAfterMessageIndex: body.messages.length - 2 });
+  });
+
+  it('sets no cap for a lone message or a tool loop', () => {
+    expect(promptCacheCutIndex([{ role: 'user' }])).toBeUndefined();
+    expect(promptCacheCutIndex([{ role: 'system' }, { role: 'user' }, { role: 'assistant' }, { role: 'tool' }])).toBeUndefined();
+    expect(promptCacheCutIndex([{ role: 'system' }, { role: 'user' }])).toBe(0);
+  });
+
+  it('looks past a multi-character prefill to the newest user line', () => {
+    expect(promptCacheCutIndex([
+      { role: 'system' }, { role: 'user' }, { role: 'assistant' }, { role: 'user' }, { role: 'user' }, { role: 'assistant' },
+    ])).toBe(3);
   });
 });

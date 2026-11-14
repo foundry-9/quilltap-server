@@ -21,13 +21,13 @@ jest.mock('@/lib/mount-index/character-vault', () => ({
   ensureCharacterVault: jest.fn(),
 }));
 
-jest.mock('@/lib/mount-index/character-scaffold', () => ({
+jest.mock('@/lib/characters/vault/scaffold', () => ({
   ensureCharacterMetadataFile: jest.fn(),
+  ensureCharacterPropertiesFile: jest.fn().mockResolvedValue(false),
 }));
 
-jest.mock('@/lib/database/repositories/character-properties-overlay', () => ({
-  readCharacterVaultProperties: jest.fn(),
-  writeCharacterVaultManagedFields: jest.fn().mockResolvedValue(undefined),
+jest.mock('@/lib/characters/vault/readers', () => ({
+  readCharacterVaultPropertiesForWrite: jest.fn(),
 }));
 
 jest.mock('@/lib/startup/progress', () => ({
@@ -40,17 +40,13 @@ jest.mock('@/lib/startup/progress', () => ({
 
 import { backfillCharacterVaults } from '@/lib/startup/backfill-character-vaults';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
-import { ensureCharacterMetadataFile } from '@/lib/mount-index/character-scaffold';
-import {
-  readCharacterVaultProperties,
-  writeCharacterVaultManagedFields,
-} from '@/lib/database/repositories/character-properties-overlay';
+import { ensureCharacterMetadataFile } from '@/lib/characters/vault/scaffold';
+import { readCharacterVaultPropertiesForWrite } from '@/lib/characters/vault/readers';
 
 const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory').getRepositories as jest.Mock;
 const ensureCharacterVaultMock = ensureCharacterVault as jest.Mock;
 const ensureCharacterMetadataFileMock = ensureCharacterMetadataFile as jest.Mock;
-const readCharacterVaultPropertiesMock = readCharacterVaultProperties as jest.Mock;
-const writeCharacterVaultManagedFieldsMock = writeCharacterVaultManagedFields as jest.Mock;
+const readPropertiesForWriteMock = readCharacterVaultPropertiesForWrite as jest.Mock;
 
 const VALID_PROPS = { pronouns: null, aliases: [], title: null, firstMessage: null, talkativeness: 0.5 };
 
@@ -62,9 +58,8 @@ function wireRoster(characters: Array<{ id: string; name: string }>) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  readCharacterVaultPropertiesMock.mockResolvedValue(VALID_PROPS);
+  readPropertiesForWriteMock.mockResolvedValue(VALID_PROPS);
   ensureCharacterMetadataFileMock.mockResolvedValue(false);
-  writeCharacterVaultManagedFieldsMock.mockResolvedValue(undefined);
 });
 
 describe('backfillCharacterVaults — seeding fact sheets', () => {
@@ -116,20 +111,18 @@ describe('backfillCharacterVaults — seeding fact sheets', () => {
     expect(ensureCharacterMetadataFileMock).toHaveBeenCalledWith('mp-old');
   });
 
-  it('still seeds a vault it had to repopulate', async () => {
-    // The repopulate projection runs from a RAW row, which cannot carry
-    // metadata — so it deliberately writes no metadata.json at all. Without the
-    // seed, a healed vault would come away with no sheet.
+  it('still seeds a fact sheet into a vault whose properties.json is invalid', async () => {
+    // The invalid keystone is reported and left alone (#148); the fact-sheet
+    // seed is independent of it.
     wireRoster([{ id: 'a', name: 'Bertie' }]);
     ensureCharacterVaultMock.mockResolvedValue({ mountPointId: 'mp-a', created: false });
-    readCharacterVaultPropertiesMock.mockResolvedValue(null);
+    readPropertiesForWriteMock.mockRejectedValue(new Error('properties.json unparseable'));
     ensureCharacterMetadataFileMock.mockResolvedValue(true);
 
     const result = await backfillCharacterVaults();
 
-    expect(result.filesRepopulated).toBe(1);
+    expect(result.keystonesInvalid).toBe(1);
     expect(result.metadataSeeded).toBe(1);
-    expect(writeCharacterVaultManagedFieldsMock).toHaveBeenCalled();
   });
 
   it('carries on seeding the rest of the roster when one character fails', async () => {

@@ -66,6 +66,7 @@ import type { Character, ChatParticipantBase, ConnectionProfile, MessageEvent } 
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section';
 import { buildInventorySection } from '@/lib/inventory/prompt-section';
 import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
+import { isWithinCeiling, type ToolEffect } from '@/lib/tools/effects';
 
 /** Maximum detect→execute→re-stream iterations within a single Carina answer. */
 const MAX_TOOL_ITERATIONS = 5;
@@ -109,7 +110,18 @@ export interface RunCarinaQueryOptions {
    * never undone by a failed emit.
    */
   onPosted?: (message: MessageEvent) => void;
+  /**
+   * The asking turn's effect ceiling (a storyteller bid, an autonomous room
+   * without destructive permission). The answerer's tool loop runs under it,
+   * and the Brahma Console — whose tools write and delete in every store — is
+   * refused outright below `write`. Unset = no ceiling (the operator's own
+   * markup, an uncapped turn).
+   */
+  effectCeiling?: ToolEffect;
 }
+
+/** The lowest ceiling under which the Brahma Console may be consulted. */
+const BRAHMA_MINIMUM_CEILING: ToolEffect = 'write';
 
 /** Resolve the answerer's default scenario content, if any. */
 function resolveDefaultScenario(character: Character): string | null {
@@ -359,7 +371,7 @@ async function answerAsBrahma(opts: RunCarinaQueryOptions): Promise<CarinaResult
     // Dynamic import keeps the Brahma console's import graph off Carina's static
     // module load (mirrors the ask_carina handler's dynamic import of this file).
     const { runBrahmaQuery } = await import('@/lib/services/brahma-console/one-shot.service');
-    const result = await runBrahmaQuery({ repos, userId, chatId, question });
+    const result = await runBrahmaQuery({ repos, userId, chatId, question, effectCeiling: opts.effectCeiling });
 
     if (!result.ok) {
       if (result.detail === 'no-profile') {
@@ -486,6 +498,23 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       opts.operatorInitiated === true,
     );
     if (reachable) {
+      if (opts.effectCeiling && !isWithinCeiling(BRAHMA_MINIMUM_CEILING, opts.effectCeiling)) {
+        logger.info('[Carina] Brahma refused: the asking turn\'s ceiling is below write', {
+          context: 'carina',
+          chatId,
+          ceiling: opts.effectCeiling,
+        });
+        return {
+          ok: false,
+          error: {
+            kind: 'refused',
+            characterName: 'Brahma',
+            detail:
+              `Brahma cannot be consulted from this turn: it allows only ${opts.effectCeiling === 'none' ? 'tools with no effect' : 'lookups'}, ` +
+              'and the Brahma Console can change and delete documents. Nothing was run.',
+          },
+        };
+      }
       return answerAsBrahma(opts);
     }
     logger.info('[Carina] Brahma requested by an unauthorized asker; treating as not-found', {
@@ -640,6 +669,8 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       canCreateOutfits: false,
       canManageInventory: false, // no inventory_* tools here
       docToolsMode: documentEditingEnabled ? 'full' : 'off',
+      // The answerer's tools run under the asking turn's ceiling.
+      effectCeiling: opts.effectCeiling,
     });
     const tools = built.tools.filter((t) => {
       const name =
@@ -663,6 +694,17 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       undefined,
       chat.projectId ?? null,
     );
+    toolContext.toolOffer = built.offer;
+    toolContext.customToolEffects = built.customToolEffects;
+    toolContext.pluginToolEffects = built.pluginToolEffects;
+    if (opts.effectCeiling) toolContext.effectCeiling = opts.effectCeiling;
+    logger.debug('[Carina] Answerer tool context built', {
+      context: 'carina',
+      chatId,
+      answererId: answerer.id,
+      offer: built.offer?.kind,
+      ceiling: opts.effectCeiling,
+    });
 
     // Accumulate one streamed LLM call into { answer, rawResponse }. The base
     // call shape is fixed for this query; only the offered tool slate and the

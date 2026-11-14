@@ -103,5 +103,5 @@ templates under `packages/quilltap/lib/completion/`.
 - [`packages/quilltap/README.md`](../../packages/quilltap/README.md) — the full command reference.
 - [DDL.md](DDL.md) — full database schema and how to query it.
 - [DATABASE_ENCRYPTION.md](DATABASE_ENCRYPTION.md) — database key handling.
-- [bug 126](bugs/fixed/bug-126-hostname-flap-kills-server.md) — why lock freshness, not a PID check, is the fallback everywhere.
-- [bug 144](bugs/fixed/bug-144-lock-clean-claims-dead-holder-is-alive.md) — why `--lock-clean` talks about heartbeat age rather than liveness.
+- [bug 126](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-126-hostname-flap-kills-server.md) — why lock freshness, not a PID check, is the fallback everywhere.
+- [bug 144](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-144-lock-clean-claims-dead-holder-is-alive.md) — why `--lock-clean` talks about heartbeat age rather than liveness.

@@ -482,13 +482,3 @@ export class VectorStoreManager {
 export function getVectorStoreManager(): VectorStoreManager {
   return processSingleton('embedding.vectorStoreManager', () => new VectorStoreManager())
 }
-
-/**
- * Convenience function to get a character's vector store
- */
-export async function getCharacterVectorStore(
-  characterId: string
-): Promise<ICharacterVectorStore> {
-  const manager = getVectorStoreManager()
-  return manager.getStore(characterId)
-}

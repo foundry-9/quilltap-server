@@ -41,7 +41,7 @@ export function useMemorySettingsDocument<T extends object>(options: {
   const [error, setError] = useState<string | null>(null)
 
   // The key names the document; the URL is that document's one address.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- url is left out of the key: the caller-supplied queryKey names the document and url is its one fixed address
   const { data: loaded, isLoading, error: loadError } = useQuery({
     queryKey,
     queryFn: ({ signal }) => apiFetch<{ settings?: Partial<T> }>(url, { signal }),

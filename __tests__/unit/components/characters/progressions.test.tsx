@@ -169,7 +169,10 @@ describe('ProgressionsSection — archived characters are tombstones', () => {
 })
 
 describe('ProgressionsSection — the save payload', () => {
-  it('spreads every other metadata key back in, untouched', async () => {
+  // A key-level patch (`?action=patch-metadata`): only the progressions key is
+  // ever sent, so the rest of the fact sheet cannot be overwritten by a stale
+  // copy, and the fact-sheet card's save cannot race this one.
+  it('sends only the progressions key, never the rest of the sheet', async () => {
     const puts = stubCharacter({
       faction: 'Ordo Aurum',
       hasAnsibleAccess: true,
@@ -182,11 +185,7 @@ describe('ProgressionsSection — the save payload', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
 
     await waitFor(() => expect(puts).toHaveLength(1))
-    expect(puts[0].metadata).toEqual({
-      faction: 'Ordo Aurum',
-      hasAnsibleAccess: true,
-      clearanceLevel: 3,
-    })
+    expect(puts[0]).toEqual({ unset: ['progressions'] })
   })
 
   it('drops the reserved key entirely when the last progression goes', async () => {
@@ -197,7 +196,7 @@ describe('ProgressionsSection — the save payload', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
 
     await waitFor(() => expect(puts).toHaveLength(1))
-    expect(puts[0].metadata).not.toHaveProperty('progressions')
+    expect(puts[0]).toEqual({ unset: ['progressions'] })
   })
 
   it('keeps the character’s other progressions when one is removed', async () => {
@@ -211,7 +210,7 @@ describe('ProgressionsSection — the save payload', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
 
     await waitFor(() => expect(puts).toHaveLength(1))
-    const written = (puts[0].metadata as Record<string, unknown>).progressions as Record<string, unknown>
+    const written = (puts[0].set as Record<string, unknown>).progressions as Record<string, unknown>
     expect(Object.keys(written)).toEqual(['fuse'])
   })
 })
@@ -248,7 +247,7 @@ describe('ProgressionsSection — the editor modal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() => expect(puts).toHaveLength(1))
-    const written = (puts[0].metadata as Record<string, unknown>).progressions as Record<
+    const written = (puts[0].set as Record<string, unknown>).progressions as Record<
       string,
       Record<string, unknown>
     >
@@ -287,7 +286,22 @@ describe('ProgressionsSection — the editor modal', () => {
     renderSection()
 
     fireEvent.click(await screen.findByRole('button', { name: /Edit progression/ }))
-    expect(screen.getByText(/As Cannon recharge would read it now/)).toBeInTheDocument()
+    expect(screen.getByText(/would read it now/)).toBeInTheDocument()
+    expect(screen.getByText(/As others are told it/)).toBeInTheDocument()
+  })
+
+  it('saves a progression marked private', async () => {
+    const puts = stubCharacter({ progressions: { cannon: CANNON } })
+    renderSection()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Edit progression/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Public/ }))
+    expect(screen.getByText(/Nothing — it is private/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(puts).toHaveLength(1))
+    const sent = puts[0] as { set: { progressions: { cannon: { public: boolean } } } }
+    expect(sent.set.progressions.cannon.public).toBe(false)
   })
 
   it('offers every documented placeholder in the legend', async () => {
@@ -311,7 +325,7 @@ describe('ProgressionsSection — the editor modal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() => expect(puts).toHaveLength(1))
-    const written = (puts[0].metadata as Record<string, unknown>).progressions as Record<
+    const written = (puts[0].set as Record<string, unknown>).progressions as Record<
       string,
       Record<string, unknown>
     >

@@ -1,10 +1,11 @@
 /**
  * Anthropic prompt-cache breakpoint placement.
  *
- * A Salon turn's final user message carries that turn's trailing context
+ * A Salon turn's newest user line carries that turn's trailing context
  * sections, which are gone from the next turn's copy of the same message — so
  * a breakpoint on it writes a cache entry nothing can ever read. The plugin
- * puts the conversation breakpoint on the message *before* the final one, adds
+ * marks the previous reply and the message before the newest line (past any
+ * `[Name]` prefill), the latest tool results in a tool loop, adds
  * a stepped mid-history breakpoint on long arrays, and never exceeds
  * Anthropic's four-breakpoint limit across tools, system and messages.
  *
@@ -117,10 +118,35 @@ describe.each(['send', 'stream'] as const)('AnthropicProvider cache breakpoints 
       { role: 'tool', toolCallId: 't1', content: 'result' },
     ];
     const body = await captureBody(path, messages);
-    expect(breakpointIndexes(body)).toEqual([1]);
-    const assistantBlocks = body.messages[1].content as any[];
-    expect(assistantBlocks[assistantBlocks.length - 1].type).toBe('tool_use');
-    expect(assistantBlocks[assistantBlocks.length - 1].cache_control).toEqual({ type: 'ephemeral' });
+    // The latest tool results are repeated by every later step of the turn.
+    expect(breakpointIndexes(body)).toEqual([2]);
+    const resultBlocks = body.messages[2].content as any[];
+    expect(resultBlocks[resultBlocks.length - 1].type).toBe('tool_result');
+    expect(resultBlocks[resultBlocks.length - 1].cache_control).toEqual({ type: 'ephemeral' });
+  });
+
+  it('marks the previous reply before a run of whispers, never the newest line', async () => {
+    const messages = [
+      { role: 'system', content: 'identity' },
+      ...conversation(4),
+      { role: 'user', content: 'vault whisper (swept next turn)' },
+      { role: 'user', content: 'scene whisper' },
+      { role: 'user', content: 'new line\n\n---\n\ntrailing recall' },
+    ];
+    const body = await captureBody(path, messages);
+    // Non-system: u0 a1 u2 a3 w4 w5 new6 — previous reply 3, then the message before the newest line.
+    expect(breakpointIndexes(body)).toEqual([3, 5]);
+    expect(body.messages[6].content).toBe(messages[7].content);
+  });
+
+  it('looks past a multi-character prefill to the newest user line', async () => {
+    const messages = [
+      ...conversation(4),
+      { role: 'user', content: 'new line with trailing sections' },
+      { role: 'assistant', content: '[Walt Pruitt]' },
+    ];
+    const body = await captureBody(path, messages);
+    expect(breakpointIndexes(body)).toEqual([3]);
   });
 
   it('adds a stepped mid-history breakpoint on a long conversation', async () => {

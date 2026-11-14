@@ -15,21 +15,40 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
+import { processSingleton } from '@/lib/utils/process-singleton';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
-import { ensureCharacterMetadataFile } from '@/lib/mount-index/character-scaffold';
-import {
-  readCharacterVaultProperties,
-  writeCharacterVaultManagedFields,
-} from '@/lib/database/repositories/character-properties-overlay';
+import { ensureCharacterMetadataFile, ensureCharacterPropertiesFile } from '@/lib/characters/vault/scaffold';
+import { readCharacterVaultPropertiesForWrite } from '@/lib/characters/vault/readers';
 
 const logger = createServiceLogger('Startup:CharacterVaultBackfill');
+
+/** The last run's result, kept for the Almanack (process-wide — bug 235). */
+const lastRun = processSingleton('startup.characterVaultBackfill.lastRun', () => ({
+  result: null as BackfillResult | null,
+}));
+
+/**
+ * The most recent backfill's result, or null before the first run. The
+ * Almanack reads `invalidKeystones` from it: the vaults whose `properties.json`
+ * the heal found present but invalid and left for repair.
+ */
+export function getLastCharacterVaultBackfill(): BackfillResult | null {
+  return lastRun.result;
+}
 
 export interface BackfillResult {
   scanned: number;
   vaultsCreated: number;
   alreadyLinked: number;
-  /** Pre-linked vaults whose missing files we repopulated from the raw row. */
-  filesRepopulated: number;
+  /** Pre-linked vaults whose ABSENT `properties.json` we seeded with defaults. */
+  propertiesSeeded: number;
+  /**
+   * Pre-linked vaults whose `properties.json` is present but unreadable or
+   * invalid. Reported and left alone — never rewritten (#148).
+   */
+  keystonesInvalid: number;
+  /** The characters behind {@link keystonesInvalid}, with the parse error. */
+  invalidKeystones: Array<{ characterId: string; name: string; mountPointId: string; detail: string }>;
   /** Pre-existing vaults we seeded an empty `metadata.json` into. */
   metadataSeeded: number;
   errors: number;
@@ -40,14 +59,16 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
     scanned: 0,
     vaultsCreated: 0,
     alreadyLinked: 0,
-    filesRepopulated: 0,
+    propertiesSeeded: 0,
+    keystonesInvalid: 0,
+    invalidKeystones: [],
     metadataSeeded: 0,
     errors: 0,
   };
 
   const repos = getRepositories();
-  // Raw reads so the vault populator writes DB values to properties.json,
-  // never the overlaid (vault-sourced) values it would otherwise see.
+  // Raw reads: the backfill needs only the pointer, and must survive a
+  // character whose vault is broken (that is what it is here to find).
   const characters = await repos.characters.findAllRaw();
   result.scanned = characters.length;
 
@@ -77,23 +98,35 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
         result.vaultsCreated++;
       } else {
         result.alreadyLinked++;
-        // ensureCharacterVault early-returns on a set FK WITHOUT verifying the
-        // vault files exist. A linked-but-unpopulated vault now reads as
-        // CharacterVaultUnavailableError (the overlay throws on missing
-        // properties.json), so heal it here from the raw row — mirrors the
-        // project/group store backfills.
-        const existingProps = await readCharacterVaultProperties(outcome.mountPointId, character.id);
-        if (!existingProps) {
-          // Repopulate the missing content files. Wardrobe is not part of this
-          // projection — it lives solely in the vault (no DB rows to source
-          // from) and is reconciled by the one-time refresh-vault-wardrobe task.
-          // `metadata` is in the same position and is likewise not projected
-          // from a raw row; the seed below is what gives it a file.
-          await writeCharacterVaultManagedFields(outcome.mountPointId, { character });
-          result.filesRepopulated++;
-          logger.warn('Repopulated character vault with missing files', {
+        // ensureCharacterVault early-returns on a set FK without verifying the
+        // vault files. The heal is deliberately narrow (D1, #148): an ABSENT
+        // properties.json is seeded with defaults; a PRESENT one that fails to
+        // parse is reported and left alone. Nothing else is written, ever —
+        // the content files hold the only copy of the character, and a raw
+        // row has nothing to put back in them.
+        try {
+          await readCharacterVaultPropertiesForWrite(outcome.mountPointId, character.id);
+          if (await ensureCharacterPropertiesFile(outcome.mountPointId)) {
+            result.propertiesSeeded++;
+            logger.warn('Seeded an absent properties.json with defaults', {
+              characterId: character.id,
+              mountPointId: outcome.mountPointId,
+            });
+          }
+        } catch (keystoneErr) {
+          const detail = keystoneErr instanceof Error ? keystoneErr.message : String(keystoneErr);
+          result.keystonesInvalid++;
+          result.invalidKeystones.push({
             characterId: character.id,
+            name: character.name,
             mountPointId: outcome.mountPointId,
+            detail,
+          });
+          logger.error('Character vault properties.json is present but invalid; left untouched for repair', {
+            characterId: character.id,
+            name: character.name,
+            mountPointId: outcome.mountPointId,
+            detail,
           });
         }
 
@@ -123,11 +156,12 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
     await new Promise<void>(resolve => setImmediate(resolve));
   }
 
+  lastRun.result = result;
   logger.info('Character vault backfill complete', result);
   startupProgress.publish({
     rawLabel: 'subsystem:vault-backfill:complete',
-    detail: `${result.vaultsCreated} created, ${result.alreadyLinked} already linked${result.filesRepopulated > 0 ? `, ${result.filesRepopulated} repopulated` : ''}${result.metadataSeeded > 0 ? `, ${result.metadataSeeded} fact sheets seeded` : ''}${result.errors > 0 ? `, ${result.errors} errors` : ''}`,
-    level: result.errors > 0 ? 'warn' : 'info',
+    detail: `${result.vaultsCreated} created, ${result.alreadyLinked} already linked${result.propertiesSeeded > 0 ? `, ${result.propertiesSeeded} settings files seeded` : ''}${result.keystonesInvalid > 0 ? `, ${result.keystonesInvalid} need repair` : ''}${result.metadataSeeded > 0 ? `, ${result.metadataSeeded} fact sheets seeded` : ''}${result.errors > 0 ? `, ${result.errors} errors` : ''}`,
+    level: result.errors > 0 || result.keystonesInvalid > 0 ? 'warn' : 'info',
   });
   startupProgress.setSubProgress(null);
   return result;

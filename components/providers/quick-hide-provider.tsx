@@ -98,7 +98,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
   }, [status])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads quick-hide tags whenever session status changes; loadTags is also exposed as refresh(), so results live in local state
     loadTags()
   }, [loadTags])
 

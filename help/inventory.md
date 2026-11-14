@@ -14,6 +14,7 @@ The Inventory is not the [Wardrobe](wardrobe.md). The Wardrobe dresses a charact
 
 - **The left rail's Inventory button** (the open box) opens the Inventory as a workspace tab, from which every shelf in the house may be browsed.
 - **In a Salon chat**, each character's card in the participant list carries an Inventory button. That opens the Inventory *for that character in that chat*, with the **Carrying now** pane alongside and an Equip button on every row.
+- **On a character's page in Aurora**, the **Inventory** card in the **Appearance** section has an **Open inventory** button for that character's own shelf, and lists what they carry by default when they arrive in a chat.
 - **On a project's page in Prospero**, the **Inventory** card browses the project's own shelf (see [Project Inventory](project-inventory.md)).
 
 At the top of the dialog a single dropdown chooses which inventory you are looking at: a **character**, **Quilltap General**, a **project** or a **group**.
@@ -113,6 +114,12 @@ Every equip or unequip posts a short line from Pascal in the chat — *"Vivienne
 
 When a character arrives in a chat — the chat starts, they are added or brought back, or two chats are merged — they take up every item within their reach that is flagged **Equipped by default** (and not archived, and not an archetype). A flagged kit brings its members. A **continuation** of another chat, or a merge, carries over exactly what they carried there instead.
 
+### Packing in the Green Room
+
+A character whose starting outfit is set to **Let Character Choose** is trusted with their pockets as well as their wardrobe. Once dressed, they look over everything within their reach — their own shelf, their groups', the project's (if the project's roster admits them) and Quilltap General — weigh it against the scenario, their nature, any subprompts in play and what they have just put on, and take up what the occasion calls for. Items marked **Equipped by default** are offered as what they *usually* carry, and are kept unless the scene makes carrying one absurd; a gentleman does not take his sabre into the Turkish bath. Walking on empty-handed is a perfectly respectable choice. Archetypes are not offered, though a kit is, along with its pieces.
+
+This holds at every arrival the choice is offered — a new chat, a character added to one, a merge — and it wins over a continuation's carry-over, since you asked for a fresh decision. The consultation borrows the same mind as the wardrobe valet (the **Green Room Wardrobe Model**, or the cheap LLM), and the Green Room's log reports what each character took up. Should the consultation fail or dawdle past its minute, the character simply gathers up their usual effects — the defaults above — and nothing is announced in the chat either way.
+
 Defaults apply *only on arrival*. A chat from before the Inventory existed, or one where you have already changed things, is left as it stands; **Reset to defaults** is there when you want the defaults again.
 
 A shared shelf's defaults reach everyone who can reach the shelf: an item flagged on a project's shelf is carried by every character in every chat of that project.
@@ -179,7 +186,7 @@ However many of these a character uses in one reply, Pascal posts **one** line a
 
 ### Inventory management
 
-Whether a character may use any of these tools is the **Inventory Management** setting on the character's page in Aurora, beside *Self-Dressing* and *Outfit Creation*. It is on unless you turn it off, and it governs the whole family — a character who may not manage their inventory cannot so much as list it. The [Brahma Console](brahma-console.md) and the [Scenario Builder](scenario-builder.md) never offer these tools.
+Whether a character may use any of these tools is the **Manages inventory** setting on the character's page in Aurora — in the **Wardrobe & inventory** card of the **Abilities** section, beside *Dresses themselves* and *Creates outfits*. It is on unless you turn it off, and it governs the whole family — a character who may not manage their inventory cannot so much as list it. The [Brahma Console](brahma-console.md) and the [Scenario Builder](scenario-builder.md) never offer these tools.
 
 The [`self_inventory`](character-system-transparency.md) tool, despite the name, cannot pick anything up or set anything down: it is a character's look at their own settings, not a hand in their pockets. It will, however, *count* the pockets on request — its `holdings.inventory` part reports how many objects, kits and archetypes are within reach, how many the character is carrying in this chat, and which shelves they came from.
 

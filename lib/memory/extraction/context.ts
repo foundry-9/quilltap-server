@@ -122,6 +122,31 @@ export function pickExtractionConnectionProfileId(chat: Pick<ChatMetadata, 'part
   return anySeat?.connectionProfileId ?? null
 }
 
+/**
+ * The connection profile a by-hand extraction of one chat runs on (queue-memories,
+ * an edited line's regenerate): the seat profile the live pipeline would use,
+ * else the user's configured cheap profile. Null when neither exists.
+ */
+export async function resolveChatExtractionProfileId(
+  chat: Pick<ChatMetadata, 'participants'>,
+  userId: string,
+): Promise<string | null> {
+  const seatProfileId = pickExtractionConnectionProfileId(chat)
+  if (seatProfileId) return seatProfileId
+
+  const repos = getRepositories()
+  const cheapLLMSettings = (await repos.chatSettings.findByUserId(userId))?.cheapLLMSettings
+  for (const id of [
+    cheapLLMSettings?.defaultCheapProfileId,
+    cheapLLMSettings?.strategy === 'USER_DEFINED' ? cheapLLMSettings.userDefinedProfileId : null,
+  ]) {
+    if (!id) continue
+    const profile = await repos.connections.findById(id)
+    if (profile && profile.userId === userId) return id
+  }
+  return null
+}
+
 /** The prompt clock for a window: the calendar's zone at the window's instant. */
 export function clockAt(ctx: Pick<ExtractionContext, 'clock'>, nowIso: string): ExtractionClock {
   return { nowIso, timelineMode: ctx.clock.timelineMode, timeZone: ctx.clock.timeZone }

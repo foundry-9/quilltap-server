@@ -20,6 +20,7 @@ import {
   parseReportPeriodMs,
   progressionPlaceholders,
   renderProgressionReport,
+  renderPublicProgressionLine,
   shouldReportProgression,
 } from '@/lib/progressions/engine'
 import { ProgressionSchema, type Progression } from '@/lib/progressions/schema'
@@ -556,6 +557,7 @@ describe('flattenProgressions', () => {
       'cannon.endTime',
       'cannon.name',
       'cannon.percent',
+      'cannon.public',
       'cannon.quantity',
       'cannon.remaining',
       'cannon.remainingMs',
@@ -626,5 +628,51 @@ describe('inferIncrement', () => {
 
   it('takes the magnitude of a backwards span', () => {
     expect(inferIncrement(-10 * UNIT_MS.minute)).toBe('minute')
+  })
+})
+
+describe('public progressions', () => {
+  const NOW = Date.parse('2026-09-08T14:05:00Z')
+  const base = {
+    name: 'Cannon recharge',
+    description: 'You feel the coils humming.',
+    startTime: '2026-09-08T14:00:00Z',
+    endTime: '2026-09-08T14:10:00Z',
+    timeIncrement: 'minute',
+    reportTemplate: 'You wait {{remaining}}.',
+  }
+
+  it('defaults to public', () => {
+    expect(ProgressionSchema.parse(base).public).toBe(true)
+  })
+
+  it('renders a neutral line with no description or template', () => {
+    const p = ProgressionSchema.parse(base)
+    expect(renderPublicProgressionLine(p, deriveProgression('cannon', p, NOW))).toBe(
+      'Cannon recharge: 5 minutes elapsed, 5 minutes remaining, 50% complete.',
+    )
+  })
+
+  it('renders nothing for a private one', () => {
+    const p = ProgressionSchema.parse({ ...base, public: false })
+    expect(renderPublicProgressionLine(p, deriveProgression('cannon', p, NOW))).toBeNull()
+  })
+
+  it('keeps the fixed pending and complete wording, and goes quiet after a once-only finish', () => {
+    const pending = ProgressionSchema.parse(base)
+    expect(renderPublicProgressionLine(pending, deriveProgression('c', pending, Date.parse('2026-09-08T13:58:00Z')))).toBe(
+      'Cannon recharge: begins in 2 minutes.',
+    )
+    const later = Date.parse('2026-09-08T14:13:00Z')
+    expect(renderPublicProgressionLine(pending, deriveProgression('c', pending, later))).toBe(
+      'Cannon recharge: complete; 3 minutes since it finished.',
+    )
+    const once = ProgressionSchema.parse({ ...base, onComplete: 'once' })
+    expect(renderPublicProgressionLine(once, deriveProgression('c', once, later))).toBeNull()
+  })
+
+  it('exposes the flag to Pascal', () => {
+    const sheet = flattenProgressions({ progressions: { cannon: { ...base, public: false } } }, NOW)
+    expect(sheet['cannon.public']).toBe(false)
   })
 })

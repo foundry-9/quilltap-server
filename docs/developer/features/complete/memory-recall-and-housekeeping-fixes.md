@@ -251,7 +251,7 @@ What shipped, and where it differs from or sharpens the text above.
 - **Atomic reinforcement increments (done later, as bug 182).** F1 (like the existing REINFORCE
   path) originally wrote an absolute count computed from the gate's snapshot, so two extraction
   jobs absorbing the same row at the same moment could lose one observation. Filed and fixed
-  (2026-10-08) as [bug 182](../../bugs/fixed/bug-182-reinforcement-count-race.md): both paths now
+  (2026-10-08) as [bug 182](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-182-reinforcement-count-race.md): both paths now
   count through `MemoriesRepository.incrementReinforcement`.
 
 ## F2 result (2026-10-08)

@@ -178,12 +178,38 @@ describe('admitCandidate (parent)', () => {
 
   it('absorbs into the digest that supersedes a cold member', async () => {
     seedMemory(store, { id: 'member', tier: 'cold', supersededById: 'digest', embedding: LEDGER })
-    seedMemory(store, { id: 'digest', source: 'CONSOLIDATED', embedding: OTHER })
+    seedMemory(store, { id: 'digest', source: 'CONSOLIDATED', consolidatedFrom: ['member'], embedding: OTHER })
     vectors.set('Friday keeps the ledger', NEAR_LEDGER)
     const outcome = await admitCandidate(candidate('Friday keeps the ledger'), NO_TIME, OPTS)
     expect(outcome.action).toEqual({ kind: 'absorb', into: 'digest', redirectedFrom: 'member' })
     expect(store.rows.get('digest')!.reinforcementCount).toBe(2)
     expect(store.rows.get('member')!.tier).toBe('cold')
+  })
+
+  describe('a reinforcement is dated to its source message (A13)', () => {
+    const SOURCE = '2025-03-02T10:00:00.000Z'
+
+    it('counts a near-duplicate at the source message time, not now', async () => {
+      seedMemory(store, { id: 'ledger', content: 'Friday keeps the ledger.', embedding: LEDGER, lastReinforcedAt: null })
+      vectors.set('Friday keeps the ledger', LEDGER)
+      await admitCandidate(candidate('Friday keeps the ledger'), { ...NO_TIME, sourceMessageTimestamp: SOURCE }, OPTS)
+      expect(store.rows.get('ledger')!.lastReinforcedAt).toBe(SOURCE)
+    })
+
+    it('folds a band reinforcement at the source message time, not now', async () => {
+      seedMemory(store, { id: 'ledger', content: 'Friday keeps the ledger.', summary: 'Ledger', embedding: LEDGER, lastReinforcedAt: null })
+      vectors.set('Friday keeps the ledger for Marguerite', NEAR_LEDGER)
+      await admitCandidate(candidate('Friday keeps the ledger for Marguerite'), { ...NO_TIME, sourceMessageTimestamp: SOURCE }, OPTS)
+      expect(store.rows.get('ledger')!.lastReinforcedAt).toBe(SOURCE)
+    })
+
+    it('never rewinds a later reinforcement', async () => {
+      const later = '2026-01-05T00:00:00.000Z'
+      seedMemory(store, { id: 'ledger', content: 'Friday keeps the ledger.', embedding: LEDGER, lastReinforcedAt: later })
+      vectors.set('Friday keeps the ledger', LEDGER)
+      await admitCandidate(candidate('Friday keeps the ledger'), { ...NO_TIME, sourceMessageTimestamp: SOURCE }, OPTS)
+      expect(store.rows.get('ledger')!.lastReinforcedAt).toBe(later)
+    })
   })
 
   it('rejects, writing nothing, when the embedding fails twice (invariant 4)', async () => {

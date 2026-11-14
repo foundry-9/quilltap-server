@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system&section=delete-all-data
+url: /settings?section=delete-all-data
 ---
 
 # Deleting Your Data
 
-> **[Open this page in Quilltap](/settings?tab=system&section=delete-all-data)**
+> **[Open this page in Quilltap](/settings?section=delete-all-data)**
 
 The Delete All Data tool permanently removes your entire Quilltap account and all associated data.
 
@@ -95,9 +95,9 @@ A complete data deletion removes:
 
 ### Step-by-Step
 
-1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
+1. **Go to the Settings page, and open the *Security* group** (`/settings?section=delete-all-data`)
 
-2. **Find the Delete All Data card**
+2. **Find the Delete All Data card** (it keeps to the Advanced fold of the group)
 
 3. **Click "Delete All Data"** button
 
@@ -312,7 +312,7 @@ Untick the box, and the shelf is swept bare along with everything else.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system&section=delete-all-data")`
+`help_navigate(url: "/settings?section=delete-all-data")`
 
 ## Related Topics
 

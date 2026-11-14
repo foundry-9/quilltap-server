@@ -293,7 +293,7 @@ function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonl
           aria-label={condition.subject === 'progress' ? 'Progress key' : inventorySubject ? 'Inventory object reference' : 'Metadata key'}
           title={
             condition.subject === 'progress'
-              ? 'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity. A progression they do not carry never matches.'
+              ? 'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity, public. A progression they do not carry never matches.'
               : inventorySubject
                 ? 'An object by id, title or name, written literally — a gate has no parameters to fill a placeholder. With no character or chat, the test never matches.'
                 : "The invoking character's fact sheet — a key the character lacks never matches."

@@ -7,12 +7,10 @@
  * Allows users to generate images using their configured image profiles.
  */
 
-import { useId, useState, useRef, useEffect, useCallback } from 'react'
+import { useId, useState, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { downloadFetchedFile } from '@/lib/download-utils'
@@ -41,34 +39,22 @@ export function GenerateImageView() {
   const [imageCount, setImageCount] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([])
-  const [allEntities, setAllEntities] = useState<EntityOption[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [previewImage, setPreviewImage] = useState<{ src: string; filename: string } | null>(null)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const { data: charactersData, isLoading } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<{ characters: Array<{ id: string; name: string }> }>('/api/v1/characters', { signal }),
-  })
+  const { data: charactersData, isLoading } = useCharactersList<{ id: string; name: string }>()
 
-  // Load all characters for placeholder insertion
-  useEffect(() => {
-    if (charactersData?.characters) {
-      const entities: EntityOption[] = charactersData.characters.map((c) => ({
-        id: c.id,
-        name: c.name,
-        type: 'character' as const,
-      }))
-
-      // Sort alphabetically
-      entities.sort((a, b) => a.name.localeCompare(b.name))
-
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
-      setAllEntities(entities)
-    }
-  }, [charactersData])
+  // Every character, for placeholder insertion, alphabetical.
+  const allEntities = useMemo<EntityOption[]>(
+    () =>
+      (charactersData ?? [])
+        .map((c) => ({ id: c.id, name: c.name, type: 'character' as const }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [charactersData],
+  )
 
   const insertPlaceholder = (text: string) => {
     const textarea = promptRef.current
@@ -163,8 +149,8 @@ export function GenerateImageView() {
     <div className="qt-page-container max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="qt-heading-2 text-foreground">Generate Image</h1>
-        <Link href="/" className="text-sm qt-text-secondary hover:text-foreground">
+        <h1 className="qt-heading-2 qt-text">Generate Image</h1>
+        <Link href="/" className="text-sm qt-text-secondary hover:qt-text">
           &larr; Back to Home
         </Link>
       </div>
@@ -174,18 +160,19 @@ export function GenerateImageView() {
         <div className="space-y-4">
           {/* Image Profile Selection */}
           <div>
-            <label className="block qt-label text-foreground mb-2">
+            <label className="block qt-label qt-text mb-2">
               Image Profile
             </label>
             <ImageProfilePicker
               value={selectedProfileId}
               onChange={setSelectedProfileId}
+              preselectDefault
             />
           </div>
 
           {/* Prompt Input */}
           <div>
-            <label htmlFor={`${fieldId}-f0`} className="block qt-label text-foreground mb-2">
+            <label htmlFor={`${fieldId}-f0`} className="block qt-label qt-text mb-2">
               Prompt
             </label>
             <div className="relative">
@@ -195,7 +182,7 @@ export function GenerateImageView() {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe the image you want to generate... Use {{CharacterName}} to include character descriptions."
-                className="w-full h-32 px-3 py-2 border qt-border-default rounded-lg qt-bg-card text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full h-32 px-3 py-2 border qt-border-default rounded-lg qt-bg-card qt-text resize-none focus:outline-none focus:ring-2 qt-focus-ring"
               />
 
               {/* Character Placeholder Dropdown */}
@@ -211,7 +198,7 @@ export function GenerateImageView() {
                     }}
                     onFocus={() => setIsDropdownOpen(true)}
                     placeholder="Search characters to insert..."
-                    className="flex-1 px-3 py-2 text-sm border qt-border-default rounded-lg qt-bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="flex-1 px-3 py-2 text-sm border qt-border-default rounded-lg qt-bg-card qt-text focus:outline-none focus:ring-2 qt-focus-ring"
                   />
                   <button
                     type="button"
@@ -255,14 +242,14 @@ export function GenerateImageView() {
 
           {/* Image Count */}
           <div>
-            <label htmlFor={`${fieldId}-f1`} className="block qt-label text-foreground mb-2">
+            <label htmlFor={`${fieldId}-f1`} className="block qt-label qt-text mb-2">
               Number of Images
             </label>
             <select
               id={`${fieldId}-f1`}
               value={imageCount}
               onChange={(e) => setImageCount(parseInt(e.target.value, 10))}
-              className="px-3 py-2 border qt-border-default rounded-lg qt-bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="px-3 py-2 border qt-border-default rounded-lg qt-bg-card qt-text focus:outline-none focus:ring-2 qt-focus-ring"
             >
               {[1, 2, 3, 4].map((n) => (
                 <option key={n} value={n}>
@@ -301,7 +288,7 @@ export function GenerateImageView() {
       {/* Generated Images Gallery */}
       {generatedImages.length > 0 && (
         <div className="qt-card p-6">
-          <h2 className="qt-heading-4 text-foreground mb-4">
+          <h2 className="qt-heading-4 qt-text mb-4">
             Generated Images ({generatedImages.length})
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

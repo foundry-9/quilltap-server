@@ -2,7 +2,10 @@
  * Messages API v1 - Individual Message Endpoint
  *
  * GET /api/v1/messages/[id] - Get a specific message
- * PUT /api/v1/messages/[id] - Edit a message
+ * GET /api/v1/messages/[id]?action=edit-impact - What editing it would disturb
+ *   (later model calls that read it; memories it formed)
+ * PUT /api/v1/messages/[id] - Edit any message (optionally regenerating the
+ *   memories it formed: `regenerateMemories: true`)
  * DELETE /api/v1/messages/[id] - Delete a message (with optional memory cascade)
  * POST /api/v1/messages/[id]?action=swipe - Generate alternative response
  *   (add &stream=1 for a text/event-stream narration of the regeneration)
@@ -11,21 +14,28 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
-import { badRequest, notFound, serverError, successResponse, created } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse, created, validationError } from '@/lib/api/responses';
 import {
   regenerateMessageAsSwipe,
   streamSwipeRegeneration,
 } from '@/lib/services/chat-message';
 import { retireMemories } from '@/lib/memory/retire';
 import { invalidateContextSummaryIfMessageCovered } from '@/lib/chat/context-summary';
+import {
+  assessMessageEditImpact,
+  regenerateEditedMessageMemories,
+} from '@/lib/services/chat-message/message-edit-impact';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import type { ChatEvent, MessageEvent, ChatMetadata, ChatParticipant } from '@/lib/schemas/types';
-import type { MemoryCascadeAction } from '@/lib/schemas/settings.types';
+import { MemoryCascadeActionEnum } from '@/lib/schemas/settings.types';
+import { readJsonBody } from '@/lib/api/request-body';
 
 // Validation schemas
 const editMessageSchema = z.object({
   content: z.string().min(1, 'Content is required'),
+  /** Retire the memories the old text formed and extract them again from the new. */
+  regenerateMemories: z.boolean().optional(),
 });
 
 const swipeActionSchema = z.object({
@@ -88,19 +98,44 @@ async function findMessageInUserChats(
 // =============================================================================
 
 export const GET = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id: messageId }) => {
-    try {const result = await findMessageInUserChats(repos, user.id, messageId);
-      if (!result) {
-        return notFound('Message');
-      }
+  async (req, { user, repos }, { id: messageId }) =>
+    dispatchAction(
+      req,
+      { 'edit-impact': () => handleEditImpact(repos, user.id, messageId) },
+      async () => {
+        try {
+          const result = await findMessageInUserChats(repos, user.id, messageId);
+          if (!result) {
+            return notFound('Message');
+          }
 
-      return successResponse({ message: result.message });
-    } catch (error) {
-      logger.error('[Messages API v1] Error fetching message', {}, error instanceof Error ? error : undefined);
-      return serverError('Failed to fetch message');
-    }
-  }
+          return successResponse({ message: result.message });
+        } catch (error) {
+          logger.error('[Messages API v1] Error fetching message', {}, error instanceof Error ? error : undefined);
+          return serverError('Failed to fetch message');
+        }
+      }
+    )
 );
+
+/** The chat's message events in transcript order. */
+function messageEventsOf(result: MessageSearchResult): MessageEvent[] {
+  return result.allMessages.filter((m): m is MessageEvent => m.type === 'message');
+}
+
+/**
+ * What editing this line would disturb — asked by the Salon before it saves,
+ * so it can warn that a model already read the old text and offer to
+ * regenerate the memories that text formed.
+ */
+async function handleEditImpact(repos: any, userId: string, messageId: string): Promise<NextResponse> {
+  const result = await findMessageInUserChats(repos, userId, messageId);
+  if (!result) {
+    return notFound('Message');
+  }
+  const impact = await assessMessageEditImpact(result.chat, messageEventsOf(result), result.message, userId);
+  return successResponse({ impact });
+}
 
 // =============================================================================
 // PUT /api/v1/messages/[id] - Edit a message
@@ -109,16 +144,25 @@ export const GET = createContextParamsHandler<{ id: string }>(
 export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     const body = await req.json();
-    const { content } = editMessageSchema.parse(body);
+    const { content, regenerateMemories } = editMessageSchema.parse(body);
     const result = await findMessageInUserChats(repos, user.id, messageId);
     if (!result) {
       return notFound('Message');
     }
 
+    // Any line may be edited: the operator's, a character's, a Staff row's.
+    // A Staff row may carry a persona-free `opaqueContent` that opaque chats
+    // send to the model instead of `content`; the edited text is the truth
+    // now, so drop the stale twin and let the model read what was written.
+    const updates: Partial<MessageEvent> = { content };
+    if (typeof result.message.opaqueContent === 'string') {
+      updates.opaqueContent = null;
+    }
+
     // Update only the edited row. (The old path deleted every message in the
     // chat and re-inserted them one by one, which was O(n²) and would silently
     // drop any sibling message that failed validation.)
-    const updatedMessage = await repos.chats.updateMessage(result.chat.id, messageId, { content });
+    const updatedMessage = await repos.chats.updateMessage(result.chat.id, messageId, updates);
     if (!updatedMessage) {
       return notFound('Message');
     }
@@ -130,7 +174,41 @@ export const PUT = createContextParamsHandler<{ id: string }>(
     // the set that fed it.
     await invalidateContextSummaryIfMessageCovered(result.chat.id, [messageId]);
 
-    return successResponse({ message: updatedMessage });
+    logger.info('[Messages API v1] Message edited', {
+      messageId,
+      chatId: result.chat.id,
+      role: result.message.role,
+      systemSender: result.message.systemSender ?? null,
+      clearedOpaqueContent: 'opaqueContent' in updates,
+      regenerateMemories: !!regenerateMemories,
+    });
+
+    // After the write: the regenerate job reads the transcript when it runs.
+    let memoriesRetired = 0;
+    let memoryJobId: string | null = null;
+    let memoryRegenerateFailed = false;
+    if (regenerateMemories) {
+      try {
+        const regen = await regenerateEditedMessageMemories(
+          result.chat,
+          messageEventsOf(result),
+          result.message,
+          user.id,
+        );
+        memoriesRetired = regen.memoriesRetired;
+        memoryJobId = regen.jobId;
+      } catch (error) {
+        // The edit stands; the old memories may or may not have been retired.
+        memoryRegenerateFailed = true;
+        logger.error(
+          '[Messages API v1] Failed to regenerate memories for edited message',
+          { messageId, chatId: result.chat.id },
+          error instanceof Error ? error : undefined
+        );
+      }
+    }
+
+    return successResponse({ message: updatedMessage, memoriesRetired, memoryJobId, memoryRegenerateFailed });
   }
 );
 
@@ -143,8 +221,14 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
     try {
       // Parse query params for memory handling
       const { searchParams } = req.nextUrl;
-      const memoryAction = searchParams.get('memoryAction') as MemoryCascadeAction | null;
-      const skipConfirmation = searchParams.get('skipConfirmation') === 'true';const result = await findMessageInUserChats(repos, user.id, messageId);
+      const rawMemoryAction = searchParams.get('memoryAction');
+      const parsedMemoryAction = rawMemoryAction === null ? null : MemoryCascadeActionEnum.safeParse(rawMemoryAction);
+      if (parsedMemoryAction && !parsedMemoryAction.success) {
+        return validationError(parsedMemoryAction.error);
+      }
+      const memoryAction = parsedMemoryAction?.data ?? null;
+      const skipConfirmation = searchParams.get('skipConfirmation') === 'true';
+const result = await findMessageInUserChats(repos, user.id, messageId);
       if (!result) {
         return notFound('Message');
       }
@@ -244,11 +328,19 @@ async function handleSwipeAction(
   { user, repos }: { user: { id: string }; repos: any },
   messageId: string
 ): Promise<NextResponse> {
-  const body = await req.json().catch(() => ({}));
+  // An empty body is "no swipeIndex" (regenerate); a body that is present but
+  // not JSON is a 400 from the middleware, never a regeneration (#220).
+  const body = await readJsonBody(req, {});
   const parsed = swipeActionSchema.safeParse(body);
 
+  // A body that is present and fails the schema is a client error, never "no
+  // swipeIndex" — that would run a billable regeneration (#168).
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+
   // If swipeIndex is provided, this is a switch operation (like PUT)
-  if (parsed.success && parsed.data.swipeIndex !== undefined) {
+  if (parsed.data.swipeIndex !== undefined) {
     return handleSwitchSwipe(repos, user.id, messageId, parsed.data.swipeIndex);
   }
 

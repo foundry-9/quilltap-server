@@ -15,7 +15,7 @@
  * @package @quilltap/theme-storybook
  */
 @layer properties, theme, base, components, utilities;
-/*! tailwindcss v4.3.4 | MIT License | https://tailwindcss.com */
+/*! tailwindcss v4.3.5 | MIT License | https://tailwindcss.com */
 @layer properties;
 /* ==========================================================================
    SOURCE: app/styles/qt-components/_variables.css
@@ -53,8 +53,12 @@
 /* ============================================================================
    QT-* VARIABLE DEFAULTS - BASELINE FOR ALL THEMES (BOTH MODES)
    Themes override any of these in their own [data-theme="<name>"] blocks.
+   :root is listed so the defaults resolve before the theme injector sets
+   data-theme — the startup, instance-lock and version-guard screens render
+   then, and without it their .qt-card had no background, leaving dark text
+   on the dark bootstrap art.
    ============================================================================ */
-[data-theme], [data-theme].dark, [data-theme].light {
+:root, [data-theme], [data-theme].dark, [data-theme].light {
   --theme-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --theme-font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
   --theme-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -102,27 +106,15 @@
     --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, black);
   }
   --qt-status-success-bg: var(--color-success);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-status-success-bg: color-mix(in srgb, var(--color-success) 85%, transparent);
-  }
   --qt-status-success-fg: var(--color-success-foreground);
   --qt-status-success-border: var(--color-success);
   --qt-status-warning-bg: var(--color-warning);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 85%, transparent);
-  }
   --qt-status-warning-fg: var(--color-warning-foreground);
   --qt-status-warning-border: var(--color-warning);
   --qt-status-info-bg: var(--color-info);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-status-info-bg: color-mix(in srgb, var(--color-info) 85%, transparent);
-  }
   --qt-status-info-fg: var(--color-info-foreground);
   --qt-status-info-border: var(--color-info);
   --qt-status-danger-bg: var(--color-destructive);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 85%, transparent);
-  }
   --qt-status-danger-fg: var(--color-destructive-foreground);
   --qt-status-danger-border: var(--color-destructive);
   --qt-punctuation-warning-bg: var(--color-warning);
@@ -423,11 +415,11 @@
   --qt-badge-chat-bg: hsl(152 50% 38% / 0.12);
   --qt-badge-chat-fg: hsl(152 50% 30%);
   --qt-badge-tag-bg: hsl(25 70% 48% / 0.12);
-  --qt-badge-tag-fg: hsl(25 70% 38%);
+  --qt-badge-tag-fg: hsl(25 70% 36.5%);
   --qt-badge-memory-bg: hsl(330 55% 52% / 0.12);
   --qt-badge-memory-fg: hsl(330 55% 38%);
   --qt-badge-message-bg: hsl(45 70% 48% / 0.12);
-  --qt-badge-message-fg: hsl(45 70% 35%);
+  --qt-badge-message-fg: hsl(45 70% 29.5%);
   --qt-badge-project-bg: hsl(185 55% 38% / 0.12);
   --qt-badge-project-fg: hsl(185 55% 30%);
   --qt-badge-enabled-bg: hsl(152 50% 38% / 0.12);
@@ -445,7 +437,7 @@
   --qt-badge-source-npm-bg: hsl(0 60% 50% / 0.12);
   --qt-badge-source-npm-fg: hsl(0 60% 38%);
   --qt-badge-source-git-bg: hsl(25 70% 48% / 0.12);
-  --qt-badge-source-git-fg: hsl(25 70% 38%);
+  --qt-badge-source-git-fg: hsl(25 70% 36.5%);
   --qt-badge-source-manual-bg: var(--color-muted);
   --qt-badge-source-manual-fg: var(--color-muted-foreground);
   --qt-badge-wardrobe-top-bg: hsl(220 60% 55% / 0.12);
@@ -453,7 +445,7 @@
   --qt-badge-wardrobe-bottom-bg: hsl(152 50% 38% / 0.12);
   --qt-badge-wardrobe-bottom-fg: hsl(152 50% 30%);
   --qt-badge-wardrobe-footwear-bg: hsl(38 70% 48% / 0.12);
-  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 38%);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 32%);
   --qt-badge-wardrobe-accessories-bg: hsl(270 45% 55% / 0.12);
   --qt-badge-wardrobe-accessories-fg: hsl(270 45% 42%);
   --qt-badge-wardrobe-hair-bg: hsl(345 55% 55% / 0.12);
@@ -1173,6 +1165,10 @@
   }
   [data-icon="inventory"] {
     --_qt-icon-mask: url("/images/icons/inventory.svg");
+    --_qt-icon-bg: none;
+  }
+  [data-icon="atlas"] {
+    --_qt-icon-mask: url("/images/icons/atlas.svg");
     --_qt-icon-bg: none;
   }
   [data-icon="sparkles"] {
@@ -2382,6 +2378,365 @@
     font-weight: var(--font-weight-medium, 500);
     color: var(--theme-muted-foreground);
   }
+  /* ======================================================================
+   * Brahma Console — Writing Assistant and attachments
+   * Theme hooks: --qt-console-output-bg, --qt-console-output-border,
+   * --qt-console-chip-bg, --qt-console-chip-border (each with a fallback).
+   * ==================================================================== */
+  /* The Writing Assistant switch (launcher) and badge (conversation). */
+  .qt-console-writing-switch, .qt-console-writing-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--spacing, 0.25rem) * 1.5);
+    border-radius: 0.25rem;
+    padding-inline: calc(var(--spacing, 0.25rem) * 2);
+    padding-block: var(--spacing, 0.25rem);
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+    --tw-font-weight: var(--font-weight-medium, 500);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-muted-foreground);
+  }
+  .qt-console-writing-switch {
+    cursor: pointer;
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function, cubic-bezier(0.4, 0, 0.2, 1)));
+    transition-duration: var(--tw-duration, var(--default-transition-duration, 150ms));
+    background: transparent;
+    border: 1px solid var(--color-border);
+  }
+  .qt-console-writing-switch:hover {
+    background: var(--color-accent);
+    color: var(--color-accent-foreground);
+  }
+  .qt-console-writing-switch:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+  }
+  .qt-console-writing-switch-on {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    @supports (color: color-mix(in lab, red, red)) {
+      background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+    }
+  }
+  .qt-console-writing-switch-track {
+    position: relative;
+    display: inline-block;
+    border-radius: calc(infinity * 1px);
+    width: 1.75rem;
+    height: 1rem;
+    background: var(--color-muted);
+    border: 1px solid var(--color-border);
+  }
+  .qt-console-writing-switch-track > span {
+    position: absolute;
+    border-radius: calc(infinity * 1px);
+    transition-property: transform, translate, scale, rotate;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function, cubic-bezier(0.4, 0, 0.2, 1)));
+    transition-duration: var(--tw-duration, var(--default-transition-duration, 150ms));
+    top: 1px;
+    left: 1px;
+    width: 0.75rem;
+    height: 0.75rem;
+    background: var(--color-muted-foreground);
+  }
+  .qt-console-writing-switch-on .qt-console-writing-switch-track {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+  .qt-console-writing-switch-on .qt-console-writing-switch-track > span {
+    transform: translateX(0.75rem);
+    background: var(--color-primary-foreground);
+  }
+  .qt-console-writing-badge {
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    @supports (color: color-mix(in lab, red, red)) {
+      border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    }
+    background: var(--color-primary);
+    @supports (color: color-mix(in lab, red, red)) {
+      background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+    }
+  }
+  /* A narrow header keeps the icon and drops the words (still read aloud). */
+  @media (max-width: 640px) {
+    .qt-console-writing-switch-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border-width: 0;
+    }
+  }
+  /* The context bar beneath the header. */
+  .qt-console-context-bar {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing, 0.25rem) * 2);
+    padding-inline: calc(var(--spacing, 0.25rem) * 3);
+    padding-block: calc(var(--spacing, 0.25rem) * 2);
+    border-bottom: 1px solid var(--qt-dialog-border);
+    background: var(--qt-dialog-bg);
+  }
+  .qt-console-context-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing, 0.25rem);
+    border-radius: calc(infinity * 1px);
+    padding-inline: calc(var(--spacing, 0.25rem) * 2);
+    padding-block: calc(var(--spacing, 0.25rem) * 0.5);
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+    max-width: 18rem;
+    background: var(--qt-console-chip-bg, var(--color-muted));
+    color: var(--color-foreground);
+    border: 1px solid var(--qt-console-chip-border, var(--color-border));
+  }
+  .qt-console-context-chip-missing {
+    color: var(--color-muted-foreground);
+    border-style: dashed;
+  }
+  .qt-console-context-chip-derived {
+    padding-block: 0px;
+    font-size: 0.6875rem;
+    background: transparent;
+    color: var(--color-muted-foreground);
+  }
+  .qt-console-context-chip-remove {
+    display: inline-flex;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    border-radius: calc(infinity * 1px);
+    padding: calc(var(--spacing, 0.25rem) * 0.5);
+    color: var(--color-muted-foreground);
+  }
+  .qt-console-context-chip-remove:hover:not(:disabled) {
+    color: var(--color-destructive);
+  }
+  .qt-console-context-chip-remove:focus-visible {
+    outline: 2px solid var(--color-ring);
+  }
+  .qt-console-context-chip-remove:disabled {
+    cursor: not-allowed;
+    opacity: 50%;
+  }
+  /* An output card: the finished piece in its own frame. */
+  .qt-console-output {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing, 0.25rem) * 2);
+    border-radius: var(--theme-radius-lg);
+    padding: calc(var(--spacing, 0.25rem) * 3);
+    background: var(--qt-console-output-bg, var(--color-card));
+    color: var(--color-card-foreground);
+    border: 1px solid var(--qt-console-output-border, var(--color-primary));
+    @supports (color: color-mix(in lab, red, red)) {
+      border: 1px solid var(--qt-console-output-border, color-mix(in srgb, var(--color-primary) 35%, var(--color-border)));
+    }
+  }
+  .qt-console-output-draft {
+    border-style: dashed;
+  }
+  .qt-console-output-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing, 0.25rem);
+    padding-bottom: calc(var(--spacing, 0.25rem) * 2);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .qt-console-output-view {
+    display: inline-flex;
+    overflow: hidden;
+    border-radius: 0.25rem;
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+    border: 1px solid var(--color-border);
+  }
+  .qt-console-output-view > button {
+    cursor: pointer;
+    padding-inline: calc(var(--spacing, 0.25rem) * 2);
+    padding-block: calc(var(--spacing, 0.25rem) * 0.5);
+    color: var(--color-muted-foreground);
+  }
+  .qt-console-output-view > button:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
+  }
+  .qt-console-output-view > button.qt-console-output-view-on {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+  }
+  .qt-console-output-body {
+    min-width: 0px;
+    font-size: var(--text-sm, 0.875rem);
+    line-height: var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875)));
+  }
+  .qt-console-output-source {
+    margin: 0px;
+    font-family: var(--theme-font-mono);
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+  }
+  .qt-console-output-saved {
+    padding-top: var(--spacing, 0.25rem);
+  }
+  /* Working notes: prose a model wrote beside its tool calls. */
+  .qt-console-notes {
+    padding-left: calc(var(--spacing, 0.25rem) * 3);
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+    color: var(--color-muted-foreground);
+    border-left: 2px solid var(--color-border);
+  }
+  /* A final message that is not an output (budget salvage, error). */
+  .qt-console-notice {
+    border-radius: 0.25rem;
+    padding-inline: calc(var(--spacing, 0.25rem) * 3);
+    padding-block: calc(var(--spacing, 0.25rem) * 2);
+    font-size: var(--text-sm, 0.875rem);
+    line-height: var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875)));
+    color: var(--color-foreground);
+    background: var(--color-warning);
+    @supports (color: color-mix(in lab, red, red)) {
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+    }
+    border: 1px solid var(--color-warning);
+    @supports (color: color-mix(in lab, red, red)) {
+      border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+    }
+  }
+  /* Attachments: the composer row and a sent message's row. */
+  .qt-console-composer {
+    display: flex;
+    flex-direction: column;
+  }
+  .qt-console-composer-dragover {
+    outline: 2px dashed var(--color-primary);
+    outline-offset: -4px;
+  }
+  .qt-console-composer-attach {
+    display: inline-flex;
+    height: 38px;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--theme-radius-md);
+    padding-inline: calc(var(--spacing, 0.25rem) * 2);
+    padding-block: calc(var(--spacing, 0.25rem) * 2);
+    color: var(--color-muted-foreground);
+    border: 1px solid var(--color-border);
+    background: transparent;
+  }
+  .qt-console-composer-attach:hover:not(:disabled) {
+    background: var(--color-accent);
+    color: var(--color-accent-foreground);
+  }
+  .qt-console-composer-attach:focus-visible {
+    outline: 2px solid var(--color-ring);
+  }
+  .qt-console-composer-attach:disabled {
+    cursor: not-allowed;
+    opacity: 50%;
+  }
+  .qt-console-attachment-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--spacing, 0.25rem) * 1.5);
+    padding-inline: calc(var(--spacing, 0.25rem) * 3);
+    padding-top: calc(var(--spacing, 0.25rem) * 2);
+    border-top: 1px solid var(--qt-dialog-border);
+    background: var(--qt-dialog-bg);
+  }
+  .qt-console-attachment-row-sent {
+    justify-content: flex-end;
+    padding-inline: 0px;
+    padding-top: var(--spacing, 0.25rem);
+    border-top: 0;
+    background: transparent;
+  }
+  .qt-console-attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--spacing, 0.25rem) * 1.5);
+    border-radius: 0.25rem;
+    padding-inline: calc(var(--spacing, 0.25rem) * 2);
+    padding-block: var(--spacing, 0.25rem);
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+    max-width: 16rem;
+    background: var(--qt-console-chip-bg, var(--color-muted));
+    color: var(--color-foreground);
+    border: 1px solid var(--qt-console-chip-border, var(--color-border));
+  }
+  .qt-console-attachment-chip a {
+    color: var(--color-primary);
+    text-decoration: underline;
+  }
+  .qt-console-attachment-chip-error {
+    border-color: var(--color-destructive);
+  }
+  .qt-console-attachment-chip-missing {
+    color: var(--color-muted-foreground);
+    border-style: dashed;
+  }
+  .qt-console-attachment-thumb {
+    flex-shrink: 0;
+    border-radius: 0.25rem;
+    -o-object-fit: cover;
+       object-fit: cover;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+  .qt-console-attachment-remove {
+    display: inline-flex;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    border-radius: calc(infinity * 1px);
+    padding: calc(var(--spacing, 0.25rem) * 0.5);
+    color: var(--color-muted-foreground);
+  }
+  .qt-console-attachment-remove:hover {
+    color: var(--color-destructive);
+  }
+  .qt-console-attachment-remove:focus-visible {
+    outline: 2px solid var(--color-ring);
+  }
+  .qt-console-attachment-image {
+    display: block;
+    cursor: zoom-in;
+    overflow: hidden;
+    border-radius: 0.25rem;
+    border: 1px solid var(--color-border);
+  }
+  .qt-console-attachment-image:focus-visible {
+    outline: 2px solid var(--color-ring);
+  }
+  .qt-console-attachment-image img {
+    display: block;
+    -o-object-fit: cover;
+       object-fit: cover;
+    width: 6rem;
+    height: 6rem;
+  }
+  /*
+   * A modal opened from the Console (context dialog, save, delete confirm).
+   * The floating Console rides above every modal, so its own modals must sit
+   * above it. Defined after `.qt-dialog-overlay`, so it wins.
+   */
+  .qt-console-modal-layer {
+    z-index: calc(var(--qt-floating-layer-z) + 10);
+  }
   /**
    * Help chat error banner
    */
@@ -3086,9 +3441,9 @@
      element, so these classes own appearance only, never placement. */
   .qt-typeahead-menu {
     position: absolute;
-    z-index: 50;
     overflow-y: auto;
     padding: var(--spacing, 0.25rem);
+    z-index: 200;
     top: 100%;
     left: 0;
     min-width: 14rem;
@@ -5114,6 +5469,54 @@
   .qt-chat-thinking-details {
     max-width: 85%;
   }
+  /* Start-aligned variant: thinking set flush left in a column of tool cards
+     (the Brahma Console), where the right offset would read as misplaced. */
+  /*
+   * Collapsible tool card summary (the Brahma Console's "Ran SQL" card): one
+   * line that stays put; the chevron turns and the query preview hides when the
+   * card is open (the full query is in the body then).
+   */
+  .qt-tool-card-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    -webkit-user-select: none;
+       -moz-user-select: none;
+            user-select: none;
+    list-style: none;
+  }
+  .qt-tool-card-summary::-webkit-details-marker {
+    display: none;
+  }
+  .qt-tool-card-summary > * {
+    flex-shrink: 0;
+  }
+  .qt-tool-card-chevron {
+    transition: transform 150ms ease;
+  }
+  details[open] > .qt-tool-card-summary .qt-tool-card-chevron {
+    transform: rotate(90deg);
+  }
+  .qt-tool-card-summary > .qt-tool-card-preview {
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  details[open] > .qt-tool-card-summary .qt-tool-card-preview {
+    visibility: hidden;
+  }
+  .qt-chat-thinking-start {
+    justify-content: flex-start;
+  }
+  .qt-chat-thinking-start .qt-chat-thinking-details {
+    max-width: 100%;
+  }
+  .qt-chat-thinking-start .qt-chat-thinking-summary {
+    justify-content: flex-start;
+  }
   .qt-chat-thinking-summary {
     display: flex;
     align-items: center;
@@ -5320,6 +5723,21 @@
   .qt-chat-announcement-chip:focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
+  }
+  /* A collapsed announcement that holds the first mention of a thing or an
+     absent character: the bar, then its name chips beside it, since the body
+     (where the chips would otherwise be) is hidden. */
+  .qt-chat-announcement-chip-wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .qt-chat-announcement-chip-wrap .qt-mention-chip {
+    font-size: 0.8125rem;
   }
   /* Inside a chip the kind must not greedily fill the row (that is what made the
      full-width bar stretch); cap it so long kinds don't dominate a packed row. */
@@ -5686,6 +6104,28 @@
   .qt-mention-chip:focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
+  }
+  /* A thing from the Atlas: the same chip, a dashed rule instead of a dotted
+     one, so a thing is told from a person by shape as well as by the popup. */
+  .qt-mention-chip-thing {
+    border-bottom-style: dashed;
+  }
+  /* The Atlas chip's popup: the entry's current picture, and its knowledge
+     rendered as Markdown inside the bubble. */
+  .qt-tooltip-image {
+    display: block;
+    max-width: 100%;
+    max-height: 9rem;
+    margin: 0.35rem 0;
+    border-radius: 0.375rem;
+    -o-object-fit: contain;
+       object-fit: contain;
+  }
+  .qt-tooltip-markdown p, .qt-tooltip-markdown ul, .qt-tooltip-markdown ol {
+    margin: 0.25rem 0;
+  }
+  .qt-tooltip-markdown ul, .qt-tooltip-markdown ol {
+    padding-left: 1.1rem;
   }
   /* ==========================================================================
      MARKDOWN ELEMENT SPACING
@@ -6723,11 +7163,15 @@
   /**
    * Formatting toolbar container - shown above textarea in document editing mode
    */
+  /* Wraps rather than overflowing: at 320px or 200% text a single row runs
+     past its card, whose overflow:hidden then clips the last buttons
+     (WCAG 1.4.4 / 1.4.10). */
   .qt-formatting-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: calc(var(--spacing, 0.25rem) * 2);
+    gap: var(--spacing, 0.25rem);
     padding: 0.375rem 0.5rem;
     background: var(--color-muted);
     @supports (color: color-mix(in lab, red, red)) {
@@ -6737,12 +7181,22 @@
     margin-bottom: 0.5rem;
   }
   /**
-   * Section groups buttons together
+   * Section groups buttons together in the markup only. It lays out as
+   * `display: contents` so every button wraps in the toolbar's one flow: a
+   * section that wrapped on its own took the full row and pushed whatever
+   * followed it onto a third line.
    */
   .qt-formatting-toolbar-section {
-    display: flex;
+    display: contents;
+  }
+  /**
+   * A toolbar button that anchors a popover (the emoji / symbol pickers)
+   * needs a real positioned box, so it is not flattened like a section.
+   */
+  .qt-formatting-toolbar-anchor {
+    position: relative;
+    display: inline-flex;
     align-items: center;
-    gap: var(--spacing, 0.25rem);
   }
   /**
    * Vertical divider between sections
@@ -6752,6 +7206,11 @@
     height: calc(var(--spacing, 0.25rem) * 5);
     width: 1px;
     background: var(--color-border);
+  }
+  /* A divider at the start or end of a wrapped row separates nothing;
+     FormattingToolbar marks it and it keeps its space but goes unseen. */
+  .qt-formatting-toolbar-divider[data-wrapped] {
+    visibility: hidden;
   }
   /**
    * Base formatting button style
@@ -7958,6 +8417,34 @@
     color: var(--qt-status-danger-fg);
   }
   /**
+   * In-place message editor — the notices above the textarea (a model has
+   * read the line; memories it formed, with the regenerate checkbox) and the
+   * Save / Cancel row beneath it.
+   */
+  :where(.qt-chat-message-editor > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing, 0.25rem) * 2) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing, 0.25rem) * 2) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  :where(.qt-chat-message-editor-notice > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(var(--spacing, 0.25rem) * var(--tw-space-y-reverse));
+    margin-block-end: calc(var(--spacing, 0.25rem) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  .qt-chat-message-editor-option {
+    display: flex;
+    cursor: pointer;
+    align-items: flex-start;
+    gap: calc(var(--spacing, 0.25rem) * 2);
+  }
+  .qt-chat-message-editor-option input {
+    margin-top: calc(var(--spacing, 0.25rem) * 0.5);
+  }
+  .qt-chat-message-editor-actions {
+    display: flex;
+    gap: calc(var(--spacing, 0.25rem) * 2);
+  }
+  /**
    * Message action bar - shows action icons at bottom of message
    * Persistent on mobile, replaces hover-based actions
    */
@@ -8200,6 +8687,84 @@
   .qt-chat-sidebar .qt-collapsible-card-divider {
     margin-inline: calc(var(--spacing, 0.25rem) * 2);
   }
+  /* The "Concepts Named" card: the absent characters and Atlas entries the
+     chat names, in two labelled groups, each row a button that goes to its
+     first mention. */
+  .qt-chat-concepts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .qt-chat-concepts-group-label {
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+    padding: 0 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted-foreground);
+  }
+  .qt-chat-concepts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .qt-chat-concepts-anchor {
+    display: block;
+  }
+  .qt-chat-concepts-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.25rem 0.375rem;
+    border-radius: 0.375rem;
+    text-align: left;
+    color: var(--color-foreground);
+    background: transparent;
+  }
+  .qt-chat-concepts-item:hover, .qt-chat-concepts-item:focus-visible {
+    background: var(--color-muted);
+    outline: none;
+  }
+  .qt-chat-concepts-item:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+  }
+  .qt-chat-concepts-thumb {
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.25rem;
+    -o-object-fit: cover;
+       object-fit: cover;
+    border: 1px solid var(--color-border);
+  }
+  .qt-chat-concepts-thumb-empty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-muted-foreground);
+  }
+  .qt-chat-concepts-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .qt-chat-concepts-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-sm, 0.875rem);
+    line-height: var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875)));
+  }
+  .qt-chat-concepts-term {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+    color: var(--color-muted-foreground);
+  }
   .qt-chat-sidebar-add {
     border-top: 1px solid var(--qt-chat-sidebar-header-border);
     padding: 0.5rem 0 0;
@@ -8287,13 +8852,14 @@
     border: 1px solid var(--qt-status-warning-border);
   }
   /**
-   * Spoken position badge - dimmed
+   * Spoken position badge - receded, but still legible. A dashed outline on
+   * the page colour marks "already spoke"; the number stays at full
+   * muted-foreground strength (WCAG 1.4.3) rather than fading to half opacity.
    */
   .qt-participant-position-spoken {
-    background: var(--color-muted);
+    background: var(--color-background);
     color: var(--color-muted-foreground);
-    border: 1px solid var(--color-border);
-    opacity: 0.5;
+    border: 1px dashed var(--color-muted-foreground);
   }
   /**
    * Inactive participant card styling - dimmed/greyed
@@ -9229,23 +9795,30 @@
   /**
    * Storyteller mode — the Salon's turn-mode control and the bidding board.
    *
-   *   qt-storyteller-mode*   — Normal / Paused / Storyteller segmented control
+   *   qt-storyteller-mode*   — Normal / Manual / Turns / Storyteller segmented control
    *   qt-storyteller-board*  — the round's board above the composer
    *   qt-storyteller-card*   — one seat's bid
    *
    * Plain CSS (no @apply) so the theme-storybook mirror is the same text.
    * Every colour reads a --qt-storyteller-* hook with a token fallback.
    */
-  /* The turn-mode control: Normal / Paused / Storyteller, one segmented row. */
+  /*
+   * The turn-mode control: Normal / Manual / Turns / Storyteller, a 2x2 grid.
+   * Four equal slots in one row cannot hold "Storyteller" in a sidebar once a
+   * theme uppercases and letter-spaces its buttons, so it is two rows; the
+   * 1px gap over the border colour draws the dividers.
+   */
   .qt-storyteller-mode {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
     width: 100%;
+    background: var(--qt-storyteller-mode-border, var(--color-border));
     border: 1px solid var(--qt-storyteller-mode-border, var(--color-border));
     border-radius: var(--qt-storyteller-mode-radius, 0.5rem);
     overflow: hidden;
   }
   .qt-storyteller-mode-option {
-    flex: 1 1 0%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -9261,9 +9834,6 @@
     color: var(--qt-storyteller-mode-fg, var(--color-muted-foreground));
     border: none;
     transition: background-color 150ms, color 150ms;
-  }
-  .qt-storyteller-mode-option + .qt-storyteller-mode-option {
-    border-left: 1px solid var(--qt-storyteller-mode-border, var(--color-border));
   }
   .qt-storyteller-mode-option:hover {
     background: var(--qt-storyteller-mode-hover-bg, var(--color-accent));
@@ -9400,6 +9970,199 @@
     margin-bottom: 0.5rem;
     font-size: 0.75rem;
     color: var(--qt-storyteller-meta-fg, var(--color-muted-foreground));
+  }
+  /* ==========================================================================
+     SOURCE: app/styles/qt-components/_green-room.css — The Green Room: the opening's narration panel in the Salon
+     ========================================================================== */
+  /**
+   * The Green Room — the panel above the Salon transcript that narrates a
+   * chat's opening (and a watched join), then folds to one line; closed, it
+   * docks into the transcript as a collapsed card.
+   *
+   *   qt-green-room            — the panel (sits on a qt-card)
+   *   qt-green-room-docked     — closed: docked in the transcript as a card
+   *   qt-green-room-header     — the headline/disclosure row plus close button
+   *   qt-green-room-headline   — running: pulse, title, status
+   *   qt-green-room-disclosure — folded: the "curtain is up" toggle
+   *   qt-green-room-toggle     — docked while running: the record's toggle
+   *   qt-green-room-close      — pinned: close (dock into the transcript)
+   *   qt-green-room-body       — the record: wardrobe, packing, activity log
+   *   qt-green-room-character* — one character's consultation line
+   *   qt-green-room-log*       — the activity log
+   *
+   * Plain CSS (no @apply) so the theme-storybook mirror is the same text.
+   * Every colour reads a --qt-green-room-* hook with a token fallback.
+   *
+   * Component: app/salon/[id]/components/GreenRoomPanel.tsx
+   */
+  .qt-green-room {
+    width: 100%;
+    max-width: var(--qt-green-room-max-width, 48rem);
+    margin: 0.75rem auto;
+    padding: 0.75rem;
+  }
+  .qt-green-room-docked {
+    margin: 0.5rem auto;
+    padding: 0.5rem 0.75rem;
+  }
+  .qt-green-room-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .qt-green-room-header > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .qt-green-room-close, .qt-green-room-toggle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    font-size: 1.25rem;
+    line-height: 1;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+    background: none;
+    border: none;
+    border-radius: 0.25rem;
+    padding: 0;
+    cursor: pointer;
+  }
+  .qt-green-room-toggle {
+    font-size: 0.875rem;
+    min-width: 1rem;
+  }
+  .qt-green-room-close:hover, .qt-green-room-toggle:hover {
+    color: var(--qt-green-room-title, var(--color-foreground));
+  }
+  .qt-green-room-headline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+  }
+  .qt-green-room-pulse {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--qt-green-room-pulse, var(--color-accent));
+    animation: qt-green-room-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  @keyframes qt-green-room-pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+  .qt-green-room-title {
+    font-weight: 600;
+    color: var(--qt-green-room-title, var(--color-foreground));
+  }
+  .qt-green-room-status {
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+  }
+  .qt-green-room-disclosure {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    text-align: left;
+    font-size: 0.875rem;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  .qt-green-room-disclosure:disabled {
+    cursor: default;
+  }
+  .qt-green-room-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    max-height: var(--qt-green-room-body-max-height, 16rem);
+    overflow-y: auto;
+  }
+  .qt-green-room-character {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .qt-green-room-character-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .qt-green-room-character-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--qt-green-room-title, var(--color-foreground));
+  }
+  .qt-green-room-character-note {
+    font-size: 0.75rem;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+  }
+  .qt-green-room-spinner {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 9999px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    opacity: 0.7;
+    animation: qt-green-room-spin 1s linear infinite;
+  }
+  @keyframes qt-green-room-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .qt-green-room-packed {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+  }
+  .qt-green-room-activity {
+    border-top: 1px solid var(--qt-green-room-divider, var(--color-border));
+    padding-top: 0.5rem;
+  }
+  .qt-green-room-activity-label {
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+  }
+  .qt-green-room-log {
+    max-height: var(--qt-green-room-log-max-height, 10rem);
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+  .qt-green-room-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .qt-green-room-log-time {
+    margin-right: 0.5rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .qt-green-room-pulse, .qt-green-room-spinner {
+      animation: none;
+    }
   }
   /* ==========================================================================
      SOURCE: app/styles/qt-components/_intervention.css — Pascal operator intervention: hold dialog, toggles, badge
@@ -11170,6 +11933,17 @@
      EMPTY STATES
      ========================================================================== */
   /**
+   * Loading state container — a spinner and its words, centred in a row.
+   * (qt-empty-state is the column layout for an icon, title and action.)
+   * Add `py-12` for a taller pane.
+   */
+  .qt-loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-block: calc(var(--spacing, 0.25rem) * 8);
+  }
+  /**
    * Empty state container
    */
   .qt-empty-state {
@@ -11620,6 +12394,368 @@
   .qt-gallery-caption-detail {
     font-size: 0.625rem;
     opacity: 0.85;
+  }
+  /* ==========================================================================
+     SOURCE: app/styles/qt-components/_settings.css — The Foundry: settings rail, search, personas, attention strip
+     ========================================================================== */
+  /**
+   * The Foundry (the Settings page) — the rail, the search field, the persona
+   * row and badges, the attention strip, and the provider cards.
+   *
+   *   qt-settings-layout           — rail + column grid
+   *   qt-settings-rail             — the <nav> of groups (hidden below md)
+   *   qt-settings-rail-item        — one group button (aria-current="page" when selected)
+   *   qt-settings-rail-count       — a group's match count while searching
+   *   qt-settings-rail-select      — the <select> that stands in for the rail below md
+   *   qt-settings-search           — the search field's wrapper
+   *   qt-settings-persona-row      — the persona chips above the rail (the hub)
+   *   qt-settings-persona-chip     — one persona chip (aria-pressed when it is the lens)
+   *   qt-settings-persona-badge    — the small avatar a card wears in its header
+   *   qt-settings-lens-banner      — "Showing <persona>'s settings" + Show everything
+   *   qt-settings-attention        — the strip of lit conditions; qt-settings-attention-chip one of them
+   *   qt-settings-advanced-divider — the "Advanced" rule inside a group
+   *   qt-settings-provider-card    — one provider's card in Connections → Providers
+   *
+   * Plain CSS (no @apply) so the theme-storybook mirror is the same text. Every
+   * colour reads a --qt-settings-* hook with a token fallback.
+   *
+   * Component: app/settings/SettingsView.tsx
+   */
+  .qt-settings-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+  @media (min-width: 768px) {
+    .qt-settings-layout {
+      grid-template-columns: 14rem minmax(0, 1fr);
+      align-items: start;
+    }
+  }
+  .qt-settings-rail {
+    display: none;
+    flex-direction: column;
+    gap: 0.25rem;
+    position: sticky;
+    top: 1rem;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--qt-settings-rail-border, var(--color-border));
+    background: var(--qt-settings-rail-bg, var(--color-background));
+    @supports (color: color-mix(in lab, red, red)) {
+      background: var(--qt-settings-rail-bg, color-mix(in srgb, var(--color-background) 88%, transparent));
+    }
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  @media (min-width: 768px) {
+    .qt-settings-rail {
+      display: flex;
+    }
+  }
+  .qt-settings-rail-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--qt-settings-rail-fg, var(--color-foreground));
+    font-size: 0.875rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .qt-settings-rail-item:hover {
+    background: var(--qt-settings-rail-hover-bg, var(--color-accent));
+    color: var(--qt-settings-rail-hover-fg, var(--color-accent-foreground));
+  }
+  .qt-settings-rail-item:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  .qt-settings-rail-item[aria-current="page"] {
+    background: var(--qt-settings-rail-active-bg, var(--color-primary));
+    color: var(--qt-settings-rail-active-fg, var(--color-primary-foreground));
+    font-weight: 600;
+  }
+  .qt-settings-rail-item[aria-current="page"]:hover {
+    background: var(--qt-settings-rail-active-bg, var(--color-primary));
+    color: var(--qt-settings-rail-active-fg, var(--color-primary-foreground));
+  }
+  .qt-settings-rail-count {
+    margin-left: auto;
+    min-width: 1.5rem;
+    padding: 0 0.375rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    text-align: center;
+    background: var(--qt-settings-rail-count-bg, var(--color-muted));
+    color: var(--qt-settings-rail-count-fg, var(--color-foreground));
+  }
+  .qt-settings-rail-select {
+    display: block;
+    width: 100%;
+  }
+  @media (min-width: 768px) {
+    .qt-settings-rail-select {
+      display: none;
+    }
+  }
+  .qt-settings-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .qt-settings-search > .qt-icon {
+    position: absolute;
+    left: 0.75rem;
+    width: 1rem;
+    height: 1rem;
+    color: var(--color-muted-foreground);
+    pointer-events: none;
+  }
+  .qt-settings-search > input {
+    width: 100%;
+    padding-left: 2.25rem;
+  }
+  .qt-settings-search mark, .qt-collapsible-card-header mark {
+    background: var(--qt-settings-mark-bg, var(--color-warning));
+    @supports (color: color-mix(in lab, red, red)) {
+      background: var(--qt-settings-mark-bg, color-mix(in srgb, var(--color-warning) 35%, transparent));
+    }
+    color: inherit;
+    border-radius: 0.125rem;
+    padding: 0 0.0625rem;
+  }
+  .qt-settings-persona-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .qt-settings-persona-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+    border-radius: 9999px;
+    border: 1px solid var(--qt-settings-chip-border, var(--color-border));
+    background: var(--qt-settings-chip-bg, var(--color-background));
+    @supports (color: color-mix(in lab, red, red)) {
+      background: var(--qt-settings-chip-bg, color-mix(in srgb, var(--color-background) 88%, transparent));
+    }
+    color: var(--qt-settings-chip-fg, var(--color-foreground));
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+  .qt-settings-persona-chip:hover {
+    background: var(--qt-settings-chip-hover-bg, var(--color-accent));
+    color: var(--qt-settings-chip-hover-fg, var(--color-accent-foreground));
+  }
+  .qt-settings-persona-chip:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  .qt-settings-persona-chip[aria-pressed="true"] {
+    border-color: var(--qt-settings-chip-active-border, var(--color-primary));
+    background: var(--qt-settings-chip-active-bg, var(--color-primary));
+    color: var(--qt-settings-chip-active-fg, var(--color-primary-foreground));
+  }
+  .qt-settings-persona-chip img {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 9999px;
+    -o-object-fit: cover;
+       object-fit: cover;
+  }
+  .qt-settings-persona-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 9999px;
+    overflow: hidden;
+    border: 1px solid var(--qt-settings-badge-border, var(--color-border));
+    background: var(--qt-settings-badge-bg, var(--color-muted));
+    color: var(--color-foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .qt-settings-persona-badge img {
+    width: 100%;
+    height: 100%;
+    -o-object-fit: cover;
+       object-fit: cover;
+  }
+  .qt-settings-lens-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--qt-settings-lens-border, var(--color-primary));
+    background: var(--qt-settings-lens-bg, var(--color-background));
+    @supports (color: color-mix(in lab, red, red)) {
+      background: var(--qt-settings-lens-bg, color-mix(in srgb, var(--color-background) 88%, transparent));
+    }
+  }
+  .qt-settings-attention {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .qt-settings-attention-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    border: 1px solid var(--qt-settings-attention-border, var(--color-warning));
+    background: var(--qt-settings-attention-bg, var(--color-background));
+    @supports (color: color-mix(in lab, red, red)) {
+      background: var(--qt-settings-attention-bg, color-mix(in srgb, var(--color-background) 80%, var(--color-warning) 20%));
+    }
+    color: var(--qt-settings-attention-fg, var(--color-foreground));
+    font-size: 0.8125rem;
+    text-decoration: none;
+  }
+  .qt-settings-attention-chip:hover {
+    background: var(--qt-settings-attention-hover-bg, var(--color-background));
+    @supports (color: color-mix(in lab, red, red)) {
+      background: var(--qt-settings-attention-hover-bg, color-mix(in srgb, var(--color-background) 65%, var(--color-warning) 35%));
+    }
+  }
+  .qt-settings-attention-chip:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  .qt-settings-advanced-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1.5rem 0 1rem;
+    color: var(--color-muted-foreground);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .qt-settings-advanced-divider::before, .qt-settings-advanced-divider::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--color-border);
+  }
+  /* --- Provider cards (Connections → Providers → By provider) --- */
+  .qt-settings-provider-card {
+    border-radius: 0.5rem;
+    border: 1px solid var(--qt-settings-provider-border, var(--color-border));
+    background: var(--qt-settings-provider-bg, var(--color-card));
+    color: var(--color-card-foreground);
+  }
+  .qt-settings-provider-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .qt-settings-provider-card-header:hover {
+    background: var(--qt-settings-provider-hover-bg, var(--color-card));
+    @supports (color: color-mix(in lab, red, red)) {
+      background: var(--qt-settings-provider-hover-bg, color-mix(in srgb, var(--color-card) 85%, var(--color-foreground) 15%));
+    }
+  }
+  .qt-settings-provider-card-header:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  .qt-settings-provider-card-title {
+    font-weight: 600;
+    font-size: 1rem;
+  }
+  .qt-settings-provider-card-summary {
+    color: var(--color-muted-foreground);
+    font-size: 0.8125rem;
+  }
+  .qt-settings-provider-card-chevron {
+    flex-shrink: 0;
+    transition: transform 150ms ease;
+  }
+  .qt-settings-provider-card-chevron-open {
+    transform: rotate(180deg);
+  }
+  .qt-settings-provider-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 0 1rem 1rem;
+    border-top: 1px solid var(--qt-settings-provider-border, var(--color-border));
+    padding-top: 1rem;
+  }
+  .qt-settings-provider-card-add {
+    border-style: dashed;
+  }
+  .qt-settings-provider-profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .qt-settings-provider-profile-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .qt-settings-provider-profile-row:hover {
+    border-color: var(--qt-settings-provider-border, var(--color-border));
+    background: var(--qt-settings-provider-hover-bg, var(--color-card));
+    @supports (color: color-mix(in lab, red, red)) {
+      background: var(--qt-settings-provider-hover-bg, color-mix(in srgb, var(--color-card) 85%, var(--color-foreground) 15%));
+    }
+  }
+  .qt-settings-provider-profile-row:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  .qt-settings-provider-kind-badge {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    min-width: 6.5rem;
+    justify-content: center;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid var(--qt-settings-provider-kind-border, var(--color-border));
+    background: var(--qt-settings-provider-kind-bg, var(--color-muted));
+    color: var(--qt-settings-provider-kind-fg, var(--color-foreground));
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+  .qt-settings-provider-profile-model {
+    color: var(--color-muted-foreground);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   /* ==========================================================================
      SOURCE: app/styles/qt-components/_typography.css — Semantic typography classes
@@ -12613,6 +13749,19 @@
     border-color: var(--color-border);
   }
   /**
+   * Form-field border — the input token, for controls that are not a full
+   * qt-input (a bare file input, a dropdown trigger styled like a field).
+   */
+  .qt-border-input {
+    border-color: var(--color-input);
+  }
+  /**
+   * Default divider colour between children (pairs with divide-x / divide-y).
+   */
+  .qt-divide-default > :not(:last-child) {
+    border-color: var(--color-border);
+  }
+  /**
    * Primary color border
    */
   .qt-border-primary {
@@ -12815,10 +13964,36 @@
     color: var(--color-foreground);
   }
   /**
+   * Foreground text at 80% — a quieter heading or sub-label.
+   */
+  .qt-text\/80 {
+    color: var(--color-foreground);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in srgb, var(--color-foreground) 80%, transparent);
+    }
+  }
+  /**
    * Secondary/muted text color
    */
   .qt-text-secondary {
     color: var(--color-muted-foreground);
+  }
+  /**
+   * Brand (primary-colour) text — the theme's --color-primary as a text colour.
+   * Not to be confused with qt-text-primary, which is the primary *foreground*
+   * text colour. Use for brand-tinted links and hover accents.
+   */
+  .qt-text-brand {
+    color: var(--color-primary);
+  }
+  /**
+   * Brand text at 70% — an eyebrow caption in the brand colour.
+   */
+  .qt-text-brand\/70 {
+    color: var(--color-primary);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in srgb, var(--color-primary) 70%, transparent);
+    }
   }
   /**
    * Warning text color
@@ -13028,6 +14203,61 @@
     color: var(--color-foreground);
   }
   /**
+   * Hover text colour: foreground at 80%.
+   */
+  .hover\:qt-text\/80:hover {
+    color: var(--color-foreground);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in srgb, var(--color-foreground) 80%, transparent);
+    }
+  }
+  /**
+   * Hover text colour: brand at 80% — the hover of a brand-coloured link.
+   */
+  .hover\:qt-text-brand\/80:hover {
+    color: var(--color-primary);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in srgb, var(--color-primary) 80%, transparent);
+    }
+  }
+  /**
+   * Hover background: accent, and accent at 80%.
+   */
+  .hover\:qt-bg-accent:hover {
+    background-color: var(--color-accent);
+  }
+  .hover\:qt-bg-accent\/80:hover {
+    background-color: var(--color-accent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in srgb, var(--color-accent) 80%, transparent);
+    }
+  }
+  /**
+   * Hover border: the input token.
+   */
+  .hover\:qt-border-input:hover {
+    border-color: var(--color-input);
+  }
+  /**
+   * Focus ring colour — the theme's ring token on :focus and :focus-visible.
+   * Pairs with a ring width (`focus:ring-2`, `focus-visible:ring-2`); on its
+   * own it draws nothing. Use it instead of `focus:ring-ring` /
+   * `focus:ring-primary`, so every focus ring follows the theme's ring colour.
+   */
+  .qt-focus-ring:focus, .qt-focus-ring:focus-visible {
+    --tw-ring-color: var(--color-ring);
+  }
+  /**
+   * Brand ring colour — a selected or highlighted item's ring (pairs with a
+   * ring width such as `ring-2`), and its hover form.
+   */
+  .qt-ring-brand {
+    --tw-ring-color: var(--color-primary);
+  }
+  .hover\:qt-ring-brand:hover {
+    --tw-ring-color: var(--color-primary);
+  }
+  /**
    * Hover background for destructive/10
    */
   .hover\:qt-bg-destructive\/10:hover {
@@ -13232,6 +14462,9 @@
   }
   .hover\:qt-text-primary:hover {
     color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+  .hover\:qt-text-brand:hover {
+    color: var(--color-primary);
   }
   /**
    * Hover borders — the outline that answers a pointer on cards, drop zones
@@ -13485,6 +14718,17 @@
    */
   .qt-bg-toggle-knob {
     background-color: var(--qt-toggle-knob-bg, white);
+  }
+  /**
+   * Toggle switch track, off state. The muted fill alone sits at ~1.1:1 on a
+   * card, so an "off" switch all but vanished (WCAG 1.4.11); the inset edge in
+   * the muted-foreground colour outlines the track at 3:1 or better in every
+   * bundled theme without moving the knob.
+   * Usage: ${on ? 'qt-bg-primary' : 'qt-toggle-off'} on the track element.
+   */
+  .qt-toggle-off {
+    background-color: var(--color-muted);
+    box-shadow: inset 0 0 0 1px var(--color-muted-foreground);
   }
   /* ==========================================================================
      PROSE DARK MODE UTILITY

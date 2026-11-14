@@ -23,6 +23,7 @@ import { useCallback, useMemo, useState } from 'react'
 import {
   OWN_TIER,
   childFolderRows,
+  pluralize,
   tierLabel,
   tierRows,
   type BrowserViewItem,
@@ -236,7 +237,7 @@ export interface ItemFolderHandlersOptions<T extends Item> {
   describeError: (error: unknown, fallback: string) => string
 }
 
-export const pluralize = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
+export { pluralize }
 
 export function useItemFolderHandlers<T extends Item>({
   state,

@@ -26,15 +26,15 @@ jest.mock('@/lib/wardrobe/expand-composites', () => ({
   detectComponentCycles: jest.fn(() => []),
 }));
 
-jest.mock('@/lib/database/repositories/vault-overlay/vault-readers', () => ({
+jest.mock('@/lib/wardrobe/vault-readers', () => ({
   readCharacterVaultWardrobe: jest.fn(),
 }));
 
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-sync', () => ({
+jest.mock('@/lib/wardrobe/vault-sync', () => ({
   projectVaultWardrobe: jest.fn(),
 }));
 
-import { resolveWardrobeMount } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
+import { resolveWardrobeMount } from '@/lib/wardrobe/vault-writes';
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
 
 describe('resolveWardrobeMount — archived characters', () => {

@@ -554,6 +554,9 @@ async function applyAction(
         notes.push(`promoted cold row ${target.id} to hot`)
       }
 
+      // A regenerate or backfill dates its observation to the source message,
+      // as its inserts are (`insertRow`), never wall-clock now (A13).
+      const observedAt = row.sourceMessageTimestamp ?? new Date().toISOString()
       const withFootnotes =
         action.kind === 'reinforce' || (action.kind === 'promote-and-reinforce' && action.withFootnotes)
       let memory: Memory | null
@@ -568,7 +571,7 @@ async function applyAction(
             narrativeTime: row.narrativeTime,
             entities: row.entities,
             reinforcementCount: 1,
-            lastReinforcedAt: new Date().toISOString(),
+            lastReinforcedAt: observedAt,
           }],
           FOLD_CAPS,
         )
@@ -579,7 +582,7 @@ async function applyAction(
         const counted = await getRepositories().memories.incrementReinforcement(
           target.characterId,
           target.id,
-          new Date().toISOString(),
+          observedAt,
           1,
         )
         memory = counted ? { ...target, ...counted } : null

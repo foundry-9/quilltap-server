@@ -7,6 +7,7 @@
  * GET /api/v1/characters/[id]?action=cascade-preview - Get cascade delete preview
  * GET /api/v1/characters/[id]?action=default-partner - Get default partner
  * GET /api/v1/characters/[id]?action=get-tags - Get character tags
+ * GET /api/v1/characters/[id]?action=vault-health - Keystones present / parsing, from the row (works on a broken vault)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,28 +17,81 @@ import { getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
 import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar';
 import { isCharacterAlbumRelativePath } from '@/lib/photos/photos-paths';
-import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
+import { CHARACTER_VAULT_FILE_PATHS } from '@/lib/characters/vault/layout';
+import { inspectCharacterVault } from '@/lib/characters/vault/health';
+import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
+import { readPagination } from '@/lib/api/query-params';
+import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
-import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import {
+  getConciergeProvenance,
+  getConciergeReason,
+  getConciergeState,
+} from '@/lib/services/dangerous-content/chat-override';
 import { deriveScriptoriumStatus } from '@/lib/scriptorium/status';
+import { resolveInventoryLocation } from '@/lib/inventory/location';
 
+
+/** The GET actions that answer from the hydrated character. */
+const HYDRATED_ACTIONS = [
+  'export',
+  'chats',
+  'cascade-preview',
+  'default-partner',
+  'get-tags',
+  'stats',
+  'depiction-guidelines',
+] as const;
+type HydratedAction = (typeof HYDRATED_ACTIONS)[number];
 
 export async function handleGet(
   req: NextRequest,
   ctx: RequestContext,
   id: string
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
+  const { repos } = ctx;
 
-  // First verify ownership for all actions
-  const character = await repos.characters.findById(id);
-  if (!exists(character)) {
+  // Existence first, from the row: the vault-health report must answer for a
+  // character whose vault is broken, which a hydrated read refuses with a 503.
+  const row = await repos.characters.findByIdRaw(id);
+  if (!exists(row)) {
     return notFound('Character');
   }
+
+  // Every other answer needs the hydrated character, loaded only when asked.
+  const hydrated = async () => {
+    const character = await repos.characters.findById(id);
+    return exists(character) ? hydratedGetHandlers(req, ctx, id, character) : null;
+  };
+  const viaHydrated = (action: HydratedAction | null) => async (): Promise<NextResponse> => {
+    const handlers = await hydrated();
+    if (!handlers) return notFound('Character');
+    return action === null ? handlers.fallback() : handlers.actions[action]();
+  };
+
+  return dispatchAction(
+    req,
+    {
+      ...(Object.fromEntries(HYDRATED_ACTIONS.map((a) => [a, viaHydrated(a)])) as Record<HydratedAction, () => Promise<NextResponse>>),
+      // Which keystones are present, which parse, and why not — from the row
+      // and the file list, never the hydrated character.
+      'vault-health': async () => NextResponse.json({ health: await inspectCharacterVault(row) }),
+    },
+    viaHydrated(null),
+  );
+}
+
+function hydratedGetHandlers(
+  req: NextRequest,
+  ctx: RequestContext,
+  id: string,
+  character: Character
+): { actions: Record<HydratedAction, () => Promise<NextResponse>>; fallback: () => Promise<NextResponse> } {
+  const { user, repos } = ctx;
 
   const handleGetDefault = async (): Promise<NextResponse> => {
     try {
@@ -59,7 +113,8 @@ export async function handleGet(
     }
   };
 
-  return dispatchAction(req, {
+  return {
+    actions: {
     export: async () => {
       try {
         // A tombstone export would be a pruned shell, and the full bundle
@@ -90,7 +145,7 @@ export async function handleGet(
           return new NextResponse(new Uint8Array(pngBuffer), {
             headers: {
               'Content-Type': 'image/png',
-              'Content-Disposition': `attachment; filename="${character.name}.png"`,
+              'Content-Disposition': buildContentDisposition(`${character.name}.png`, 'attachment'),
             },
           });
         }
@@ -99,7 +154,7 @@ export async function handleGet(
         return new NextResponse(JSON.stringify(stCharacter, null, 2), {
           headers: {
             'Content-Type': 'application/json',
-            'Content-Disposition': `attachment; filename="${character.name}.json"`,
+            'Content-Disposition': buildContentDisposition(`${character.name}.json`, 'attachment'),
           },
         });
       } catch (error) {
@@ -112,8 +167,7 @@ export async function handleGet(
       try {
         const { searchParams } = req.nextUrl;
         const search = searchParams.get('search')?.toLowerCase() || '';
-        const limit = parseInt(searchParams.get('limit') || '10', 10);
-        const offset = parseInt(searchParams.get('offset') || '0', 10);
+        const { limit, offset } = readPagination(req, { defaultLimit: 10, maxLimit: 200 });
 
         const allChats = await repos.chats.findByCharacterId(id);
         const userChats = allChats.filter((chat) => chat.userId === user.id);
@@ -292,13 +346,35 @@ export async function handleGet(
         // Fan out the independent counts. The vault file links are fetched once
         // and reused for photos, knowledge, and core so we don't re-query the
         // mount-index three times for the same mount point.
-        const [memoryCount, chats, wardrobeItems, fileLinks, memberships] = await Promise.all([
+        const [memoryCount, chats, wardrobeItems, fileLinks, memberships, inventoryLocation] = await Promise.all([
           repos.memories.countByCharacterId(id),
           repos.chats.findByCharacterId(id),
           repos.wardrobe.findByCharacterId(id),
           mountPointId ? repos.docMountFileLinks.findByMountPointId(mountPointId) : Promise.resolve([]),
           repos.groupCharacterMembers.findByCharacterId(id),
+          // Read probe only — never `ensure`, so the stats never provision a folder.
+          resolveInventoryLocation('character', id, repos, user.id),
         ]);
+
+        // The character's own Inventory shelf (live objects only), split the
+        // way the header shows it: archetypes (classes, never carried), kits,
+        // and plain objects; "carried" is what arrives in a chat with them —
+        // `equippedByDefault` on a non-archetype, kits included, exactly as
+        // `applyInventoryDefaults` selects it.
+        const inventoryRecords = inventoryLocation ? await inventoryLocation.readItems(false) : [];
+        let inventoryArchetypes = 0;
+        let inventoryKits = 0;
+        let inventoryObjects = 0;
+        let inventoryCarried = 0;
+        for (const record of inventoryRecords) {
+          if (record.isArchetype) {
+            inventoryArchetypes++;
+            continue;
+          }
+          if (record.kind === 'kit') inventoryKits++;
+          else inventoryObjects++;
+          if (record.equippedByDefault) inventoryCarried++;
+        }
 
         // Photos counts through `isCharacterAlbumRelativePath`, the same
         // predicate `listCharacterGallery` filters on, so this figure and the
@@ -307,10 +383,15 @@ export async function handleGet(
         // Knowledge = files under the `Knowledge/` folder; Core = files under
         // the `Core/` packet folder (the periodically re-offered core whisper).
         // All three count link rows.
+        // Subprompts / Mail / Scenarios count the files in those vault folders
+        // for the character page's Vault card.
         const presentPaths = new Set<string>();
         let photos = 0;
         let knowledge = 0;
         let core = 0;
+        let subprompts = 0;
+        let mail = 0;
+        let scenarioFiles = 0;
         for (const link of fileLinks) {
           const rel = link.relativePath.toLowerCase();
           presentPaths.add(rel);
@@ -319,6 +400,9 @@ export async function handleGet(
           }
           if (rel.startsWith('knowledge/')) knowledge++;
           if (rel.startsWith('core/')) core++;
+          if (rel.startsWith('subprompts/')) subprompts++;
+          if (rel.startsWith('mail/')) mail++;
+          if (rel.startsWith('scenarios/')) scenarioFiles++;
         }
 
         // Character Files = how many of the canonical managed vault files are
@@ -326,9 +410,15 @@ export async function handleGet(
         // path so historic case-variant duplicate rows (`Manifesto.md` +
         // `manifesto.md`) can't push the figure past the canonical set size.
         let characterFiles = 0;
-        for (const corePath of SINGLE_FILE_OVERLAY_PATHS) {
+        const missingCharacterFiles: string[] = [];
+        for (const corePath of CHARACTER_VAULT_FILE_PATHS) {
           if (presentPaths.has(corePath.toLowerCase())) characterFiles++;
+          else missingCharacterFiles.push(corePath);
         }
+
+        // The vault's own name, for the page's link into the Scriptorium.
+        const vaultMount = mountPointId ? await repos.docMountPoints.findById(mountPointId) : null;
+        const vault = vaultMount ? { mountPointId: vaultMount.id, name: vaultMount.name } : null;
 
         // Hydrate the character's groups (membership lives in the mount-index;
         // color/icon come from each group's document store via findByIds).
@@ -346,15 +436,33 @@ export async function handleGet(
           memories: memoryCount,
           conversations: chats.length,
           wardrobeItems: wardrobeItems.length,
+          inventory: {
+            objects: inventoryObjects,
+            archetypes: inventoryArchetypes,
+            kits: inventoryKits,
+            carriedByDefault: inventoryCarried,
+          },
           photos,
           scenarios: character.scenarios?.length ?? 0,
           knowledge,
           core,
           characterFiles,
-          characterFilesTotal: SINGLE_FILE_OVERLAY_PATHS.length,
+          characterFilesTotal: CHARACTER_VAULT_FILE_PATHS.length,
+          missingCharacterFiles: mountPointId ? missingCharacterFiles : [],
+          subprompts,
+          mail,
+          scenarioFiles,
         };
 
-        return NextResponse.json({ stats, groups });
+        logger.debug('[Characters v1] Character stats computed', {
+          characterId: id,
+          characterFiles,
+          missing: stats.missingCharacterFiles.length,
+          hasVault: Boolean(vault),
+          inventory: stats.inventory,
+        });
+
+        return NextResponse.json({ stats, groups, vault });
       } catch (error) {
         logger.error('[Characters v1] Error computing character stats', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to compute character stats');
@@ -371,5 +479,7 @@ export async function handleGet(
       const content = await readStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME);
       return successResponse({ content: content ?? '' });
     },
-  }, handleGetDefault);
+    },
+    fallback: handleGetDefault,
+  };
 }

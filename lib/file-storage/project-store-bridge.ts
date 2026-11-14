@@ -28,7 +28,13 @@ import {
   sanitizeLeafName,
 } from './bridge-path-helpers';
 
-const STORAGE_KEY_PREFIX = 'mount-blob:';
+import {
+  isMountBlobStorageKey,
+  parseMountBlobStorageKey,
+  buildMountBlobStorageKey,
+} from './mount-blob-key';
+
+export { isMountBlobStorageKey, parseMountBlobStorageKey, buildMountBlobStorageKey };
 
 interface ProjectStoreTarget {
   mountPointId: string;
@@ -62,37 +68,6 @@ export async function getProjectDocumentStore(
   } catch (error) {
     return null;
   }
-}
-
-/**
- * True when the storageKey refers to a blob in a database-backed mount point.
- */
-export function isMountBlobStorageKey(storageKey: string | null | undefined): boolean {
-  return typeof storageKey === 'string' && storageKey.startsWith(STORAGE_KEY_PREFIX);
-}
-
-/**
- * Parse a mount-blob storageKey into its components. Returns null for keys
- * that don't match the scheme, so callers can use the result as a type guard.
- */
-export function parseMountBlobStorageKey(
-  storageKey: string
-): { mountPointId: string; blobId: string } | null {
-  if (!isMountBlobStorageKey(storageKey)) return null;
-  const rest = storageKey.slice(STORAGE_KEY_PREFIX.length);
-  const sep = rest.indexOf(':');
-  if (sep < 1 || sep === rest.length - 1) return null;
-  return {
-    mountPointId: rest.slice(0, sep),
-    blobId: rest.slice(sep + 1),
-  };
-}
-
-/**
- * Build a storage key for a freshly-written mount blob.
- */
-export function buildMountBlobStorageKey(mountPointId: string, blobId: string): string {
-  return `${STORAGE_KEY_PREFIX}${mountPointId}:${blobId}`;
 }
 
 interface WriteProjectFileInput {

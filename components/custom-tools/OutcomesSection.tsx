@@ -693,7 +693,7 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
           disabled={disabled}
           className={`qt-input w-44 text-sm ${subject.key.trim() === '' ? 'qt-input-error' : ''}`}
           aria-label="Progress key"
-          title={'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity. A progression they do not carry simply doesn\u2019t match.'}
+          title={'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity, public. A progression they do not carry simply doesn\u2019t match.'}
         />
       )}
 

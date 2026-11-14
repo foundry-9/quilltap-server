@@ -16,7 +16,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
-import type { Character } from '@/lib/schemas/character.types';
+import type { CharacterRow } from '@/lib/schemas/character.types';
 import {
   resolveMailPath,
   deliverLetter,
@@ -28,10 +28,10 @@ import {
 const logger = createServiceLogger('PostOffice:Deliver');
 
 export interface ComposeAndDeliverParams {
-  /** The character signing the letter (sender). */
-  sender: Character;
-  /** The recipient character. */
-  recipient: Character;
+  /** The character signing the letter (sender). Only the row is needed. */
+  sender: CharacterRow;
+  /** The recipient character. Only the row is needed. */
+  recipient: CharacterRow;
   /** Body markdown the sender wrote — never includes frontmatter. */
   message: string;
   /**

@@ -6,7 +6,7 @@ url: /aurora
 
 > **[Open this page in Quilltap](/aurora)**
 
-This guide covers character deletion, relationships, partnerships, NPCs, and other management tasks.
+This guide covers character deletion, relationships, conversation partners, NPCs, and other management tasks.
 
 ## The Character Card
 
@@ -40,6 +40,8 @@ What this action does:
 - Re-imports the built-in first-run Lorian and Riya dossiers
 - Reuses prior character IDs when those records existed, keeping linked references steady
 
+Should Lorian and Riya have arrived at your establishment as mere silhouettes — a letter where a portrait ought to be, an empty personality, no system prompt, no wardrobe to speak of — they were the casualties of a first-run mishap now mended. A press of **Reset Built-in Characters** sends for the genuine articles, portraits and all. The hollow pair may have left behind two retired stores in the Scriptorium, named in the manner of *Lorian Version … Store* and *Riya Version … Store*; they hold nothing of consequence and may be dismissed at your leisure.
+
 ## Help Tools
 
 Certain characters may be granted the privilege of peering behind the curtain — reading your Quilltap settings and searching the documentation on your behalf, rather like a well-informed butler who knows where everything is kept.
@@ -56,8 +58,8 @@ When enabled for a character, two tools become available:
 ### Enabling Help Tools
 
 1. Open a character in **Aurora** (`/aurora`)
-2. Navigate to the **Profiles** tab
-3. Find the **Help Tools** section
+2. Open the **Chat Defaults** section
+3. Find **Help tools**
 4. Select **Enabled** from the dropdown
 5. The setting saves automatically
 
@@ -114,7 +116,7 @@ excused from the export wizard; their bundle *is* their export.
 ### How to Archive
 
 1. Open the character's page from the **Characters** roster
-2. Click **Archive** in the action column
+2. Open the **⋯** menu in the header and choose **Archive…**
 3. The confirmation spells out precisely what is packed and what stays —
    read it, then click **Archive**
 
@@ -196,20 +198,20 @@ Delete a character when:
 5. Click **Delete** to confirm
 6. Character is permanently removed
 
-**Method 2: From Character View**
+**Method 2: From the Character's Page**
 
-1. Open character to view
-2. Click menu icon (⋮ or ⋯) at top
-3. Select **Delete Character**
+1. Open the character's page
+2. Click the **⋯** menu in the header
+3. Select **Delete…**
 4. Confirmation dialog appears
 5. Click **Confirm Delete**
 6. Character removed
 
-**Method 3: From Character Edit**
+**Method 3: From the Character's Page**
 
-1. Open character edit
-2. Click menu icon at top
-3. Select **Delete Character**
+1. Open the character's page
+2. Click the **⋯** menu in the header
+3. Select **Delete…**
 4. Confirmation appears
 5. Click **Confirm**
 
@@ -299,11 +301,11 @@ Characters can have relationships with other characters:
 
 **When editing character:**
 
-1. Edit character
-2. Edit **Details** tab
-3. In Description or Personality section
+1. Open the character's page
+2. Go to the **Details** section
+3. In the Description or Personality field of the **Dossier** card
 4. Add relationship information
-5. Save
+5. It saves itself as you write
 
 ### Linking Relationships
 
@@ -347,8 +349,8 @@ Loyal ally of Captain Vex. Secret rival of his brother Daniel."
 
 To see all relationships a character has:
 
-1. Open character view
-2. Look in Description or Personality
+1. Open the character's page
+2. Look in Description or Personality on **Details**
 3. All mentioned relationships visible
 4. Click links to view related characters
 5. Build relationship map by following links
@@ -357,149 +359,53 @@ To see all relationships a character has:
 
 If characters' relationships change:
 
-1. Edit character
-2. Update Description or Personality
+1. Open the character's page
+2. Update Description or Personality in the **Dossier** card on **Details**
 3. Modify relationship information
-4. Save changes
+4. It saves itself as you write
 
 **Example:**
 
 - Before: "Alice is best friends with James"
 - After: "Alice was best friends with James, but they had a falling out"
 
-## Partnerships
+## Conversation Partners
 
-Partnerships let characters work together in conversations.
+There is no such thing in Quilltap as a standing "partnership" of characters. What there *is* comes in two parts, and between them they cover everything one might hope a partnership would do.
 
-### What are Partnerships?
+### The Default Conversation Partner
 
-A partnership is when two or three characters work together:
+A character played by the AI may name, in advance, the person who usually sits across the table from them: a **conversation partner**, which is to say one of *your* characters — a character you play yourself, rather than the AI.
 
-**When you chat with a partnership:**
+1. Open the character's page in Aurora
+2. Go to **Chat Defaults**
+3. Under **Conversation partner**, choose one of your user-controlled characters (or **No default partner**)
 
-- Multiple characters participate in conversation
-- AI switches between character voices
-- Creates group roleplay scenario
-- Characters interact with each other
+The choice saves itself the moment it is made. Thereafter, when you start a new chat with this character, the New Chat dialog's **Play As** picker arrives already set to that partner, and you take your seat in their shoes. You may, of course, pick someone else — or **Chat as yourself** — on any particular occasion; the default is a suggestion, not a summons.
 
-**Examples:**
+A few points of etiquette:
 
-- Detective and partner detective investigate crime
-- Two adventurers go on quest together
-- Group of friends having conversation
+- **Only characters you play may be partners.** A character becomes yours to play when you tick *You play this character* on their Abilities, or when their connection profile is set to **User Acts As Character**. If you have none yet, the section says so and offers to help you make one.
+- **A character you play has no partner.** You are already sitting in their chair; the picker is shown disabled.
+- **A partner is a default for new chats only.** Changing it does nothing to chats already under way.
 
-### Setting Up Partnerships
+### Several Characters at Once
 
-**Method 1: Create partnership with character**
+For a scene with two, three or a crowd of AI-played characters — the detective *and* her partner, the whole adventuring party, a dinner of friends — start a chat with more than one character, or add participants to a chat already in progress. Each character speaks in their own voice, from their own prompt and memories, and they address one another as readily as they address you. All of that is covered at length in [Multi-Character Chats](chat-multi-character.md) and [Chat Participants](chat-participants.md).
 
-1. Open character
-2. Look for **Partners** or **Partnership** section
-3. Click **Add Partner** or **Create Partnership**
-4. Select second character
-5. Optional: Add third character
-6. Save
+### Choosing Good Company
 
-**Method 2: Create partnership during chat**
+Whether it is your partner or a full cast, the old rules of good society apply:
 
-1. Start chat with one character
-2. Click chat options or add participant
-3. Select second character to add
-4. Conversation becomes partnership
-5. Both characters participate
-
-**Method 3: Create partnership from Characters list**
-
-1. From characters page
-2. Select multiple characters (if multi-select available)
-3. Click **Create Partnership** or similar
-4. Partnership created
-5. Can be used in chats
-
-### Using Partnerships
-
-**Starting chat with partnership:**
-
-1. Go to **Chats** or **Conversations**
-2. Click **New Chat** or **+ New Conversation**
-3. Select first character or partnership
-4. If partnership: see all members listed
-5. Start conversation
-6. All partners participate
-
-**During partnership chat:**
-
-- AI generates responses as each character
-- Characters interact with you and each other
-- Feels like group conversation
-- Can ask characters what they think of each other
-
-### Character Switching in Partnerships
-
-Some views allow switching character focus:
-
-1. During partnership chat
-2. Click character name at top or in chat
-3. Switch which character's perspective to emphasize
-4. Or see all perspectives equally
-
-### Managing Partnerships
-
-**Removing from partnership:**
-
-1. Edit character
-2. Go to Partners section
-3. Click **X** next to partner
-4. Partner removed from this partnership
-5. Save
-
-**Dissolving partnership:**
-
-1. If partnership is saved/named
-2. Delete partnership (see character deletion)
-3. Partnership removed but characters remain
-
-**Updating partnership:**
-
-1. Edit character
-2. Add or remove partners
-3. Modify partnership settings
-4. Save
-
-### Partnership Best Practices
-
-| Good Partnership | Poor Partnership |
-|------------------|------------------|
+| Good Company | Poor Company |
+|--------------|--------------|
 | Complementary characters | Similar personalities |
 | Different perspectives | Redundant characters |
-| Defined relationship | Strangers thrown together |
+| A defined relationship | Strangers thrown together |
 | Clear individual voices | Indistinguishable voices |
-| Purposeful pairing | Random selection |
+| A purpose for the pairing | Random selection |
 
-### Creating Great Partnerships
-
-**Strategy 1: Opposites**
-
-- Pair opposite personality types
-- Example: Serious detective + Humorous sidekick
-- Creates dynamic dialogue
-
-**Strategy 2: Defined Relationship**
-
-- Characters with established relationship
-- Example: Close friends, rivals, siblings
-- Pre-existing dynamic enhances chat
-
-**Strategy 3: Complementary Skills**
-
-- Different expertise or knowledge
-- Example: Scientist + Historian
-- Can discuss topics from different angles
-
-**Strategy 4: Conflicting Goals**
-
-- Characters with different objectives
-- Example: Law officer + Criminal informant
-- Creates interesting tension/dynamic
+A serious detective wants a sidekick with a sense of humour; a scientist and a historian can argue a subject from two ends; a lawman and his informant make a pleasing tension. Characters with an established history — friends, rivals, siblings — bring that history to the table, and you may record it in their [relationships](#character-relationships).
 
 ## NPCs (Non-Player Characters)
 
@@ -509,16 +415,16 @@ NPCs are characters typically controlled by AI that interact with player charact
 
 **Mark character as NPC:**
 
-1. When creating character, tag with "NPC"
-2. Or add tag later in organization
-3. Indicates character is AI-controlled
+1. Open the character's page and go to **Abilities**
+2. In the **Control** card, tick **Non-player character** — or choose **Convert to NPC** from the header's **⋯** menu
+3. The header shows an **NPC** badge from then on
 
 **Quick NPC creation:**
 
 1. Go to **Characters** > **Create Character**
 2. Add quick NPC with minimal info
 3. Tag as "NPC"
-4. Use in chats and partnerships
+4. Use in chats, alone or alongside other characters
 5. Quick way to generate opponents/allies
 
 ### Ad-Hoc NPCs in Chat
@@ -548,7 +454,7 @@ During a chat, create temporary NPCs on the fly:
 
 - Create antagonist NPCs
 - Create supporting cast
-- Use partnerships for multi-NPC scenes
+- Put several NPCs in one chat for crowded scenes
 
 **For roleplay:**
 

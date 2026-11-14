@@ -45,88 +45,23 @@ import {
   DEFAULT_CHEAP_LLM_CONFIG,
   type CheapLLMConfig,
 } from '@/lib/llm/cheap-llm';
-import { selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
+import {
+  GREEN_ROOM_LLM_TIMEOUT_MS,
+  GREEN_ROOM_TIMED_OUT,
+  resolveGreenRoomSubprompts,
+  selectGreenRoomLLM,
+  withGreenRoomTimeout,
+} from '@/lib/chat/opening/green-room/model';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
 import { resolveWardrobeInstructions } from '@/lib/wardrobe/wardrobe-instructions';
-import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { createSharedTierLoader, loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
 import { buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit';
 import { filterByPronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 import { loadRecentOpenings } from '@/lib/wardrobe/recent-openings';
-import type {
-  CreationProgressEmitter,
-  OutfitPreviewSlots,
-} from '@/lib/chat/creation-progress';
+import type { GreenRoomNarrator, OutfitPreviewSlots } from '@/lib/chat/opening/narrator';
 
 type Repos = RepositoryContainer;
-
-/**
- * The subprompts in play for `characterId`'s LLM-controlled seat in `chatId`,
- * resolved from the persisted participant record. `[]` when the chat or seat
- * cannot be found, or on any read error — the outfit choice never waits on
- * this.
- */
-async function resolveSubpromptsForSeat(
-  repos: Repos,
-  chatId: string,
-  characterId: string,
-): Promise<SubpromptForPrompt[]> {
-  try {
-    const chat = await repos.chats.findById(chatId);
-    const seat = chat?.participants.find(
-      (p) => p.characterId === characterId && p.controlledBy !== 'user' && p.status !== 'removed',
-    );
-    const selected = seat?.selectedSubpromptIds ?? [];
-    if (selected.length === 0) return [];
-    // Loaded lazily: the subprompts module reaches into the mount-index
-    // document store, which this orchestrator otherwise never touches.
-    const { resolveSelectedSubprompts } = await import('@/lib/subprompts/subprompts');
-    return await resolveSelectedSubprompts(characterId, selected);
-  } catch (error) {
-    logger.warn('[applyOutfitSelections] Could not read subprompts for the green room — continuing without', {
-      chatId,
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-}
-
-/**
- * How long to wait on the wardrobe LLM for one character before giving up and
- * dressing them in their defaults.
- *
- * A healthy call on a cheap model is a second or two. Observed in the wild: a
- * provider that took 2m32s to emit 19 tokens, which — back when this loop was
- * serial — stalled the entire chat-creation request behind one character.
- * Concurrency stops one straggler from blocking the others; this stops a
- * straggler from blocking the chat.
- *
- * Note the underlying request is not aborted, only abandoned; it will still be
- * billed and still land in the LLM log.
- */
-const OUTFIT_LLM_TIMEOUT_MS = 60_000;
-
-/** Sentinel distinguishing "gave up waiting" from any legitimate resolution. */
-const TIMED_OUT = Symbol('outfit-llm-timed-out');
-
-/**
- * Resolve `work`, or `TIMED_OUT` if it takes longer than `ms`.
- *
- * The timer is always cleared so a fast resolution doesn't hold the event loop
- * open, and a late rejection from `work` is absorbed by the race rather than
- * surfacing as an unhandled rejection.
- */
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const guard = new Promise<typeof TIMED_OUT>((resolve) => {
-    timer = setTimeout(() => resolve(TIMED_OUT), ms);
-  });
-  return Promise.race([work, guard]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
-}
 
 /**
  * Context needed for LLM-based outfit selection during chat creation or
@@ -155,12 +90,12 @@ export interface OutfitSelectionContext {
    */
   sourceChatId?: string | null;
   /**
-   * Optional progress emitter for the chat-creation status dialog. Only the
+   * The Green Room's narrator (`lib/chat/opening/narrator.ts`). Only the
    * `llm_choose` mode narrates (it's the slow, LLM-backed path): it announces
    * "consulting the wardrobe for <name>" before the call and publishes the
-   * decided four-slot outfit afterwards. Inert when absent.
+   * decided outfit afterwards. Silent when absent.
    */
-  progress?: CreationProgressEmitter;
+  narrator?: GreenRoomNarrator;
   /**
    * Why these characters are being dressed, for the wear ledger: a new chat
    * (`'chat-start'`, the default), a seat added or reactivated
@@ -204,7 +139,7 @@ function outfitSlotCount(slots: EquippedSlots): number {
 
 /**
  * Map a resolved outfit's per-slot leaf items into the lightweight preview DTO
- * the status dialog renders (no full `WardrobeItem` payloads over the wire).
+ * the Green Room panel renders (no full `WardrobeItem` payloads over the wire).
  */
 function toOutfitPreviewSlots(
   leafItemsBySlot: Record<WardrobeItemType, WardrobeItem[]>,
@@ -228,7 +163,7 @@ function toOutfitPreviewSlots(
  * - 'none': Set every slot to an empty array
  * - 'previous_chat': Copy equipped state from the source chat (continuation flow)
  * - 'llm_choose': Ask a cheap LLM to pick an outfit, fall back to defaults on
- *   failure, on an unflagged empty answer, or on {@link OUTFIT_LLM_TIMEOUT_MS}
+ *   failure, on an unflagged empty answer, or on `GREEN_ROOM_LLM_TIMEOUT_MS`
  *
  * Runs in two phases:
  *
@@ -271,22 +206,22 @@ export async function applyOutfitSelections(
     return pending;
   };
 
-  /** Publish a resolved outfit to the status dialog. Never throws. */
+  /** Publish a resolved outfit to the Green Room. Never throws. */
   const publishPreview = async (
     characterId: string,
     characterName: string,
     slots: EquippedSlots,
   ): Promise<void> => {
-    if (!context?.progress) return;
+    if (!context?.narrator) return;
     try {
       const resolved = resolveEquippedOutfitForCharacter(await getPool(characterId), slots);
-      context.progress.wardrobeResult(
+      context.narrator.wardrobeResult(
         characterId,
         characterName,
         toOutfitPreviewSlots(resolved.leafItemsBySlot),
       );
     } catch (resolveError) {
-      logger.warn('[applyOutfitSelections] Failed to resolve outfit for progress preview', {
+      logger.warn('[applyOutfitSelections] Failed to resolve outfit for the Green Room preview', {
         chatId,
         characterId,
         error: getErrorMessage(resolveError, 'Unknown error'),
@@ -378,7 +313,7 @@ export async function applyOutfitSelections(
             }
 
             if (character && wardrobeItems.length > 0) {
-              const resolved = selectCheapLLMFromProfiles(
+              const resolved = selectGreenRoomLLM(
                 await repos.connections.findAll(),
                 context.cheapLLMConfig || DEFAULT_CHEAP_LLM_CONFIG,
               );
@@ -390,7 +325,7 @@ export async function applyOutfitSelections(
                 // wardrobe for <name>…" until the result lands.
                 consulted = true;
                 consultedName = character.name;
-                context.progress?.wardrobeStart(characterId, character.name);
+                context.narrator?.wardrobeStart(characterId, character.name);
 
                 // Optional dressing instructions: nearest tier's
                 // `Wardrobe/instructions.md` wins (character > group >
@@ -414,7 +349,7 @@ export async function applyOutfitSelections(
                 // room too. The chat row is already persisted at every call
                 // site (creation, add-participant, merge), so the seat's
                 // selection is readable here. Soft-fails to none.
-                const subprompts = await resolveSubpromptsForSeat(repos, chatId, characterId);
+                const subprompts = await resolveGreenRoomSubprompts(repos, chatId, characterId);
                 if (subprompts.length > 0) {
                   logger.debug('[applyOutfitSelections] Subprompts in play for the green room', {
                     chatId,
@@ -431,7 +366,7 @@ export async function applyOutfitSelections(
                 });
 
                 const startedAt = Date.now();
-                const result = await withTimeout(
+                const result = await withGreenRoomTimeout(
                   chooseLLMOutfit(
                     character.name,
                     character.description || null,
@@ -447,14 +382,13 @@ export async function applyOutfitSelections(
                     subprompts,
                     { recentOpenings },
                   ),
-                  OUTFIT_LLM_TIMEOUT_MS,
                 );
 
-                if (result === TIMED_OUT) {
+                if (result === GREEN_ROOM_TIMED_OUT) {
                   logger.warn('[applyOutfitSelections] LLM outfit selection timed out, falling back to defaults', {
                     chatId,
                     characterId,
-                    timeoutMs: OUTFIT_LLM_TIMEOUT_MS,
+                    timeoutMs: GREEN_ROOM_LLM_TIMEOUT_MS,
                     poolSize: wardrobeItems.length,
                   });
                 } else {
@@ -526,7 +460,7 @@ export async function applyOutfitSelections(
               chatId,
               characterId,
             });
-            context?.progress?.log(`${consultedName} chose to wear nothing at all.`, 'info');
+            context?.narrator?.log(`${consultedName} chose to wear nothing at all.`, 'info');
           }
           await publishPreview(characterId, consultedName, chosen.slots);
           return chosen;
@@ -535,8 +469,8 @@ export async function applyOutfitSelections(
         const fallback = buildDefaultOutfitWithCredit((await getPool(characterId)).wearable());
         // If we already told the dialog we were consulting this character,
         // resolve their panel with the default we fell back to (and note it).
-        if (consulted && context?.progress) {
-          context.progress.log(`${consultedName} settled on their usual attire.`, 'warn');
+        if (consulted && context?.narrator) {
+          context.narrator.log(`${consultedName} settled on their usual attire.`, 'warn');
           await publishPreview(characterId, consultedName, fallback.slots);
         }
         return fallback;

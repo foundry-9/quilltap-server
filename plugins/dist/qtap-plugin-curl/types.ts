@@ -102,6 +102,15 @@ export interface UrlPattern {
   /** Whether this is a wildcard pattern */
   isWildcard: boolean;
 
-  /** Regex for matching */
-  regex: RegExp;
+  /** Required scheme (without colon), or null for http and https */
+  scheme: string | null;
+
+  /** Matches the parsed, lowercased hostname */
+  hostRegex: RegExp;
+
+  /** Required port, or null for the scheme's default port */
+  port: string | null;
+
+  /** Matches the parsed path at a segment boundary, or null for any path */
+  pathRegex: RegExp | null;
 }

@@ -16,6 +16,9 @@ import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plug
 import { logger } from '@/lib/logger';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { pluginRegistry } from '@/lib/plugins';
+import { resolveInside, PathOutsideBaseError } from '@/lib/paths/resolve-inside';
+import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
 
 // MIME types for font files
 const FONT_MIME_TYPES: Record<string, string> = {
@@ -108,12 +111,33 @@ export async function GET(
       );
     }
 
-    // Security: Validate the path doesn't escape the plugin directory
-    const normalizedPath = path.normalize(fontEntry.filePath);
-    if (normalizedPath.includes('..')) {
-      logger.warn('Path traversal attempt detected', {
+    // The font must resolve inside its theme's directory (symlinks resolved
+    // for installed bundles).
+    const themeRoot = theme.source === 'bundle' && theme.bundlePath
+      ? theme.bundlePath
+      : pluginRegistry.get(pluginName)?.pluginPath;
+    if (!themeRoot) {
+      logger.warn('Theme directory not found for font', {
         context: 'GET /api/themes/fonts',
-        filePath: fontEntry.filePath,
+        pluginName,
+      });
+      return NextResponse.json(
+        { error: 'Font not found' },
+        { status: 404 }
+      );
+    }
+    let fontFilePath: string;
+    try {
+      fontFilePath = await resolveInside(themeRoot, fontEntry.src, {
+        realpath: theme.source === 'bundle',
+      });
+    } catch (err) {
+      if (!(err instanceof PathOutsideBaseError)) throw err;
+      logger.warn('Font path outside its theme directory', {
+        context: 'GET /api/themes/fonts',
+        themeId: theme.id,
+        src: fontEntry.src,
+        reason: err.reason,
       });
       return NextResponse.json(
         { error: 'Invalid path' },
@@ -123,28 +147,26 @@ export async function GET(
 
     // Read the font file
     try {
-      const fontBuffer = await fs.readFile(fontEntry.filePath);
+      const fontBuffer = await fs.readFile(fontFilePath);
 
       // Determine MIME type from extension
-      const ext = path.extname(fontEntry.filePath).toLowerCase();
-      const mimeType = FONT_MIME_TYPES[ext] || 'application/octet-stream';// Return the font with appropriate headers
-      return new NextResponse(new Uint8Array(fontBuffer), {
-        status: 200,
-        headers: {
-          'Content-Type': mimeType,
-          'Content-Length': fontBuffer.length.toString(),
-          // Cache for 1 year (fonts don't change often)
-          'Cache-Control': 'public, max-age=31536000, immutable',
-          // CORS headers for font loading
-          'Access-Control-Allow-Origin': '*',
-        },
+      const ext = path.extname(fontFilePath).toLowerCase();
+      const mimeType = FONT_MIME_TYPES[ext] || 'application/octet-stream';
+      logger.debug('Serving theme font', { context: 'GET /api/themes/fonts', themeId: theme.id, src: fontEntry.src });
+      // Same-origin `@font-face` loads need no CORS header, and ignore the
+      // `attachment` disposition non-inline types receive.
+      return serveStoredBytes(new Uint8Array(fontBuffer), {
+        mimeType,
+        filename: path.basename(fontFilePath),
+        // Cache for 1 year (fonts don't change often)
+        cacheControl: 'public, max-age=31536000, immutable',
       });
     } catch (readError) {
       logger.error(
         'Failed to read font file',
         {
           context: 'GET /api/themes/fonts',
-          filePath: fontEntry.filePath,
+          filePath: fontFilePath,
         },
         readError instanceof Error ? readError : undefined
       );

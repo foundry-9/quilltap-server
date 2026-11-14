@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=chat&section=autonomous-rooms
+url: /settings?section=autonomous-rooms
 ---
 
 # Autonomous Rooms — Private Character-to-Character Salons
@@ -76,7 +76,7 @@ Selection rules: at least two LLM-controlled characters, no user-controlled part
 
 A room's standing arrangements need not be fixed at its christening. The very card that sets a room's schedule, budgets, visibility, and tool authorizations may be summoned again at any hour to **revise** them, by way of the **Edit Enclave** dialog. ("Enclave" is the Estate's fond name for an autonomous room; the dialog wears it on its brass plate.) Two bell-pulls ring for the same butler:
 
-- From **Data & System → Chat → Scheduled Autonomous Rooms**, each room in the management list now carries an **Edit** button beside its Pause and Stop.
+- From **Settings → Games & Tools → Scheduled Autonomous Rooms**, each room in the management list now carries an **Edit** button beside its Pause and Stop.
 - From within a room's own transcript, the chat sidebar's **Organize** card offers an **Edit Enclave** button — shown only when the chat at hand is, in fact, an autonomous room.
 
 The dialog presents the familiar settings — the room's title, the cron expression and freshness window, the four budget caps, the dear-tokens tickbox, the visibility, and the destructive-tool authorization — filled in with the room's present arrangements. Adjust whichever you please and click **Save Changes**.
@@ -94,7 +94,7 @@ Note that the dialog governs a room's *settings* — its schedule, its purse, it
 
 In an autonomous room, characters may invoke any tool they would ordinarily be permitted to invoke, with one narrowing: tools whose effect is **destroy** — deletion that cannot be undone from inside Quilltap: deleting a document, a folder or a stored file, discarding a letter, removing an annotation, and any plugin or MCP tool declared to delete — are disabled unless the room's owner has pre-authorized them at room creation. Every tool declares its effect (none, read, write or destroy), so the set is no longer a hand-kept list; and the refusal is enforced when the tool is called, not merely by leaving it off the menu. The rationale is straightforward: the householder is not present to confirm; the conservative default is to refuse.
 
-The user-level **destructive-tool policy** (`/settings?tab=chat`, *Autonomous Rooms* → *Destructive tools*) acts as a ceiling. Setting it to **Always refuse** disables the destructive set across every autonomous room regardless of any permissive per-room flag. Setting it to **Opt in per room** honors the per-room authorization, when granted.
+The user-level **destructive-tool policy** (`/settings?section=autonomous-rooms`, *Autonomous Rooms* → *Destructive tools*) acts as a ceiling. Setting it to **Always refuse** disables the destructive set across every autonomous room regardless of any permissive per-room flag. Setting it to **Opt in per room** honors the per-room authorization, when granted.
 
 A character invoking the image-generation tool deliberately is unaffected — that path runs as in any chat. What is suppressed in autonomous rooms is the *automatic* image pipelines: the Lantern's story-background trigger does not fire, and wardrobe changes do not regenerate avatars. (Wardrobe state still advances. Only the image generation is skipped.)
 
@@ -108,9 +108,9 @@ A running room wears green; a paused or idle one wears slate. Hover, and the too
 
 ## Visibility — discoverable, not surfaced
 
-Autonomous-room transcripts are by default **hidden from the main Salon chat list**. They are findable, exportable as `.qtap` archives, and reviewable from a dedicated **Autonomous Rooms** subsection under Data & System settings. Other households may choose a more open default at the Chat-tab setting:
+Autonomous-room transcripts are by default **hidden from the main Salon chat list**. They are findable, exportable as `.qtap` archives, and reviewable from a dedicated **Autonomous Rooms** subsection of the Games & Tools group in Settings. Other households may choose a more open default at the Autonomous Rooms card setting:
 
-- **Owner only** (default) — autonomous-room chats are hidden from the main Salon list; surface from the Autonomous Rooms subsection of Data & System.
+- **Owner only** (default) — autonomous-room chats are hidden from the main Salon list; surface from the Autonomous Rooms card of Settings → Games & Tools.
 - **Household** — visible to authorized household members per the existing chat-sharing rules.
 - **Open** — visible in the main Salon chat list alongside ordinary chats.
 
@@ -128,12 +128,12 @@ This dual safeguard (a prompt-level instruction *and* a structural provenance fl
 
 ## Settings reference
 
-- `/settings?tab=chat&section=autonomous-rooms` — user-level defaults:
+- `/settings?section=autonomous-rooms` — user-level defaults:
   - **Daily token budget** (left empty by default — no daily allowance is imposed until the householder sets one)
   - **Default freshness window** (default 12h)
   - **Default visibility** (Owner only / Household / Open)
   - **Destructive-tool policy** (Always refuse / Opt in per room)
-- `/settings?tab=chat&section=autonomous-room-schedules` — autonomous-room management list:
+- `/settings?section=autonomous-room-schedules` — autonomous-room management list:
   - Per-room run-state badge, last run, next run, run budgets consumed
   - **Pause**, **Resume**, **Stop**, and **Edit** controls
   - Direct link to the chat transcript and `.qtap` export
@@ -142,11 +142,11 @@ This dual safeguard (a prompt-level instruction *and* a structural provenance fl
 ## In-Chat Navigation
 
 ```
-help_navigate(url: "/settings?tab=chat&section=autonomous-rooms")
+help_navigate(url: "/settings?section=autonomous-rooms")
 ```
 
 ```
-help_navigate(url: "/settings?tab=chat&section=autonomous-room-schedules")
+help_navigate(url: "/settings?section=autonomous-room-schedules")
 ```
 
 ## Related Pages

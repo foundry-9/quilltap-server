@@ -43,25 +43,25 @@ import {
 
 describe('buildAgentModeInstructions', () => {
   it('includes guidance not to submit for conversational or relational messages', () => {
-    const instructions = buildAgentModeInstructions(10);
+    const instructions = buildAgentModeInstructions(10, 'research');
     // Regression: before the fix the instructions didn't explicitly forbid
     // calling submit_final_response in response to relational messages.
     expect(instructions).toMatch(/Do NOT submit.*conversational.*relational/i);
   });
 
   it('includes guidance not to re-summarize work from a previous turn', () => {
-    const instructions = buildAgentModeInstructions(10);
+    const instructions = buildAgentModeInstructions(10, 'research');
     // The ghost-wrap-up pattern is explicitly called out as forbidden.
     expect(instructions).toMatch(/Do NOT submit.*previous turn/i);
   });
 
   it('includes the maxTurns value', () => {
-    const instructions = buildAgentModeInstructions(7);
+    const instructions = buildAgentModeInstructions(7, 'research');
     expect(instructions).toContain('7');
   });
 
   it('mentions submit_final_response tool by name', () => {
-    const instructions = buildAgentModeInstructions(10);
+    const instructions = buildAgentModeInstructions(10, 'research');
     expect(instructions).toContain('submit_final_response');
   });
 });

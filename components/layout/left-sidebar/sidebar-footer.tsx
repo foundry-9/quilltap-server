@@ -22,6 +22,9 @@ import { useHelpChatOptional } from '@/components/providers/help-chat-provider'
 import { useBrahmaConsoleOptional } from '@/components/providers/brahma-console-provider'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import { useInventoryDialogOptional } from '@/components/providers/inventory-dialog-provider'
+import { useAtlasDialogOptional } from '@/components/providers/atlas-dialog-provider'
+import { useQueryClient } from '@tanstack/react-query'
+import { chatProjectIdQuery } from '@/lib/hooks/use-character-wardrobe-items'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { standaloneDocKey, type DocumentStandaloneTabPayload } from '@/lib/workspace/types'
 import { Icon } from '@/components/ui/icon'
@@ -109,6 +112,8 @@ export function SidebarFooter() {
   const brahmaConsole = useBrahmaConsoleOptional()
   const wardrobeDialog = useWardrobeDialogOptional()
   const inventoryDialog = useInventoryDialogOptional()
+  const atlasDialog = useAtlasDialogOptional()
+  const queryClient = useQueryClient()
   const pathname = usePathname()
   const router = useRouter()
   // Inside the workspace, the Brahma Console and the rail Wardrobe open as
@@ -277,6 +282,38 @@ export function SidebarFooter() {
             <Icon name="inventory" className="qt-left-sidebar-item-icon w-7 h-7" />
           </button>
         )}
+        {atlasDialog && (
+          <button
+            type="button"
+            onClick={async () => {
+              // As the Inventory: a browse/edit tab in the workspace. From a
+              // Salon chat the dialog opens on the chat's project (General
+              // when it has none); elsewhere on General.
+              if (inWorkspace) {
+                workspace!.openTab('atlas')
+                return
+              }
+              const chatMatch = pathname?.match(SALON_CHAT_PATH_RE)
+              if (!chatMatch) {
+                atlasDialog.open()
+                return
+              }
+              const chatId = chatMatch[1]
+              let projectId: string | null = null
+              try {
+                projectId = await queryClient.fetchQuery(chatProjectIdQuery(chatId))
+              } catch (error) {
+                console.warn('[SidebarFooter] Could not read the chat\'s project for the Atlas', { chatId, error })
+              }
+              atlasDialog.open(projectId ? { chatId, projectId } : { chatId })
+            }}
+            className="qt-left-sidebar-item justify-center px-0"
+            title="The Atlas"
+            aria-label="The Atlas"
+          >
+            <Icon name="atlas" className="qt-left-sidebar-item-icon w-7 h-7" />
+          </button>
+        )}
 
         <button
           type="button"
@@ -306,7 +343,7 @@ export function SidebarFooter() {
               <Icon name="themes" className="qt-left-sidebar-item-icon w-7 h-7" />
             </button>
             {openPopout === 'themes' && (
-              <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
+              <div className="absolute bottom-full left-0 mb-1 w-56 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
                 <NavUserMenuThemeContent onThemeSelected={handleThemeSelected} />
               </div>
             )}
@@ -324,7 +361,7 @@ export function SidebarFooter() {
               <QuickHideIcon hasHidden={hasAnyHidden} className="qt-left-sidebar-item-icon w-7 h-7" />
             </button>
             {openPopout === 'quickHide' && (
-              <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
+              <div className="absolute bottom-full left-0 mb-1 w-56 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
                 <NavUserMenuQuickHideContent />
               </div>
             )}

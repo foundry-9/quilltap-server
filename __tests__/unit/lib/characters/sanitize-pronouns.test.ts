@@ -17,16 +17,16 @@ import { sanitizePronouns } from '@/lib/characters/sanitize-pronouns'
 
 describe('sanitizePronouns — accepted', () => {
   it('takes a well-formed trio', () => {
-    expect(sanitizePronouns({ subject: 'she', object: 'her', possessive: 'hers' })).toEqual({
+    expect(sanitizePronouns({ subject: 'she', object: 'her', possessive: 'her' })).toEqual({
       subject: 'she',
       object: 'her',
-      possessive: 'hers',
+      possessive: 'her',
     })
   })
 
   it('trims each field', () => {
-    expect(sanitizePronouns({ subject: ' they ', object: '\tthem', possessive: 'theirs\n' })).toEqual(
-      { subject: 'they', object: 'them', possessive: 'theirs' }
+    expect(sanitizePronouns({ subject: ' they ', object: '\tthem', possessive: 'their\n' })).toEqual(
+      { subject: 'they', object: 'them', possessive: 'their' }
     )
   })
 
@@ -106,5 +106,23 @@ describe('sanitizePronouns — rejected', () => {
 
   it('rejects the whole trio when only one field is a placeholder', () => {
     expect(sanitizePronouns({ subject: 'she', object: 'her', possessive: 'none' })).toBeUndefined()
+  })
+})
+
+describe('sanitizePronouns possessive form', () => {
+  it('takes the independent possessive of a standard set as its determiner, so the preset matches', () => {
+    expect(sanitizePronouns({ subject: 'she', object: 'her', possessive: 'hers' })).toEqual({
+      subject: 'she',
+      object: 'her',
+      possessive: 'her',
+    })
+    expect(sanitizePronouns({ subject: 'They', object: 'them', possessive: 'Theirs' })?.possessive).toBe('their')
+  })
+
+  it('leaves custom sets and determiners alone', () => {
+    expect(sanitizePronouns({ subject: 'he', object: 'him', possessive: 'his' })?.possessive).toBe('his')
+    expect(sanitizePronouns({ subject: 'xe', object: 'xem', possessive: 'xyrs' })?.possessive).toBe('xyrs')
+    // "hers" with a non-matching set is the author's choice, not a slip
+    expect(sanitizePronouns({ subject: 'they', object: 'them', possessive: 'hers' })?.possessive).toBe('hers')
   })
 })

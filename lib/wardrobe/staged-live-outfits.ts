@@ -26,6 +26,7 @@
 
 import {
   addIdToSlot,
+  bySlot,
   cloneEquippedSlots,
   equippedSlotsEqual,
   isComposite,
@@ -226,4 +227,81 @@ export function breakApartBundleGesture(
   itemsById: ReadonlyMap<string, WardrobeItem>,
 ): StagedGesture {
   return plain((prev) => breakApartBundleInSlots(prev, bundle, itemsById))
+}
+
+// ============================================================================
+// STAGED ROLLBACK
+//
+// The History tab's "Wear again" stages like every other wardrobe gesture: the
+// recorded outfit lands in the Live tab and nothing is sent until Done. On
+// Done, a character whose staged slots still match the outfit they picked is
+// committed through `?action=wardrobe-rollback` (which moves the history
+// cursor), and one edited further after the pick is committed as an ordinary
+// `set_all` (which appends a new entry).
+// ============================================================================
+
+/** One item of a recorded outfit, as `?action=wardrobe-history` reports it. */
+export interface HistorySlotItemRef {
+  itemId: string
+  archived: boolean
+  missing: boolean
+}
+
+/** A recorded outfit's slots, as `?action=wardrobe-history` reports them. */
+export type HistoryEntrySlots = Partial<Record<WardrobeItemType, readonly HistorySlotItemRef[]>>
+
+/** A rollback staged on the History tab, remembered until Done or discard. */
+export interface StagedRollback {
+  index: number
+  slots: HistoryEntrySlots
+}
+
+/**
+ * What a rollback to `entry` will put on, given what is worn now — the client
+ * mirror of the server's `filterStaleItems` (`lib/wardrobe/history/rollback.ts`):
+ * a missing item is left off, and an archived one is left off unless it is
+ * already worn in that slot.
+ */
+export function rollbackTargetSlots(entry: HistoryEntrySlots, live: EquippedSlots): EquippedSlots {
+  return bySlot((slot) => {
+    const out: string[] = []
+    for (const item of entry[slot] ?? []) {
+      if (item.missing) continue
+      if (item.archived && !(live[slot] ?? []).includes(item.itemId)) continue
+      if (!out.includes(item.itemId)) out.push(item.itemId)
+    }
+    return out
+  })
+}
+
+/**
+ * Stage a return to a recorded outfit. The gesture replaces the slots outright,
+ * so it must be applied to the worn snapshot, not on top of other staging.
+ */
+export function rollbackGesture(entry: HistoryEntrySlots): StagedGesture {
+  return plain((prev) => rollbackTargetSlots(entry, prev))
+}
+
+/**
+ * Which staged rollbacks still stand at Done: the character has a baseline, no
+ * outfit claims ride beside the slots, and the staged slots are exactly what
+ * the rollback would put on. Anything edited since the pick is left to the
+ * ordinary `set_all` flush.
+ */
+export function standingRollbacks(
+  rollbacks: Record<string, StagedRollback>,
+  staged: Record<string, EquippedSlots>,
+  baselines: Record<string, EquippedSlots>,
+  wornBundleIdsByChar: Record<string, readonly string[]> = {},
+): Array<{ characterId: string; index: number; slots: EquippedSlots }> {
+  const out: Array<{ characterId: string; index: number; slots: EquippedSlots }> = []
+  for (const [characterId, rollback] of Object.entries(rollbacks)) {
+    const baseline = baselines[characterId]
+    const slots = staged[characterId]
+    if (!baseline || !slots) continue
+    if ((wornBundleIdsByChar[characterId]?.length ?? 0) > 0) continue
+    if (!equippedSlotsEqual(slots, rollbackTargetSlots(rollback.slots, baseline))) continue
+    out.push({ characterId, index: rollback.index, slots })
+  }
+  return out
 }

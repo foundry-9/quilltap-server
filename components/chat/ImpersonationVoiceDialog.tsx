@@ -20,12 +20,13 @@
  * failed — a dead provider must not trap a draft.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { VoiceRewriteReviewPanel } from '@/components/chat/VoiceRewriteReviewPanel'
 import { getAvatarSrc, type AvatarImageSource } from '@/components/ui/Avatar'
 import { showErrorToast } from '@/lib/toast'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 interface ProfileCard {
@@ -96,7 +97,8 @@ export default function ImpersonationVoiceDialog({
   const isDraft = stage === 'draft'
   // The draft is editable here, but the hook owns the text — a second copy
   // would need an effect to stay in step with it.
-  const [profiles, setProfiles] = useState<ProfileCard[]>([])
+  // Shared connection-profile list, fetched only while the dialog is open.
+  const { data: profiles = [], error: profilesError } = useConnectionProfilesQuery<ProfileCard>({ enabled: isOpen })
   const proposalRef = useRef<HTMLDivElement>(null)
 
   // Bring the proposal into view the moment it arrives. On a short screen the
@@ -108,23 +110,10 @@ export default function ImpersonationVoiceDialog({
   }, [generating])
 
   useEffect(() => {
-    if (!isOpen) return
-    fetch('/api/v1/connection-profiles')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((data) => {
-        setProfiles(
-          (data.profiles || []).map((p: Record<string, unknown>) => ({
-            id: String(p.id),
-            name: String(p.name ?? ''),
-            modelName: String(p.modelName ?? ''),
-            isDefault: Boolean(p.isDefault),
-          })),
-        )
-      })
-      .catch((err) => {
-        showErrorToast(`Failed to load connection profiles: ${err.message}`)
-      })
-  }, [isOpen])
+    if (profilesError) {
+      showErrorToast(`Failed to load connection profiles: ${profilesError.message}`)
+    }
+  }, [profilesError])
 
   const avatar = imagesHidden ? null : getAvatarSrc(avatarSrc ?? null)
   const initial = characterName.charAt(0).toUpperCase()
@@ -205,7 +194,7 @@ export default function ImpersonationVoiceDialog({
 
           {/* The operator's draft */}
           <div className="mb-4" onKeyDown={handleSeedKeyDown}>
-            <label className="block text-sm qt-text-primary mb-2">Your draft</label>
+            <label className="qt-label mb-2">Your draft</label>
             <MarkdownLexicalEditor
               value={seed}
               onChange={onSeedChange}
@@ -218,7 +207,7 @@ export default function ImpersonationVoiceDialog({
           {/* Voice pickers — changing either drops a stale proposal; nothing re-runs until asked. */}
           <div className="mb-4 space-y-3">
             <div>
-              <label htmlFor="impersonation-voice-profile" className="block text-sm qt-text-primary mb-2">
+              <label htmlFor="impersonation-voice-profile" className="qt-label mb-2">
                 How should they say it?
               </label>
               <select
@@ -240,7 +229,7 @@ export default function ImpersonationVoiceDialog({
 
             {showPromptPicker && (
               <div>
-                <label htmlFor="impersonation-voice-prompt" className="block text-sm qt-text-primary mb-2">
+                <label htmlFor="impersonation-voice-prompt" className="qt-label mb-2">
                   System prompt
                 </label>
                 <select

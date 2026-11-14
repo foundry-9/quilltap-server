@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=memory&section=memory-regenerate
+url: /settings?section=memory-regenerate
 ---
 
 # Regenerate the Commonplace Book
 
-> **[Open this page in Quilltap](/settings?tab=memory&section=memory-regenerate)**
+> **[Open this page in Quilltap](/settings?section=memory-regenerate)**
 
 Every so often, a thoughtful proprietor finds themselves staring at the Commonplace Book and wishing — wistfully, regretfully — that the whole charming clutter could be reshelved from scratch. Perhaps the extraction LLM has grown more discerning since the early entries were inscribed; perhaps the gate has been recalibrated; perhaps a small tide of duplicates has washed in from a long-running chat and refused to leave. *Regenerate Memories* is the brass lever that does precisely that: it sweeps every chat-derived memory off the shelves and writes the room afresh, with the current pipeline doing the writing.
 
@@ -27,11 +27,11 @@ Memories whose chat has already been deleted (orphans) are also wiped, since not
 
 ## What About Dangerous Chats?
 
-If a chat is **Unmoderated** and an uncensored text profile is available — either named as the *Uncensored text profile* on the Concierge's desk (`/settings?tab=concierge&section=uncensored-desk`) or found by marking a connection profile as both *Cheap* and *Uncensored-compatible* — that profile will be used to extract memories from that chat. Other chats use your standard cheap LLM as usual. This routing happens automatically; you don't need to do anything special beyond having the dangerous profile configured.
+If a chat is **Unmoderated** and an uncensored text profile is available — either named as the *Uncensored text profile* on the Concierge's desk (`/settings?section=uncensored-desk`) or found by marking a connection profile as both *Cheap* and *Uncensored-compatible* — that profile will be used to extract memories from that chat. Other chats use your standard cheap LLM as usual. This routing happens automatically; you don't need to do anything special beyond having the dangerous profile configured.
 
 ## How Fast the Sweep Runs
 
-How many extraction jobs run shoulder-to-shoulder is no longer set here — it is governed by the single **Simultaneous Labours** dial that presides over *every* background errand. You will find it atop the **Tasks Queue** card in the **Data & System** tab of Settings. Nudge it upward when a capable backend can shoulder more at once; leave it at the modest factory setting of four when in doubt. See [Managing Tasks](system-tasks-queue.md) for the full account.
+How many extraction jobs run shoulder-to-shoulder is no longer set here — it is governed by the single **Simultaneous Labours** dial that presides over *every* background errand. You will find it atop the **Tasks Queue** card in the **Data & Maintenance** group of Settings. Nudge it upward when a capable backend can shoulder more at once; leave it at the modest factory setting of four when in doubt. See [Managing Tasks](system-tasks-queue.md) for the full account.
 
 ## Watching the Sweep
 
@@ -51,7 +51,7 @@ It is **not** the right tool for routine maintenance — that's what *Maintenanc
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=memory&section=memory-regenerate")`
+`help_navigate(url: "/settings?section=memory-regenerate")`
 
 ## Related Settings
 

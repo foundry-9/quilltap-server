@@ -182,7 +182,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
             'embedding_profiles',
             'prompt_templates',
             'files',
-            'projects',
+            // `projects` dropped its userId column (single-user tables carry none)
           ];
 
           // Update the userId foreign key in each related table

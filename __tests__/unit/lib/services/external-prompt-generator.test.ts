@@ -41,12 +41,14 @@ jest.mock('@/lib/services/llm-logging.service', () => ({
   logLLMCall: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { generateExternalPrompt, META_SYSTEM_PROMPT } from '@/lib/services/external-prompt-generator.service';
+import { generateExternalPrompt, buildMetaSystemPrompt } from '@/lib/services/external-prompt-generator.service';
 import {
   CONVERSATIONAL_VOICE_DIRECTION,
   TRUST_SAFEGUARDS_DIRECTION,
   COMPANION_TRUST_DISPOSITION,
   COMPANION_TRUST_DISPOSITION_GATE,
+  STAKES_AND_REACTION_DIRECTION,
+  ASSISTANT_TASK_DIRECTION,
 } from '@/lib/services/character-field-semantics';
 import { createLLMProvider } from '@/lib/llm';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
@@ -416,7 +418,9 @@ describe('generateExternalPrompt', () => {
   });
 });
 
-describe('META_SYSTEM_PROMPT', () => {
+describe('buildMetaSystemPrompt', () => {
+  const META_SYSTEM_PROMPT = buildMetaSystemPrompt('roleplay');
+
   it('carries the shared listening direction and trust safeguards', () => {
     expect(META_SYSTEM_PROMPT).toContain(CONVERSATIONAL_VOICE_DIRECTION);
     expect(META_SYSTEM_PROMPT).toContain(TRUST_SAFEGUARDS_DIRECTION);
@@ -430,5 +434,12 @@ describe('META_SYSTEM_PROMPT', () => {
 
   it('tells the model not to leave the {{user}} placeholder in a standalone prompt', () => {
     expect(META_SYSTEM_PROMPT).toMatch(/never the literal \{\{user\}\} token/);
+  });
+
+  it('follows the character kind: stakes for roleplay, the work for an assistant', () => {
+    expect(buildMetaSystemPrompt('roleplay')).toContain(STAKES_AND_REACTION_DIRECTION);
+    expect(buildMetaSystemPrompt('roleplay')).not.toContain(ASSISTANT_TASK_DIRECTION);
+    expect(buildMetaSystemPrompt('assistant')).toContain(ASSISTANT_TASK_DIRECTION);
+    expect(buildMetaSystemPrompt('assistant')).not.toContain(STAKES_AND_REACTION_DIRECTION);
   });
 });

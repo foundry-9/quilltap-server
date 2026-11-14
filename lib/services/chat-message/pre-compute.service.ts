@@ -29,6 +29,9 @@ import {
 } from './compression-cache.service'
 import { extractMemorySearchKeywords, extractVisibleConversation, stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
 import { buildRecallQuery } from '@/lib/memory/recall/query'
+import { resolveSpeakerNames } from '@/lib/chat/speaker-names'
+import { findActiveUserParticipant } from '@/lib/chat/turn-manager'
+import type { ChatMessage } from '@/lib/memory/cheap-llm-tasks/types'
 import { searchRecall } from '@/lib/memory/recall/search'
 import { buildTurnRecallContext } from '@/lib/memory/recall/tags'
 import { PROACTIVE_RECALL_POOL_SIZE, type PreRecall } from '@/lib/memory/recall/assemble'
@@ -202,10 +205,17 @@ async function proactiveRecallTask(
 
   // Include the new user message that was just saved but isn't in the
   // existingMessages snapshot.
+  // It is the seat the human is speaking as, so the transcript can name it.
   if (!isContinueMode && content) {
+    const speakingAs = findActiveUserParticipant(
+      chat.participants,
+      chat.activeTypingParticipantId,
+      chat.impersonatingParticipantIds,
+    )
     messagesSinceLastSpoke.push({
       role: 'USER',
       content,
+      participantId: speakingAs?.id ?? null,
     } as MessageEvent)
   }
 
@@ -234,18 +244,28 @@ async function proactiveRecallTask(
   }
 
   // Extract keywords via cheap LLM, stripping tool artifacts from assistant
-  // messages so the keyword extractor sees only narrative content.
+  // messages so the keyword extractor sees only narrative content. Lines keep
+  // their seat so the transcript is labelled by speaker, never by role.
+  const speakerNames = await resolveSpeakerNames(chat)
+  const keywordLines = messagesSinceLastSpoke.reduce<ChatMessage[]>((acc, m) => {
+    const role = m.role.toLowerCase() as ChatMessage['role']
+    const seat = m.participantId ? { participantId: m.participantId } : {}
+    if (role === 'assistant') {
+      const cleaned = stripToolArtifacts(m.content || '')
+      if (cleaned) acc.push({ role, content: cleaned, ...seat })
+    } else {
+      acc.push({ role, content: m.content || '', ...seat })
+    }
+    return acc
+  }, [])
+  logger.debug('Distilling recall keywords', {
+    chatId,
+    characterId: character.id,
+    lines: keywordLines.length,
+    namedSeats: speakerNames.size,
+  })
   const keywordResult = await extractMemorySearchKeywords(
-    messagesSinceLastSpoke.reduce<Array<{ role: 'user' | 'assistant' | 'system'; content: string }>>((acc, m) => {
-      const role = m.role.toLowerCase() as 'user' | 'assistant' | 'system'
-      if (role === 'assistant') {
-        const cleaned = stripToolArtifacts(m.content || '')
-        if (cleaned) acc.push({ role, content: cleaned })
-      } else {
-        acc.push({ role, content: m.content || '' })
-      }
-      return acc
-    }, []),
+    keywordLines,
     character.name,
     recallSelection,
     userId,
@@ -256,7 +276,9 @@ async function proactiveRecallTask(
     {
       nowIso: new Date().toISOString(),
       timelineMode: chat.timelineMode ?? 'realtime',
-    }
+    },
+    undefined,
+    speakerNames,
   )
 
   if (!keywordResult.success || !keywordResult.result || keywordResult.result.keywords.length === 0) {
@@ -286,6 +308,7 @@ async function proactiveRecallTask(
   const recallSettings = await getMemoryRecallSettings()
   const recallContext = buildTurnRecallContext({
     chat,
+    characterId: character.id,
     recallSettings,
     turnContext: signals.context ?? null,
     turnTemporal: signals.temporal ?? null,

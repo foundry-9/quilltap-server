@@ -1,22 +1,14 @@
-/**
- * Character Edit Route — thin wrapper around {@link CharacterEditView}. When the
- * tabbed workspace is enabled, redirects into it preserving the character id and
- * `?tab=` deep-link; otherwise renders the view.
- * See `docs/developer/features/complete/tabbed-workspace.md`.
- */
+import { redirect } from 'next/navigation'
+import { legacyCharacterRedirectTarget } from '@/lib/navigation/legacy-character-redirect'
 
-import { CharacterEditView } from './CharacterEditView'
-import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
-
-export default async function EditCharacterPage({
+/** A retired spelling of the character page; see `lib/navigation/legacy-character-redirect.ts`. */
+export default async function Page({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { id } = await params
-  const { tab } = await searchParams
-  redirectToWorkspaceTab('character-edit', { characterId: id, tab })
-  return <CharacterEditView characterId={id} initialTab={tab} />
+  redirect(legacyCharacterRedirectTarget(id, await searchParams))
 }

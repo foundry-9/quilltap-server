@@ -10,8 +10,10 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { withReasoningHeadroom } from '@/lib/llm/reasoning-headroom';
 import { profileParams } from '@/lib/llm/cheap-llm';
 import { parseLLMJson } from '@/lib/llm/llm-json';
+import { DEFAULT_CHARACTER_KIND } from '@/lib/characters/kind';
 import { describeGeneratedProperties, parseGeneratedProperties } from '@/lib/characters/generated-properties';
 
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
@@ -27,6 +29,7 @@ import {
   CONVERSATIONAL_VOICE_DIRECTION,
   TRUST_SAFEGUARDS_DIRECTION,
   GATED_COMPANION_TRUST_DISPOSITION,
+  generatorDirectionFor,
   EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import {
@@ -199,6 +202,11 @@ Respond with JSON:
 
 For exampleDialogues: ${EXAMPLE_DIALOGUE_COVERAGE}`;
 
+/**
+ * Summon From Lore creates a new character, and a new character is a roleplay
+ * character (`DEFAULT_CHARACTER_KIND`); the operator can switch it to Assistant
+ * afterwards. The kind is never guessed from the source material.
+ */
 export const SYSTEM_PROMPTS_PROMPT = `${PROMPT_SEMANTICS}
 
 Create system prompts that instruct an AI how to roleplay as this character.
@@ -217,6 +225,8 @@ The main prompt should capture the character's essence from the source material.
 ${CONVERSATIONAL_VOICE_DIRECTION}
 
 ${TRUST_SAFEGUARDS_DIRECTION}
+
+${generatorDirectionFor(DEFAULT_CHARACTER_KIND)}
 
 ${GATED_COMPANION_TRUST_DISPOSITION}
 Use the relationships array in the Prior Analysis, where one is given, as evidence for that decision.`;
@@ -528,7 +538,6 @@ export function assembleQtapExport(
     physicalDescription: stepResults.physical_descriptions
       ? {
           id: crypto.randomUUID(),
-          name: 'AI Generated',
           headAndShouldersPrompt: (stepResults.physical_descriptions.headAndShouldersPrompt || '').substring(0, 500),
           shortPrompt: (stepResults.physical_descriptions.shortPrompt || '').substring(0, 350),
           mediumPrompt: (stepResults.physical_descriptions.mediumPrompt || '').substring(0, 500),
@@ -747,10 +756,6 @@ export function restampStructuralFields(data: QuilltapExport['data'], now: strin
       if (physicalDescription && typeof physicalDescription === 'object') {
         const pd = physicalDescription as Record<string, unknown>;
         ensureEntryScaffolding(pd);
-        if (typeof pd.name !== 'string' || !pd.name.trim()) {
-          pd.name = 'AI Generated';
-          fixes++;
-        }
       }
 
       const wardrobeItems = character.wardrobeItems;
@@ -1042,7 +1047,7 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           PROPERTIES_EXTRACTION_PROMPT,
-          { temperature: 0.3, maxTokens: 300, ...llmOpts }
+          { temperature: 0.3, maxTokens: withReasoningHeadroom(300), ...llmOpts }
         );
         const props = parseGeneratedProperties(raw);
         stepResults.pronouns = props.pronouns ?? undefined;

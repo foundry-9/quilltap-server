@@ -24,6 +24,7 @@ import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/docum
 import { assertBasePathAvailable } from './base-path-availability';
 import { isEvictedCloudPlaceholder } from '@/lib/files/cloud-placeholder';
 import { walkTree } from '@/lib/files/walk';
+import { PathOutsideBaseError, resolveInside } from '@/lib/paths/resolve-inside';
 
 const logger = createServiceLogger('MountIndex:Scanner');
 
@@ -506,15 +507,16 @@ export async function createFilesystemFolder(
   mountPointId: string,
   relativePath: string
 ): Promise<void> {
-  const target = path.resolve(basePath, relativePath);
-  const baseResolved = path.resolve(basePath);
-  const baseWithSep = baseResolved.endsWith(path.sep) ? baseResolved : baseResolved + path.sep;
-
-  if (!(target === baseResolved || target.startsWith(baseWithSep))) {
+  let target: string;
+  try {
+    target = await resolveInside(basePath, relativePath, { realpath: true });
+  } catch (err) {
+    if (!(err instanceof PathOutsideBaseError)) throw err;
     logger.warn('Folder path escapes mount base — refusing to create', {
       mountPointId,
       relativePath,
       basePath,
+      reason: err.reason,
     });
     throw new Error('Folder path escapes mount point boundary');
   }

@@ -7,6 +7,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 import ConnectionProfilesTab from '@/components/settings/connection-profiles-tab'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 
 
 // Mock fetchJson helper
@@ -27,7 +28,30 @@ describe('ConnectionProfilesTab max tokens limit', () => {
     const { fetchJson } = require('@/lib/fetch-helpers')
     fetchJsonMock = fetchJson
 
-    // Setup default mock responses for fetchJson
+    // The lists are shared queries read through `fetch` (lib/hooks/use-profiles.ts).
+    ;(global.fetch as jest.Mock).mockImplementation(async (url: string) => {
+      const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body })
+      if (url === '/api/v1/connection-profiles') return ok({ profiles: [], count: 0 })
+      if (url === '/api/v1/api-keys') {
+        return ok({ apiKeys: [{ id: 'key-1', label: 'Primary', provider: 'OPENAI', isActive: true }], count: 1 })
+      }
+      if (url === '/api/v1/providers') {
+        return ok({
+          providers: [
+            {
+              name: 'OPENAI',
+              displayName: 'OpenAI',
+              configRequirements: { requiresApiKey: true, requiresBaseUrl: false },
+              capabilities: { chat: true, imageGeneration: true, embeddings: true, webSearch: true },
+            },
+          ],
+        })
+      }
+      if (url === '/api/v1/settings/chat') return ok({ cheapLLMSettings: { defaultCheapProfileId: null } })
+      return ok({})
+    })
+
+    // Setup default mock responses for fetchJson (the modal's writes and probes)
     fetchJsonMock.mockImplementation(async (url: string, options?: any) => {
       // Test connection (v1 endpoint) - check before general connection-profiles
       if (url === '/api/v1/connection-profiles?action=test-connection') {
@@ -107,15 +131,7 @@ describe('ConnectionProfilesTab max tokens limit', () => {
   it('clamps max tokens input using selected model metadata', async () => {
     const user = userEvent.setup()
 
-    render(<ConnectionProfilesTab />)
-
-    // Wait for the profiles list to load
-    await waitFor(() => {
-      expect(fetchJsonMock).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/connection-profiles'),
-        expect.any(Object)
-      )
-    })
+    renderWithQuery(<ConnectionProfilesTab />)
 
     // Find and click the "Add Profile" button
     const addProfileButton = await screen.findByRole('button', { name: /\+ Add Profile/ })

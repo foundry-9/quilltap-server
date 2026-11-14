@@ -3,7 +3,7 @@
  *
  * Every plugin that rewrites text as the user types must stay out of code. This
  * is the ONE predicate they share — see
- * [bug 63](../../../../docs/developer/bugs/fixed/bug-63-text-replacement-in-code.md),
+ * [bug 63](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-63-text-replacement-in-code.md),
  * which is what happens when two plugins keep their own bail lists.
  *
  * @module components/chat/lexical/utils/code-context

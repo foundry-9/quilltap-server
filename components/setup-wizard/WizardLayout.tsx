@@ -37,7 +37,7 @@ export function WizardLayout({
 
         <div className="min-h-[300px]">{children}</div>
 
-        {footer && <div className="pt-4 border-t border-[var(--qt-border-color)]">{footer}</div>}
+        {footer && <div className="pt-4 border-t qt-border-default">{footer}</div>}
       </div>
     </div>
   )

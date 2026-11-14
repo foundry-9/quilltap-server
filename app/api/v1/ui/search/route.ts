@@ -20,6 +20,7 @@
 
 import { createContextHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { readPagination } from '@/lib/api/query-params';
 import {
   badRequest,
   serverError,
@@ -143,11 +144,7 @@ export const GET = createContextHandler(async (req, context) => {
     const { searchParams } = req.nextUrl;
     const query = searchParams.get('q')?.trim();
     const typesParam = searchParams.get('types');
-    const limitParam = searchParams.get('limit');
-    const offsetParam = searchParams.get('offset');
-
-    const limit = limitParam ? Math.min(parseInt(limitParam, 10), 50) : 20;
-    const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
+    const { limit, offset } = readPagination(req, { defaultLimit: 20, maxLimit: 50 });
 
     // Parse and validate types filter
     let requestedTypes: SearchType[] = VALID_TYPES;

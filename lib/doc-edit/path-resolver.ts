@@ -14,10 +14,16 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { createServiceLogger } from '@/lib/logging/create-logger';
+import { PathOutsideBaseError, resolveInsideDetailed } from '@/lib/paths/resolve-inside';
 import { getFilesDir } from '@/lib/paths';
 import { getRepositories } from '@/lib/repositories/factory';
 import { projectRosterAdmits, PROJECT_ROSTER_REFUSAL } from '@/lib/projects/roster-access';
 import type { DocMountPointType } from '@/lib/schemas/mount-index.types';
+import {
+  isUnderCoreFolder,
+  ownVaultCoreRefusal,
+  ownVaultPathSegments,
+} from '@/lib/characters/vault/core-guard';
 import {
   readDatabaseDocument,
   writeDatabaseDocument,
@@ -114,18 +120,22 @@ export interface PathResolutionContext {
    * vault, not just the single character the LLM is currently speaking as. */
   characterIds?: string[];
   /**
-   * The doc-tool opacity covenant: hide every CHARACTER VAULT (the acting
-   * character's own and every peer's) while leaving the group, project and
-   * global tiers reachable. Set by the doc-edit context builders for a
-   * character with `systemTransparency !== true`.
+   * The doc-tool opacity covenant, for a character with
+   * `systemTransparency !== true`: every PEER vault is hidden, and her OWN
+   * vault stays reachable with its core guarded — the root-level files and the
+   * managed folders (`lib/characters/vault/core-guard.ts`). The group, project
+   * and global tiers are untouched.
+   *
+   * Resolution refuses the vault root and anything in a core folder here, and
+   * marks the result `ownVaultGuarded` so the per-file gates
+   * (`assertCharacterMayRead` / `assertCharacterMayWrite`) refuse root-level
+   * files — the one part of the rule that depends on whether the caller means
+   * a file or a folder.
    *
    * `characterId` must still be supplied alongside it — group membership is
-   * derived from `characterId` and from nothing else, so hiding vaults by
-   * withholding the character instead of setting this flag also erases every
-   * group store she belongs to (bug 152). The reserved `self` token is refused
-   * while this is set, since her own vault is among what's hidden.
+   * derived from `characterId` and from nothing else (bug 152).
    */
-  hideCharacterVaults?: boolean;
+  guardOwnVault?: boolean;
   /** Mount point name or ID (required for document_store scope) */
   mountPoint?: string;
   /**
@@ -166,6 +176,12 @@ export interface ResolvedPath {
   basePath: string;
   /** The relative path within the base */
   relativePath: string;
+  /**
+   * True when this is the acting character's own vault resolved under
+   * `guardOwnVault`: the per-file gates must then refuse a root-level file
+   * (see `lib/characters/vault/core-guard.ts`).
+   */
+  ownVaultGuarded?: boolean;
 }
 
 export class PathResolutionError extends Error {
@@ -194,54 +210,23 @@ function isAbsolutePath(p: string): boolean {
 }
 
 /**
- * Safely resolve a real path with fallback to path.resolve if realpath fails.
- *
- * When the leaf doesn't exist yet (e.g. a new file we're about to write),
- * walks up the path to the deepest existing ancestor, realpaths *that*, then
- * re-attaches the missing tail. This keeps boundary checks correct on data
- * directories that live behind a symlink — e.g. `~/iCloud` on macOS, which
- * resolves to `~/Library/Mobile Documents/com~apple~CloudDocs`. Without the
- * walk-up, the file's realpath would expand the symlink while a missing
- * sibling's `path.resolve` would not, and the two sides of a containment
- * check would disagree even though both refer to the same tree.
+ * Resolve `relativePath` under `baseDir` with symlinks resolved on both sides
+ * (`resolveInsideDetailed`). A leaf that does not exist yet is resolved
+ * through its deepest existing ancestor, so data directories behind a symlink
+ * (e.g. `~/iCloud` on macOS) compare correctly, and a link inside the base
+ * that points elsewhere is reported as outside.
  */
-async function safeRealpath(p: string): Promise<string> {
+async function containedRealpaths(
+  baseDir: string,
+  relativePath: string
+): Promise<{ realBase: string; realPath: string; inside: boolean }> {
   try {
-    return await fs.realpath(p);
-  } catch {
-    // Walk up to the deepest existing ancestor and realpath that, then
-    // re-attach the unresolved tail. This handles "file doesn't exist yet"
-    // without losing symlink resolution on the parent directory.
-    const tail: string[] = [];
-    let current = path.resolve(p);
-    while (current !== path.dirname(current)) {
-      const parent = path.dirname(current);
-      try {
-        const realParent = await fs.realpath(parent);
-        return path.join(realParent, ...tail.reverse(), path.basename(current));
-      } catch {
-        tail.push(path.basename(current));
-        current = parent;
-      }
-    }
-    return path.resolve(p);
+    const resolved = await resolveInsideDetailed(baseDir, relativePath, { realpath: true });
+    return { realBase: resolved.realBase, realPath: resolved.realPath, inside: true };
+  } catch (err) {
+    if (!(err instanceof PathOutsideBaseError)) throw err;
+    return { realBase: baseDir, realPath: path.resolve(baseDir, relativePath), inside: false };
   }
-}
-
-/**
- * Verify that a resolved path stays within the expected base directory.
- * Both arguments must already be realpath'd (or both unresolved) so symlink
- * expansion is symmetric — see `safeRealpath` for why that matters.
- */
-function verifyPathIsWithinBase(resolvedPath: string, baseDir: string): boolean {
-  // Normalize both paths for comparison
-  const normalizedResolved = path.normalize(resolvedPath);
-  const normalizedBase = path.normalize(baseDir);
-
-  // Ensure base ends with separator for proper containment check
-  const baseDirWithSep = normalizedBase.endsWith(path.sep) ? normalizedBase : normalizedBase + path.sep;
-
-  return normalizedResolved.startsWith(baseDirWithSep) || normalizedResolved === normalizedBase;
 }
 
 /**
@@ -354,25 +339,23 @@ async function collectAccessibleMountPointIds(
   // wardrobe. No ownership gate here — the document path resolver grants the
   // LLM access to its own + participant vaults by chat membership, not user
   // ownership.
-  // The opacity covenant subtracts the two vault tiers and nothing else. The
-  // character still goes INTO the pool so her group stores resolve — that is
-  // the whole point of expressing this as a subtraction (bug 152).
+  // The opacity covenant subtracts the participant (peer) tier and nothing
+  // else: her own vault stays in the pool, its core guarded at resolution and
+  // by the per-file gates. The character still goes INTO the pool so her group
+  // stores resolve (bug 152).
   //
   // The project tier is roster-gated (`roster: 'gated'`): a character off the
   // project's roster sees no project stores (lib/projects/roster-access.ts).
-  const vaultsVisible = !context.hideCharacterVaults;
+  const peersVisible = !context.guardOwnVault;
   const pool = await resolveTieredMountPool(
     {
       characterId: context.characterId,
-      characterIds: context.characterIds,
+      characterIds: peersVisible ? context.characterIds : undefined,
       projectId: context.projectId,
     },
-    { includeParticipants: vaultsVisible, roster: 'gated', enabled: 'ignore' },
+    { includeParticipants: peersVisible, roster: 'gated', enabled: 'ignore' },
   );
-  return flattenTierPool(pool, {
-    includeParticipants: vaultsVisible,
-    includeCharacterTier: vaultsVisible,
-  });
+  return flattenTierPool(pool, { includeParticipants: peersVisible });
 }
 
 /**
@@ -451,11 +434,9 @@ async function resolveDocumentStorePath(
   // the DB link, rather than its name (see SELF_VAULT_TOKEN). Only a character
   // acting as itself can use it; without a characterId we fall through to normal
   // resolution so a store literally named "self" stays reachable elsewhere.
-  // `hideCharacterVaults` covers her OWN vault too, so the token is refused
-  // explicitly here. It used to be refused as a side effect of the opacity
-  // gate withholding `characterId` — the same withholding that hid her group
-  // stores (bug 152). Stating it keeps the refusal once the character stays.
-  if (context.characterId && !context.hideCharacterVaults && needle === SELF_VAULT_TOKEN) {
+  // Under `guardOwnVault` the token still names her own vault; its core is
+  // guarded below like any other address of it.
+  if (context.characterId && needle === SELF_VAULT_TOKEN) {
     const ownVaultId = await resolveSelfVaultMountPointId(context.characterId);
     if (ownVaultId && accessibleIds.includes(ownVaultId)) {
       mountPoint = await repos.docMountPoints.findById(ownVaultId);
@@ -503,7 +484,7 @@ async function resolveDocumentStorePath(
     const existing = await findEnabledMountPointByRef(context.mountPoint);
     if (existing) {
       logger.warn(
-        `Mount point exists but is out of scope: ${existing.name} (${existing.id}) (project: ${context.projectId ?? 'none'}, characters: ${describeCharacters(context)}, vaultsHidden: ${context.hideCharacterVaults === true})`
+        `Mount point exists but is out of scope: ${existing.name} (${existing.id}) (project: ${context.projectId ?? 'none'}, characters: ${describeCharacters(context)}, ownVaultGuarded: ${context.guardOwnVault === true})`
       );
       throw new PathResolutionError(
         `The document store "${existing.name}" exists but is not reachable from this conversation. ` +
@@ -513,7 +494,7 @@ async function resolveDocumentStorePath(
       );
     }
     logger.warn(
-      `Mount point not found or not accessible: ${context.mountPoint} (project: ${context.projectId ?? 'none'}, characters: ${describeCharacters(context)}, vaultsHidden: ${context.hideCharacterVaults === true})`
+      `Mount point not found or not accessible: ${context.mountPoint} (project: ${context.projectId ?? 'none'}, characters: ${describeCharacters(context)}, ownVaultGuarded: ${context.guardOwnVault === true})`
     );
     throw new PathResolutionError(
       `No document store "${context.mountPoint}" is reachable in this context — nothing was read`,
@@ -529,6 +510,26 @@ async function resolveDocumentStorePath(
     );
   }
 
+  // The own-vault core guard: the vault root and the core folders are closed
+  // to an opaque character whatever she means to do there. Root-level files
+  // are refused by the per-file gates, which know a file from a folder.
+  let ownVaultGuarded = false;
+  if (context.guardOwnVault && context.characterId) {
+    const ownVaultId = await resolveSelfVaultMountPointId(context.characterId);
+    if (ownVaultId && ownVaultId === mountPoint.id) {
+      ownVaultGuarded = true;
+      if (ownVaultPathSegments(relativePath).length === 0 || isUnderCoreFolder(relativePath)) {
+        logger.info('Refused own-vault core path for an opaque character', {
+          characterId: context.characterId,
+          mountPointId: mountPoint.id,
+          relativePath,
+        });
+        throw new PathResolutionError(ownVaultCoreRefusal(relativePath), 'ACCESS_DENIED');
+      }
+    }
+  }
+  const guardFlag = ownVaultGuarded ? { ownVaultGuarded: true } : {};
+
   // Database-backed stores have no filesystem path. Everything the doc-edit
   // helpers need comes from (mountPointId, relativePath); callers dispatch
   // on `mountType` to decide whether to read from disk or from the DB.
@@ -541,18 +542,15 @@ async function resolveDocumentStorePath(
       mountType: 'database',
       basePath: '',
       relativePath,
+      ...guardFlag,
     };
   }
 
   const baseDir = mountPoint.basePath;
-  const joinedPath = path.join(baseDir, relativePath);
-  const [realBase, realPath] = await Promise.all([
-    safeRealpath(baseDir),
-    safeRealpath(joinedPath),
-  ]);
+  const { realBase, realPath, inside } = await containedRealpaths(baseDir, relativePath);
 
   // Verify path stays within base directory
-  if (!verifyPathIsWithinBase(realPath, realBase)) {
+  if (!inside) {
     logger.warn(
       `Path resolution escaped base directory: ${relativePath} -> ${realPath} (base: ${realBase})`
     );
@@ -570,6 +568,7 @@ async function resolveDocumentStorePath(
     mountType: mountPoint.mountType,
     basePath: baseDir,
     relativePath,
+    ...guardFlag,
   };
 }
 
@@ -624,12 +623,8 @@ async function resolveProjectPath(
       }
 
       const baseDir = mountPoint.basePath;
-      const joinedPath = path.join(baseDir, relativePath);
-      const [realBase, realPath] = await Promise.all([
-        safeRealpath(baseDir),
-        safeRealpath(joinedPath),
-      ]);
-      if (!verifyPathIsWithinBase(realPath, realBase)) {
+      const { realBase, realPath, inside } = await containedRealpaths(baseDir, relativePath);
+      if (!inside) {
         logger.warn(
           `Path resolution escaped official project mount: ${relativePath} -> ${realPath} (base: ${realBase})`
         );
@@ -655,14 +650,10 @@ async function resolveProjectPath(
 
   const filesDir = getFilesDir();
   const baseDir = path.join(filesDir, context.projectId);
-  const joinedPath = path.join(baseDir, relativePath);
-  const [realBase, realPath] = await Promise.all([
-    safeRealpath(baseDir),
-    safeRealpath(joinedPath),
-  ]);
+  const { realBase, realPath, inside } = await containedRealpaths(baseDir, relativePath);
 
   // Verify path stays within project directory
-  if (!verifyPathIsWithinBase(realPath, realBase)) {
+  if (!inside) {
     logger.warn(
       `Path resolution escaped project directory: ${relativePath} -> ${realPath} (base: ${realBase})`
     );
@@ -689,14 +680,10 @@ async function resolveGeneralPath(
 ): Promise<ResolvedPath> {
   const filesDir = getFilesDir();
   const baseDir = path.join(filesDir, '_general');
-  const joinedPath = path.join(baseDir, relativePath);
-  const [realBase, realPath] = await Promise.all([
-    safeRealpath(baseDir),
-    safeRealpath(joinedPath),
-  ]);
+  const { realBase, realPath, inside } = await containedRealpaths(baseDir, relativePath);
 
   // Verify path stays within general directory
-  if (!verifyPathIsWithinBase(realPath, realBase)) {
+  if (!inside) {
     logger.warn(
       `Path resolution escaped general directory: ${relativePath} -> ${realPath} (base: ${realBase})`
     );
@@ -899,6 +886,11 @@ export interface AccessibleMountPoint {
   name: string;
   basePath: string;
   mountType: DocMountPointType;
+  /**
+   * True for the acting character's own vault under `guardOwnVault`: an
+   * enumerator must drop its core entries (`isOwnVaultEntryHidden`).
+   */
+  ownVaultGuarded?: boolean;
 }
 
 /**
@@ -915,12 +907,12 @@ export interface AccessibleMountPointsQuery {
   /** Peer participants whose vaults are admitted (cross-character reads). */
   extraCharacterIds?: string[];
   /**
-   * The doc-tool opacity covenant — subtract both vault tiers (the acting
-   * character's own and every peer's) while group, project and global stay
-   * reachable. See `PathResolutionContext.hideCharacterVaults`; callers derive
-   * it from `actingCharacterIsOpaqueToVaults` so the two sides cannot disagree.
+   * The doc-tool opacity covenant — hide peer vaults, keep her own with its
+   * core guarded. See `PathResolutionContext.guardOwnVault`; callers derive it
+   * from `actingCharacterIsOpaqueToVaults` so the two sides cannot disagree.
+   * Enumerators filter her own vault's entries with `isOwnVaultEntryHidden`.
    */
-  hideCharacterVaults?: boolean;
+  guardOwnVault?: boolean;
   /** A pre-built pool that is the accessible set (see `PathResolutionContext.mountPool`). */
   mountPool?: TieredMountPool;
 }
@@ -939,12 +931,12 @@ export async function getAccessibleMountPoints(
 ): Promise<AccessibleMountPoint[]> {
   try {
     const repos = getRepositories();
-    const { projectId, characterId, extraCharacterIds, hideCharacterVaults, mountPool } = query;
+    const { projectId, characterId, extraCharacterIds, guardOwnVault, mountPool } = query;
     const ids = await collectAccessibleMountPointIds({
       projectId,
       characterId,
       characterIds: extraCharacterIds && extraCharacterIds.length > 0 ? extraCharacterIds : undefined,
-      hideCharacterVaults,
+      guardOwnVault,
       mountPool,
     });
 
@@ -952,6 +944,7 @@ export async function getAccessibleMountPoints(
       return [];
     }
 
+    const guardedVaultId = guardOwnVault ? await resolveSelfVaultMountPointId(characterId) : null;
     const mountPoints: AccessibleMountPoint[] = [];
     for (const id of ids) {
       const mountPoint = await repos.docMountPoints.findById(id);
@@ -961,6 +954,7 @@ export async function getAccessibleMountPoints(
           name: mountPoint.name,
           basePath: mountPoint.basePath,
           mountType: mountPoint.mountType,
+          ...(guardedVaultId === mountPoint.id ? { ownVaultGuarded: true } : {}),
         });
       }
     }

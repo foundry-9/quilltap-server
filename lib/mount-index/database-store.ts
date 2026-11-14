@@ -28,6 +28,7 @@ import {
 } from './db-store-events';
 import { detectNativeText, isExtractableBlobPath, normaliseRelativePath as normaliseSharedRelativePath } from './path-utils';
 import { reindexAfterDatabaseWrite } from './post-write-reindex';
+import { sameStorePath } from './store-path-fold';
 import { inventoryWritesAreLinted, isTitleLintFolder, isTitleLintPath } from '@/lib/inventory/lint-scope';
 import type { InventoryDocumentChange } from '@/lib/inventory/title-lint-documents';
 
@@ -291,8 +292,8 @@ export async function deleteDatabaseDocument(
 ): Promise<boolean> {
   const repos = getRepositories();
   const rel = normaliseRelativePath(relativePath);
-  // Delete the link with GC. Chunks cascade off the link, and the document
-  // cascades off the file row if this was the last link.
+  // Delete the link with GC: `deleteWithGC` drops the link's chunks and, if
+  // this was the last link, the file row with its document (no FK cascade).
   const link = await repos.docMountFileLinks.findByMountPointAndPath(mountPointId, rel);
   if (!link) return false;
 
@@ -355,9 +356,15 @@ export async function moveDatabaseDocument(
   }
   // Case-only rename of the same document (notes.md → Notes.md) is allowed —
   // the case-insensitive lookup would otherwise find the source itself and
-  // report a bogus conflict.
-  const caseOnlyRename = fromRel !== toRel && fromRel.toLowerCase() === toRel.toLowerCase();
-  if (!caseOnlyRename) {
+  // report a bogus conflict. "Case-only" is the store's NOCASE rule (ASCII
+  // only, `sameStorePath`): `Café.md → CAFÉ.md` is two rows to the store, so
+  // it takes the ordinary conflict check (#224).
+  const caseOnlyRename = fromRel !== toRel && sameStorePath(fromRel, toRel);
+  if (caseOnlyRename) {
+    logger.debug('Case-only rename of a database document; skipping the conflict probe', {
+      mountPointId, fromRelativePath: fromRel, toRelativePath: toRel,
+    });
+  } else {
     const conflict = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, toRel);
     if (conflict) {
       throw new DatabaseStoreError(

@@ -9,7 +9,6 @@
  */
 
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { logger } from '@/lib/logger';
 import { pluginRegistry, getEnabledPluginsByCapability } from '@/lib/plugins';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
@@ -23,6 +22,32 @@ import type { LoadedBundleTheme } from './bundle-loader';
 import { getBundledThemesDir } from '@/lib/paths';
 import type { ThemePlugin, EmbeddedFont } from '@quilltap/plugin-types';
 import { AbstractMapRegistry } from '@/lib/plugins/abstract-map-registry';
+import { resolveInsideSync, PathOutsideBaseError } from '@/lib/paths/resolve-inside';
+
+/**
+ * Resolve a manifest-supplied path inside a theme's root directory, or return
+ * undefined (with a warning) when it would land outside. Installed bundles are
+ * checked with symlinks resolved; npm plugin packages lexically, since package
+ * managers may link files into them.
+ */
+function themeFilePath(
+  root: string,
+  rel: string,
+  context: { themeId: string; field: string; realpath: boolean }
+): string | undefined {
+  try {
+    return resolveInsideSync(root, rel, { realpath: context.realpath });
+  } catch (err) {
+    if (!(err instanceof PathOutsideBaseError)) throw err;
+    logger.warn('Ignoring theme path outside the theme directory', {
+      themeId: context.themeId,
+      field: context.field,
+      path: rel,
+      reason: err.reason,
+    });
+    return undefined;
+  }
+}
 
 // ============================================================================
 // TYPES
@@ -419,7 +444,11 @@ class ThemeRegistry extends AbstractMapRegistry<
       previewImagePath: themePlugin.metadata.previewImage?.startsWith('data:')
         ? undefined // Don't set path for data URLs
         : themePlugin.metadata.previewImage
-          ? path.join(plugin.pluginPath, themePlugin.metadata.previewImage)
+          ? themeFilePath(plugin.pluginPath, themePlugin.metadata.previewImage, {
+              themeId,
+              field: 'previewImage',
+              realpath: false,
+            })
           : undefined,
       tags: themePlugin.metadata.tags || [],
       pluginName: plugin.manifest.name,
@@ -478,7 +507,14 @@ class ThemeRegistry extends AbstractMapRegistry<
       throw new Error('Plugin does not have themeConfig');
     }
     // Load tokens file
-    const tokensPath = path.join(plugin.pluginPath, themeConfig.tokensPath || 'tokens.json');
+    const tokensPath = themeFilePath(plugin.pluginPath, themeConfig.tokensPath || 'tokens.json', {
+      themeId,
+      field: 'tokensPath',
+      realpath: false,
+    });
+    if (!tokensPath) {
+      throw new Error('Theme tokensPath must name a file inside the plugin');
+    }
 
     let tokensData: string;
     try {
@@ -522,8 +558,13 @@ class ThemeRegistry extends AbstractMapRegistry<
     // Load optional CSS overrides
     let cssOverrides: string | undefined;
     if (themeConfig.stylesPath) {
-      const stylesPath = path.join(plugin.pluginPath, themeConfig.stylesPath);
+      const stylesPath = themeFilePath(plugin.pluginPath, themeConfig.stylesPath, {
+        themeId,
+        field: 'stylesPath',
+        realpath: false,
+      });
       try {
+        if (!stylesPath) throw new Error('stylesPath is outside the plugin');
         cssOverrides = await fs.readFile(stylesPath, 'utf-8');
       } catch (error) {
         logger.warn('Failed to load theme CSS overrides', {
@@ -537,9 +578,14 @@ class ThemeRegistry extends AbstractMapRegistry<
     // Determine preview image path
     let previewImagePath: string | undefined;
     if (themeConfig.previewImage) {
-      previewImagePath = path.join(plugin.pluginPath, themeConfig.previewImage);
+      previewImagePath = themeFilePath(plugin.pluginPath, themeConfig.previewImage, {
+        themeId,
+        field: 'previewImage',
+        realpath: false,
+      });
       // Verify file exists
       try {
+        if (!previewImagePath) throw new Error('previewImage is outside the plugin');
         await fs.access(previewImagePath);
       } catch {
         logger.warn('Theme preview image not found', {
@@ -554,8 +600,13 @@ class ThemeRegistry extends AbstractMapRegistry<
     const fonts: LoadedThemeFont[] = [];
     if (themeConfig.fonts && themeConfig.fonts.length > 0) {
       for (const fontDef of themeConfig.fonts) {
-        const fontPath = path.join(plugin.pluginPath, fontDef.src);
+        const fontPath = themeFilePath(plugin.pluginPath, fontDef.src, {
+          themeId,
+          field: 'fonts.src',
+          realpath: false,
+        });
         try {
+          if (!fontPath) throw new Error('font src is outside the plugin');
           await fs.access(fontPath);
           fonts.push({
             family: fontDef.family,
@@ -687,7 +738,12 @@ class ThemeRegistry extends AbstractMapRegistry<
     const fonts: LoadedThemeFont[] = [];
     if (manifest.fonts && manifest.fonts.length > 0) {
       for (const fontDef of manifest.fonts) {
-        const fontPath = path.join(installPath, fontDef.src);
+        const fontPath = themeFilePath(installPath, fontDef.src, {
+          themeId,
+          field: 'fonts.src',
+          realpath: true,
+        });
+        if (!fontPath) continue;
         fonts.push({
           family: fontDef.family,
           filePath: fontPath,
@@ -731,7 +787,11 @@ class ThemeRegistry extends AbstractMapRegistry<
       cssOverrides,
       previewImage: manifest.previewImage,
       previewImagePath: manifest.previewImage
-        ? path.join(installPath, manifest.previewImage)
+        ? themeFilePath(installPath, manifest.previewImage, {
+            themeId,
+            field: 'previewImage',
+            realpath: true,
+          })
         : undefined,
       tags: manifest.tags || [],
       pluginName: `bundle:${themeId}`,

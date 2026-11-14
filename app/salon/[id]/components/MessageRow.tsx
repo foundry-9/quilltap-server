@@ -16,10 +16,14 @@ import { resolveWhisperTargetLabel } from '../whisper-visibility'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import MessageContent from '@/components/chat/MessageContent'
 import { useAbsentMentions } from '@/hooks/useAbsentMentions'
+import { useAtlasMentions } from '@/hooks/useAtlasMentions'
+import type { MentionChipData } from '@/components/chat/MentionChip'
 import { assignMentionsToRuns } from '@/lib/chat/mention-markers'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
+import { MessageEditor } from './message-row/MessageEditor'
+import type { EditImpactState } from '../hooks/useMessageActions'
 import { getImageAttachments, resolveMessageDiagramStyle } from './message-row/helpers'
 import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import type { MessageAvatarInfo } from './message-row/types'
@@ -43,6 +47,10 @@ interface MessageRowProps {
   messageIndex: number
   isEditing: boolean
   editContent: string
+  /** The open editor's check of what the edit disturbs (only read while editing). */
+  editImpact?: EditImpactState | null
+  /** Regenerate the memories the old text formed, on save. */
+  regenerateMemoriesOnSave?: boolean
   viewSourceMessageIds: Set<string>
   swipeState: { current: number; total: number } | null
   showResendButton: boolean
@@ -88,6 +96,7 @@ interface MessageRowProps {
   onEditSave: (messageId: string) => void
   onEditCancel: () => void
   onEditChange: (content: string) => void
+  onRegenerateMemoriesChange?: (value: boolean) => void
   onToggleSourceView: (messageId: string) => void
   onDelete: (messageId: string) => void
   onGenerateSwipe: (messageId: string) => void
@@ -146,6 +155,8 @@ function MessageRowInner({
   messageIndex,
   isEditing,
   editContent,
+  editImpact = null,
+  regenerateMemoriesOnSave = true,
   viewSourceMessageIds,
   swipeState,
   showResendButton,
@@ -172,6 +183,7 @@ function MessageRowInner({
   onEditSave,
   onEditCancel,
   onEditChange,
+  onRegenerateMemoriesChange,
   onToggleSourceView,
   onDelete,
   onGenerateSwipe,
@@ -201,8 +213,15 @@ function MessageRowInner({
   regeneration = null,
 }: MessageRowProps) {
   const imagesHidden = useImagesHidden()
-  // Name chips: absent characters whose first mention in the chat is here.
-  const mentions = useAbsentMentions(chatId, message.id)
+  // Name chips: absent characters whose first mention in the chat is here,
+  // then Atlas things. People come first, so a person's chip wins a run the
+  // two would share (the marker pass never marks inside a marked run).
+  const personMentions = useAbsentMentions(chatId, message.id)
+  const thingMentions = useAtlasMentions(chatId, message.id)
+  const mentions = useMemo<ReadonlyArray<MentionChipData>>(
+    () => (thingMentions.length === 0 ? personMentions : [...personMentions, ...thingMentions]),
+    [personMentions, thingMentions],
+  )
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
   // Diagrams are drawn in their author's hand (see resolveMessageDiagramStyle).
   const diagramStyle = useMemo(
@@ -303,6 +322,7 @@ function MessageRowInner({
       <div key={message.id} className={messageRowClasses.join(' ')}>
         <AnnouncementChip
           message={message}
+          chatId={chatId}
           onToggleExpanded={onToggleSystemMessageExpanded}
           participantNames={participantNames}
           announcerNames={announcerNames}
@@ -358,29 +378,16 @@ function MessageRowInner({
           aria-busy={regeneration ? true : undefined}
         >
           {isEditing ? (
-            <div className="space-y-2">
-              <textarea
-                value={editContent}
-                onChange={(e) => onEditChange(e.target.value)}
-                className="qt-textarea"
-                aria-label="Edit message"
-                rows={3}
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={() => onEditSave(message.id)}
-                  className="qt-button qt-button-primary qt-button-sm"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={onEditCancel}
-                  className="qt-button qt-button-secondary qt-button-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+            <MessageEditor
+              messageId={message.id}
+              content={editContent}
+              onChange={onEditChange}
+              onSave={onEditSave}
+              onCancel={onEditCancel}
+              impact={editImpact}
+              regenerateMemories={regenerateMemoriesOnSave}
+              onRegenerateMemoriesChange={(value) => onRegenerateMemoriesChange?.(value)}
+            />
           ) : (
             <>
               {/* Whisper label */}
@@ -635,6 +642,8 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Edit state
   if (prev.isEditing !== next.isEditing) return false
   if (prev.isEditing && prev.editContent !== next.editContent) return false
+  if (prev.isEditing && prev.editImpact !== next.editImpact) return false
+  if (prev.isEditing && prev.regenerateMemoriesOnSave !== next.regenerateMemoriesOnSave) return false
 
   // View source toggle (compare Set membership for this message)
   if (prev.viewSourceMessageIds.has(prev.message.id) !== next.viewSourceMessageIds.has(next.message.id)) return false

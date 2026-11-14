@@ -56,8 +56,8 @@ export interface UseDocumentStoresReturn {
   stores: DocumentStore[]
   loading: boolean
   error: string | null
-  /** `silent` refreshes in place without flipping `loading` (tab re-activation). */
-  fetchStores: (opts?: { silent?: boolean }) => Promise<void>
+  /** Re-read the list in place (no loading flip). */
+  fetchStores: () => Promise<void>
   createStore: (data: CreateDocumentStoreData) => Promise<DocumentStore | null>
   updateStore: (id: string, data: UpdateDocumentStoreData) => Promise<DocumentStore | null>
   deleteStore: (id: string) => Promise<boolean>

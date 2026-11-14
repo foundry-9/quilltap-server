@@ -46,6 +46,21 @@ export interface SendMessageOptions {
    */
   nudge?: boolean
   /**
+   * Open the chat (continue mode only): run its opening — the Green Room's
+   * dressing and packing, the staff's posts — narrated on this stream with
+   * `greenRoom` frames, ending with the greeting as a turn. A chat already
+   * opened gets an empty, closed stream. See `lib/chat/opening/run.ts`.
+   */
+  opening?: boolean
+  /**
+   * What this turn is for. `'opening'`: the chat's first line — the Core
+   * whisper is offered (as it is not on a plain continue), the skip option is
+   * withheld, an ephemeral opening note trails the context, and a character
+   * with a scripted `firstMessage` posts it instead of calling the model. Set
+   * only by the opening; never on the wire.
+   */
+  purpose?: 'opening'
+  /**
    * How a chained turn's speaker was chosen: `queue` (popped from the manual
    * turn queue — treated as summoned) or `algorithm` (weighted rotation — the
    * skip option is offered). Threaded from the turn orchestrator into chained
@@ -284,6 +299,13 @@ export interface ProcessMessageResult {
    */
   yielded?: boolean
   /**
+   * This character's turn (a spoken line or a pass) completed the cycle: every
+   * present seat has now spoken or passed once. Turns mode ends its chain here
+   * (`executeTurnChain`). Judged before the turn was recorded, because a wrap
+   * resets the persisted cycle list.
+   */
+  closedCycle?: boolean
+  /**
    * Storyteller: an operator post was recorded and a round should open (or,
    * with `carina`, the post was an `@Name:` query and no round opens).
    */
@@ -319,6 +341,56 @@ export interface DangerResolutionResult {
  * Passed by reference to sub-services (failover, finalizer) which mutate it directly,
  * eliminating large destructure/reassign patterns.
  */
+/** How a turn's tools travel for one profile: natively, or as a text protocol. */
+export type TurnToolMode = 'native' | 'simple-json' | 'text-block'
+
+/**
+ * The tool half of a call, formatted for one connection profile. A substitute
+ * is often on another provider, so the primary's provider-formatted array is
+ * wrong for it (#181); `TurnToolSlate.formatToolsFor` builds this per profile.
+ */
+export interface ProfileToolFormat {
+  /** Tools sent natively beside the messages (empty under a text protocol). */
+  actualTools: unknown[]
+  resolvedToolMode: TurnToolMode
+  /** The model calls tools through a text protocol rather than natively. */
+  useTextBlockTools: boolean
+  useNativeWebSearch: boolean
+  /** Provider stop sequences (simple-json only). */
+  stopSequences: string[] | undefined
+}
+
+/** Formats the turn's tools for one profile. */
+export type FormatToolsFor = (profile: ConnectionProfile) => Promise<ProfileToolFormat>
+
+/** One message in a provider call, as the turn assembles it. */
+export interface TurnCallMessage {
+  role: string
+  content: string
+  attachments?: unknown[]
+  name?: string
+  thoughtSignature?: string
+  reasoningContent?: string
+  toolCallId?: string
+  toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
+  cacheControl?: { type: 'ephemeral' }
+}
+
+/**
+ * Everything about a call that depends on which profile is being called.
+ * Written onto `StreamingState.effectiveCall` by `callSubstitute` when a
+ * stand-in answers, so the tool loops continue on the stand-in's own shape.
+ */
+export interface EffectiveCall {
+  /** The message array, image-budgeted for this profile. */
+  messages: TurnCallMessage[]
+  tools: unknown[]
+  toolMode: TurnToolMode
+  useNativeWebSearch: boolean
+  modelParams: Record<string, unknown>
+  stop?: string[]
+}
+
 export interface StreamingState {
   fullResponse: string
   effectiveProfile: ConnectionProfile
@@ -361,6 +433,13 @@ export interface StreamingState {
    * tried.
    */
   routeVia: RouteAttemptVia
+  /**
+   * The call shape of the profile now holding the turn, when a substitute
+   * answered (`callSubstitute`). Absent means the turn is still on its
+   * primary's shape. The tool loops read their tools, messages and params
+   * from here before the slate.
+   */
+  effectiveCall?: EffectiveCall
 }
 
 /**

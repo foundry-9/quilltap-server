@@ -3,6 +3,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm'
+import { withReasoningHeadroom } from '@/lib/llm/reasoning-headroom'
 import type { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { selectionFromProfile, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
@@ -285,8 +286,10 @@ export function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'memory-recap-summarization': 'SUMMARIZATION',
     'derive-scene-context': 'SUMMARIZATION',
     'outfit-selection': 'SUMMARIZATION',
+    'inventory-selection': 'SUMMARIZATION',
     'craft-image-prompt': 'IMAGE_PROMPT_CRAFTING',
     'craft-story-background-prompt': 'IMAGE_PROMPT_CRAFTING',
+    'optimize-wardrobe-image-prompts': 'IMAGE_PROMPT_CRAFTING',
     'describe-attachment': 'IMAGE_DESCRIPTION',
     'resolve-character-appearances': 'APPEARANCE_RESOLUTION',
     'sanitize-appearance': 'APPEARANCE_RESOLUTION',
@@ -330,7 +333,8 @@ async function sendToProvider(
   )
 
   const profileKey = `${selection.provider}:${selection.modelName}`
-  const effectiveMaxTokens = Math.max(maxTokens ?? 2048, 2048)
+  // Headroom so a model that thinks by default still has room to answer
+  const effectiveMaxTokens = withReasoningHeadroom(Math.max(maxTokens ?? 2048, 2048))
 
   // `durationMs` is the wall-clock of the provider call this row describes.
   // This shared path covers MEMORY_EXTRACTION, TITLE_GENERATION, SUMMARIZATION,
@@ -478,11 +482,13 @@ const TASK_TYPE_ACTIVITY: Record<string, ActivityKind> = {
   // the user is waiting on, so it belongs inside the same span.
   'craft-image-prompt': 'image',
   'craft-story-background-prompt': 'image',
+  'optimize-wardrobe-image-prompts': 'image',
   'derive-scene-context': 'image',
   'resolve-character-appearances': 'image',
   'sanitize-appearance': 'image',
   'describe-attachment': 'image',
   'outfit-selection': 'image',
+  'inventory-selection': 'image',
 
   // the Commonplace Book
   'memory-extraction-self': 'memory',

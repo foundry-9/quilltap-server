@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=memory
+url: /settings?group=context-memory
 ---
 
 # The Command Line and the Commonplace Book
@@ -12,7 +12,7 @@ The `quilltap memories` subcommand is the rear entrance to all of them. It is re
 
 Three things, principally:
 
-- **Surveying.** To answer "what does this character actually remember about me?" without paging through the Commonplace Book settings tab one entry at a time, ranked the way the recall path itself ranks them.
+- **Surveying.** To answer "what does this character actually remember about me?" without paging through the Commonplace Book one entry at a time, ranked the way the recall path itself ranks them.
 - **Searching.** To find the memory or memories that contain a particular phrase, regardless of which character formed them or what chat produced them.
 - **Illustrating the lattice.** Each new memory is linked to its near neighbours in vector space at the moment it is written; the result is a bidirectional graph of related memories that you can walk on the command line, root yourself at any node, and watch fan out.
 
@@ -255,7 +255,7 @@ The Commonplace Book keeps itself tidy in rounds, and each round has five steps,
 
 `maintain` runs some or all of them by hand. `--character` is required: a name or id for one character, or `all` for every character you own. `--phases` takes a comma-separated selection (misspellings are caught before anything is sent); naming `consolidate` brings `mirror` along with it, since the Commonplace files must follow a consolidation as surely as the butler follows the soup.
 
-Like `validate --repair`, `maintain` does no writing itself: it asks the **running** Quilltap server to do it, exactly as the maintenance buttons in **Settings → Memory** do. A `--dry-run` writes nothing and prints, for each step, whether it ran or was skipped (and why), followed by the particulars: the near-duplicate groups it would fold; each proposed consolidation cluster with the notes it would fold, the digest it would write, the notes kept standalone, and any contradictions; the demotion arithmetic (the cap, how many active memories are counted, how many are exempt (hand-written notes and digests), how many over the cap, how many would go); the number it would retire; and the subjects whose Commonplace files would change. A dry run across `all` prints one line per character instead, and may not include `consolidate` — rehearsing a model call for every character in the house would be an extravagance the server politely declines.
+Like `validate --repair`, `maintain` does no writing itself: it asks the **running** Quilltap server to do it, exactly as the maintenance buttons in **Settings → Context & Memory → Maintenance** do. A `--dry-run` writes nothing and prints, for each step, whether it ran or was skipped (and why), followed by the particulars: the near-duplicate groups it would fold; each proposed consolidation cluster with the notes it would fold, the digest it would write, the notes kept standalone, and any contradictions; the demotion arithmetic (the cap, how many active memories are counted, how many are exempt (hand-written notes and digests), how many over the cap, how many would go); the number it would retire; and the subjects whose Commonplace files would change. A dry run across `all` prints one line per character instead, and may not include `consolidate` — rehearsing a model call for every character in the house would be an extravagance the server politely declines.
 
 Without `--dry-run`, the server queues one maintenance job per character and the CLI prints their ids; watch `quilltap memories status` or the logs to see them land. A run by hand ignores the master *enabled* switches — you asked, after all.
 
@@ -298,4 +298,4 @@ All `memories` verbs are read-only. They open the main encrypted database (`quil
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=memory")`
+`help_navigate(url: "/settings?group=context-memory")`

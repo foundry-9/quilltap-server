@@ -357,8 +357,8 @@ describe('deliverRecall', () => {
     const bundle = await assembleRecall(plan())
     const delivery = await deliverRecall(bundle, { characterId: LYRA, chat: { id: 'chat-1' }, deliveredText: everything(bundle) })
 
-    const ring = (repos.chats.update.mock.calls[0][1] as { commonplaceRecallHistory: { turns: string[][] } }).commonplaceRecallHistory
-    expect(ring.turns).toEqual([bundle.pools.head])
+    const ring = (repos.chats.update.mock.calls[0][1] as { commonplaceRecallHistory: { byCharacter: Record<string, string[][]> } }).commonplaceRecallHistory
+    expect(ring.byCharacter).toEqual({ [LYRA]: [bundle.pools.head] })
     expect(delivery.debugLog.find(l => l.startsWith(RECALL_RING_PREFIX))).toBe(`${RECALL_RING_PREFIX} ${bundle.pools.head.join(' ')}`)
     // The stage trace rides in the debug record.
     expect(delivery.debugLog.some(l => l.startsWith('[Recall] query'))).toBe(true)

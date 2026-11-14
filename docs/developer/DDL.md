@@ -289,10 +289,28 @@ left to fall back to), mirroring the project/group stores: a vault-linked
 character whose `properties.json` keystone is missing/unreadable causes
 `findById` to throw `CharacterVaultUnavailableError` (mapped to a 503 by the
 route handler) and list reads (`findAll`/`findByIds`) to drop the offending
-row. Existence-only callers (delete, ownership pre-checks, cascade delete) read
+row. A keystone that is present but will not parse also makes `findById`
+throw (4.13); list reads take its settings at their defaults, so the character
+stays in the roster. Existence-only callers (delete, ownership pre-checks, cascade delete) read
 `findByIdRaw`, which never applies the overlay, so a broken vault stays
-deletable/repairable; the startup backfill repopulates a linked-but-empty vault
-from the raw row.
+deletable/repairable.
+
+**Row and entity are two types (4.13).** `CharacterRowSchema` is this table;
+`CharacterManagedFieldsSchema` is the vault-managed fields; `CharacterSchema`
+is the row extended with them (`lib/schemas/character.types.ts`).
+`CHARACTER_MANAGED_FIELDS` and `characterManagedDefaults()` are derived from the
+schemas. `findByIdRaw`, `findAllRaw`, `findByStorePointerRaw` and
+`createBoundToStore` return `CharacterRow`; every other read returns the
+hydrated `Character`. The repository validates rows with the row schema, so a
+managed field can never reach an `UPDATE`.
+
+**The heal never writes over content (4.13, #148).** At boot,
+`backfillCharacterVaults` seeds an *absent* `properties.json` (defaults) and an
+absent `metadata.json` (`{}`), and nothing else. A present `properties.json`
+that fails to parse is logged at `error`, listed in the Almanack, and left
+alone. `GET /api/v1/characters/[id]?action=vault-health` reports which layout
+files are present and which parse; `POST …?action=repair-vault` seeds only
+what is absent.
 
 ```sql
 CREATE TABLE "characters" (
@@ -349,17 +367,32 @@ keyed by `(mountPointId, relativePath)` where `mountPointId` matches
 | manifesto | `manifesto.md` |
 | personality | `personality.md` |
 | exampleDialogues | `example-dialogues.md` |
-| pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit, canDrawDiagrams, diagramStyle | `properties.json` — `canChooseOutfit` and `canDrawDiagrams` are optional-with-default (absent hydrates as `false`); `diagramStyle` is `'handDrawn'` or `'clean'`, and absent or unrecognized hydrates as `'handDrawn'`. Old vaults need no backfill and no migration exists. |
-| metadata | `metadata.json` — optional; a flat object of user-authored keys with any JSON value. Absent file or unparseable content hydrates as `{}` (**not** a keystone — only `properties.json` may declare a vault broken), so old vaults need no backfill and no migration exists. A patch REPLACES the whole object rather than merging keys. One **reserved key**, `progressions`, holds the character's timed spans and IS validated — by `lib/progressions/schema.ts` (the runtime source of truth), mirrored for editors at `public/schemas/qtap-progression.schema.json`. Validation happens at the point of use, not at hydration: the parser stays shape-agnostic, and a malformed entry is dropped alone with a `warn` while its siblings survive. Every other key stays freeform and unchecked. No migration: the key appears on first write. |
+| pronouns, birthday, aliases, title, firstMessage, talkativeness, canChooseOutfit, canDrawDiagrams, diagramStyle, kind | `properties.json` — `birthday` (4.13) is a `YYYY-MM-DD` calendar date or `null`; absent or not a real date hydrates as `null`, and the age is derived from it (`lib/characters/birthday.ts`), never stored; `canChooseOutfit` and `canDrawDiagrams` are optional-with-default (absent hydrates as `false`); `diagramStyle` is `'handDrawn'` or `'clean'`, and absent or unrecognized hydrates as `'handDrawn'`; `kind` (4.13) is `'roleplay'` or `'assistant'`, and absent or unrecognized hydrates as `'roleplay'` (read only through `lib/characters/kind.ts`). Old vaults need no backfill and no migration exists. |
+| metadata | `metadata.json` — optional; a flat object of user-authored keys with any JSON value. Absent file or unparseable content hydrates as `{}` (**not** a keystone — only `properties.json` may declare a vault broken), so old vaults need no backfill and no migration exists. A patch REPLACES the whole object rather than merging keys — in the repository and in every job-child writer (Pascal's effects). **One exception (4.13):** the HTTP route's `PUT /api/v1/characters/[id]?action=patch-metadata` takes `{ set, unset }` and merges keys server-side under the character's write chain (`CharactersRepository.patchMetadata`), so two editors cannot race a read-merge-replace; a present sheet that is not a JSON object is refused (409), never merged over. One **reserved key**, `progressions`, holds the character's timed spans (each with a `public` flag, default `true`, deciding whether it joins the character's public identity) and IS validated — by `lib/progressions/schema.ts` (the runtime source of truth), mirrored for editors at `public/schemas/qtap-progression.schema.json`. Validation happens at the point of use, not at hydration: the parser stays shape-agnostic, and a malformed entry is dropped alone with a `warn` while its siblings survive. Every other key stays freeform and unchecked. No migration: the key appears on first write. |
 | physicalDescription.fullDescription | `physical-description.md` |
-| physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt, physicalDescription.humanoid | `physical-prompts.json` — `humanoid` is optional (absent hydrates as `true`), so old vaults need no backfill and no migration exists. A write that omits it keeps the vault's current value. |
+| physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt, physicalDescription.humanoid | `physical-prompts.json` — `humanoid` is optional (absent hydrates as `true`), so old vaults need no backfill and no migration exists. A write that omits it keeps the vault's current value. A `null` physical description (the card's Clear) empties both files and keeps `humanoid` (4.13, #149). |
 | systemPrompts[] | `Prompts/<sanitized-name>.md` (one file per record) |
 | scenarios[] | `Scenarios/<sanitized-title>.md` (one file per record). Frontmatter carries `description` and, since 4.9, `archived: true` — omitted entirely while the scenario is active. The same `archived` key marks a scenario archived in the other three scopes (general, project, group `Scenarios/` folders). |
 
-Reads go through `applyDocumentStoreOverlay()` in
-`lib/database/repositories/character-properties-overlay.ts`; writes through
-`applyDocumentStoreWriteOverlay()`. The repository's `*Raw` helpers bypass
-the overlay (used by exports and the migration's populator).
+The table above is `CHARACTER_VAULT_LAYOUT` in
+`lib/characters/vault/layout.ts`, the one declarative description of the
+layout: each entry's file(s), codec, defaults, scaffold seed and keystone
+status. Hydration (`hydrate.ts`), patch routing and the full projection
+(`write.ts`), the scaffold (`scaffold.ts`), the adoption / sync keystones, the
+archive keep-set and the "character files" health figure all derive from it.
+The repository's `*Raw` helpers bypass the vault.
+
+**Prompt and scenario ids (4.13).** `Prompts/*.md` and `Scenarios/*.md`
+frontmatter carries `id:` (a UUID). A file without one takes the old
+path-derived id (`stableUuidFromString('prompt:<mount>:<path>')`, `scenario:` for
+scenarios — `resolveFileItemId` in `lib/utils/stable-uuid.ts`), so nothing
+already referencing it breaks; the next write stamps that id in, and from then
+on the id survives a rename. The project, group and General `Scenarios/`
+folders follow the same rule. Prompts and scenarios are written one file at a
+time (`lib/characters/vault/items.ts`), never as a whole array through
+`update()`, and nothing sweeps a file that does not parse as an item. The
+physical description's id is derived from the vault
+(`physicalDescriptionIdFor`), never stored.
 
 ### wardrobe_items — DROPPED in 4.7 (`drop-wardrobe-items-table-v1`)
 
@@ -565,6 +598,45 @@ next real change appends at `max + 1`. Unbounded; nothing prunes or renumbers.
 - DDL single source: `lib/database/backends/sqlite/chat-wardrobe-history-ddl.ts`.
   Design of record: `docs/developer/features/complete/wardrobe-outfit-history.md`.
 
+### chat_avatar_timeline
+
+```sql
+CREATE TABLE "chat_avatar_timeline" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL REFERENCES "chats"("id") ON DELETE CASCADE,
+  "characterId" TEXT NOT NULL,   -- no FK: characters may be archived tombstones
+  "imageId" TEXT,                -- vault link id or legacy files.id; NULL = the character's own avatar from here on
+  "effectiveAt" TEXT NOT NULL,   -- ISO time the avatar took effect (the bind); baselines use 1970-01-01T00:00:00.000Z
+  "source" TEXT NOT NULL,        -- baseline | generated | cache | operator | operator-removed
+  "createdAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_chat_avatar_timeline_chat"
+  ON "chat_avatar_timeline" ("chatId", "characterId", "effectiveAt");
+```
+
+The Salon avatar timeline (added 4.13 by `add-chat-avatar-timeline-table-v1`, no
+seeding). Per character per chat, the avatars the chat has bound, dated, so each
+Salon bubble is drawn with the avatar in force when it was written
+(`avatarAt`, `lib/chat/salon-avatar.ts`). Append-only.
+
+- The only runtime writer is `ChatAvatarTimelineRepository.record`
+  (`lib/database/repositories/chat-avatar-timeline.repository.ts`), called from the
+  avatar job's `bindAvatarToChat` (`generated` / `cache`) and the chat route's
+  `set-avatar` / `remove-avatar` (`operator` / `operator-removed`). From the job
+  child it is buffered whole and replayed in the parent. `upsertRows` is for
+  restore and import only.
+- The first `record` for a pair also writes a `baseline` row holding what the chat
+  showed before (its prior `avatarOverrides` entry, or NULL), so an older chat's
+  earlier bubbles keep their look.
+- Rows are never rewritten when an image is deleted; the resolver falls back to the
+  latest surviving image for that character in the chat, then the current avatar.
+- Chat deletion cascades. Character deletion calls `deleteByCharacter`.
+- Exported in `.qtap` bundles as `avatar_timeline` records and included in backups
+  (`data/avatar-timeline.json`).
+- DDL single source: `lib/database/backends/sqlite/chat-avatar-timeline-ddl.ts`.
+  Design of record: `docs/developer/features/complete/salon-avatar-timeline.md`.
+
 ### outfit_presets — REMOVED in 4.5
 
 The `outfit_presets` table was eliminated; named outfit bundles are now expressed as composite `wardrobe_items` rows whose `componentItemIds` references the constituent items. Migrations `migrate-outfit-presets-to-composites-v1` and `drop-outfit-presets-table-v1` perform the fold-and-drop. A snapshot of the table content is written to `<dataDir>/backup/pre-drop-outfit-presets.json` before the drop.
@@ -636,7 +708,7 @@ CREATE TABLE "chats" (
   "lastFullRebuildTurn" INTEGER DEFAULT 0,
   "summaryAnchorMessageIds" TEXT DEFAULT '[]',
   "isPaused" INTEGER DEFAULT 0,
-  "turnMode" TEXT DEFAULT NULL,               -- Storyteller mode: 'rotation' (NULL) or 'storyteller'. Patch-only: written only by ChatsRepository.setTurnMode. Independent of isPaused. Added by add-storyteller-mode-v1.
+  "turnMode" TEXT DEFAULT NULL,               -- Turn mode: 'rotation' (NULL), 'turns' (one full cycle, then stop) or 'storyteller'. Patch-only: written only by ChatsRepository.setTurnMode. Independent of isPaused. Added by add-storyteller-mode-v1.
   "storytellerInviteFilter" INTEGER DEFAULT 0, -- Storyteller mode: 1 = invite each seat to bid with probability 0.25 + 0.75 × talkativeness; 0 = invite everyone. Added by add-storyteller-mode-v1.
   "isManuallyRenamed" INTEGER DEFAULT 0,
   "impersonatingParticipantIds" TEXT DEFAULT '[]',
@@ -672,6 +744,9 @@ CREATE TABLE "chats" (
   "conciergeModeReason" TEXT DEFAULT NULL,  -- 'manual' | 'refusals' | 'classifier' | 'migration'; why the chat is in its conciergeMode. NULL when Moderated. Added by add-chat-concierge-mode-v1.
   "moderationRefusalCount" INTEGER NOT NULL DEFAULT 0,  -- The Concierge's refusal ledger: stated moderation refusals (typed-error, provider-code, finish-reason, message-pattern; never 'inferred') since the chat was last set to Moderated. Incremented atomically (SET v = v + 1) only by ChatsRepository.incrementModerationRefusalCount, called only by recordModerationRefusal (lib/services/dangerous-content/refusal-ledger.ts); reset to 0 only by applyConciergeFlip's 'moderated' case. At autoSwitchAfterRefusals on a Moderated AUTO_ROUTE chat the Concierge switches it to Unmoderated. **Deliberately absent from ChatMetadataSchema**, like transcriptVersion, so a whole-row update() cannot rewind it; read it with ChatsRepository.getModerationRefusalLedger. Not exported in .qtap bundles. Added by add-chat-refusal-ledger-v1.
   "lastModerationRefusalAt" TEXT DEFAULT NULL,  -- ISO timestamp of the most recent ledger entry; written and reset beside moderationRefusalCount, same rules. Added by add-chat-refusal-ledger-v1.
+  "openingState" TEXT NOT NULL DEFAULT 'done',  -- 'pending' | 'running' | 'done': how far the chat's opening (lib/chat/opening/run.ts — Green Room dressing and packing, staff posts, the greeting) has got. Casting writes 'pending'; the Salon opens a chat that is not 'done'; a startup reconciler returns 'running' rows older than ten minutes to 'pending'. **Patch-only and deliberately absent from ChatMetadataSchema**, written only by ChatsRepository.setOpeningState from lib/chat/opening/ (a grep-test holds it). Not exported in .qtap bundles nor backed up — a restored or imported chat reads as 'done' by the default. Added by add-chat-opening-state-v1.
+  "openingPhase" TEXT DEFAULT NULL,  -- The last opening phase completed (an OPENING_PHASES key); a resumed opening starts at the next one. Same rules as openingState. Added by add-chat-opening-state-v1.
+  "openingPlan" TEXT DEFAULT NULL,  -- JSON { outfitSelections?, sourceChatId? }: what casting asked of the opening (the operator's outfit choices, a continuation's source chat), kept until the opening finishes and then cleared. Same rules as openingState. Added by add-chat-opening-state-v1.
   "answerConfirmationOverride" TEXT DEFAULT NULL,  -- per-chat answer-confirmation override: NULL = inherit (project override, then global); 'ON'/'OFF' = force the Salon consistency check on/off. Added by add-answer-confirmation-columns-v2.
   "turnQueue" TEXT DEFAULT '[]',
   "spokenThisCycleParticipantIds" TEXT DEFAULT '[]',  -- JSON array of participantIds that have spoken in the current rotation cycle (includes user-controlled characters)
@@ -686,6 +761,8 @@ CREATE TABLE "chats" (
   "chatType" TEXT DEFAULT 'salon',                  -- 'salon' | 'help' | 'autonomous' | 'brahma'
   "helpPageUrl" TEXT DEFAULT NULL,
   "consoleConnectionProfileId" TEXT DEFAULT NULL,   -- Brahma Console (chatType='brahma') active model; NULL on other chats
+  "consoleMode" TEXT DEFAULT NULL,                  -- Brahma Console: 'writing' = Writing Assistant conversation (set at creation, never changed); NULL = ordinary Console
+  "consoleContext" TEXT DEFAULT NULL,               -- Brahma Console Writing Assistant: JSON array of ConsoleContextRef ({kind:'chat'|'project'|'store', id} | {kind:'general'}); NULL/[] = none
   "scenarioText" TEXT DEFAULT NULL,
   "scenarioSource" TEXT DEFAULT NULL,                -- JSON { mountPointId, path, bodySha256 }: the scenario file the preset under scenarioText was read from, and its body hash at pick time. NULL = custom scene or pre-source chat. Written only beside scenarioText by resolveScenarioSelection's two callers. Added by add-chat-scenario-source-v1
   "scenarioNotes" TEXT DEFAULT NULL,                 -- free-text notes layered beneath the preset in scenarioText. Added by add-chat-scenario-source-v1
@@ -1117,7 +1194,7 @@ CREATE TABLE "chat_settings" (
   "avatarDisplayMode" TEXT DEFAULT 'ALWAYS',
   "avatarDisplayStyle" TEXT DEFAULT 'CIRCULAR',
   "tagStyles" TEXT DEFAULT '{}',
-  "cheapLLMSettings" TEXT DEFAULT '{}',
+  "cheapLLMSettings" TEXT DEFAULT '{}', -- JSON { strategy, userDefinedProfileId, defaultCheapProfileId, fallbackToLocal, embeddingProvider, allowCheapFallback, outfitSelectionProfileId (4.13: the Green Room's opening-outfit profile, null = the cheap LLM) }
   "imageDescriptionProfileId" TEXT,
   "uncensoredImageDescriptionProfileId" TEXT, -- DEPRECATED in 4.10: no longer read; moved to conciergeSettings.uncensoredVisionProfileId by add-concierge-settings-v1. Column retained until a housekeeping migration drops it. (Added in 4.4 by add-uncensored-image-description-profile-field-v1.)
   "defaultRoleplayTemplateId" TEXT,
@@ -1243,7 +1320,13 @@ CREATE TABLE "connection_profiles" (
   -- models refuse a request carrying more than four. A Salon turn keeps the
   -- newest and describes the rest in text. Read it only through
   -- resolveMaxImagesPerRequest() (lib/llm/connection-profile-utils.ts).
-  "maxImagesPerRequest" INTEGER DEFAULT 4
+  "maxImagesPerRequest" INTEGER DEFAULT 4,
+  -- How many turns (assistant messages after it) a tool result is sent to
+  -- this profile in full before its body becomes a one-line stub in the
+  -- history. 0 = never elide. Eliding rewrites the history part-way up, which
+  -- re-writes a provider prompt cache from that point. Read it only through
+  -- resolveToolResultVerbatimTurns() (lib/llm/connection-profile-utils.ts).
+  "toolResultVerbatimTurns" INTEGER DEFAULT 3
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);
@@ -1368,7 +1451,7 @@ CREATE INDEX "idx_files_userId" ON "files" ("userId");
 
 **Invariant (enforced at write time):** `sha256`, `mimeType` and `size` all describe the bytes **actually stored**, never the bytes handed to the writer. The Scriptorium storage bridges transcode bitmap uploads to WebP (`transcodeToWebP`, via `storeMountFile`), so a writer that records its input describes a file that exists nowhere. All three are therefore taken from the bridge's return value; `lib/chat-files-v2.ts` additionally runs the bridge's own transcode before hashing, so the one hash serves both upload dedup and the join to `doc_mount_files.sha256` — the join that carries an image's description into the search index and lets `describe_image` / `attach_image` resolve a mount link back to its FileEntry.
 
-`mimeType`/`size` were brought into line by `repair-files-mime-and-size-from-mount-blob-v1`, which deliberately left `sha256` alone on the grounds that it was load-bearing for dedup; that carve-out was bug 117, and `realign-file-entry-sha256-v1` closes it by reading each row's hash back out of the mount blob its `storageKey` names.
+`mimeType`/`size` were brought into line by `repair-files-mime-and-size-from-mount-blob-v1`, which deliberately left `sha256` alone on the grounds that it was load-bearing for dedup; that carve-out was bug 117, and `realign-file-entry-sha256-v1` closes it by reading each row's hash back out of the mount blob its `storageKey` names. `recompress-oversized-mount-blobs-v1` (4.10) originally rewrote only `sha256` after re-encoding a blob, which left rows claiming PNG/JPEG at the old size; it now writes all three, and `repair-files-mime-and-size-from-mount-blob-v2` mends instances that ran the first version.
 
 `generationKey` is the avatar configuration cache key: one image per character per configuration, looked up before the avatar job spends a Concierge classification call or an image call. It hashes the generation prompt (itself already the canonical serialization of the character's appearance, resolved outfit and art direction, since `buildCharacterAvatarPrompt` is pure) together with the provider-side shape the prompt does not carry — provider, image profile id and the full `buildImageGenParams` output. `lib/image-gen/avatar-cache.ts` is the only thing that derives or looks up a key; a call site that computes its own is a second format, and the two drift. Binding is last-write-wins, which is what makes the regenerate button a reroll for that configuration. Rows predating the cache carry a lower-fidelity `v: 0` key over `(generationModel, generationPrompt)` alone, assigned by `collapse-duplicate-avatar-rolls-v1`; the `v` discriminator inside the hashed payload keeps the two formats from ever colliding. Null on every file that is not a cached avatar. Design of record: [avatar-configuration-cache](features/complete/avatar-configuration-cache.md).
 
@@ -1485,7 +1568,7 @@ CREATE TABLE "memories" (
   "updatedAt" TEXT NOT NULL,
   "reinforcementCount" INTEGER DEFAULT 1,
   "lastReinforcedAt" TEXT DEFAULT NULL,
-  "relatedMemoryIds" TEXT DEFAULT '[]',
+  "relatedMemoryIds" TEXT DEFAULT '[]',  -- JSON ids; two-way between a holder's own rows (both sides written). One-way links left by pre-4.13 consolidation were given their other side by symmetrize-memory-links-v1 (4.13).
   "reinforcedImportance" REAL DEFAULT 0.5,
   "witnessedContext" TEXT DEFAULT NULL,  -- added in 4.6 (add-autonomous-rooms-fields-v1): 'user_present' | 'autonomous_room' | 'manual'. NULL on legacy rows.
   "occurredAt" TEXT DEFAULT NULL,        -- added in 4.9 (add-episodic-memory-fields-v1): ISO wall-clock EVENT time (vs createdAt, the write clock). Backfilled from the source message's createdAt, else the memory's own createdAt. Resolved dates are local window starts on the instance memory calendar; legacy UTC-midnight values were re-stamped at local midnight of the same date in 4.10 (rezone-legacy-memory-occurred-at-v1).
@@ -1493,7 +1576,7 @@ CREATE TABLE "memories" (
   "entities" TEXT DEFAULT '[]',          -- added in 4.9: JSON string[] of the episode's proper nouns (places, people, named things)
   "kind" TEXT DEFAULT 'semantic',        -- added in 4.9: 'semantic' (standing fact) | 'episodic' (specific dated occurrence)
   "tier" TEXT DEFAULT 'hot',             -- added in 4.10 (add-memory-tiers-v1): 'hot' | 'cold'. Cold = consolidated member or cap-pressure demotion; hidden from ordinary recall, still read by the gate, search tool, UI and CLI
-  "supersededById" TEXT DEFAULT NULL,    -- added in 4.10: id of the CONSOLIDATED digest that replaced this cold row
+  "supersededById" TEXT DEFAULT NULL,    -- added in 4.10: id of the row that replaced this cold row — the CONSOLIDATED digest that folded it in (and lists it in consolidatedFrom), or, for the older side of a contradiction, the row carrying the newer fact (no consolidatedFrom entry). Admission redirects only in the first case (4.13).
   "supersededAt" TEXT DEFAULT NULL,      -- added in 4.10 (add-memory-superseded-at-v1): when the row went cold under its digest; set/cleared with supersededById. Cold retention ages by it, not updatedAt (bug 225). Backfilled from updatedAt for rows already superseded
   "consolidatedFrom" TEXT DEFAULT '[]',  -- added in 4.10: on a digest, JSON string[] of the member memory ids it folds
   "consolidatedAt" TEXT DEFAULT NULL,    -- added in 4.10: last time the consolidator considered this row
@@ -1566,6 +1649,15 @@ CREATE TABLE "roleplay_templates" (
 CREATE INDEX "idx_roleplay_templates_createdAt" ON "roleplay_templates" ("createdAt" DESC);
 CREATE INDEX "idx_roleplay_templates_userId" ON "roleplay_templates" ("userId");
 ```
+
+> **Built-in ids (since `rekey-built-in-roleplay-templates-v1`, 4.13):** a row with
+> `isBuiltIn = 1` has the fixed id `builtInRoleplayTemplateId(name)` — a UUIDv5 of its
+> name in a fixed namespace (`lib/roleplay-templates/built-in-ids.ts`) — the same on
+> every instance, so restored and imported pointers resolve. The migration re-keyed
+> older rows and `characters.defaultRoleplayTemplateId`, `chats.roleplayTemplateId`,
+> `chats.participants[].roleplayTemplateId` and `chat_settings.defaultRoleplayTemplateId`;
+> projects' pointers (in `properties.json`) are re-keyed at boot from the
+> `instance_settings` key `builtInRoleplayTemplateRekeys`, which is then deleted.
 
 > **`delimiters` JSON shape (since `rp-delimiter-kinds-v1`):** each entry is a
 > discriminated union on `kind`: `{ kind: 'wrap', name, buttonName, delimiters, style }`
@@ -1814,7 +1906,7 @@ Known keys (others may be present from migrations / startup hooks):
 - `memoryExtractionLimits` (4.4+) — JSON: `{enabled, maxPerHour, softStartFraction, softFloor}` (`maxPerHour` 1–10,000). Per-instance memory extraction rate limits, edited on the Extraction Grain card. Read by `lib/background-jobs/handlers/memory-extraction.ts` and the dry-run extraction route; updated by `POST /api/v1/memories?action=extraction-limits-config`. Migrated from `chat_settings.memoryExtractionLimits` for SINGLE_USER_ID by `migrate-extraction-knobs-to-instance-settings-v1`.
 - `memoryRecall` (4.7+) — JSON: `{scopePolicy: 'down-weight' | 'exclude', expandRelated: boolean, perTurnConversationSummaries: boolean}`. Per-instance Commonplace Book recall relevance settings. `scopePolicy` controls what happens to a `scope: narrow` memory whose `projectId` differs from the current chat's project (cross-project leakage): `down-weight` (default) applies a strong recall penalty, `exclude` filters it out entirely. `expandRelated` (default `false`, added in Phase 2) is the opt-in related-memory one-hop expansion toggle: when on, recall pulls each top hit's strongly-linked related memories in as extra candidates (capped at 3 per hit, 10 total), scores them against the same query embedding, and re-ranks the union. `perTurnConversationSummaries` (default `false`, added in 4.9) makes every turn's consolidated Commonplace Book whisper carry a freshly-searched relevant-past-conversations list from the character's vault `Conversation Summaries/` folder, reusing the vector the turn's memory search already embedded (no extra embedding call); off, that list refreshes only at chat start / character join, on each summary fold, and on retrospective turns. Read on the per-turn recall path (`lib/chat/context-manager.ts`, `lib/services/chat-message/pre-compute.service.ts`) via `getMemoryRecallSettings`; updated by `POST /api/v1/memories?action=recall-config`. No column on `chat_settings` (every memory knob lives instance-wide, behind `resolveMemorySettings`). Schema: `MemoryRecallSettingsSchema` in `lib/schemas/settings.types.ts`.
 - `dataRetention` (4.8+) — JSON: `{staleChatDays: number}` (1–3650, default 30). Per-instance stale-chat retention window: how many days a chat must sit with no *played* message (participant character or human user; feature whispers don't count) before the daily maintenance sweep collapses its regenerable data — superseded generated images, `chats.compressionCache`/`compiledIdentityStacks`, and the discardable `chat_messages` columns (`rawResponse`, `reasoningContent`, `reasoningSegments`, `renderedHtml`, `debugMemoryLogs`). Conversation-chunk embeddings are deliberately **not** touched (4.10+): they are ~1 KB each and are what lets semantic search reach old conversations. Resolved by `resolveStaleChatDays()` (`lib/background-jobs/maintenance/retention-constants.ts`); accessors in `lib/instance-settings`; updated by `PUT /api/v1/settings/data-retention` (Settings → Chat → Data Retention). Schema: `DataRetentionSettingsSchema` in `lib/schemas/settings.types.ts`.
-- `brahmaConsole` — JSON: `{maxAgentTurns: number, inlineConnectionProfileId?: UUID | null}` (`maxAgentTurns` 5–200, default 50). The Brahma Console's agent-turn budget (resolved by `resolveBrahmaMaxAgentTurns`) and, since 4.12, the connection profile the inline `@Brahma:` / `@Brahma?` answerer uses in Salon chats (null = the user's default profile; a project's `brahmaConnectionProfileId` in `properties.json` overrides it; resolved only by `resolveInlineBrahmaConnectionProfile` in `lib/services/brahma-console/inline-profile.ts`, which lets a stale id fall through). Updated by `PUT /api/v1/settings/brahma-console` (Settings → Chat → Brahma Console; the PUT merges over the stored value). Backup restore in new-account mode remaps `inlineConnectionProfileId`. Schema: `BrahmaConsoleSettingsSchema` in `lib/schemas/settings.types.ts`.
+- `brahmaConsole` — JSON: `{maxAgentTurns: number, inlineConnectionProfileId?: UUID | null}` (`maxAgentTurns` integer ≥ 1, no upper bound, default 10). The Brahma Console's agent-turn budget (resolved by `resolveBrahmaMaxAgentTurns`) and, since 4.12, the connection profile the inline `@Brahma:` / `@Brahma?` answerer uses in Salon chats (null = the user's default profile; a project's `brahmaConnectionProfileId` in `properties.json` overrides it; resolved only by `resolveInlineBrahmaConnectionProfile` in `lib/services/brahma-console/inline-profile.ts`, which lets a stale id fall through). Updated by `PUT /api/v1/settings/brahma-console` (Settings → Chat → Brahma Console; the PUT merges over the stored value). Backup restore in new-account mode remaps `inlineConnectionProfileId`. Schema: `BrahmaConsoleSettingsSchema` in `lib/schemas/settings.types.ts`.
 - `taboo` (4.8+) — JSON: `{phrases: string[]}` (each 1–200 chars after trim, at most 500 entries, default `[]`). Per-instance list of phrases characters must never say. Normalized on write (trim, drop empties, case-insensitive dedupe, **user order preserved** — the rendering sits in the cacheable system-prompt prefix, so order is deliberately not sorted). Read once per turn by `buildContext()` (`lib/chat/context-manager.ts`) via `getTabooSettings` and rendered by `renderTabooSection` (`lib/chat/context/system-prompt-builder.ts`) between the universal math-formatting note and the per-turn tool instructions; an empty list renders no section at all. Updated by `PUT /api/v1/settings/taboo` (Settings → Chat → Taboo). Accessors in `lib/instance-settings`. Schema: `TabooSettingsSchema` in `lib/schemas/settings.types.ts`.
 - `lastMaintenanceSweepAt` (4.7+) — ISO 8601 timestamp of the last completed scheduled-maintenance pass. Written/read by `lib/background-jobs/scheduled-maintenance.ts` to skip the startup tick when a sweep ran within the last 20 h (dev-restart friendliness). Internal; not exported.
 - `lanternBackgroundsMountPointId` (4.3+) — UUID of the global "Lantern Backgrounds" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/file-storage/lantern-store-bridge.ts`; written by `provision-lantern-backgrounds-mount-v1`. Used to land story-background job output and generic `generate_image` tool output when no project context is available.
@@ -2099,7 +2191,7 @@ The UNIQUE index on `(mountPointId, relativePath COLLATE NOCASE)` enforces "one 
 
 **An omitted metadata field on `linkBlobContent`'s UPDATE branch means "keep", not "blank" (bug 155).** `description`/`descriptionUpdatedAt`, `extractedText`/`extractedTextSha256`, and `extractionStatus` join the SET clause only when their input field is present, so a byte-only overwrite — `file-ops.writeDestBytes`, `docs write --force`, the sync's store-side applier — leaves the caption alone. An explicit `description: ''` still clears it. The INSERT branch keeps its blank defaults.
 
-**A repoint zeroes `chunkCount` and deletes the link's chunks (bug 156).** Chunks are keyed by `linkId` and cascade only on link *deletion*, so an overwrite used to orphan the previous revision's rows in place while the link went on claiming `chunkCount > 0, conversionStatus = 'converted'` — exactly the predicate `rescanDatabaseMountPoint` uses to decide a link needs nothing done. `linkDocumentContent` now drops them whenever `fileId` actually changes (and `fanOutGroupFileId` does the same for the group members whose content moved), so writers that re-chunk immediately set the real count back moments later and writers that do not are collected by the next rescan.
+**A repoint zeroes `chunkCount` and deletes the link's chunks (bug 156).** Chunks are keyed by `linkId` and are dropped only when the link is deleted (explicitly — see `doc_mount_chunks` below), so an overwrite used to orphan the previous revision's rows in place while the link went on claiming `chunkCount > 0, conversionStatus = 'converted'` — exactly the predicate `rescanDatabaseMountPoint` uses to decide a link needs nothing done. `linkDocumentContent` now drops them whenever `fileId` actually changes (and `fanOutGroupFileId` does the same for the group members whose content moved), so writers that re-chunk immediately set the real count back moments later and writers that do not are collected by the next rescan.
 
 The three `allow*` columns are the per-document policy, derived from a markdown document's YAML frontmatter at index time (positive sense: `1` == permissive == the frontmatter default of `true`). `allowEmbed` (frontmatter `embed`) gates inclusion in the embedding pipeline — `0` skips embedding and NULLs any existing chunk vectors. `allowCharacterRead` (`character_read`) gates whether LLM characters may read/list/grep/RAG the document — `0` makes it invisible to them (the human operator is unaffected). `allowCharacterWrite` (`character_write`) gates character-initiated mutation. `character_read` is the master gate: the coercion in `lib/doc-edit/document-policy.ts` forces `allowEmbed` and `allowCharacterWrite` to `0` whenever `allowCharacterRead` is `0`, so the stored columns are the *effective* policy (a row with `allowCharacterRead = 0, allowEmbed = 1` should never be written by the normal path). Non-markdown links keep the permissive defaults (no frontmatter to parse). The columns are re-derived on every reindex, so editing the frontmatter (operator or on-disk) is the control surface. See `lib/doc-edit/document-policy.ts` and the `add-doc-mount-file-policy-flags-v1` migration.
 
@@ -2120,7 +2212,7 @@ CREATE TABLE IF NOT EXISTS "doc_mount_chunks" (
 );
 ```
 
-Chunks are keyed by **linkId**, not by fileId — every hard link to a file maintains its own chunk + embedding set so consumers can re-extract independently. The `embedding` column stores quantized vectors (see "Embedding BLOB format" in the main-DB section; same codec as `conversation_chunks.embedding`). `mountPointId` is denormalized off the link row for fast per-mount queries.
+Chunks are keyed by **linkId**, not by fileId — every hard link to a file maintains its own chunk + embedding set so consumers can re-extract independently. **The foreign keys above are present only on tables the pre-4.5 `add-doc-mount-file-links` migration built; tables created by the schema translator carry none (#189).** Nothing may rely on the cascade: a link delete drops its chunks explicitly (`deleteWithGC`, `clearMountLinks`), and `reapOrphanedStoreChildren` collects chunks whose link is gone. The `embedding` column stores quantized vectors (see "Embedding BLOB format" in the main-DB section; same codec as `conversation_chunks.embedding`). `mountPointId` is denormalized off the link row for fast per-mount queries.
 
 ### project_doc_mount_links
 
@@ -2233,7 +2325,8 @@ where bytes must round-trip exactly.
 
 `sha256` is always recomputed from the stored bytes, so it describes what is
 actually in `data`. The `recompress-oversized-mount-blobs-v1` migration
-re-encoded rows written before the chokepoint existed; it deliberately leaves
+re-encoded rows written before the chokepoint existed (moving the matching
+`files` row's `sha256`, `mimeType` and `size` with it); it deliberately leaves
 `relativePath` alone (a `.png` may hold WebP bytes), because stored Markdown
 references the path and the serving routes take `Content-Type` from
 `storedMimeType`.

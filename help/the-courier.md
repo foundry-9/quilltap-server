@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers&section=the-courier
+url: /settings?section=connection-profiles
 ---
 
 # The Courier
 
-> **[Open this page in Quilltap](/settings?tab=providers&section=the-courier)**
+> **[Open this page in Quilltap](/settings?section=connection-profiles)**
 
 The Courier is Quilltap's manual transport — a connection profile that does not telephone any LLM provider on your behalf. Instead, when one of your characters comes due to speak, the Courier presents you with a tidy bundle of Markdown: everything Quilltap *would* have wired across the æther, neatly arranged so you may carry it, by hand, to whichever obliging engine you fancy. The reply you receive you simply paste back into Quilltap, and the parlour proceeds as if the message had arrived by ordinary post.
 
@@ -19,15 +19,17 @@ It is, in short, for those occasions when you would rather not give Quilltap you
 
 ## Setting up a Courier profile
 
-1. Open **Settings** (the gear icon) and select the **Providers** tab.
-2. Click **Add Connection Profile**.
+1. Open **Settings** (the gear icon), choose the **Connections** group, and open the **Providers** card.
+2. Open the card of any provider you already keep — the Courier, being a profile, lives inside a connection profile like any other — and choose **+ Add → Connection profile**. (Or switch the Providers card to **By kind**, open **Connection Profiles**, and click **Add Connection Profile**; a link to this page lands you there directly.)
 3. At the top of the form, set **Transport** to **The Courier (manual / clipboard)**. The form will tighten its sleeves and present you with only the fields a Courier actually needs.
 4. Give the profile a **name** that reminds you which destination you intend to carry messages to ("Claude desktop courier", "ChatGPT o3 in the web parlour", "Friday's local Llama", etc.).
 5. In **Which LLM will you carry to?**, type whatever you like — it's purely informational. Quilltap doesn't validate or call it; the label appears on the placeholder bubble so future-you remembers which window to switch to.
-6. Tick **Set as default profile** if you want every new chat to lean on The Courier by default, or **Mark as cheap LLM** if you intend to use it for housekeeping tasks like memory extraction (be warned: every cheap LLM call will also pause for you to paste).
+6. Tick **Set as default profile** if you want every new chat to lean on The Courier by default, or **Mark as cheap LLM** and choose it under **User Defined** on the Cheap LLM Settings card if you intend to use it for housekeeping tasks like memory extraction (be warned: every cheap LLM call will also pause for you to paste).
 7. Save.
 
-Once saved, you can attach this profile to any character (per-character default in the character editor) or to any chat participant (in the Participants drawer of the Chat Sidebar of a Salon).
+Once saved, the Courier profile appears on its provider's card with the other connection profiles, wearing the Forge's badge, and in the full Connection Profiles list under *By kind*. Its settings — the transport, the destination label, and delta mode — are all in the connection-profile form; open the profile from either place to change them.
+
+You can attach this profile to any character (per-character default in the character editor) or to any chat participant (in the Participants drawer of the Chat Sidebar of a Salon).
 
 ## Taking a Courier-bound turn
 
@@ -64,7 +66,7 @@ This makes for a markedly shorter bundle on every subsequent turn — particular
 
 Should your destination LLM lose the thread — a new conversation in the desktop client, an app restart, a switch from Claude to ChatGPT mid-scene — the bubble offers a graceful pivot: the **Use full context** button in the prompt toolbar swaps the displayed bundle to the full version (which Quilltap obligingly kept on hand). Copy that instead, paste it in, and the LLM is restored to its full briefing.
 
-To disable delta mode altogether — perhaps because you switch between clients on every turn — uncheck **Delta mode after first turn** when editing the Courier profile. Every turn will then arrive as a full bundle.
+To disable delta mode altogether — perhaps because you switch between clients on every turn — uncheck **Delta mode after first turn** when editing the Courier profile (open it from its provider's card, or from Connection Profiles under *By kind*). Every turn will then arrive as a full bundle.
 
 ## Some practical notes
 
@@ -78,4 +80,4 @@ To disable delta mode altogether — perhaps because you switch between clients 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=providers&section=the-courier")`
+`help_navigate(url: "/settings?section=connection-profiles")`

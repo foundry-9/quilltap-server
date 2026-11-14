@@ -1,10 +1,9 @@
 /**
- * runCharacterOptimizer — prompt-cache shape and usage logging.
+ * runCharacterOptimizer — the grounds a refinement works from.
  *
- * Every pass of a run shares the character and memory context and differs
- * only in its instruction, so the shared context travels as its own,
- * byte-identical user message ahead of the instruction; and every optimizer
- * log row carries the provider's usage and cache figures.
+ * Covers the memories / instructions / both choice: an instructions-only run
+ * never touches the Commonplace Book, a thin dossier with instructions carries
+ * on rather than stopping, and every LLM call carries the instructions.
  */
 
 import { runCharacterOptimizer } from '@/lib/services/character-optimizer.service';
@@ -39,8 +38,8 @@ const CHARACTER_ID = 'char-1';
 const PROFILE_ID = 'profile-1';
 
 const ANALYSIS_JSON = JSON.stringify({
-  behavioralPatterns: [{ pattern: 'Runs a bookshop', evidence: 'memory', frequency: 'often' }],
-  summary: 'She keeps a bookshop.',
+  behavioralPatterns: [{ pattern: 'Runs a bookshop', evidence: 'instruction', frequency: "Author's instruction" }],
+  summary: 'The author moves her to Bath.',
 });
 
 function makeRepos(memories = [] as ReturnType<typeof createMockMemory>[]) {
@@ -65,7 +64,7 @@ function reinforced(n: number) {
   );
 }
 
-describe('runCharacterOptimizer — prompt cache and usage logging', () => {
+describe('runCharacterOptimizer — memories and instructions', () => {
   let sendMessage: jest.Mock;
 
   beforeEach(() => {
@@ -84,21 +83,57 @@ describe('runCharacterOptimizer — prompt cache and usage logging', () => {
     jest.mocked(providerRegistry.isInitialized).mockReturnValue(true);
   });
 
-  async function run(repos: RepositoryContainer) {
+  async function run(repos: RepositoryContainer, options: Parameters<typeof runCharacterOptimizer>[5]) {
     const events: OptimizerProgressEvent[] = [];
-    await runCharacterOptimizer(CHARACTER_ID, PROFILE_ID, USER_ID, repos, (e) => events.push(e), {
-      useSemanticSearch: false,
-    });
+    await runCharacterOptimizer(CHARACTER_ID, PROFILE_ID, USER_ID, repos, (e) => events.push(e), options);
     return events;
   }
 
-  it('sends the shared context as one unchanging message ahead of each pass instruction', async () => {
-    const events = await run(makeRepos(reinforced(4)));
+  it('refuses a run with neither memories nor instructions', async () => {
+    const events = await run(makeRepos(), { useMemories: false, instructions: '   ' });
+    expect(events.at(-1)?.type).toBe('error');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('an instructions-only run never reads the Commonplace Book and carries the instructions to every call', async () => {
+    const repos = makeRepos(reinforced(5));
+    const events = await run(repos, { useMemories: false, instructions: 'She now runs a bookshop in Bath.' });
+
+    expect(repos.memories.findByCharacterAboutCharacter).not.toHaveBeenCalled();
+    expect(events.find((e) => e.type === 'step_complete' && e.step === 'loading')?.memoryCount).toBe(0);
     expect(events.at(-1)?.type).toBe('done');
+    expect(sendMessage.mock.calls.length).toBeGreaterThan(1);
+    for (const [req] of sendMessage.mock.calls) {
+      const user = req.messages[1].content as string;
+      expect(user).toContain('She now runs a bookshop in Bath.');
+      expect(user).toContain('No memories were consulted for this refinement.');
+    }
+    // The analysis is the instructions-only reading.
+    expect(sendMessage.mock.calls[0][0].messages[2].content).toContain("against the author's instructions");
+  });
+
+  it('a memories-only run with too few reinforced memories still stops early', async () => {
+    const events = await run(makeRepos(reinforced(1)), { useMemories: true });
+    expect(events.at(-1)?.type).toBe('done');
+    expect(events.at(-1)?.analysis?.summary).toBe('Not enough reinforced memories to analyze.');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('a thin dossier with instructions carries on, on the instructions alone', async () => {
+    const events = await run(makeRepos(reinforced(1)), { useMemories: true, instructions: 'Soften her temper.' });
+    expect(events.find((e) => e.type === 'step_complete' && e.step === 'loading')?.memoryCount).toBe(0);
+    expect(sendMessage).toHaveBeenCalled();
+    const firstUser = sendMessage.mock.calls[0][0].messages[1].content as string;
+    expect(firstUser).toContain('Soften her temper.');
+    expect(firstUser).not.toContain('Memory 0');
+    expect(events.at(-1)?.type).toBe('done');
+  });
+
+  it('sends the shared context as one unchanging message ahead of each pass instruction', async () => {
+    await run(makeRepos(reinforced(4)), { useMemories: true, instructions: 'Soften her temper.' });
     const calls = sendMessage.mock.calls.map(([req]) => req.messages as Array<{ role: string; content: string }>);
     expect(calls.length).toBeGreaterThan(2);
     const shared = calls[0][1].content;
-    expect(shared).toContain('Memory 0');
     for (const messages of calls) {
       expect(messages.map((m) => m.role)).toEqual(['system', 'user', 'user']);
       // Byte-identical across the run, so a prompt cache can hold it.
@@ -109,7 +144,7 @@ describe('runCharacterOptimizer — prompt cache and usage logging', () => {
   });
 
   it('logs each call with the provider usage and cache figures', async () => {
-    await run(makeRepos(reinforced(4)));
+    await run(makeRepos(reinforced(4)), { useMemories: true });
     const logged = jest.mocked(logLLMCall).mock.calls.map(([params]) => params);
     expect(logged.length).toBe(sendMessage.mock.calls.length);
     for (const params of logged) {
@@ -118,5 +153,14 @@ describe('runCharacterOptimizer — prompt cache and usage logging', () => {
       expect(params.cacheUsage).toEqual({ cacheCreationInputTokens: 0, cacheReadInputTokens: 5000 });
       expect(params.rawProviderUsage).toEqual({ input_tokens: 100, cache_read_input_tokens: 5000, output_tokens: 20 });
     }
+  });
+
+  it('memories and instructions together put both in front of the model', async () => {
+    const events = await run(makeRepos(reinforced(4)), { useMemories: true, instructions: 'Soften her temper.' });
+    const firstUser = sendMessage.mock.calls[0][0].messages[1].content as string;
+    expect(firstUser).toContain('Memory 0');
+    expect(firstUser).toContain('Soften her temper.');
+    expect(firstUser).toContain('the instructions win');
+    expect(events.find((e) => e.type === 'step_complete' && e.step === 'loading')?.memoryCount).toBe(4);
   });
 });

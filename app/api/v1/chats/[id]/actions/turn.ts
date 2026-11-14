@@ -1,7 +1,12 @@
 /**
  * Chats API v1 - Turn Actions
  *
- * Handles turn action (nudge/queue/dequeue)
+ * POST ?action=turn-nudge | turn-queue | turn-dequeue | turn-skip-user  `{ participantId }`
+ * POST ?action=turn-query  (no body) — the next speaker; a POST because a spent
+ *   rotation is redrawn and stored to answer it.
+ *
+ * The old `POST ?action=turn` with `{ action }` in the body answers for one
+ * release (`TURN_ACTION_KINDS` maps the action names to the body values).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -32,17 +37,30 @@ import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 
+/** The `?action=` names and the turn action each one is. */
+export const TURN_ACTION_KINDS = {
+  'turn-nudge': 'nudge',
+  'turn-queue': 'queue',
+  'turn-dequeue': 'dequeue',
+  'turn-query': 'query',
+  'turn-skip-user': 'skipUserTurn',
+} as const;
+
+export type TurnActionKind = (typeof TURN_ACTION_KINDS)[keyof typeof TURN_ACTION_KINDS];
+
 /**
- * Process a turn action (nudge, queue, dequeue, or query)
+ * Process a turn action. `kind` comes from the `?action=` name; when it is
+ * absent (the deprecated `?action=turn`), the body names it.
  */
 export async function handleTurnAction(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
-  { repos }: RequestContext
+  { repos }: RequestContext,
+  kind?: TurnActionKind,
 ): Promise<NextResponse> {
-  const body = await req.json();
-  const parsed = turnActionSchema.parse(body);
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const parsed = turnActionSchema.parse(kind ? { ...body, action: kind } : body);
   const turnAction = parsed.action;
   const participantId = 'participantId' in parsed ? parsed.participantId : undefined;
 

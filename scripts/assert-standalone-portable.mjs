@@ -114,7 +114,7 @@ if (offenders.length > 0) {
   console.error('   ride to every target and shadow the correct per-platform binary.');
   console.error('');
   console.error('   Most likely cause: the Next build used Turbopack instead of --webpack.');
-  console.error('   See docs/developer/bugs/fixed/bug-90-turbopack-smuggles-build-host-natives.md');
+  console.error('   See https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-90-turbopack-smuggles-build-host-natives.md');
   console.error('');
   process.exit(1);
 }

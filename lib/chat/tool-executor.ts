@@ -125,10 +125,9 @@ import {
 } from '@/lib/tools/handlers/terminal-handler';
 import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 import {
-  describeCeilingRefusal,
-  effectOfToolCall,
-  isWithinCeiling,
+  resolveToolPermit,
   type ToolEffect,
+  type ToolOffer,
 } from '@/lib/tools/effects';
 
 export interface ToolCallRequest {
@@ -264,6 +263,13 @@ export interface ToolExecutionContext {
   customToolEffects?: ReadonlyMap<string, ToolEffect>;
   /** Plugin / MCP tool name → declared effect. Missing tools count as `write`. */
   pluginToolEffects?: ReadonlyMap<string, ToolEffect>;
+  /**
+   * What this seat was offered this turn: `buildTools()`'s `offer` for a
+   * model-driven loop, `OPERATOR_TOOL_OFFER` for a run the operator started by
+   * hand. The executor refuses a built-in, plugin or MCP tool name that is not
+   * in it, and refuses every call when it is absent (`resolveToolPermit`).
+   */
+  toolOffer?: ToolOffer;
 }
 
 /**
@@ -360,35 +366,44 @@ export async function executeToolCallWithContext(
     };
   }
 
-  // The effect ceiling — the one place a call's effect is checked.
-  if (context.effectCeiling) {
-    const effect = effectOfToolCall(toolCall.name, toolCall.arguments, {
-      customToolEffects: context.customToolEffects,
-      pluginToolEffects: context.pluginToolEffects,
-    });
-    if (!isWithinCeiling(effect, context.effectCeiling)) {
-      logger.info('Tool call refused: above the turn\'s effect ceiling', {
-        context: 'tool-executor',
-        toolName: toolCall.name,
-        chatId,
-        effect,
-        ceiling: context.effectCeiling,
-      });
-      const message = describeCeilingRefusal(toolCall.name, effect, context.effectCeiling);
-      return {
-        toolName: toolCall.name,
-        success: false,
-        result: { formattedText: message },
-        error: message,
-      };
-    }
-    logger.debug('Tool call within the turn\'s effect ceiling', {
+  // The tool permit — the one place a call is admitted: offered to this seat
+  // this turn, on the right surface, and within the turn's effect ceiling.
+  const permit = resolveToolPermit(toolCall.name, toolCall.arguments, {
+    offer: context.toolOffer,
+    effectCeiling: context.effectCeiling,
+    operatorSurface: context.operatorSurface,
+    customToolEffects: context.customToolEffects,
+    pluginToolEffects: context.pluginToolEffects,
+  });
+  if (!permit.permitted) {
+    const logFields = {
       context: 'tool-executor',
       toolName: toolCall.name,
-      effect,
+      chatId,
+      refusal: permit.refusal,
+      effect: permit.effect,
       ceiling: context.effectCeiling,
-    });
+      offer: context.toolOffer?.kind,
+    };
+    if (permit.refusal === 'no-offer') {
+      logger.error('Tool call refused: the tool context carries no offer', logFields);
+    } else {
+      logger.info('Tool call refused by the tool permit', logFields);
+    }
+    return {
+      toolName: toolCall.name,
+      success: false,
+      result: { formattedText: permit.message },
+      error: permit.message,
+    };
   }
+  logger.debug('Tool call permitted', {
+    context: 'tool-executor',
+    toolName: toolCall.name,
+    effect: permit.effect,
+    ceiling: context.effectCeiling,
+    offer: context.toolOffer?.kind,
+  });
 
   try {
     // Check if this is a built-in tool - these are handled later in this function
@@ -1039,20 +1054,9 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle run_sql (Brahma Console — read-only SQL access). Gated on the
-    // operator surface: the tool is only ever OFFERED to the console, and even
-    // if a tool name leaked into history, a character surface can never EXECUTE
-    // it. Both gates are independent (see brahma-sql-access spec §8).
+    // Handle run_sql (Brahma Console — read-only SQL access). Offered only to
+    // the console; the permit above refuses it off the operator surface.
     if (toolCall.name === 'run_sql') {
-      if (!context.operatorSurface) {
-        return {
-          toolName: 'run_sql',
-          success: false,
-          result: null,
-          error: 'run_sql is only available in the Brahma Console.',
-        };
-      }
-
       const result = await executeRunSqlTool(toolCall.arguments, { userId });
 
       return {
@@ -1063,20 +1067,11 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle the Brahma lookup shortcuts. Same double gate as run_sql: only
-    // offered to the console, and never executed off the operator surface —
-    // they read every character's memories and every conversation.
+    // Handle the Brahma lookup shortcuts. Same rule as run_sql: offered only to
+    // the console, and the permit refuses them off the operator surface — they
+    // read every character's memories and every conversation.
     const brahmaLookup = BRAHMA_LOOKUP_HANDLERS[toolCall.name]
     if (brahmaLookup) {
-      if (!context.operatorSurface) {
-        return {
-          toolName: toolCall.name,
-          success: false,
-          result: null,
-          error: `${toolCall.name} is only available in the Brahma Console.`,
-        };
-      }
-
       const result = await brahmaLookup(toolCall.arguments, { userId });
 
       return {
@@ -1190,6 +1185,8 @@ export async function executeToolCallWithContext(
         chatId,
         callingParticipantId: context.callingParticipantId,
         emitCarinaAnswer: context.emitCarinaAnswer,
+        // A tool loop started from this call inherits the turn's ceiling.
+        effectCeiling: context.effectCeiling,
       });
       return {
         toolName: 'ask_carina',

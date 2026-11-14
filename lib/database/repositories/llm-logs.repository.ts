@@ -70,6 +70,12 @@ function profileKey(groupBy: ProfileGroupBy): { keyExpr: string; notNullClause: 
  * Extends AbstractDedicatedDbRepository (over AbstractBaseRepository, not the
  * user-owned base) since LLMLog schema uses Date type for timestamps.
  */
+/** The three listings that page in SQL; `countByScope` totals the same rows. */
+export type LLMLogListScope =
+  | { kind: 'recent' }
+  | { kind: 'standalone' }
+  | { kind: 'type'; type: LLMLogType };
+
 export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   constructor() {
     super('llm_logs', LLMLogSchema, {
@@ -205,33 +211,56 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   }
 
   /**
-   * Find standalone logs (no messageId, chatId, or characterId - for standalone image gen)
-   * @param userId The user ID
-   * @param limit Maximum number of logs to return (default: 50)
-   * @returns Promise<LLMLog[]> Array of standalone logs
+   * The filter behind each paged listing. One builder, so a page and its
+   * total can never disagree about which rows they count (#167).
    */
-  async findStandalone(userId: string, limit: number = 50): Promise<LLMLog[]> {
-    return this.safeQuery(
-      async () => {
-        const filter: TypedQueryFilter<LLMLog> = {
+  private scopeFilter(userId: string, scope: LLMLogListScope): TypedQueryFilter<LLMLog> {
+    switch (scope.kind) {
+      case 'standalone':
+        return {
           userId,
           messageId: { $eq: null },
           chatId: { $eq: null },
           characterId: { $eq: null },
         };
+      case 'type':
+        return { userId, type: scope.type };
+      case 'recent':
+        return { userId };
+    }
+  }
 
+  /** One page of a listing, newest first, paged in SQL. */
+  private async findPage(
+    userId: string,
+    scope: LLMLogListScope,
+    limit: number,
+    offset: number,
+    errorMessage: string
+  ): Promise<LLMLog[]> {
+    return this.safeQuery(
+      async () => {
         const options: QueryOptions = {
           sort: { createdAt: -1 },
           limit,
+          ...(offset > 0 ? { skip: offset } : {}),
         };
-
-        const logs = await this.findByFilter(filter, options);
-        return logs;
+        return this.findByFilter(this.scopeFilter(userId, scope), options);
       },
-      'Error finding standalone LLM logs',
-      { userId, limit },
+      errorMessage,
+      { userId, scope: scope.kind, limit, offset },
       []
     );
+  }
+
+  /**
+   * Find standalone logs (no messageId, chatId, or characterId - for standalone image gen)
+   * @param userId The user ID
+   * @param limit Maximum number of logs to return (default: 50)
+   * @param offset Rows to skip, newest first (default: 0)
+   */
+  async findStandalone(userId: string, limit: number = 50, offset: number = 0): Promise<LLMLog[]> {
+    return this.findPage(userId, { kind: 'standalone' }, limit, offset, 'Error finding standalone LLM logs');
   }
 
   /**
@@ -239,47 +268,25 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
    * @param userId The user ID
    * @param type The log type
    * @param limit Maximum number of logs to return (default: 50)
-   * @returns Promise<LLMLog[]> Array of logs of the specified type
+   * @param offset Rows to skip, newest first (default: 0)
    */
-  async findByType(userId: string, type: LLMLogType, limit: number = 50): Promise<LLMLog[]> {
-    return this.safeQuery(
-      async () => {
-        const filter: TypedQueryFilter<LLMLog> = { userId, type };
-        const options: QueryOptions = {
-          sort: { createdAt: -1 },
-          limit,
-        };
-
-        const logs = await this.findByFilter(filter, options);
-        return logs;
-      },
-      'Error finding LLM logs by type',
-      { userId, type, limit },
-      []
-    );
+  async findByType(userId: string, type: LLMLogType, limit: number = 50, offset: number = 0): Promise<LLMLog[]> {
+    return this.findPage(userId, { kind: 'type', type }, limit, offset, 'Error finding LLM logs by type');
   }
 
   /**
-   * Find recent logs for a user
+   * Find recent logs for a user, newest first
    * @param userId The user ID
    * @param limit Maximum number of logs to return (default: 20)
-   * @returns Promise<LLMLog[]> Array of recent logs, sorted by creation date (newest first)
+   * @param offset Rows to skip, newest first (default: 0)
    */
-  async findRecent(userId: string, limit: number = 20): Promise<LLMLog[]> {
-    return this.safeQuery(
-      async () => {
-        const options: QueryOptions = {
-          sort: { createdAt: -1 },
-          limit,
-        };
+  async findRecent(userId: string, limit: number = 20, offset: number = 0): Promise<LLMLog[]> {
+    return this.findPage(userId, { kind: 'recent' }, limit, offset, 'Error finding recent LLM logs');
+  }
 
-        const logs = await this.findByFilter({ userId }, options);
-        return logs;
-      },
-      'Error finding recent LLM logs',
-      { userId, limit },
-      []
-    );
+  /** How many rows the matching paged listing holds in all. */
+  async countByScope(userId: string, scope: LLMLogListScope): Promise<number> {
+    return this.count(this.scopeFilter(userId, scope));
   }
 
   /**
@@ -445,12 +452,7 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
     return this.safeQuery(
       async () => {
-        // `$exists: true` only. `$ne: null` used to be here too and made this
-        // method return zeroes on every install: the SQLite translator emits
-        // `usage != ?` with a NULL parameter, i.e. `usage != NULL`, which is
-        // unknown for every row by SQL NULL semantics, so the filter matched
-        // nothing. The Almanack renders exactly this number, which is how the
-        // long-standing "0 tokens logged" reading was finally traced.
+        // Rows with usage recorded (`usage IS NOT NULL`).
         const filter: TypedQueryFilter<LLMLog> = {
           userId,
           usage: { $exists: true },
@@ -491,8 +493,7 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
     return this.safeQuery(
       async () => {
-        // `$exists: true` only — see {@link getTotalTokenUsage} for why
-        // `$ne: null` must never be added back.
+        // Rows with usage recorded (`usage IS NOT NULL`).
         const filter: TypedQueryFilter<LLMLog> = {
           userId,
           usage: { $exists: true },
@@ -537,13 +538,7 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
     return this.safeQuery(
       async () => {
-        // Only `$exists: true` (→ `usage IS NOT NULL`) — do NOT add
-        // `$ne: null`. The SQLite translator emits `usage != NULL`
-        // literally, which is unknown/false for every row by SQL NULL
-        // semantics, so the filter would return zero matches and the
-        // sum would always be 0. The sibling methods getTotalTokenUsage
-        // and getTotalTokenUsageSince carried that bug until 4.9 and are
-        // now fixed the same way.
+        // Rows with usage recorded (`usage IS NOT NULL`).
         const filter: TypedQueryFilter<LLMLog> = {
           chatId,
           usage: { $exists: true },
@@ -598,9 +593,7 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
     const { includeCacheHits = false } = options;
     return this.safeQuery(
       async () => {
-        // `$exists: true` only — see getTotalTokenUsageForChatSince for why
-        // `$ne: null` must not be added (the translator emits `usage != NULL`,
-        // which is unknown for every row and zeroes the sum).
+        // Rows with usage recorded (`usage IS NOT NULL`).
         const filter: TypedQueryFilter<LLMLog> = {
           autonomousRunId,
           usage: { $exists: true },
@@ -647,6 +640,33 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
       },
       'Error counting LLM logs for message',
       { messageId },
+      0
+    );
+  }
+
+  /**
+   * Count a chat's logs written strictly after a timestamp — how many model
+   * calls could have read a line that landed then. `only` narrows the count to
+   * the given message ids and/or log types (used to subtract a line's own
+   * generation calls). Counts only; never loads a request or response body.
+   */
+  async countForChatSince(
+    chatId: string,
+    sinceTimestamp: string,
+    only?: { messageIds?: string[]; types?: LLMLogType[] },
+  ): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const filter: TypedQueryFilter<LLMLog> = {
+          chatId,
+          createdAt: { $gt: sinceTimestamp },
+          ...(only?.messageIds ? { messageId: { $in: only.messageIds } } : {}),
+          ...(only?.types ? { type: { $in: only.types } } : {}),
+        };
+        return this.count(filter);
+      },
+      'Error counting LLM logs for chat since timestamp',
+      { chatId, sinceTimestamp },
       0
     );
   }

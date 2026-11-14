@@ -20,7 +20,10 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { PROJECT_OWN_STORE_NAME_PREFIX, isProjectOwnStoreName } from './project-store-naming';
 import { GROUP_OWN_STORE_NAME_PREFIX, isGroupOwnStoreName } from './group-store-naming';
-import { ensureOfficialStore } from './ensure-official-store';
+import { ensureOfficialStore, findAdoptableLinkedStore } from './ensure-official-store';
+
+/** A project's or group's official store: a plain documents store. */
+const OWNER_STORE_SHAPE = { storeType: 'documents' as const, includePatterns: [] as string[] };
 
 /** The two owners that have an official store. */
 export type StoreOwnerKind = 'project' | 'group';
@@ -51,12 +54,13 @@ export async function ensureOwnerOfficialStore(
         entityLabel: 'project',
         entityLabelCapitalized: 'Project',
         entityIdLogKey: 'projectId',
-        storeNamePrefix: PROJECT_OWN_STORE_NAME_PREFIX,
+        storeNameFor: name => `${PROJECT_OWN_STORE_NAME_PREFIX}${name}`,
+        storeShape: OWNER_STORE_SHAPE,
         findEntityRaw: id => repos.projects.findByIdRaw(id),
+        stalePointer: 'heal',
+        findAdoptable: async id => findAdoptableLinkedStore(await repos.projectDocMountLinks.findByProjectId(id), isProjectOwnStoreName),
         setOfficialMountPointId: (id, mpId) => repos.projects.setOfficialMountPointId(id, mpId),
-        findLinks: id => repos.projectDocMountLinks.findByProjectId(id),
         link: (id, mpId) => repos.projectDocMountLinks.link(id, mpId),
-        isOwnStoreName: isProjectOwnStoreName,
       },
       ownerId,
       ownerName,
@@ -68,12 +72,13 @@ export async function ensureOwnerOfficialStore(
       entityLabel: 'group',
       entityLabelCapitalized: 'Group',
       entityIdLogKey: 'groupId',
-      storeNamePrefix: GROUP_OWN_STORE_NAME_PREFIX,
+      storeNameFor: name => `${GROUP_OWN_STORE_NAME_PREFIX}${name}`,
+      storeShape: OWNER_STORE_SHAPE,
       findEntityRaw: id => repos.groups.findByIdRaw(id),
+      stalePointer: 'heal',
+      findAdoptable: async id => findAdoptableLinkedStore(await repos.groupDocMountLinks.findByGroupId(id), isGroupOwnStoreName),
       setOfficialMountPointId: (id, mpId) => repos.groups.setOfficialMountPointId(id, mpId),
-      findLinks: id => repos.groupDocMountLinks.findByGroupId(id),
       link: (id, mpId) => repos.groupDocMountLinks.link(id, mpId),
-      isOwnStoreName: isGroupOwnStoreName,
     },
     ownerId,
     ownerName,

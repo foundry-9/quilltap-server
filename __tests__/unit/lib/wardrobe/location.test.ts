@@ -38,7 +38,7 @@ const mockCreateInMount = jest.fn();
 const mockUpdateManyInMount = jest.fn(async () => []);
 const mockDeleteInMount = jest.fn();
 const mockResolveWardrobeMount = jest.fn();
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
+jest.mock('@/lib/wardrobe/vault-writes', () => ({
   readMountItems: (...a: unknown[]) => mockReadMountItems(...a),
   createInMount: (...a: unknown[]) => mockCreateInMount(...a),
   updateManyInMount: (...a: unknown[]) => mockUpdateManyInMount(...a),

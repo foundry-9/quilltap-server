@@ -27,6 +27,8 @@ jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueAutonomousRoomTurn: jest.fn(),
 }))
 jest.mock('@/lib/background-jobs/child/host-rpc-client', () => ({ callHost: jest.fn() }))
+const mockRunOpening = jest.fn(async () => {})
+jest.mock('@/lib/chat/opening/run', () => ({ runOpening: (...args: unknown[]) => mockRunOpening(...(args as [])) }))
 // Keep the real `runStartPatch` (it's the source of the `currentRunId` field we
 // assert on) but stub the banner so we don't drag in characters/turn-manager.
 jest.mock('@/lib/background-jobs/handlers/autonomous-room-announce', () => {
@@ -49,6 +51,7 @@ function makeRepos(chat: Record<string, unknown> | null): ReposHarness {
   const chatUpdates: Array<Record<string, unknown>> = []
   const repos = {
     chats: {
+      getOpeningState: jest.fn(async () => ({ state: 'done', phase: null, plan: null })),
       findById: jest.fn(async () => chat),
       update: jest.fn(async (_id: string, patch: Record<string, unknown>) => {
         callOrder.push('update')
@@ -95,6 +98,20 @@ describe('beginAutonomousRun', () => {
       scheduleNextRunAt: '2026-06-12T10:00:00.000Z',
     })
     expect(mockEnqueue).toHaveBeenCalledWith('user-1', { chatId: 'chat-1', runId: 'run-NEW' })
+  })
+
+  it('opens a room that was cast but never opened before its run begins', async () => {
+    const h = makeRepos({ ...AUTONOMOUS_CHAT })
+    h.repos.chats.getOpeningState.mockResolvedValue({ state: 'pending', phase: null, plan: null })
+    mockRunOpening.mockImplementationOnce(async () => { h.callOrder.push('open') })
+
+    await beginAutonomousRun({
+      chatId: 'chat-1', userId: 'user-1', runId: 'run-NEW',
+      nowIso: '2026-06-11T00:00:00.000Z', onEnqueueFailure: 'error',
+    })
+
+    expect(mockRunOpening).toHaveBeenCalledWith(expect.objectContaining({ chatId: 'chat-1', trigger: 'run-start' }))
+    expect(h.callOrder).toEqual(['open', 'update', 'enqueue'])
   })
 
   it('omits scheduleNextRunAt when the key is not provided', async () => {

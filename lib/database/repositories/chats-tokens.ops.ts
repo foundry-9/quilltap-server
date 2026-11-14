@@ -6,7 +6,7 @@
  */
 
 import { ChatMetadata } from '@/lib/schemas/types';
-import { QueryFilter } from '../interfaces';
+import { QueryFilter, UpdateOperators } from '../interfaces';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
 import { safeQuery } from './safe-query';
@@ -23,19 +23,20 @@ export class ChatTokenTrackingOps {
     promptTokens: number,
     completionTokens: number,
     estimatedCost: number | null,
-    priceSource?: string
+    priceSource?: ChatMetadata['priceSource']
   ): Promise<void> {
     await safeQuery(async () => {
       const collection = await this.ctx.getCollection();
       const now = this.ctx.getCurrentTimestamp();
 
       // Build update operations
-      const updateOps: Record<string, unknown> = {
+      const $set: Partial<ChatMetadata> = { updatedAt: now };
+      const updateOps: UpdateOperators<ChatMetadata> = {
         $inc: {
           totalPromptTokens: promptTokens,
           totalCompletionTokens: completionTokens,
         },
-        $set: { updatedAt: now },
+        $set,
       };
 
       // If we have a cost to add, we need special handling
@@ -44,18 +45,18 @@ export class ChatTokenTrackingOps {
         const existing = await this.ctx.findById(chatId);
         if (existing) {
           const currentCost = existing.estimatedCostUSD || 0;
-          (updateOps.$set as Record<string, unknown>).estimatedCostUSD = currentCost + estimatedCost;
+          $set.estimatedCostUSD = currentCost + estimatedCost;
 
           // Add priceSource if provided
           if (priceSource) {
-            (updateOps.$set as Record<string, unknown>).priceSource = priceSource;
+            $set.priceSource = priceSource;
           }
         }
       }
 
       const result = await collection.updateOne(
         { id: chatId } as QueryFilter,
-        updateOps as any
+        updateOps
       );
 
       if (result.matchedCount === 0) {

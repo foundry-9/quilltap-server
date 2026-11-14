@@ -69,19 +69,19 @@ export function TasksQueueCard() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="qt-heading-2 text-foreground mb-1">Tasks Queue</h2>
+          <h2 className="qt-heading-2 qt-text mb-1">Tasks Queue</h2>
           <p className="qt-text-small">
             Background job queue for memory extraction and other LLM tasks
           </p>
         </div>
-        <div className="flex-shrink-0 text-primary">
+        <div className="flex-shrink-0 qt-text-brand">
           <Icon name="layers" className="w-8 h-8" />
         </div>
       </div>
 
       {/* Simultaneous Labours — global background-job concurrency cap */}
       <div className="qt-card p-4 mb-6">
-        <label htmlFor="maxConcurrentJobs" className="qt-body text-foreground font-medium">
+        <label htmlFor="maxConcurrentJobs" className="qt-body qt-text font-medium">
           Simultaneous Labours — {displayConcurrency}
         </label>
         <input
@@ -128,13 +128,13 @@ export function TasksQueueCard() {
       {data && (
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="qt-card p-3 text-center">
-            <div className="qt-heading-2 text-foreground">
+            <div className="qt-heading-2 qt-text">
               {data.stats.activeTotal}
             </div>
             <div className="qt-text-xs">Active Jobs</div>
           </div>
           <div className="qt-card p-3 text-center">
-            <div className="qt-heading-2 text-foreground">
+            <div className="qt-heading-2 qt-text">
               ~{formatTokens(data.totalEstimatedTokens)}
             </div>
             <div className="qt-text-xs">Est. Tokens</div>
@@ -187,7 +187,7 @@ export function TasksQueueCard() {
 
       {/* Jobs List */}
       <div>
-        <h3 className="qt-heading-4 text-foreground mb-3">Queue Items</h3>
+        <h3 className="qt-heading-4 qt-text mb-3">Queue Items</h3>
 
         {loading && !data ? (
           <div className="text-center py-6 qt-text-secondary">

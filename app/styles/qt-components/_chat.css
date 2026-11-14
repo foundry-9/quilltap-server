@@ -200,6 +200,62 @@
     max-width: 85%;
   }
 
+  /* Start-aligned variant: thinking set flush left in a column of tool cards
+     (the Brahma Console), where the right offset would read as misplaced. */
+  /*
+   * Collapsible tool card summary (the Brahma Console's "Ran SQL" card): one
+   * line that stays put; the chevron turns and the query preview hides when the
+   * card is open (the full query is in the body then).
+   */
+  .qt-tool-card-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+  }
+
+  .qt-tool-card-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .qt-tool-card-summary > * {
+    flex-shrink: 0;
+  }
+
+  .qt-tool-card-chevron {
+    transition: transform 150ms ease;
+  }
+
+  details[open] > .qt-tool-card-summary .qt-tool-card-chevron {
+    transform: rotate(90deg);
+  }
+
+  .qt-tool-card-summary > .qt-tool-card-preview {
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  details[open] > .qt-tool-card-summary .qt-tool-card-preview {
+    visibility: hidden;
+  }
+
+  .qt-chat-thinking-start {
+    justify-content: flex-start;
+  }
+
+  .qt-chat-thinking-start .qt-chat-thinking-details {
+    max-width: 100%;
+  }
+
+  .qt-chat-thinking-start .qt-chat-thinking-summary {
+    justify-content: flex-start;
+  }
+
   .qt-chat-thinking-summary {
     display: flex;
     align-items: center;
@@ -423,6 +479,23 @@
   .qt-chat-announcement-chip:focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
+  }
+
+  /* A collapsed announcement that holds the first mention of a thing or an
+     absent character: the bar, then its name chips beside it, since the body
+     (where the chips would otherwise be) is hidden. */
+  .qt-chat-announcement-chip-wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .qt-chat-announcement-chip-wrap .qt-mention-chip {
+    font-size: 0.8125rem;
   }
 
   /* Inside a chip the kind must not greedily fill the row (that is what made the
@@ -835,6 +908,34 @@
   .qt-mention-chip:focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
+  }
+
+  /* A thing from the Atlas: the same chip, a dashed rule instead of a dotted
+     one, so a thing is told from a person by shape as well as by the popup. */
+  .qt-mention-chip-thing {
+    border-bottom-style: dashed;
+  }
+
+  /* The Atlas chip's popup: the entry's current picture, and its knowledge
+     rendered as Markdown inside the bubble. */
+  .qt-tooltip-image {
+    display: block;
+    max-width: 100%;
+    max-height: 9rem;
+    margin: 0.35rem 0;
+    border-radius: 0.375rem;
+    object-fit: contain;
+  }
+
+  .qt-tooltip-markdown p,
+  .qt-tooltip-markdown ul,
+  .qt-tooltip-markdown ol {
+    margin: 0.25rem 0;
+  }
+
+  .qt-tooltip-markdown ul,
+  .qt-tooltip-markdown ol {
+    padding-left: 1.1rem;
   }
 
   /* ==========================================================================
@@ -1669,8 +1770,11 @@
   /**
    * Formatting toolbar container - shown above textarea in document editing mode
    */
+  /* Wraps rather than overflowing: at 320px or 200% text a single row runs
+     past its card, whose overflow:hidden then clips the last buttons
+     (WCAG 1.4.4 / 1.4.10). */
   .qt-formatting-toolbar {
-    @apply flex items-center justify-center gap-2;
+    @apply flex flex-wrap items-center justify-center gap-1;
     padding: 0.375rem 0.5rem;
     background: color-mix(in srgb, var(--color-muted) 50%, transparent);
     border-radius: var(--radius-md);
@@ -1678,10 +1782,21 @@
   }
 
   /**
-   * Section groups buttons together
+   * Section groups buttons together in the markup only. It lays out as
+   * `display: contents` so every button wraps in the toolbar's one flow: a
+   * section that wrapped on its own took the full row and pushed whatever
+   * followed it onto a third line.
    */
   .qt-formatting-toolbar-section {
-    @apply flex items-center gap-1;
+    display: contents;
+  }
+
+  /**
+   * A toolbar button that anchors a popover (the emoji / symbol pickers)
+   * needs a real positioned box, so it is not flattened like a section.
+   */
+  .qt-formatting-toolbar-anchor {
+    @apply relative inline-flex items-center;
   }
 
   /**
@@ -1691,6 +1806,12 @@
     @apply h-5 mx-1;
     width: 1px;
     background: var(--color-border);
+  }
+
+  /* A divider at the start or end of a wrapped row separates nothing;
+     FormattingToolbar marks it and it keeps its space but goes unseen. */
+  .qt-formatting-toolbar-divider[data-wrapped] {
+    visibility: hidden;
   }
 
   /**
@@ -2757,6 +2878,31 @@
   }
 
   /**
+   * In-place message editor — the notices above the textarea (a model has
+   * read the line; memories it formed, with the regenerate checkbox) and the
+   * Save / Cancel row beneath it.
+   */
+  .qt-chat-message-editor {
+    @apply space-y-2;
+  }
+
+  .qt-chat-message-editor-notice {
+    @apply space-y-1;
+  }
+
+  .qt-chat-message-editor-option {
+    @apply flex items-start gap-2 cursor-pointer;
+  }
+
+  .qt-chat-message-editor-option input {
+    @apply mt-0.5;
+  }
+
+  .qt-chat-message-editor-actions {
+    @apply flex gap-2;
+  }
+
+  /**
    * Message action bar - shows action icons at bottom of message
    * Persistent on mobile, replaces hover-based actions
    */
@@ -2970,6 +3116,87 @@
     @apply mx-2;
   }
 
+  /* The "Concepts Named" card: the absent characters and Atlas entries the
+     chat names, in two labelled groups, each row a button that goes to its
+     first mention. */
+  .qt-chat-concepts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .qt-chat-concepts-group-label {
+    @apply text-xs;
+    padding: 0 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-chat-concepts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .qt-chat-concepts-anchor {
+    display: block;
+  }
+
+  .qt-chat-concepts-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.25rem 0.375rem;
+    border-radius: 0.375rem;
+    text-align: left;
+    color: var(--color-foreground);
+    background: transparent;
+  }
+
+  .qt-chat-concepts-item:hover,
+  .qt-chat-concepts-item:focus-visible {
+    background: var(--color-muted);
+    outline: none;
+  }
+
+  .qt-chat-concepts-item:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+  }
+
+  .qt-chat-concepts-thumb {
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.25rem;
+    object-fit: cover;
+    border: 1px solid var(--color-border);
+  }
+
+  .qt-chat-concepts-thumb-empty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-chat-concepts-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .qt-chat-concepts-name {
+    @apply text-sm truncate;
+  }
+
+  .qt-chat-concepts-term {
+    @apply text-xs truncate;
+    color: var(--color-muted-foreground);
+  }
+
   .qt-chat-sidebar-add {
     border-top: 1px solid var(--qt-chat-sidebar-header-border);
     padding: 0.5rem 0 0;
@@ -3048,13 +3275,14 @@
   }
 
   /**
-   * Spoken position badge - dimmed
+   * Spoken position badge - receded, but still legible. A dashed outline on
+   * the page colour marks "already spoke"; the number stays at full
+   * muted-foreground strength (WCAG 1.4.3) rather than fading to half opacity.
    */
   .qt-participant-position-spoken {
-    background: var(--color-muted);
+    background: var(--color-background);
     color: var(--color-muted-foreground);
-    border: 1px solid var(--color-border);
-    opacity: 0.5;
+    border: 1px dashed var(--color-muted-foreground);
   }
 
   /**

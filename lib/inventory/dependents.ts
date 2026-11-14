@@ -17,7 +17,7 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { classifyMount } from '@/lib/mount-index/reach';
 import { INVENTORY_FOLDER, isInventoryItemDocumentPath } from '@/lib/inventory/folders';
-import { parseInventoryItemFile } from '@/lib/database/repositories/vault-overlay/inventory-readers';
+import { parseInventoryItemFile } from '@/lib/inventory/vault-readers';
 import type { InventoryRecord, InventoryScope } from '@/lib/schemas/inventory.types';
 
 /** A record and the mount it was read from. */

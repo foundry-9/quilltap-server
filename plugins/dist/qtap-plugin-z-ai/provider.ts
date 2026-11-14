@@ -60,6 +60,19 @@ export function supportsReasoningEffort(model: string): boolean {
   return minor >= 2;                   // glm-5.2, glm-5.3, … (not 5.1, 5, 5-turbo)
 }
 
+/**
+ * Z.AI's end-user identifier is `user_id` (6–128 characters), not OpenAI's
+ * `user` — until 1.1.35 the plugin sent `user`, which Z.AI's schema does not
+ * list, so the per-character cache key never reached the provider. A key
+ * outside the documented length is omitted rather than risking a 400.
+ * See https://docs.z.ai/api-reference/llm/chat-completion.
+ */
+export function zaiUserId(cacheKey: string | undefined): string | undefined {
+  if (typeof cacheKey !== 'string') return undefined;
+  if (cacheKey.length < 6 || cacheKey.length > 128) return undefined;
+  return cacheKey;
+}
+
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 type ChatContentPart = OpenAI.Chat.Completions.ChatCompletionContentPart;
 
@@ -331,13 +344,12 @@ export class ZAIProvider implements TextProvider {
       }
     }
 
-    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
-      body.user = params.cacheKey;
-    }
+    const userId = zaiUserId(params.cacheKey);
+    if (userId) body.user_id = userId;
 
     this.applyProfileParameters(body, params);
 
-    const response = (await client.chat.completions.create(
+    const response =(await client.chat.completions.create(
       body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
     )) as OpenAI.Chat.Completions.ChatCompletion;
 
@@ -434,13 +446,12 @@ export class ZAIProvider implements TextProvider {
       }
     }
 
-    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
-      body.user = params.cacheKey;
-    }
+    const userId = zaiUserId(params.cacheKey);
+    if (userId) body.user_id = userId;
 
     this.applyProfileParameters(body, params);
 
-    const stream = (await client.chat.completions.create(
+    const stream =(await client.chat.completions.create(
       body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming
     )) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
 

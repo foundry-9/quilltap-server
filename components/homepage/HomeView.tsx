@@ -38,7 +38,7 @@ export function HomeView({
   return (
     <div className="qt-homepage-container">
       {/* Welcome section */}
-      <WelcomeSection displayName={displayName} />
+      <WelcomeSection displayName={displayName} firstVisit={recentChats.length === 0} />
 
       {/* Quick action buttons */}
       <QuickActionsRow lastChatId={lastChatId} />

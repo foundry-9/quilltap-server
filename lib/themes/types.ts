@@ -230,6 +230,31 @@ export const ThemeTokensSchema = z.object({
 export type ThemeTokens = z.infer<typeof ThemeTokensSchema>;
 
 // ============================================================================
+// BUNDLE-RELATIVE PATHS
+// ============================================================================
+
+/**
+ * Whether `p` names a file inside a theme bundle: relative, no NUL byte, no
+ * leading separator or drive letter, and no `..` segment (either separator
+ * counts, so `a\\..\\b` is refused too). The loaders still resolve every path
+ * through `resolveInside`; this keeps an unusable manifest from validating.
+ */
+export function isBundleRelativePath(p: string): boolean {
+  if (p.length === 0 || p.includes('\0')) return false;
+  if (p.startsWith('/') || p.startsWith('\\')) return false;
+  if (/^[A-Za-z]:/.test(p)) return false;
+  return !p.split(/[\\/]/).includes('..');
+}
+
+const BUNDLE_PATH_MESSAGE = 'Must be a relative path inside the theme bundle (no leading "/", drive letter or ".." segment)';
+
+/** A manifest field naming a file inside the theme bundle. */
+export const BundleRelativePathSchema = z
+  .string()
+  .min(1)
+  .refine(isBundleRelativePath, { message: BUNDLE_PATH_MESSAGE });
+
+// ============================================================================
 // FONT DEFINITION
 // ============================================================================
 
@@ -240,7 +265,7 @@ export const FontDefinitionSchema = z.object({
   /** Font family name */
   family: z.string().min(1).describe('Font family name'),
   /** Font source URL or relative path */
-  src: z.string().min(1).describe('Font file URL or path'),
+  src: BundleRelativePathSchema.describe('Font file path relative to the theme root'),
   /** Font weight (e.g., "400", "700", "400 700") */
   weight: z.string().optional().describe('Font weight'),
   /** Font style (e.g., "normal", "italic") */
@@ -284,7 +309,7 @@ export const ThemeManifestSchema = z.object({
   fonts: z.array(FontDefinitionSchema).optional().describe('Custom fonts to load'),
 
   // Optional: Per-icon overrides (icon name -> bundle-relative asset path; .svg keeps currentColor, .webp bakes color)
-  icons: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), z.string().min(1)).optional()
+  icons: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), BundleRelativePathSchema).optional()
     .describe('Per-icon override map: icon name -> bundle-relative asset path (svg or webp)'),
 
   // Optional: Component-specific CSS overrides (Tier 3)
@@ -350,20 +375,20 @@ export const QtapThemeManifestSchema = z.object({
   extendsTheme: z.string().optional().describe('ID of theme to extend/inherit from'),
 
   // Preview
-  previewImage: z.string().optional().describe('Relative path to preview image'),
+  previewImage: BundleRelativePathSchema.optional().describe('Relative path to preview image'),
 
   // Tokens - inline or path reference
   tokens: ThemeTokensSchema.optional().describe('Inline theme design tokens'),
-  tokensPath: z.string().optional().describe('Relative path to tokens JSON file'),
+  tokensPath: BundleRelativePathSchema.optional().describe('Relative path to tokens JSON file'),
 
   // Styles
-  stylesPath: z.string().optional().describe('Relative path to CSS overrides file'),
+  stylesPath: BundleRelativePathSchema.optional().describe('Relative path to CSS overrides file'),
 
   // Fonts
   fonts: z.array(FontDefinitionSchema).optional().describe('Custom font definitions'),
 
   // Per-icon overrides (icon name -> bundle-relative asset path; .svg keeps currentColor, .webp bakes color)
-  icons: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), z.string().min(1)).optional()
+  icons: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), BundleRelativePathSchema).optional()
     .describe('Per-icon override map: icon name -> bundle-relative asset path (svg or webp)'),
 
   // Subsystem overrides

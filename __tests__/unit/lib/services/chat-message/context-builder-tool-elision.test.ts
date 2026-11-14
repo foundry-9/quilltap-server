@@ -223,3 +223,44 @@ describe('buildConversationMessages — tool-result elision (multi-character)', 
     expect(mwpTool!.content).toContain('result elided')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Per-profile window (connection_profiles.toolResultVerbatimTurns)
+// ---------------------------------------------------------------------------
+
+describe('buildConversationMessages — per-profile elision window', () => {
+  const sixTurnsLater = [
+    toolMsg('search', 'the full report', { query: 'pool' }, 'tool-1'),
+    assistantMsg('A1', 'a-1'),
+    assistantMsg('A2', 'a-2'),
+    assistantMsg('A3', 'a-3'),
+    assistantMsg('A4', 'a-4'),
+    assistantMsg('A5', 'a-5'),
+    assistantMsg('A6', 'a-6'),
+  ]
+
+  it('never elides with a window of 0', () => {
+    const { conversationMessages, messagesWithParticipants } = buildConversationMessages(sixTurnsLater, true, 0)
+    for (const out of [conversationMessages, messagesWithParticipants!]) {
+      const tool = out.find(m => m.id === 'tool-1')!
+      expect(tool.content).toBe('[Tool Result: search]\nthe full report')
+    }
+  })
+
+  it('keeps a result in full until the profile window is reached', () => {
+    const { conversationMessages } = buildConversationMessages(sixTurnsLater.slice(0, 6), false, 6)
+    expect(conversationMessages.find(m => m.id === 'tool-1')!.content).toContain('the full report')
+  })
+
+  it('elides at the profile window and names it in the stub', () => {
+    const { conversationMessages } = buildConversationMessages(sixTurnsLater, false, 6)
+    const tool = conversationMessages.find(m => m.id === 'tool-1')!
+    expect(tool.content).not.toContain('the full report')
+    expect(tool.content).toContain('result elided (>6 turns old)')
+  })
+
+  it('defaults to the documented window of 3 when no window is given', () => {
+    const { conversationMessages } = buildConversationMessages(sixTurnsLater.slice(0, 4), false)
+    expect(conversationMessages.find(m => m.id === 'tool-1')!.content).toContain('result elided (>3 turns old)')
+  })
+})

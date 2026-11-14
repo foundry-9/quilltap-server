@@ -22,6 +22,7 @@ interface CardState {
   scenarios: boolean
   wardrobe: boolean
   inventory: boolean
+  atlas: boolean
 }
 
 interface UseProjectCardStateReturn {
@@ -39,7 +40,7 @@ function getInitialState(projectId: string): { cardState: CardState; isFirstVisi
   // Only check localStorage on client
   if (typeof window === 'undefined') {
     return {
-      cardState: { files: true, characters: true, settings: true, modelBehavior: true, imageGeneration: true, documentStores: true, scenarios: true, wardrobe: true, inventory: true },
+      cardState: { files: true, characters: true, settings: true, modelBehavior: true, imageGeneration: true, documentStores: true, scenarios: true, wardrobe: true, inventory: true, atlas: true },
       isFirstVisit: true,
     }
   }
@@ -50,7 +51,7 @@ function getInitialState(projectId: string): { cardState: CardState; isFirstVisi
   if (hasVisited) {
     // Not first visit - collapse all cards
     return {
-      cardState: { files: false, characters: false, settings: false, modelBehavior: false, imageGeneration: false, documentStores: false, scenarios: false, wardrobe: false, inventory: false },
+      cardState: { files: false, characters: false, settings: false, modelBehavior: false, imageGeneration: false, documentStores: false, scenarios: false, wardrobe: false, inventory: false, atlas: false },
       isFirstVisit: false,
     }
   }
@@ -58,7 +59,7 @@ function getInitialState(projectId: string): { cardState: CardState; isFirstVisi
   // First visit - keep cards expanded and mark as visited
   localStorage.setItem(storageKey, 'true')
   return {
-    cardState: { files: true, characters: true, settings: true, modelBehavior: true, imageGeneration: true, documentStores: true, scenarios: true, wardrobe: true, inventory: true },
+    cardState: { files: true, characters: true, settings: true, modelBehavior: true, imageGeneration: true, documentStores: true, scenarios: true, wardrobe: true, inventory: true, atlas: true },
     isFirstVisit: true,
   }
 }

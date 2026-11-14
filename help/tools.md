@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers
+url: /settings?group=connections
 ---
 
 # Tools
 
-> **[Open this page in Quilltap](/settings?tab=providers)**
+> **[Open this page in Quilltap](/settings?group=connections)**
 
 Tools are AI capabilities that allow the AI assistant to perform actions within Quilltap and access information beyond the conversation. They extend what the AI can do during a chat session.
 
@@ -147,7 +147,7 @@ For more details, see [Configuring Chat Tools](tools-settings.md).
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=providers")`
+`help_navigate(url: "/settings?group=connections")`
 
 ## Related Topics
 

@@ -54,14 +54,14 @@ export default function LLMLogsCard() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="qt-heading-2 text-foreground mb-1">
+          <h2 className="qt-heading-2 qt-text mb-1">
             LLM Logs
           </h2>
           <p className="qt-text-small">
             Recent LLM API requests and responses
           </p>
         </div>
-        <div className="flex-shrink-0 text-primary">
+        <div className="flex-shrink-0 qt-text-brand">
           <Icon name="cpu" className="w-8 h-8" />
         </div>
       </div>
@@ -112,7 +112,7 @@ export default function LLMLogsCard() {
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 text-xs rounded qt-bg-primary/10 text-primary">
+                  <span className="px-2 py-0.5 text-xs rounded qt-bg-primary/10 qt-text-brand">
                     {getTypeLabel(log.type)}
                   </span>
                   <span className="qt-text-primary truncate text-sm">

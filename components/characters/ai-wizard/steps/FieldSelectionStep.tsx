@@ -62,7 +62,7 @@ export function FieldSelectionStep({
     <div className="space-y-6">
       {/* Background Context */}
       <div>
-        <h3 id={`${id}-background-heading`} className="qt-heading-4 text-foreground mb-2">
+        <h3 id={`${id}-background-heading`} className="qt-heading-4 qt-text mb-2">
           Background Context
         </h3>
         <p className="text-sm qt-text-secondary mb-3">
@@ -83,7 +83,7 @@ export function FieldSelectionStep({
       <div>
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="qt-heading-4 text-foreground">
+            <h3 className="qt-heading-4 qt-text">
               Fields to Generate
             </h3>
             <p className="text-sm qt-text-secondary">
@@ -94,7 +94,7 @@ export function FieldSelectionStep({
             <button
               type="button"
               onClick={onSelectAll}
-              className="text-sm text-primary hover:underline"
+              className="text-sm qt-text-brand hover:underline"
             >
               Select all
             </button>
@@ -102,7 +102,7 @@ export function FieldSelectionStep({
             <button
               type="button"
               onClick={onClearAll}
-              className="text-sm text-primary hover:underline"
+              className="text-sm qt-text-brand hover:underline"
             >
               Clear all
             </button>
@@ -153,7 +153,7 @@ export function FieldSelectionStep({
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">
+                    <span className="font-medium qt-text">
                       {FIELD_LABELS[field]}
                     </span>
                     {statusText && (
@@ -171,8 +171,8 @@ export function FieldSelectionStep({
       </div>
 
       {/* Summary */}
-      <div className="p-4 rounded-lg border qt-border-default qt-bg-muted/20">
-        <h4 className="font-medium text-foreground mb-2">Generation Summary</h4>
+      <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/20">
+        <h4 className="font-medium qt-text mb-2">Generation Summary</h4>
         {selectedFields.size === 0 ? (
           <p className="text-sm qt-text-secondary">
             No fields selected. Please select at least one field to generate.
@@ -180,12 +180,12 @@ export function FieldSelectionStep({
         ) : (
           <div className="text-sm qt-text-secondary">
             <p>
-              Will generate <span className="font-medium text-foreground">{selectedFields.size}</span> field{selectedFields.size !== 1 ? 's' : ''}:
+              Will generate <span className="font-medium qt-text">{selectedFields.size}</span> field{selectedFields.size !== 1 ? 's' : ''}:
             </p>
             <ul className="mt-2 space-y-1">
               {Array.from(selectedFields).map((field) => (
                 <li key={field} className="flex items-center gap-2">
-                  <Icon name="check" className="w-4 h-4 text-primary flex-shrink-0" />
+                  <Icon name="check" className="w-4 h-4 qt-text-brand flex-shrink-0" />
                   <span>{FIELD_LABELS[field]}</span>
                 </li>
               ))}

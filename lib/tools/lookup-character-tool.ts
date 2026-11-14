@@ -37,8 +37,9 @@ export const lookupCharacterToolDefinition = {
   function: {
     name: 'lookup_character',
     description:
-      "Look up a character in ONE call: id, name, aliases, pronouns, title, their core files " +
-      '(identity, description, personality, manifesto), physical descriptions, how many memories ' +
+      "Look up a character in ONE call: id, name, aliases, pronouns, title, birthday, their core files " +
+      '(identity — opening with their age, public progressions and pronouns — description, ' +
+      'personality, manifesto), physical descriptions, how many memories ' +
       'they hold, and their conversation count with the most recent conversations (id, title, ' +
       'dates). Use this FIRST for any question about a character — it replaces several run_sql ' +
       'calls and the vault lookup.',

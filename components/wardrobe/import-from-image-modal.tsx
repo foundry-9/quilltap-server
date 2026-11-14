@@ -4,7 +4,8 @@
  * Import From Image Modal
  *
  * A three-state modal for importing wardrobe items from a reference image:
- * 1. Upload state — file picker, optional guidance notes, "Analyze" button
+ * 1. Upload state — file picker, the vision profile to read it with (preset
+ *    to the one the server would pick), optional guidance notes, "Analyze" button
  * 2. Analyzing state — loading spinner while LLM processes the image
  * 3. Review state — editable item cards with select/deselect, "Import Selected" button,
  *    plus an optional ensemble card that bundles the imported pieces into one
@@ -20,10 +21,12 @@
  * @module components/wardrobe/import-from-image-modal
  */
 
-import { useState, useRef, useCallback, useId } from 'react'
+import { useState, useRef, useCallback, useId, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { fetchJson } from '@/lib/fetch-helpers'
 import FormActions from '@/components/ui/FormActions'
@@ -32,6 +35,7 @@ import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.type
 import { unionTypes } from '@/lib/wardrobe/composite-types'
 import { linkWardrobeItemImage, uploadWardrobeItemImage } from '@/lib/wardrobe/item-images-client'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
+import { WARDROBE_IMAGE_PROMPT_MAX_LENGTH } from '@/lib/wardrobe/image-prompt-limit'
 
 // ============================================================================
 // TYPES
@@ -46,6 +50,8 @@ interface ImportFromImageModalProps {
 interface ProposedItem {
   title: string
   description: string
+  /** The image-generation cue the analysis wrote; always filled, capped. */
+  imagePrompt: string
   types: WardrobeItemType[]
   appropriateness: string
   selected: boolean
@@ -64,6 +70,19 @@ interface OutfitDraft extends ProposedOutfit {
 }
 
 type ModalState = 'upload' | 'analyzing' | 'review'
+
+interface VisionProfileOption {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+}
+
+interface VisionProfilesResponse {
+  profiles: VisionProfileOption[]
+  /** What the analysis uses when nothing is chosen; null when no profile can see. */
+  defaultProfileId: string | null
+}
 
 /** An ensemble needs at least two pieces to be worth bundling. */
 const MIN_OUTFIT_PIECES = 2
@@ -99,13 +118,17 @@ export function ImportFromImageModal({
   /** Keep the photograph as each created piece's first picture. */
   const [keepPhotograph, setKeepPhotograph] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /** The operator's pick; null means "whatever the server would choose". */
+  const [chosenProfileId, setChosenProfileId] = useState<string | null>(null)
+  /** Which model read the photograph, shown on the review screen. */
+  const [analyzedBy, setAnalyzedBy] = useState<string | null>(null)
+  const visionProfilesQuery = useQuery({
+    queryKey: queryKeys.wardrobe.visionProfiles,
+    queryFn: ({ signal }) => apiFetch<VisionProfilesResponse>('/api/v1/wardrobe?action=analyze-image', { signal }),
+  })
+  const visionProfiles = useMemo(() => visionProfilesQuery.data?.profiles ?? [], [visionProfilesQuery.data])
+  const selectedProfileId = chosenProfileId ?? visionProfilesQuery.data?.defaultProfileId ?? ''
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
-
-  useEscapeKey(onClose, true)
-
   // ── File Selection ──────────────────────────────────────────────────────
 
   const handleFileSelect = useCallback((file: File) => {
@@ -167,19 +190,21 @@ export function ImportFromImageModal({
         proposedItems: Array<{
           title: string
           description: string
+          imagePrompt: string
           types: WardrobeItemType[]
           appropriateness: string
         }>
         proposedOutfit: ProposedOutfit | null
         provider: string
         model: string
-      }>('/api/v1/wardrobe/analyze-image', {
+      }>('/api/v1/wardrobe?action=analyze-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: base64,
           mimeType: selectedFile.type,
           guidance: guidance.trim() || undefined,
+          profileId: selectedProfileId || undefined,
         }),
       })
 
@@ -194,7 +219,9 @@ export function ImportFromImageModal({
         return
       }
 
-      setProposedItems(items.map(item => ({ ...item, selected: true })))
+      const reader = visionProfiles.find(p => p.id === selectedProfileId)
+      setAnalyzedBy(reader ? `${reader.name} (${reader.provider} • ${reader.modelName})` : `${result.data.provider} • ${result.data.model}`)
+      setProposedItems(items.map(item => ({ ...item, imagePrompt: item.imagePrompt ?? '', selected: true })))
       const proposedOutfit = result.data.proposedOutfit
       setOutfit(
         proposedOutfit && items.length >= MIN_OUTFIT_PIECES
@@ -207,7 +234,7 @@ export function ImportFromImageModal({
       setError(message)
       setState('upload')
     }
-  }, [selectedFile, guidance])
+  }, [selectedFile, guidance, selectedProfileId, visionProfiles])
 
   // ── Item Editing ────────────────────────────────────────────────────────
 
@@ -285,6 +312,7 @@ export function ImportFromImageModal({
             body: JSON.stringify({
               title: item.title,
               description: item.description || null,
+              imagePrompt: item.imagePrompt.trim() || null,
               types: item.types,
               appropriateness: item.appropriateness || null,
               isDefault: false,
@@ -364,410 +392,428 @@ export function ImportFromImageModal({
 
   // ── Render ──────────────────────────────────────────────────────────────
 
+  // Opens over the wardrobe dialog; the shell stacks it on top by DOM order.
   return (
-    <>
-      {/* Overlay — z values sit above qt-dialog-overlay (z-[60]) so this
-          stacks on top of the parent wardrobe dialog. */}
-      <button
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-[70]"
-        onClick={onClose}
-        aria-label="Close dialog"
-        type="button"
-      />
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      title="Import from Image"
+      showCloseButton
+      maxWidth="wide"
+      bodyClassName="qt-dialog-body space-y-4 flex-1 overflow-y-auto"
+      footerClassName="qt-dialog-footer flex-shrink-0"
+      footer={
+        <>
+          {state === 'upload' && (
+            <FormActions
+              onCancel={onClose}
+              onSubmit={handleAnalyze}
+              submitLabel="Analyze Image"
+              cancelLabel="Cancel"
+              isDisabled={!selectedFile}
+            />
+          )}
+          {state === 'analyzing' && (
+            <FormActions
+              onCancel={() => {
+                setState('upload')
+                setError(null)
+              }}
+              onSubmit={() => {}}
+              submitLabel="Analyzing..."
+              cancelLabel="Cancel"
+              isLoading={true}
+              isDisabled={true}
+            />
+          )}
+          {state === 'review' && (
+            <FormActions
+              onCancel={onClose}
+              onSubmit={handleImport}
+              submitLabel={`Import ${selectedCount} Item${selectedCount !== 1 ? 's' : ''}${willCreateOutfit ? ' + Outfit' : ''}`}
+              cancelLabel="Cancel"
+              isLoading={importing}
+              isDisabled={selectedCount === 0 || outfitTitleMissing}
+            />
+          )}
+        </>
+      }
+    >
+      {/* Error display */}
+      {error && (
+        <div className="qt-alert-error rounded px-3 py-2 text-sm">
+          {error}
+        </div>
+      )}
 
-      {/* Dialog */}
-      <div
-        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[80] pointer-events-auto"
-        style={{ width: 'min(var(--qt-page-max-width), calc(100vw - 2rem))' }}
-      >
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          onKeyDown={handleFocusKeyDown}
-          className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col"
-        >
-          {/* Header */}
-          <div className="qt-dialog-header sticky top-0 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <h2 id={titleId} className="qt-dialog-title">Import from Image</h2>
-              <button
-                aria-label="Close"
-                type="button"
-                onClick={onClose}
-                className="qt-text-secondary hover:text-foreground"
-              >
-                <Icon name="close" className="w-5 h-5" />
-              </button>
+      {/* ── Upload State ─────────────────────────────────────── */}
+      {(state === 'upload' || state === 'analyzing') && (
+        <>
+          {/* Image preview or drop zone */}
+          {imagePreview ? (
+            <div className="relative">
+              <img
+                src={imagePreview}
+                alt="Selected reference image"
+                className="w-full max-h-64 object-contain rounded border qt-border-default"
+              />
+              {state === 'upload' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFile(null)
+                    setImagePreview(null)
+                  }}
+                  className="absolute top-2 right-2 qt-button-secondary qt-button-sm !px-2"
+                  title="Remove image"
+                >
+                  <Icon name="close" className="w-4 h-4" />
+                </button>
+              )}
             </div>
+          ) : (
+            <div
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed qt-border-default rounded-lg p-8 text-center cursor-pointer hover:qt-border-primary transition-colors"
+            >
+              <Icon name="image" className="w-12 h-12 mx-auto qt-text-secondary mb-3" />
+              <p className="text-sm qt-text mb-1">
+                Drop an image here or click to browse
+              </p>
+              <p className="text-xs qt-text-secondary">
+                JPEG, PNG, WebP, or GIF up to 10 MB
+              </p>
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_TYPES.join(',')}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleFileSelect(file)
+            }}
+            className="hidden"
+          />
+
+          {/* Which vision model reads the photograph */}
+          <div>
+            <label htmlFor={`${id}-vision-profile`} className="qt-label mb-1">
+              Reading the photograph
+            </label>
+            <select
+              id={`${id}-vision-profile`}
+              value={selectedProfileId}
+              onChange={(e) => setChosenProfileId(e.target.value || null)}
+              disabled={state === 'analyzing' || visionProfilesQuery.isLoading || visionProfiles.length === 0}
+              className="qt-select text-sm w-full"
+            >
+              {visionProfilesQuery.isLoading && <option value="">Consulting the roster of keen-eyed models…</option>}
+              {!visionProfilesQuery.isLoading && visionProfiles.length === 0 && (
+                <option value="">No profile can see pictures</option>
+              )}
+              {visionProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider} • {profile.modelName})
+                  {profile.id === visionProfilesQuery.data?.defaultProfileId ? ' — the usual choice' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs qt-text-secondary mt-1">
+              Only profiles whose model reads images and whose provider will actually deliver one are listed.
+            </p>
           </div>
 
-          {/* Body */}
-          <div className="qt-dialog-body space-y-4 flex-1">
-            {/* Error display */}
-            {error && (
-              <div className="qt-alert-error rounded px-3 py-2 text-sm">
-                {error}
-              </div>
-            )}
+          {/* Guidance notes */}
+          <div>
+            <label htmlFor="wardrobe-image-guidance" className="qt-label mb-1">
+              Hints for the AI (optional)
+            </label>
+            <textarea
+              id="wardrobe-image-guidance"
+              value={guidance}
+              onChange={(e) => setGuidance(e.target.value)}
+              rows={2}
+              maxLength={2000}
+              disabled={state === 'analyzing'}
+              placeholder='Anything specific to focus on or avoid? e.g., "the woman on the left", "ignore the background", "this is a medieval setting"'
+              className="qt-textarea text-sm"
+            />
+          </div>
 
-            {/* ── Upload State ─────────────────────────────────────── */}
-            {(state === 'upload' || state === 'analyzing') && (
-              <>
-                {/* Image preview or drop zone */}
-                {imagePreview ? (
-                  <div className="relative">
-                    <img
-                      src={imagePreview}
-                      alt="Selected reference image"
-                      className="w-full max-h-64 object-contain rounded border qt-border-default"
-                    />
-                    {state === 'upload' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedFile(null)
-                          setImagePreview(null)
-                        }}
-                        className="absolute top-2 right-2 qt-button-secondary qt-button-sm !px-2"
-                        title="Remove image"
-                      >
-                        <Icon name="close" className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed qt-border-default rounded-lg p-8 text-center cursor-pointer hover:qt-border-primary transition-colors"
-                  >
-                    <Icon name="image" className="w-12 h-12 mx-auto qt-text-secondary mb-3" />
-                    <p className="text-sm text-foreground mb-1">
-                      Drop an image here or click to browse
-                    </p>
-                    <p className="text-xs qt-text-secondary">
-                      JPEG, PNG, WebP, or GIF up to 10 MB
-                    </p>
-                  </div>
+          {/* Analyzing indicator */}
+          {state === 'analyzing' && (
+            <div className="flex items-center gap-3 px-3 py-2 rounded qt-bg-muted">
+              <svg className="w-5 h-5 animate-spin qt-text-primary" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+                <path d="M12 2a10 10 0 0110 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
+              </svg>
+              <span className="text-sm qt-text-secondary">
+                Scanning image for clothing and accessories...
+              </span>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Review State ─────────────────────────────────────── */}
+      {state === 'review' && (
+        <>
+          {/* Reference image thumbnail */}
+          {imagePreview && (
+            <div className="flex items-start gap-3">
+              <img
+                src={imagePreview}
+                alt="Reference image"
+                className="w-20 h-20 object-cover rounded border qt-border-default flex-shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm qt-text">
+                  {proposedItems.length} item{proposedItems.length !== 1 ? 's' : ''} identified
+                </p>
+                {analyzedBy && (
+                  <p className="text-xs qt-text-secondary mt-1">Read by {analyzedBy}</p>
                 )}
+                <p className="text-xs qt-text-secondary mt-1">
+                  Edit any field below before importing. Deselect items you don&apos;t want.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setState('upload')
+                  setProposedItems([])
+                  setOutfit(EMPTY_OUTFIT)
+                  setError(null)
+                }}
+                className="qt-button-secondary qt-button-sm flex-shrink-0"
+              >
+                Re-analyze
+              </button>
+            </div>
+          )}
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={ACCEPTED_TYPES.join(',')}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleFileSelect(file)
-                  }}
-                  className="hidden"
-                />
+          {/* Keep the photograph as each piece's first picture */}
+          <label className="flex items-start gap-3 cursor-pointer px-3 py-2 rounded qt-bg-muted">
+            <input
+              type="checkbox"
+              checked={keepPhotograph}
+              onChange={(e) => setKeepPhotograph(e.target.checked)}
+              className="qt-checkbox mt-0.5"
+            />
+            <span className="flex-1 min-w-0">
+              <span className="text-sm qt-text block">
+                The photograph will be kept as each piece&apos;s first picture
+              </span>
+              <span className="text-xs qt-text-secondary block mt-0.5">
+                Pressed into every garment&apos;s album, and the outfit&apos;s too. Untick it to leave the albums blank.
+              </span>
+            </span>
+          </label>
 
-                {/* Guidance notes */}
-                <div>
-                  <label htmlFor="wardrobe-image-guidance" className="qt-label mb-1">
-                    Hints for the AI (optional)
+          {/* Item cards */}
+          <div className="space-y-4">
+            {proposedItems.map((item, index) => (
+              <div
+                key={index}
+                className={`border qt-border-default rounded-lg p-4 space-y-3 transition-opacity ${
+                  item.selected ? '' : 'opacity-50'
+                }`}
+              >
+                {/* Select checkbox + title */}
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={item.selected}
+                    onChange={(e) => updateItem(index, { selected: e.target.checked })}
+                    aria-label={`Import ${item.title || 'this item'}`}
+                    className="qt-checkbox mt-1"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={item.title}
+                      onChange={(e) => updateItem(index, { title: e.target.value })}
+                      aria-label="Item title"
+                      className="qt-input text-sm font-medium w-full"
+                      placeholder="Item title"
+                    />
+                  </div>
+                </div>
+
+                {item.selected && (
+                  <>
+                    {/* Types */}
+                    <div className="ml-8">
+                      <span className="qt-label text-xs mb-1 block">Type(s)</span>
+                      <div className="flex flex-wrap gap-2">
+                        {WARDROBE_SLOT_TYPES.map((type) => (
+                          <label
+                            key={type}
+                            className="inline-flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={item.types.includes(type)}
+                              onChange={() => toggleItemType(index, type)}
+                              className="qt-checkbox"
+                            />
+                            <span className="text-xs capitalize qt-text">{type}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Appropriateness */}
+                    <div className="ml-8">
+                      <label htmlFor={`${id}-appropriateness-${index}`} className="qt-label text-xs mb-1 block">
+                        Appropriateness
+                      </label>
+                      <input
+                        id={`${id}-appropriateness-${index}`}
+                        type="text"
+                        value={item.appropriateness}
+                        onChange={(e) => updateItem(index, { appropriateness: e.target.value })}
+                        className="qt-input text-sm w-full"
+                        placeholder="e.g., formal, casual, intimate"
+                        maxLength={200}
+                      />
+                    </div>
+
+                    {/* Portrait cue — what the image-makers are told */}
+                    <div className="ml-8">
+                      <div className="flex items-center justify-between mb-1">
+                        <label htmlFor={`${id}-image-prompt-${index}`} className="qt-label text-xs block">
+                          Portrait Cue
+                        </label>
+                        <span className="text-xs qt-text-secondary">
+                          {item.imagePrompt.length}/{WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
+                        </span>
+                      </div>
+                      <input
+                        id={`${id}-image-prompt-${index}`}
+                        type="text"
+                        value={item.imagePrompt}
+                        onChange={(e) => updateItem(index, { imagePrompt: e.target.value })}
+                        className="qt-input text-sm w-full"
+                        placeholder="e.g., worn brown leather duster with brass buttons"
+                        maxLength={WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div className="ml-8">
+                      <label htmlFor={`${id}-description-${index}`} className="qt-label text-xs mb-1 block">
+                        Description
+                      </label>
+                      <textarea
+                        id={`${id}-description-${index}`}
+                        value={item.description}
+                        onChange={(e) => updateItem(index, { description: e.target.value })}
+                        rows={3}
+                        className="qt-textarea text-sm w-full"
+                        placeholder="Item description..."
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Ensemble — bundles the imported pieces into one outfit */}
+          <div
+            className={`border qt-border-default rounded-lg p-4 space-y-3 transition-opacity ${
+              willCreateOutfit ? '' : 'opacity-50'
+            }`}
+          >
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={willCreateOutfit}
+                disabled={!outfitAvailable}
+                onChange={(e) => setOutfit(prev => ({ ...prev, enabled: e.target.checked }))}
+                className="qt-checkbox mt-1"
+              />
+              <span className="flex-1 min-w-0">
+                <span className="text-sm font-medium qt-text block">
+                  Also create an outfit from these pieces
+                </span>
+                <span className="text-xs qt-text-secondary block mt-0.5">
+                  {outfitAvailable
+                    ? `Bundles the ${selectedCount} selected items into a single outfit you can wear in one gesture.`
+                    : 'Select at least two items to bundle them into an outfit.'}
+                </span>
+              </span>
+            </label>
+
+            {willCreateOutfit && (
+              <>
+                <div className="ml-8">
+                  <label htmlFor="wardrobe-image-outfit-title" className="qt-label text-xs mb-1 block">
+                    Outfit title
                   </label>
-                  <textarea
-                    id="wardrobe-image-guidance"
-                    value={guidance}
-                    onChange={(e) => setGuidance(e.target.value)}
-                    rows={2}
-                    maxLength={2000}
-                    disabled={state === 'analyzing'}
-                    placeholder='Anything specific to focus on or avoid? e.g., "the woman on the left", "ignore the background", "this is a medieval setting"'
-                    className="qt-textarea text-sm"
+                  <input
+                    id="wardrobe-image-outfit-title"
+                    type="text"
+                    value={outfit.title}
+                    onChange={(e) => setOutfit(prev => ({ ...prev, title: e.target.value }))}
+                    className="qt-input text-sm font-medium w-full"
+                    placeholder="e.g., Midnight Gala Ensemble"
                   />
                 </div>
 
-                {/* Analyzing indicator */}
-                {state === 'analyzing' && (
-                  <div className="flex items-center gap-3 px-3 py-2 rounded qt-bg-muted">
-                    <svg className="w-5 h-5 animate-spin qt-text-primary" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
-                      <path d="M12 2a10 10 0 0110 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
-                    </svg>
-                    <span className="text-sm qt-text-secondary">
-                      Scanning image for clothing and accessories...
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
+                <div className="ml-8">
+                  <label htmlFor="wardrobe-image-outfit-appropriateness" className="qt-label text-xs mb-1 block">
+                    Appropriateness
+                  </label>
+                  <input
+                    id="wardrobe-image-outfit-appropriateness"
+                    type="text"
+                    value={outfit.appropriateness}
+                    onChange={(e) => setOutfit(prev => ({ ...prev, appropriateness: e.target.value }))}
+                    className="qt-input text-sm w-full"
+                    placeholder="e.g., formal, evening"
+                    maxLength={200}
+                  />
+                </div>
 
-            {/* ── Review State ─────────────────────────────────────── */}
-            {state === 'review' && (
-              <>
-                {/* Reference image thumbnail */}
-                {imagePreview && (
-                  <div className="flex items-start gap-3">
-                    <img
-                      src={imagePreview}
-                      alt="Reference image"
-                      className="w-20 h-20 object-cover rounded border qt-border-default flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground">
-                        {proposedItems.length} item{proposedItems.length !== 1 ? 's' : ''} identified
-                      </p>
-                      <p className="text-xs qt-text-secondary mt-1">
-                        Edit any field below before importing. Deselect items you don&apos;t want.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setState('upload')
-                        setProposedItems([])
-                        setOutfit(EMPTY_OUTFIT)
-                        setError(null)
-                      }}
-                      className="qt-button-secondary qt-button-sm flex-shrink-0"
-                    >
-                      Re-analyze
-                    </button>
-                  </div>
-                )}
+                <div className="ml-8">
+                  <label htmlFor="wardrobe-image-outfit-description" className="qt-label text-xs mb-1 block">
+                    Description
+                  </label>
+                  <textarea
+                    id="wardrobe-image-outfit-description"
+                    value={outfit.description}
+                    onChange={(e) => setOutfit(prev => ({ ...prev, description: e.target.value }))}
+                    rows={2}
+                    className="qt-textarea text-sm w-full"
+                    placeholder="The overall look..."
+                  />
+                </div>
 
-                {/* Keep the photograph as each piece's first picture */}
-                <label className="flex items-start gap-3 cursor-pointer px-3 py-2 rounded qt-bg-muted">
+                <label className="ml-8 flex items-start gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={keepPhotograph}
-                    onChange={(e) => setKeepPhotograph(e.target.checked)}
+                    checked={outfit.replace}
+                    onChange={(e) => setOutfit(prev => ({ ...prev, replace: e.target.checked }))}
                     className="qt-checkbox mt-0.5"
                   />
-                  <span className="flex-1 min-w-0">
-                    <span className="text-sm text-foreground block">
-                      The photograph will be kept as each piece&apos;s first picture
-                    </span>
-                    <span className="text-xs qt-text-secondary block mt-0.5">
-                      Pressed into every garment&apos;s album, and the outfit&apos;s too. Untick it to leave the albums blank.
+                  <span className="text-sm qt-text">
+                    Replace everything in its slots when worn
+                    <span className="block text-xs qt-text-secondary">
+                      Off layers the pieces over whatever is already on.
                     </span>
                   </span>
                 </label>
-
-                {/* Item cards */}
-                <div className="space-y-4">
-                  {proposedItems.map((item, index) => (
-                    <div
-                      key={index}
-                      className={`border qt-border-default rounded-lg p-4 space-y-3 transition-opacity ${
-                        item.selected ? '' : 'opacity-50'
-                      }`}
-                    >
-                      {/* Select checkbox + title */}
-                      <div className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          checked={item.selected}
-                          onChange={(e) => updateItem(index, { selected: e.target.checked })}
-                          aria-label={`Import ${item.title || 'this item'}`}
-                          className="qt-checkbox mt-1"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <input
-                            type="text"
-                            value={item.title}
-                            onChange={(e) => updateItem(index, { title: e.target.value })}
-                            aria-label="Item title"
-                            className="qt-input text-sm font-medium w-full"
-                            placeholder="Item title"
-                          />
-                        </div>
-                      </div>
-
-                      {item.selected && (
-                        <>
-                          {/* Types */}
-                          <div className="ml-8">
-                            <span className="qt-label text-xs mb-1 block">Type(s)</span>
-                            <div className="flex flex-wrap gap-2">
-                              {WARDROBE_SLOT_TYPES.map((type) => (
-                                <label
-                                  key={type}
-                                  className="inline-flex items-center gap-1.5 cursor-pointer"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={item.types.includes(type)}
-                                    onChange={() => toggleItemType(index, type)}
-                                    className="qt-checkbox"
-                                  />
-                                  <span className="text-xs capitalize text-foreground">{type}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Appropriateness */}
-                          <div className="ml-8">
-                            <label htmlFor={`${id}-appropriateness-${index}`} className="qt-label text-xs mb-1 block">
-                              Appropriateness
-                            </label>
-                            <input
-                              id={`${id}-appropriateness-${index}`}
-                              type="text"
-                              value={item.appropriateness}
-                              onChange={(e) => updateItem(index, { appropriateness: e.target.value })}
-                              className="qt-input text-sm w-full"
-                              placeholder="e.g., formal, casual, intimate"
-                              maxLength={200}
-                            />
-                          </div>
-
-                          {/* Description */}
-                          <div className="ml-8">
-                            <label htmlFor={`${id}-description-${index}`} className="qt-label text-xs mb-1 block">
-                              Description
-                            </label>
-                            <textarea
-                              id={`${id}-description-${index}`}
-                              value={item.description}
-                              onChange={(e) => updateItem(index, { description: e.target.value })}
-                              rows={3}
-                              className="qt-textarea text-sm w-full"
-                              placeholder="Item description..."
-                            />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Ensemble — bundles the imported pieces into one outfit */}
-                <div
-                  className={`border qt-border-default rounded-lg p-4 space-y-3 transition-opacity ${
-                    willCreateOutfit ? '' : 'opacity-50'
-                  }`}
-                >
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={willCreateOutfit}
-                      disabled={!outfitAvailable}
-                      onChange={(e) => setOutfit(prev => ({ ...prev, enabled: e.target.checked }))}
-                      className="qt-checkbox mt-1"
-                    />
-                    <span className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-foreground block">
-                        Also create an outfit from these pieces
-                      </span>
-                      <span className="text-xs qt-text-secondary block mt-0.5">
-                        {outfitAvailable
-                          ? `Bundles the ${selectedCount} selected items into a single outfit you can wear in one gesture.`
-                          : 'Select at least two items to bundle them into an outfit.'}
-                      </span>
-                    </span>
-                  </label>
-
-                  {willCreateOutfit && (
-                    <>
-                      <div className="ml-8">
-                        <label htmlFor="wardrobe-image-outfit-title" className="qt-label text-xs mb-1 block">
-                          Outfit title
-                        </label>
-                        <input
-                          id="wardrobe-image-outfit-title"
-                          type="text"
-                          value={outfit.title}
-                          onChange={(e) => setOutfit(prev => ({ ...prev, title: e.target.value }))}
-                          className="qt-input text-sm font-medium w-full"
-                          placeholder="e.g., Midnight Gala Ensemble"
-                        />
-                      </div>
-
-                      <div className="ml-8">
-                        <label htmlFor="wardrobe-image-outfit-appropriateness" className="qt-label text-xs mb-1 block">
-                          Appropriateness
-                        </label>
-                        <input
-                          id="wardrobe-image-outfit-appropriateness"
-                          type="text"
-                          value={outfit.appropriateness}
-                          onChange={(e) => setOutfit(prev => ({ ...prev, appropriateness: e.target.value }))}
-                          className="qt-input text-sm w-full"
-                          placeholder="e.g., formal, evening"
-                          maxLength={200}
-                        />
-                      </div>
-
-                      <div className="ml-8">
-                        <label htmlFor="wardrobe-image-outfit-description" className="qt-label text-xs mb-1 block">
-                          Description
-                        </label>
-                        <textarea
-                          id="wardrobe-image-outfit-description"
-                          value={outfit.description}
-                          onChange={(e) => setOutfit(prev => ({ ...prev, description: e.target.value }))}
-                          rows={2}
-                          className="qt-textarea text-sm w-full"
-                          placeholder="The overall look..."
-                        />
-                      </div>
-
-                      <label className="ml-8 flex items-start gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={outfit.replace}
-                          onChange={(e) => setOutfit(prev => ({ ...prev, replace: e.target.checked }))}
-                          className="qt-checkbox mt-0.5"
-                        />
-                        <span className="text-sm text-foreground">
-                          Replace everything in its slots when worn
-                          <span className="block text-xs qt-text-secondary">
-                            Off layers the pieces over whatever is already on.
-                          </span>
-                        </span>
-                      </label>
-                    </>
-                  )}
-                </div>
               </>
             )}
           </div>
-
-          {/* Footer */}
-          <div className="qt-dialog-footer flex-shrink-0">
-            {state === 'upload' && (
-              <FormActions
-                onCancel={onClose}
-                onSubmit={handleAnalyze}
-                submitLabel="Analyze Image"
-                cancelLabel="Cancel"
-                isDisabled={!selectedFile}
-              />
-            )}
-            {state === 'analyzing' && (
-              <FormActions
-                onCancel={() => {
-                  setState('upload')
-                  setError(null)
-                }}
-                onSubmit={() => {}}
-                submitLabel="Analyzing..."
-                cancelLabel="Cancel"
-                isLoading={true}
-                isDisabled={true}
-              />
-            )}
-            {state === 'review' && (
-              <FormActions
-                onCancel={onClose}
-                onSubmit={handleImport}
-                submitLabel={`Import ${selectedCount} Item${selectedCount !== 1 ? 's' : ''}${willCreateOutfit ? ' + Outfit' : ''}`}
-                cancelLabel="Cancel"
-                isLoading={importing}
-                isDisabled={selectedCount === 0 || outfitTitleMissing}
-              />
-            )}
-          </div>
-        </div>
-      </div>
-    </>
+        </>
+      )}
+    </BaseModal>
   )
 }

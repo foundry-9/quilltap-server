@@ -305,6 +305,7 @@ describe('NDJSON export — memory embeddings', () => {
           embedding: { '0': 0.1, '1': 0.2, '2': 0.3 },
         },
       },
+      { kind: '__footer__', counts: { characters: 1, memories: 2 } },
     ];
 
     const result = await assembleExportFromStream(
@@ -681,6 +682,45 @@ describe('NDJSON export → import round-trip — new export types', () => {
     expect(data.pluginConfigs[0]._redactedKeys).toEqual(['apiToken']);
     // `enabled` travels so a plugin the user switched off stays off.
     expect(data.pluginConfigs[0].enabled).toBe(false);
+  });
+
+  it('strips config keys marked secret even when their input type is not password', async () => {
+    const config = {
+      id: 'pc-3',
+      userId: testUserId,
+      pluginName: 'qtap-plugin-mcp',
+      config: {
+        servers: '[{"name":"x","bearerToken":"tok-secret-123"}]',
+        discoveryTimeout: 30,
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    (getUserRepositories as jest.Mock).mockReturnValue({});
+    (getRepositories as jest.Mock).mockReturnValue({
+      pluginConfigs: { findByUserId: jest.fn(async () => [config]) },
+    });
+    (getPlugin as jest.Mock).mockReturnValue({
+      manifest: {
+        configSchema: [
+          { key: 'servers', label: 'Servers', type: 'textarea', secret: true },
+          { key: 'discoveryTimeout', label: 'Timeout', type: 'number' },
+        ],
+      },
+    });
+
+    const text = await readAllText(
+      createNdjsonStream(testUserId, { type: 'plugin-configs', scope: 'all' })
+    );
+    expect(text).not.toContain('tok-secret-123');
+
+    const result = await assembleExportFromStream(ndjsonToRecords(text));
+    const data = result.data as {
+      pluginConfigs: Array<{ config: Record<string, unknown>; _redactedKeys?: string[] }>;
+    };
+    expect(data.pluginConfigs[0].config).toEqual({ discoveryTimeout: 30 });
+    expect(data.pluginConfigs[0]._redactedKeys).toEqual(['servers']);
   });
 
   it('withholds the entire config when the plugin manifest cannot be resolved', async () => {

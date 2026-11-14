@@ -53,11 +53,9 @@ jest.mock('@/lib/mount-index/folder-paths', () => ({
   ensureFolderPath: jest.fn().mockResolvedValue(undefined),
 }));
 
-import {
-  applyDocumentStoreWriteOverlay,
-  CHARACTER_METADATA_JSON_PATH,
-} from '@/lib/database/repositories/character-properties-overlay';
-import { parseVaultMetadata } from '@/lib/database/repositories/vault-overlay/parsers';
+import { applyDocumentStoreWriteOverlay } from '@/lib/characters/vault/write';
+import { CHARACTER_METADATA_JSON_PATH } from '@/lib/characters/vault/layout';
+import { parseVaultMetadata } from '@/lib/characters/vault/parsers';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 
 const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory').getRepositories as jest.Mock;

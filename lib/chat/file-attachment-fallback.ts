@@ -332,7 +332,7 @@ async function describeImageWithProfile(
         return unsupportedResult(
           imageDescProfile,
           file,
-          `Image description failed - ${imageDescProfile.modelName} is a reasoning model that used all ${response.usage?.completionTokens || maxTokens} tokens for internal reasoning and didn't output a description. Reasoning models are expensive and slow for this task. Switch to gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash instead.`
+          `Image description failed - ${imageDescProfile.modelName} is a reasoning model that used all ${response.usage?.completionTokens || maxTokens} tokens for internal reasoning and didn't output a description. Reasoning models are expensive and slow for this task. Switch to gpt-4o-mini, a Claude Haiku model, or gemini-2.0-flash instead.`
         )
       }
 
@@ -340,7 +340,7 @@ async function describeImageWithProfile(
       return unsupportedResult(
         imageDescProfile,
         file,
-        `Image could not be processed - ${imageDescProfile.provider} ${imageDescProfile.modelName} returned empty response. The model may not support vision. Try using gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash as your image description profile.`
+        `Image could not be processed - ${imageDescProfile.provider} ${imageDescProfile.modelName} returned empty response. The model may not support vision. Try using gpt-4o-mini, a Claude Haiku model, or gemini-2.0-flash as your image description profile.`
       )
     }
 
@@ -365,7 +365,7 @@ async function describeImageWithProfile(
       return unsupportedResult(
         imageDescProfile,
         file,
-        `The image description profile responded with: "${trimmedContent.substring(0, 100)}...". This appears to be an error rather than an image description. The model may not support images or there's a parameter mismatch. Try using gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash.`
+        `The image description profile responded with: "${trimmedContent.substring(0, 100)}...". This appears to be an error rather than an image description. The model may not support images or there's a parameter mismatch. Try using gpt-4o-mini, a Claude Haiku model, or gemini-2.0-flash.`
       )
     }
 

@@ -81,3 +81,39 @@ export function formatCell(value: unknown): { text: string; isNull: boolean } {
   if (typeof value === 'object') return { text: JSON.stringify(value), isNull: false }
   return { text: String(value), isNull: false }
 }
+
+/**
+ * One slice of the in-flight run, in display order: a stretch of thinking, or
+ * a contiguous range of tool calls (indices into the live tool-call list).
+ */
+export type LiveRunSegment =
+  | { kind: 'thinking'; text: string; isLast: boolean }
+  | { kind: 'tools'; start: number; end: number }
+
+/**
+ * Interleave the cumulative reasoning chain with the tool batches it led to.
+ * Each mark records how much reasoning had streamed when its batch was
+ * detected, so the reasoning before a mark precedes that batch's cards. The
+ * trailing reasoning (after the last batch) is `isLast` — it is the one still
+ * streaming. Empty thinking slices are dropped.
+ */
+export function segmentLiveRun(
+  reasoning: string,
+  marks: ReadonlyArray<{ reasoningLength: number; toolIndex: number }>,
+  toolCount: number,
+): LiveRunSegment[] {
+  const segments: LiveRunSegment[] = []
+  let offset = 0
+  for (let i = 0; i < marks.length; i++) {
+    const mark = marks[i]
+    const cut = Math.max(offset, Math.min(mark.reasoningLength, reasoning.length))
+    const text = reasoning.slice(offset, cut).trim()
+    if (text) segments.push({ kind: 'thinking', text, isLast: false })
+    offset = cut
+    const end = i + 1 < marks.length ? marks[i + 1].toolIndex : toolCount
+    if (end > mark.toolIndex) segments.push({ kind: 'tools', start: mark.toolIndex, end })
+  }
+  const tail = reasoning.slice(offset).trim()
+  if (tail) segments.push({ kind: 'thinking', text: tail, isLast: true })
+  return segments
+}

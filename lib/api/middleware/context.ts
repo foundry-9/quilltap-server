@@ -11,11 +11,13 @@ import { getServerSession, type ExtendedSession } from '@/lib/auth/session';
 import { getRepositoriesSafe, type RepositoryContainer } from '@/lib/repositories/factory';
 import { startupState } from '@/lib/startup/startup-state';
 import { logger } from '@/lib/logger';
-import { validationError, serverError } from '@/lib/api/responses';
+import { validationError, serverError, badRequest } from '@/lib/api/responses';
+import { guardRequestBodyParsers, RequestBodyParseError } from '@/lib/api/request-body';
 import type { User } from '@/lib/schemas/types';
 import { ProjectStoreUnavailableError } from '@/lib/projects/project-store/schema';
 import { GroupStoreUnavailableError } from '@/lib/groups/group-store/schema';
-import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
+import { CharacterVaultUnavailableError } from '@/lib/characters/vault/layout';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 
 const contextLogger = logger.child({ module: 'api-context-middleware' });
 
@@ -24,6 +26,20 @@ const contextLogger = logger.child({ module: 'api-context-middleware' });
  * This ensures plugins and providers are fully loaded.
  */
 async function ensureServerReady(): Promise<void> {
+  // Without a resolved key, startup stops before readiness (instrumentation
+  // returns early) and only the operator can move it on — through /setup or
+  // /unlock. Waiting out the 30s below would hold the browser's connections
+  // open for nothing and starve the very navigation to those pages, so refuse
+  // at once.
+  if (!startupState.isPepperResolved()) {
+    const pepperState = startupState.getPepperState();
+    contextLogger.debug('Refusing API request — database key not resolved', {
+      pepperState,
+      lockedMode: startupState.isLockedMode(),
+    });
+    throw new PepperNotReadyError(pepperState);
+  }
+
   if (!startupState.isReady()) {
     const isReady = await startupState.waitForReady(30000);
     if (!isReady) {
@@ -96,6 +112,16 @@ async function buildRequestContext(): Promise<ContextBuildResult> {
     await ensureServerReady();
   } catch (error) {
     if (error instanceof PepperNotReadyError) {
+      // Locked (passphrase pending) answers 423, like /api/health; a key that
+      // still needs first-run setup keeps its 503.
+      if (error.pepperState === 'needs-passphrase') {
+        return {
+          response: NextResponse.json(
+            { error: 'Locked', unlockUrl: '/unlock', pepperState: error.pepperState },
+            { status: 423 }
+          ),
+        };
+      }
       return {
         response: NextResponse.json(
           { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },
@@ -154,17 +180,26 @@ export async function withContextParams<P extends Record<string, string | string
 
 /**
  * Catch handler errors and return appropriate responses.
- * ZodErrors become 400 validation errors; everything else becomes 500.
+ * ZodErrors and unparseable request bodies become 400s; everything else becomes 500.
  */
 async function handleRouteError(
   request: NextRequest,
   handlerFn: () => Promise<NextResponse>
 ): Promise<NextResponse> {
+  // Tag the request's own body parsers so a malformed body is told apart
+  // from any other SyntaxError the handler might raise (#221).
+  guardRequestBodyParsers(request);
   try {
     return await handlerFn();
   } catch (error) {
     if (error instanceof z.ZodError) {
       return validationError(error);
+    }
+    if (error instanceof RequestBodyParseError) {
+      contextLogger.debug(`[${request.method} ${new URL(request.url).pathname}] Unparseable request body`, {
+        kind: error.kind,
+      });
+      return badRequest(error.message);
     }
     const method = request.method;
     const url = new URL(request.url).pathname;
@@ -201,6 +236,15 @@ async function handleRouteError(
       return NextResponse.json(
         { error: 'Character vault unavailable', characterId: error.characterId },
         { status: 503 },
+      );
+    }
+    // A write that reached an archived character (the tombstone guard) is the
+    // caller's conflict, not a crash.
+    if (error instanceof CharacterArchivedError) {
+      contextLogger.warn(`[${method} ${url}] Write refused: character is archived`, { error: error.message });
+      return NextResponse.json(
+        { error: 'This character is archived; rehydrate it to make changes.' },
+        { status: 409 },
       );
     }
     contextLogger.error(`[${method} ${url}] Unhandled route error`, {}, error instanceof Error ? error : undefined);

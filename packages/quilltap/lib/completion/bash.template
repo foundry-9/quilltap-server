@@ -58,7 +58,7 @@ _quilltap_complete() {
   cword=$COMP_CWORD
 
   # Global options that can appear before subcommands
-  local global_opts="-d --data-dir -i --instance -p --port -o --open -v --version -h --help --update --passphrase"
+  local global_opts="-d --data-dir -i --instance -p --port --host -o --open -v --version -h --help --update --passphrase"
 
   # Top-level subcommands
   local top_cmds="db docs sync themes instances memories memory-diff recall-replay anchor-probe logs migrations maintenance file-verify completion"
@@ -68,7 +68,7 @@ _quilltap_complete() {
   # reserves -i for --ignore-case rather than --instance. Counting those wrong
   # makes a flag's value look like the subcommand's verb, which is how
   # `quilltap docs --limit 5 <TAB>` used to lose the verb list.
-  local vf_global=" -d --data-dir -i --instance -p --port --passphrase "
+  local vf_global=" -d --data-dir -i --instance -p --port --host --passphrase "
   local vf_db=" --limit --grep --character --project --about --source --tier --chat --message --field --tail --last --from --type --out --id --count "
   local vf_docs=" --mount --folder --type --ext --limit --max --context --top --threshold --sort --depth --max-nodes --format "
   local vf_sync=" --direction --prefer "
@@ -146,7 +146,7 @@ _quilltap_complete() {
     COMPREPLY=($(compgen -d -- "$cur"))
     return
   fi
-  if [[ "$prev" == "-p" ]] || [[ "$prev" == "--port" ]] || [[ "$prev" == "--passphrase" ]]; then
+  if [[ "$prev" == "-p" ]] || [[ "$prev" == "--port" ]] || [[ "$prev" == "--host" ]] || [[ "$prev" == "--passphrase" ]]; then
     return
   fi
   if [[ "$prev" == "--instance" ]] || { [[ "$prev" == "-i" ]] && [[ "$subcommand" != "memories" ]]; }; then

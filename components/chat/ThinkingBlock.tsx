@@ -19,6 +19,9 @@ interface ThinkingBlockProps {
   renderingPatterns?: RenderingPattern[]
   /** Dialogue detection for paragraph-level styling. */
   dialogueDetection?: DialogueDetection | null
+  /** `end` (default) offsets the block right, as in the Salon's prose; `start`
+   *  sets it flush left, as between the Brahma Console's SQL cards. */
+  align?: 'end' | 'start'
 }
 
 /**
@@ -30,7 +33,7 @@ interface ThinkingBlockProps {
  * the silent-message tokens). DISPLAY ONLY — never fed back to any model.
  *
  * Shared by the Salon (live + interleaved per-message reasoning) and the Brahma
- * Console (single leading block), both of which render through the same
+ * Console (start-aligned, interleaved with its SQL cards), both of which render through the same
  * `@/components/chat/MessageContent`.
  */
 export function ThinkingBlock({
@@ -39,11 +42,12 @@ export function ThinkingBlock({
   streaming = false,
   renderingPatterns,
   dialogueDetection,
+  align = 'end',
 }: ThinkingBlockProps) {
   if (!content || content.trim().length === 0) return null
 
   return (
-    <div className="qt-chat-thinking">
+    <div className={align === 'start' ? 'qt-chat-thinking qt-chat-thinking-start' : 'qt-chat-thinking'}>
       <details className="qt-chat-thinking-details group" open={streaming || !collapsedByDefault}>
         <summary className="qt-chat-thinking-summary">
           <Icon

@@ -30,8 +30,8 @@ jest.mock('@/lib/mount-index/database-store', () => ({
   readDatabaseDocument: jest.fn(),
 }))
 
+import { stableUuidFromString } from '@/lib/utils/stable-uuid'
 import { listScenariosEverywhere, scenarioExcerpt, SCENARIO_EXCERPT_LENGTH } from '@/lib/scenarios/everywhere'
-import { characterScenarioIdForPath } from '@/lib/scenarios/location'
 import { makeScenarioStores } from '../../../__tests__/helpers/scenario-stores'
 
 const USER = 'user-1'
@@ -117,7 +117,7 @@ describe('listScenariosEverywhere', () => {
     const ada = (await listScenariosEverywhere(stores.repos, USER)).find((s) => s.name === 'Ada')!
     expect(ada.scenarios[0]).toMatchObject({
       name: 'Tavern',
-      scenarioId: characterScenarioIdForPath('vault-ada', 'Scenarios/Tavern.md'),
+      scenarioId: stableUuidFromString(`scenario:${'vault-ada'}:${'Scenarios/Tavern.md'}`),
     })
   })
 })

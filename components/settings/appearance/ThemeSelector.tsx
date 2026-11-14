@@ -173,7 +173,7 @@ export function ThemeSelector({
   return (
     <section className="border-t qt-border-default pt-8">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xl font-semibold text-foreground">Theme</h2>
+        <h2 className="text-xl font-semibold qt-text">Theme</h2>
         <button
           type="button"
           onClick={handleInstallClick}
@@ -259,7 +259,7 @@ export function ThemeSelector({
 
       {/* Hint about theme plugins */}
       {availableThemes.length === 0 && (
-        <div className="mt-4 p-4 qt-bg-muted rounded-lg border qt-border-default">
+        <div className="mt-4 border qt-border-default rounded-lg p-4 qt-bg-muted">
           <div className="flex items-start gap-3">
             <Icon name="info" className="w-5 h-5 qt-text-secondary flex-shrink-0 mt-0.5" />
             <div>

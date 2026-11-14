@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers&section=capabilities-report
+url: /settings?section=capabilities-report
 ---
 
 # The Almanack
 
-> **[Open this page in Quilltap](/settings?tab=providers&section=capabilities-report)**
+> **[Open this page in Quilltap](/settings?section=capabilities-report)**
 
 The Almanack — formerly, and rather more prosaically, the Capabilities Report — is the annual compendium of your establishment, compiled on demand rather than annually, which is the only liberty it takes with the form. In the tradition of Whitaker's and Wisden, it sets down the state of things: what is installed, what is configured, what has accumulated in the cellars, and which of the boilers is making that noise. It is assembled with the thoroughness of a particularly zealous butler taking inventory after a weekend house party, and it is meant to be shared — in a bug report, in a support thread, or with anyone who asks how much you have actually built.
 
@@ -12,7 +12,7 @@ The Almanack — formerly, and rather more prosaically, the Capabilities Report 
 
 **Step by step:**
 
-1. **Go to the AI Providers tab** in Settings (`/settings?tab=providers`)
+1. **Go to the Settings page, and open the *Data & Maintenance* group** (`/settings?section=capabilities-report`)
 2. **Find The Almanack** section
 3. **Click "Compile the Almanack"**
 4. **Watch the progress bar.** The compilation runs in seven named phases, and the bar tells you which one is under way:
@@ -63,7 +63,7 @@ The ten busiest characters, with the chats they have been in, the memories they 
 
 Drawn from the LLM logs: requests by type with token totals and measured latency, per-profile usage both lifetime (from the profile rows) and within the retention window (from the logs), and the prompt-cache hit and miss figures by provider and by profile.
 
-> **A note on richness.** This section is only as good as your logging settings. If the numbers look thin, that is the retention window talking, not the establishment. Enable LLM logging and lengthen the window (Settings → Chat → LLM Logging) and the Almanack's arithmetic grows correspondingly richer. The section prints your current setting at the top so you can see why.
+> **A note on richness.** This section is only as good as your logging settings. If the numbers look thin, that is the retention window talking, not the establishment. Enable LLM logging and lengthen the window (Settings → Data & Maintenance → LLM Logging) and the Almanack's arithmetic grows correspondingly richer. The section prints your current setting at the top so you can see why.
 
 Two honesty notes are printed with the figures rather than buried here. Latency averages always carry the count they were averaged over, because a great many older log rows carry no timing at all. And if your database predates the per-row profile columns, per-profile attribution falls back to grouping by provider and model — which cannot tell two profiles apart if they share a pair — and says so.
 
@@ -133,7 +133,7 @@ Each entry shows the filename, the date compiled and the size, with buttons to v
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=providers&section=capabilities-report")`
+`help_navigate(url: "/settings?section=capabilities-report")`
 
 ## Related Topics
 

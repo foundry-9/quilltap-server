@@ -44,7 +44,7 @@ An item that covers more than one slot (its "covers" list names several — a dr
 
 You may put multiple items in the same slot to layer them (e.g. a t-shirt under a sweater); list them inner-to-outer.
 
-If the available wardrobe contains a composite item (its description mentions it bundles other items, or its title implies an outfit set), you may pick that composite directly — equipping it places it in all the slots it covers. Choose at most one outfit set for the top and bottom: never combine two composites (or a composite and a dress, jumpsuit or other multi-slot garment) that both cover the top or bottom. Do not list a composite under one slot for a single piece of it — it brings every piece it bundles.
+If the available wardrobe contains a composite item (its description mentions it bundles other items, or its title implies an outfit set), you may pick that composite directly — equipping it places it in all the slots it covers. Choose at most one outfit set for the top and bottom: never combine two composites (or a composite and a dress, jumpsuit or other multi-slot garment) that both cover the top or bottom. Do not list a composite under one slot for a single piece of it — it brings every piece it bundles. You need not take a set whole: when one piece of it would suit (the jacket from a suit, the boots from a riding outfit), pick that piece by its own ID — the pieces a set names are listed separately — and build the rest of the outfit around it.
 
 Example response:
 {"top": ["uuid-tshirt", "uuid-sweater"], "bottom": ["uuid-jeans"], "footwear": ["uuid-boots"], "accessories": [], "hair": []}
@@ -135,14 +135,12 @@ export async function chooseLLMOutfit(
   // on the first items that fit. Composite items (those that bundle other
   // wardrobe items) get a marker so the LLM knows they cover their listed
   // slots in one pick.
+  const titleById = new Map(wardrobeItems.map(item => [item.id, item.title]))
   const wardrobeSection = shuffled(wardrobeItems, options.random ?? Math.random).map(item => {
     const types = item.types.join(', ')
     const appropriateness = item.appropriateness ? ` [appropriate for: ${item.appropriateness}]` : ''
     const desc = item.description ? ` — ${item.description}` : ''
-    const componentCount = item.componentItemIds?.length ?? 0
-    const compositeMarker = componentCount > 0
-      ? ` [composite — bundles ${componentCount} other item${componentCount === 1 ? '' : 's'}]`
-      : ''
+    const compositeMarker = describeComposite(item, titleById)
     return `  - ID: ${item.id} | "${item.title}"${compositeMarker} (covers: ${types})${appropriateness}${desc}`
   }).join('\n')
 
@@ -279,6 +277,25 @@ Choose what ${characterName} should wear for this scene:`,
     characterId,
     { temperature: OUTFIT_SELECTION_TEMPERATURE },
   )
+}
+
+/**
+ * The marker on a composite's line: the pieces it bundles, by title, so the
+ * model can see which separately listed items belong to the set and wear one
+ * of them alone. Pieces not offered here (held back, out of reach) are only
+ * counted. Empty for a plain item.
+ */
+function describeComposite(
+  item: Pick<WardrobeItem, 'componentItemIds'>,
+  titleById: ReadonlyMap<string, string>,
+): string {
+  const ids = item.componentItemIds ?? []
+  if (ids.length === 0) return ''
+  const named = ids.map(id => titleById.get(id)).filter((t): t is string => !!t)
+  const unnamed = ids.length - named.length
+  const parts = named.map(t => `"${t}"`)
+  if (unnamed > 0) parts.push(`${unnamed} other item${unnamed === 1 ? '' : 's'}`)
+  return ` [composite — bundles ${parts.join(', ')}]`
 }
 
 /** A Fisher–Yates shuffle into a new array; the input is left alone. */

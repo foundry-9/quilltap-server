@@ -42,7 +42,10 @@ consult a character's dossier on the right.
   double-click restores the even split), and **rejoin** them by gathering every
   tab back into one pane.
 - **Close a tab** with the small ✕ on its right. Close the last one and the home
-  tab reappears.
+  tab reappears. A document tab with words not yet filed saves them first, and
+  should the save be refused it stays open, edits and all, rather than let them
+  fall through the floorboards — whether you reach for the ✕, **Delete** or the
+  keyboard shortcut.
 
 Your arrangement — which tabs are open, in which pane, in what order, and how the
 split is set — is remembered between visits.
@@ -136,7 +139,10 @@ particular: rich or source Markdown, autosave, rename by clicking the title,
 the little trash-can for dismissals. The one difference is discretion itself:
 with no conversation attached, **the Librarian makes no announcements and no
 character is told** of your openings, scribblings, renamings, or erasures. The
-work is entirely between you and the page.
+work is entirely between you and the page. It saves with the same care, too:
+words typed while a save is under way follow directly behind it, and should a
+save be refused, the tab declines to close or rename until your changes are
+safely filed, keeping them where you left them.
 
 Pick the same file twice and the workspace politely brings its existing tab
 forward rather than opening a second copy; standalone tabs are likewise

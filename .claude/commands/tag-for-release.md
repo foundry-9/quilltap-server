@@ -1,6 +1,6 @@
 # Tag for Production Release
 
-This command builds the release commit with a tree-copy strategy (immune to stale merge bases) and then merges the tagged release back into main so history stays connected. After a release is tagged, `git log <tag>..main` reflects everything done on main since that release.
+This command builds the release commit with a tree-copy strategy (immune to stale merge bases) and then merges the tagged release back into main — and into the freshly restarted bugfix branch — so history stays connected. After a release is tagged, `git log <tag>..main` reflects everything done on main since that release, and `git log <tag>..bugfix` everything done on bugfix since.
 
 **Important:** Do not use sed commands with regexp group backreferences (like `\1`) in Bash tool calls — they get mangled. Instead, use the Edit tool to modify `package.json`, `README.md`, and other files directly. The instructions below describe *what* to change in each file, with examples.
 
@@ -141,15 +141,14 @@ Add a new dev heading above the release heading:
 - (entries from the release)
 ```
 
-### Step 8: Commit and tag main
+### Step 8: Commit main
 
 ```bash
 git add package.json package-lock.json README.md
 git commit --no-verify -m "dev: started NEWDEVVERSION development"
-git tag -s -m "NEWDEVVERSION-dev" NEWDEVVERSION-dev
 ```
 
-(Replace NEWDEVVERSION with the actual version, e.g., `4.2.0`)
+(Replace NEWDEVVERSION with the actual version, e.g., `4.2.0`.) Do not tag this commit: a bare `X.Y.0-dev` tag has no build number, so its release workflow always fails. The first dev tag is the `X.Y.0-dev.N` one cut by the ordinary dev flow.
 
 ### Step 9: Set up the new bugfix branch
 
@@ -157,11 +156,19 @@ The bugfix branch version should be one patch ahead of the release. For example,
 
 ```bash
 git checkout bugfix
-# Tree-copy: make bugfix's working tree identical to release's
+# Merge release in so bugfix's history includes the release commit and tag.
+# -s ours records release as a parent without applying anything yet...
+git merge --no-ff --no-commit -s ours release
+# ...then tree-copy makes the merge's tree identical to release's.
 git rm -rf .
 git checkout release -- .
 git add -A
+git commit --no-verify -m "merge: NEWRELEASE into bugfix"
 ```
+
+(Replace NEWRELEASE with the actual version, e.g., `4.1.0`.)
+
+This is the bugfix counterpart of Step 5's merge-back: afterwards `git log NEWRELEASE..bugfix` shows only the work done on bugfix since the release, and `git merge-base --is-ancestor NEWRELEASE bugfix` holds. The merge resolves to release's tree exactly (the tree-copy, not the merge strategy, decides the content), so a stale merge base can never leak old bugfix code into the new branch. Never resolve this merge any other way.
 
 **Edit `package.json`:** Set the version to the next patch with bugfix suffix.
 
@@ -272,11 +279,17 @@ The bugfix branch version should be one patch ahead of the release. For example,
 
 ```bash
 git checkout bugfix
-# Tree-copy: make bugfix's working tree identical to release's
+# Merge release in so bugfix's history includes the release commit and tag.
+# -s ours records release as a parent without applying anything yet...
+git merge --no-ff --no-commit -s ours release
+# ...then tree-copy makes the merge's tree identical to release's.
 git rm -rf .
 git checkout release -- .
 git add -A
+git commit --no-verify -m "merge: NEWRELEASE into bugfix"
 ```
+
+(Replace NEWRELEASE with the actual version, e.g., `4.0.2`.) See the `main`-branch flow's Step 9 for why the merge is resolved by tree-copy.
 
 **Edit `package.json`:** Set the version to the next patch with bugfix suffix.
 

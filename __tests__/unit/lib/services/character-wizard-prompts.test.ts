@@ -6,13 +6,15 @@
  * "description = appearance + behaviour" conflation.
  */
 
-import { FIELD_PROMPTS, PROPERTIES_PROMPT } from '@/lib/services/character-wizard.service'
+import { FIELD_PROMPTS, PROPERTIES_PROMPT, buildSystemPromptFieldPrompt, wizardFieldMaxTokens, wizardFieldPrompt } from '@/lib/services/character-wizard.service'
 import {
   CONVERSATIONAL_VOICE_DIRECTION,
   EXAMPLE_DIALOGUE_COVERAGE,
   TRUST_SAFEGUARDS_DIRECTION,
   COMPANION_TRUST_DISPOSITION,
   COMPANION_TRUST_DISPOSITION_GATE,
+  STAKES_AND_REACTION_DIRECTION,
+  ASSISTANT_TASK_DIRECTION,
 } from '@/lib/services/character-field-semantics'
 
 describe('character-wizard FIELD_PROMPTS', () => {
@@ -72,26 +74,26 @@ describe('character-wizard FIELD_PROMPTS', () => {
   })
 
   it('systemPrompt prompt carries the Prompt-bucket semantics', () => {
-    const p = FIELD_PROMPTS.systemPrompt
+    const p = buildSystemPromptFieldPrompt('roleplay')
     expect(p).toContain('SYSTEM PROMPTS')
     expect(p.toLowerCase()).toContain('second person')
   })
 
   it('systemPrompt prompt directs listening and conversational register', () => {
-    const p = FIELD_PROMPTS.systemPrompt
+    const p = buildSystemPromptFieldPrompt('roleplay')
     expect(p).toContain(CONVERSATIONAL_VOICE_DIRECTION)
     expect(p).toMatch(/listen like a person/i)
     expect(p).toMatch(/seasoning/i)
   })
 
   it('systemPrompt prompt carries the trust safeguards', () => {
-    const p = FIELD_PROMPTS.systemPrompt
+    const p = buildSystemPromptFieldPrompt('roleplay')
     expect(p).toContain(TRUST_SAFEGUARDS_DIRECTION)
     expect(p).toMatch(/not a committee/i)
   })
 
   it('systemPrompt prompt gates the companion trust disposition', () => {
-    const p = FIELD_PROMPTS.systemPrompt
+    const p = buildSystemPromptFieldPrompt('roleplay')
     const gate = p.indexOf(COMPANION_TRUST_DISPOSITION_GATE)
     const disposition = p.indexOf(COMPANION_TRUST_DISPOSITION)
     expect(gate).toBeGreaterThan(-1)
@@ -99,7 +101,35 @@ describe('character-wizard FIELD_PROMPTS', () => {
   })
 
   it('systemPrompt prompt allows 600 words', () => {
-    expect(FIELD_PROMPTS.systemPrompt).toMatch(/under 600 words/)
+    expect(buildSystemPromptFieldPrompt('roleplay')).toMatch(/under 600 words/)
+  })
+
+  it('systemPrompt prompt for a roleplay character carries the stakes direction, before the companion gate', () => {
+    const p = buildSystemPromptFieldPrompt('roleplay')
+    expect(p).toContain(STAKES_AND_REACTION_DIRECTION)
+    expect(p).not.toContain(ASSISTANT_TASK_DIRECTION)
+    expect(p.indexOf(STAKES_AND_REACTION_DIRECTION)).toBeGreaterThan(p.indexOf(TRUST_SAFEGUARDS_DIRECTION))
+    expect(p.indexOf(STAKES_AND_REACTION_DIRECTION)).toBeLessThan(p.indexOf(COMPANION_TRUST_DISPOSITION_GATE))
+  })
+
+  it('systemPrompt prompt for an assistant carries the task direction instead', () => {
+    const p = buildSystemPromptFieldPrompt('assistant')
+    expect(p).toContain(ASSISTANT_TASK_DIRECTION)
+    expect(p).not.toContain(STAKES_AND_REACTION_DIRECTION)
+  })
+
+  it('wizardFieldPrompt routes systemPrompt through the kind and every other field to FIELD_PROMPTS', () => {
+    expect(wizardFieldPrompt('systemPrompt', 'assistant')).toBe(buildSystemPromptFieldPrompt('assistant'))
+    expect(wizardFieldPrompt('identity', 'assistant')).toBe(FIELD_PROMPTS.identity)
+    expect(FIELD_PROMPTS.systemPrompt).toBeUndefined()
+  })
+
+  it('gives the system prompt room to finish (a reasoning model truncated it at the old 1000-token cap)', () => {
+    expect(wizardFieldMaxTokens('systemPrompt')).toBe(2500)
+    expect(wizardFieldMaxTokens('exampleDialogues')).toBe(1000)
+    expect(wizardFieldMaxTokens('firstMessage')).toBe(1000)
+    expect(wizardFieldMaxTokens('scenarios')).toBe(4000)
+    expect(wizardFieldMaxTokens('identity')).toBe(500)
   })
 
   it('exampleDialogues prompt asks for a joke caught, a casual line, and a serious moment', () => {

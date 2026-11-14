@@ -64,7 +64,7 @@ export function useInventoryList(container: InventoryContainer | null, opts: Inv
   const shared = !!opts.shared && container?.scope === 'character'
   const tierKey = container ? inventoryTierKey(container, shared) : 'none'
   // The URL is a pure function of the container (and object), which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- container and shared are left out: tierKey encodes both, and the URL is a pure function of them
   const query = useQuery({
     queryKey: queryKeys.inventory.list(tierKey, { includeArchived: opts.includeArchived, projectId: opts.projectId ?? null }),
     queryFn: async ({ signal }) => {
@@ -91,7 +91,7 @@ export function useInventoryFolders(container: InventoryContainer | null): { fol
 export function useInventoryArchetypes(container: InventoryContainer | null, projectId?: string | null) {
   const tierKey = container ? inventoryTierKey(container) : 'none'
   // The URL is a pure function of the container (and object), which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- container is left out: tierKey encodes it, and the URL is a pure function of it
   const query = useQuery({
     queryKey: queryKeys.inventory.archetypes(tierKey, projectId),
     queryFn: async ({ signal }) => {
@@ -109,7 +109,7 @@ export function useInventoryArchetypes(container: InventoryContainer | null, pro
 /** One object's pictures (an instance with none shows its archetype's). */
 export function useInventoryImages(container: InventoryContainer | null, itemId: string | null) {
   // The URL is a pure function of the container (and object), which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- container is left out: an item id names one object in one tier, so itemId alone keys its pictures
   const query = useQuery({
     queryKey: queryKeys.inventory.images(itemId ?? 'none'),
     queryFn: ({ signal }) =>
@@ -193,12 +193,12 @@ export function useInventoryMutations() {
     renameFolder: folders.renameFolder,
     deleteFolder: folders.deleteFolder,
     fileItems: folders.fileItems,
-    transfer: async (body: {
+    transfer: async ({ action, ...body }: {
       action: 'move' | 'copy'
       itemId: string
       from: InventoryContainer
       to: InventoryContainer
-    }) => (await run({ url: '/api/v1/inventory/transfers', method: 'POST', body })).item as ResolvedInventoryItem,
+    }) => (await run({ url: `/api/v1/inventory?action=${action}-to-tier`, method: 'POST', body })).item as ResolvedInventoryItem,
   }
 }
 

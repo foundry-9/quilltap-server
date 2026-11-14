@@ -733,6 +733,36 @@ describe('runCarinaQuery', () => {
       }
     });
 
+    it('runs an ordinary answerer\'s tools under the asking turn\'s ceiling and offer', async () => {
+      const offer = { kind: 'offered', names: new Set(['web_search']) };
+      jest.mocked(buildTools).mockResolvedValue({
+        tools: [{ function: { name: 'web_search' } }],
+        modelSupportsNativeTools: true,
+        useNativeWebSearch: false,
+        customToolEffects: new Map(),
+        pluginToolEffects: new Map(),
+        offer,
+      } as never);
+      jest.mocked(streamMessage)
+        .mockImplementationOnce(async function* () {
+          yield { content: '' };
+          yield { done: true, rawResponse: { finishReason: 'tool_calls' } };
+        } as never)
+        .mockImplementationOnce(async function* () {
+          yield { content: 'Paris.' };
+          yield { done: true, rawResponse: { finishReason: 'stop' } };
+        } as never);
+      jest.mocked(detectToolCallsInResponse)
+        .mockReturnValueOnce([{ name: 'web_search', arguments: {}, callId: 'call-1' }])
+        .mockReturnValueOnce([]);
+
+      await runCarinaQuery({ ...BASE_OPTS, effectCeiling: 'read' });
+
+      expect(buildTools).toHaveBeenCalledWith(expect.objectContaining({ effectCeiling: 'read' }));
+      const toolContext = jest.mocked(processToolCalls).mock.calls[0][1];
+      expect(toolContext).toMatchObject({ effectCeiling: 'read', toolOffer: offer });
+    });
+
     it('runs tool loop up to MAX_TOOL_ITERATIONS without infinite looping', async () => {
       const FAKE_RAW = { finishReason: 'tool_calls' };
       // Always return a tool call — the loop should cap at 5 iterations
@@ -1271,6 +1301,34 @@ describe('runCarinaQuery', () => {
 
       expect(runBrahmaQuery).toHaveBeenCalledTimes(1);
       expect(result).toMatchObject({ ok: true, answererName: 'Brahma' });
+    });
+
+    it.each(['read', 'none'] as const)('refuses Brahma outright from a turn capped at %s', async (ceiling) => {
+      jest.mocked(getRepositories).mockReturnValue(makeBrahmaRepos(true) as never);
+
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Brahma',
+        askerParticipantId: 'part-2',
+        effectCeiling: ceiling,
+      });
+
+      expect(result).toMatchObject({ ok: false, error: { kind: 'refused', characterName: 'Brahma' } });
+      expect(runBrahmaQuery).not.toHaveBeenCalled();
+      expect(postCarinaResponse).not.toHaveBeenCalled();
+    });
+
+    it('passes a write ceiling down to the Brahma engine', async () => {
+      jest.mocked(getRepositories).mockReturnValue(makeBrahmaRepos(true) as never);
+
+      await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Brahma',
+        askerParticipantId: 'part-2',
+        effectCeiling: 'write',
+      });
+
+      expect(runBrahmaQuery).toHaveBeenCalledWith(expect.objectContaining({ effectCeiling: 'write' }));
     });
 
     it('an opaque LLM character cannot reach Brahma — not-found, Console stays invisible', async () => {

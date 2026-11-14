@@ -13,7 +13,7 @@ import { logger } from '@/lib/logger';
 import { created, serverError, badRequest, conflict, successResponse } from '@/lib/api/responses';
 import { attachMountPoint } from '@/lib/mount-index/watcher';
 import { checkBasePathAvailability } from '@/lib/mount-index/base-path-availability';
-import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
+import { scaffoldCharacterMount } from '@/lib/characters/vault/scaffold';
 import { searchDocumentChunks } from '@/lib/mount-index/document-search';
 import {
   generateEmbeddingForUser,

@@ -30,6 +30,7 @@ import { publishMountChange } from './realtime';
 import { FileOpError } from './file-op-error';
 import { normaliseRelativePath, detectNativeText, mimeForExtension } from './path-utils';
 import { reindexAfterDatabaseWrite } from './post-write-reindex';
+import { PathOutsideBaseError, resolveInsideSync } from '@/lib/paths/resolve-inside';
 
 // Re-exported so existing `import { FileOpError } from '@/lib/mount-index/file-ops'`
 // call sites keep working after the class moved to its own leaf module.
@@ -89,16 +90,26 @@ export function resolveFsAbsolute(mp: DocMountPoint, relativePath: string): stri
       'INVALID_PATH'
     );
   }
-  const abs = path.resolve(mp.basePath, relativePath);
-  const base = path.resolve(mp.basePath);
-  const baseWithSep = base.endsWith(path.sep) ? base : base + path.sep;
-  if (abs !== base && !abs.startsWith(baseWithSep)) {
-    throw new FileOpError(
-      `Path escapes mount boundary: ${relativePath}`,
-      'INVALID_PATH'
-    );
+  // Containment is checked on the symlink-resolved path as well as the
+  // lexical one, so a link inside the mount cannot carry a read or write to a
+  // location outside it. The lexical path is returned so stored link paths
+  // keep the mount's own spelling of its base.
+  try {
+    return resolveInsideSync(mp.basePath, relativePath, { realpath: true });
+  } catch (err) {
+    if (err instanceof PathOutsideBaseError) {
+      logger.warn('Refusing mount path outside its base', {
+        mountPointId: mp.id,
+        relativePath,
+        reason: err.reason,
+      });
+      throw new FileOpError(
+        `Path escapes mount boundary: ${relativePath}`,
+        'INVALID_PATH'
+      );
+    }
+    throw err;
   }
-  return abs;
 }
 
 // ============================================================================

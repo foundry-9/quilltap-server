@@ -57,6 +57,8 @@ function idMaps() {
     tags: new Map(),
     preserveIdsSkips: new Set(),
     messages: new Map(),
+    writtenChats: new Set(),
+    writtenRows: new Set(),
   }
 }
 

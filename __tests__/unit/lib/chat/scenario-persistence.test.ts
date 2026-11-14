@@ -32,19 +32,7 @@ jest.mock('@/lib/logger', () => ({
   },
 }))
 
-jest.mock('@/lib/chat/initialize', () => ({
-  buildChatContext: jest.fn().mockResolvedValue({
-    systemPrompt: 'You are Alice.',
-    firstMessage: 'Hello there!',
-    character: { id: 'char-1', name: 'Alice' },
-    userCharacter: null,
-    persona: null,
-  }),
-}))
 
-jest.mock('@/lib/chat/initial-greeting', () => ({
-  generateGreetingMessage: jest.fn().mockResolvedValue({ content: 'Hi!' }),
-}))
 
 // The Concierge off duty: no Concierge state at creation, no uncensored greeting.
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => {
@@ -59,12 +47,6 @@ jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
   resolveProviderForDangerousContent: jest.fn(),
 }))
 
-jest.mock('@/lib/chat/first-message-context', () => ({
-  buildFirstMessageContext: jest.fn().mockResolvedValue({
-    participantMemories: [],
-    projectContext: null,
-  }),
-}))
 
 jest.mock('@/lib/services/chat-enrichment.service', () => ({
   enrichParticipantSummary: jest.fn().mockImplementation((p: unknown) => Promise.resolve(p)),

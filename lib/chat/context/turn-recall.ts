@@ -17,6 +17,10 @@ import { stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { getErrorMessage } from '@/lib/error-utils'
+import { resolveSpeakerNames, type SpeakerNames } from '@/lib/chat/speaker-names'
+import { logger } from '@/lib/logger'
+import { findActiveUserParticipant } from '@/lib/chat/turn-manager'
+import type { ChatMessage } from '@/lib/memory/cheap-llm-tasks/types'
 import { isInWhisperScope } from '@/lib/schemas/chat.types'
 import { retrieveKnowledgeForTurn, type KnowledgeDebugEntry } from './knowledge-injector'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
@@ -30,7 +34,7 @@ import type {
   Provider,
 } from '@/lib/schemas/types'
 
-type HistoryRow = { role: string; content: string }
+type HistoryRow = { role: string; content: string; participantId?: string | null }
 
 /** Max characters of recent-window prose used as the memory-search query. */
 const RECENT_WINDOW_QUERY_MAX_CHARS = 600
@@ -152,6 +156,41 @@ export async function assembleTurnRecall(input: TurnRecallInput): Promise<Recall
     chat.contextSummary ||
     ''
 
+  // The fallback distillation, for when the proactive pass did not run
+  // (first turn, continue mode, nothing to distil from). Its lines keep their
+  // seats so the transcript is labelled by speaker, never by role; the new
+  // message is the seat the human is speaking as.
+  let distill: { messages: ChatMessage[]; selection: CheapLLMSelection; clockIso: string; speakerNames: SpeakerNames } | undefined
+  if (cheapLLMSelection) {
+    const speakingAs = newUserMessage
+      ? findActiveUserParticipant(chat.participants, chat.activeTypingParticipantId, chat.impersonatingParticipantIds)
+      : null
+    const messages: ChatMessage[] = [
+      ...existingMessages.slice(-DISTILL_WINDOW_ROWS)
+        .map((m): ChatMessage => ({
+          role: m.role.toLowerCase() as ChatMessage['role'],
+          content: conversationText(m),
+          ...(m.participantId ? { participantId: m.participantId } : {}),
+        }))
+        .filter(m => m.content.length > 0),
+      ...(newUserMessage
+        ? [{ role: 'user' as const, content: newUserMessage, ...(speakingAs ? { participantId: speakingAs.id } : {}) }]
+        : []),
+    ]
+    distill = {
+      messages,
+      selection: cheapLLMSelection,
+      clockIso: new Date().toISOString(),
+      speakerNames: await resolveSpeakerNames(chat),
+    }
+    logger.debug('[TurnRecall] Prepared fallback distillation', {
+      chatId: chat.id,
+      characterId: character.id,
+      lines: messages.length,
+      namedSeats: distill.speakerNames.size,
+    })
+  }
+
   return assembleRecall({
     userId: input.userId,
     embeddingProfileId: input.embeddingProfileId,
@@ -166,20 +205,7 @@ export async function assembleTurnRecall(input: TurnRecallInput): Promise<Recall
     currentStateTokens: input.currentStateTokens,
     recallSettings: await getMemoryRecallSettings(),
     recentWindow: input.recentWindow,
-    // The fallback distillation, for when the proactive pass did not run
-    // (first turn, continue mode, nothing to distil from).
-    distill: cheapLLMSelection
-      ? {
-          messages: [
-            ...existingMessages.slice(-DISTILL_WINDOW_ROWS)
-              .map(m => ({ role: m.role.toLowerCase() as 'user' | 'assistant' | 'system', content: conversationText(m) }))
-              .filter(m => m.content.length > 0),
-            ...(newUserMessage ? [{ role: 'user' as const, content: newUserMessage }] : []),
-          ],
-          selection: cheapLLMSelection,
-          clockIso: new Date().toISOString(),
-        }
-      : undefined,
+    distill,
     preRecall: input.preRecall,
     recap: input.generateMemoryRecap && cheapLLMSelection
       ? {

@@ -1,8 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 
 export interface ConnectionProfileInfo {
   id: string
@@ -17,12 +15,8 @@ export interface ConnectionProfileInfo {
   allowWebSearch: boolean
 }
 
-interface ConnectionProfilesResponse {
-  profiles?: Array<Record<string, unknown>>
-}
-
-function mapProfiles(data: ConnectionProfilesResponse): ConnectionProfileInfo[] {
-  return (data.profiles || []).map((p) => ({
+function mapProfiles(rows: Array<Record<string, unknown>>): ConnectionProfileInfo[] {
+  return rows.map((p) => ({
     id: p.id as string,
     name: (p.name as string) || '',
     provider: (p.provider as string) || '',
@@ -36,17 +30,17 @@ function mapProfiles(data: ConnectionProfilesResponse): ConnectionProfileInfo[] 
 const EMPTY_PROFILES: ConnectionProfileInfo[] = []
 
 /**
- * Hook to fetch and cache connection profiles, resolving a profile ID to its
- * provider/model info. Backed by the shared TanStack Query cache (dedups by key);
- * a long staleTime preserves its reference-data "fetch once, share everywhere" feel.
+ * The connection profiles as display info, with an id → provider/model
+ * lookup. A narrowing `select` over the shared list
+ * (`useConnectionProfilesQuery`), so a profile written anywhere that
+ * invalidates the list shows here; the long staleTime only spares re-reads
+ * between writes.
  */
 export function useConnectionProfiles() {
-  const { data: profiles = EMPTY_PROFILES, isLoading: loading } = useQuery({
-    queryKey: queryKeys.connectionProfiles.all,
-    queryFn: ({ signal }) => apiFetch<ConnectionProfilesResponse>('/api/v1/connection-profiles', { signal }),
-    select: mapProfiles,
-    staleTime: Infinity,
-  })
+  const { data: profiles = EMPTY_PROFILES, isLoading: loading } = useConnectionProfilesQuery<
+    Record<string, unknown>,
+    ConnectionProfileInfo[]
+  >({ select: mapProfiles, staleTime: Infinity })
 
   return {
     profiles,

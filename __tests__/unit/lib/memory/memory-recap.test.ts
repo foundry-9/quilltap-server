@@ -119,7 +119,6 @@ function makeMemory(overrides: Partial<Memory> = {}): Memory {
 describe('Memory Recap Service', () => {
   // Fresh import for each test to ensure mocks are picked up
   let generateMemoryRecap: typeof import('@/lib/memory/recall/recap').generateMemoryRecap
-  let buildRecentConversationsBlock: typeof import('@/lib/memory/recall/recap').buildRecentConversationsBlock
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -136,7 +135,6 @@ describe('Memory Recap Service', () => {
     jest.isolateModules(() => {
       const mod = require('@/lib/memory/recall/recap')
       generateMemoryRecap = mod.generateMemoryRecap
-      buildRecentConversationsBlock = mod.buildRecentConversationsBlock
     })
   })
 
@@ -618,15 +616,14 @@ describe('Memory Recap Service', () => {
     })
   })
   /**
-   * Bug 158 — the greeting's "Recent Conversations" block.
+   * Bug 158 — the recap's "Recent Conversations" list.
    *
    * The block used to inline `contextSummary` whole, with no cap and no closing
-   * note, immediately before "open with a concise greeting". A chat created
-   * before the seed was fixed carries its own scenario in that column, so an
-   * unsummarized prior chat put 9 KB of stage direction at the end of the
-   * greeting prompt and the character opened from it. These pin the two guards.
+   * note. A chat created before the seed was fixed carries its own scenario in
+   * that column, so an unsummarized prior chat put 9 KB of stage direction into
+   * the prompt and the character acted from it. These pin the two guards.
    */
-  describe('buildRecentConversationsBlock (bug 158)', () => {
+  describe('Recent Conversations guards (bug 158)', () => {
     const scenario =
       '# Scenario: Amy\'s Pool\n\n' +
       'Follow the stream north from the Troll Bridge — not across it, not under it, ' +
@@ -636,12 +633,18 @@ describe('Memory Recap Service', () => {
       'its privacy hedge. Amy is in her pool, and Charlie walks up the path and sits down ' +
       'on the flat rocks next to it.'
 
+    const recap = async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
+      return result.content
+    }
+
     it('caps each entry so one oversized summary cannot dominate the prompt', async () => {
       mockFindRecentSummarizedByCharacter.mockResolvedValue([
         { id: 'chat-pool', title: 'Damp Curtains and Cold Water', contextSummary: scenario },
       ])
 
-      const block = await buildRecentConversationsBlock(testCharacterId, testChatId, 5)
+      const block = await recap()
 
       expect(block).toContain('#### Damp Curtains and Cold Water (`chat-pool`)')
 
@@ -662,10 +665,9 @@ describe('Memory Recap Service', () => {
         { id: 'chat-1', title: 'The Wrong Wall', contextSummary: 'They argued about a wall.' },
       ])
 
-      const block = await buildRecentConversationsBlock(testCharacterId, testChatId, 5)
+      const block = await recap()
 
       expect(block).toContain('`read_conversation`')
-      expect(block.trimEnd().endsWith('_')).toBe(true)
     })
 
     it('leaves a short summary intact', async () => {
@@ -673,7 +675,7 @@ describe('Memory Recap Service', () => {
         { id: 'chat-1', title: 'The Wrong Wall', contextSummary: 'They argued about a wall.' },
       ])
 
-      const block = await buildRecentConversationsBlock(testCharacterId, testChatId, 5)
+      const block = await recap()
 
       expect(block).toContain('They argued about a wall.')
       expect(block).not.toContain('…')
@@ -684,32 +686,10 @@ describe('Memory Recap Service', () => {
         { id: 'chat-1', title: 'Untold', contextSummary: '   ' },
       ])
 
-      const block = await buildRecentConversationsBlock(testCharacterId, testChatId, 5)
+      const block = await recap()
 
       expect(block).toContain('#### Untold (`chat-1`)')
       expect(block).not.toContain('(`chat-1`)\n ')
-    })
-
-    it('returns nothing when the character has no summarized chats', async () => {
-      mockFindRecentSummarizedByCharacter.mockResolvedValue([])
-
-      expect(await buildRecentConversationsBlock(testCharacterId, testChatId, 5)).toBe('')
-    })
-
-    it('returns nothing, and asks the repository nothing, at limit 0', async () => {
-      expect(await buildRecentConversationsBlock(testCharacterId, testChatId, 0)).toBe('')
-      expect(mockFindRecentSummarizedByCharacter).not.toHaveBeenCalled()
-    })
-
-    it('excludes the chat being greeted', async () => {
-      mockFindRecentSummarizedByCharacter.mockResolvedValue([])
-
-      await buildRecentConversationsBlock(testCharacterId, testChatId, 5)
-
-      expect(mockFindRecentSummarizedByCharacter).toHaveBeenCalledWith(testCharacterId, {
-        limit: 5,
-        excludeChatId: testChatId,
-      })
     })
   })
   describe('generateMemoryRecap as a recall pool (Phase E)', () => {

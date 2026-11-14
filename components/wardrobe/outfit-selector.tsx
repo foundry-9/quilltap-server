@@ -3,8 +3,13 @@
 /**
  * Outfit Selector Component
  *
- * Allows selecting outfit modes and manual slot assignments for
- * LLM-controlled characters when creating a new chat.
+ * Allows selecting outfit modes and manual slot assignments for the cast of a
+ * new chat, a joining seat, or a merge.
+ *
+ * Each seat opens on the server's mode (`defaultModes`, from the casting
+ * defaults; `defaultOutfitMode` in `lib/chat/opening/arrival.ts` is the one
+ * rule) and the selector reports only the seats the operator changed — an
+ * untouched seat is left out, so the server applies that same rule.
  *
  * The `Compose outfit` mode (was `Choose Outfit`) reveals an embedded
  * `<OutfitComposer>` — the same component the wardrobe dialog uses for the
@@ -54,13 +59,6 @@ export interface OutfitSelectorCharacter {
    * choose` mode — for them, this dialog *is* the choosing.
    */
   isUserControlled?: boolean
-  /**
-   * The character's `canChooseOutfit` property (from their vault
-   * `properties.json`). When true — and the character is LLM-controlled — a
-   * fresh (non-continuation) chat defaults this character's Starting Outfit to
-   * `Let character choose` rather than `Use defaults`.
-   */
-  canChooseOutfit?: boolean
 }
 
 // ============================================================================
@@ -79,21 +77,12 @@ const MODE_SUMMARY_LABELS: Record<OutfitSelectionMode, string> = {
 }
 
 /**
- * The Starting Outfit mode a character opens with, computed from what we can
- * know synchronously. Continuation chats carry the previous outfit forward;
- * an LLM-controlled character flagged `canChooseOutfit` defaults to letting
- * the character choose. Everyone else provisionally opens on `default` and is
- * refined to `default`-vs-`manual` once their wardrobe loads (see
- * {@link CharacterOutfitSection}) — a character with no usable default outfit
- * lands on `manual` with the section expanded.
+ * What a seat shows when the caller has no server mode for it: the previous
+ * chat's outfit when there is a source chat (a merge), else defaults. Display
+ * only — an untouched seat is never sent, so the server's own rule decides.
  */
-function computeSyncInitialMode(
-  char: OutfitSelectorCharacter,
-  sourceChatId?: string | null,
-): OutfitSelectionMode {
-  if (sourceChatId) return 'previous_chat'
-  if (char.canChooseOutfit && !char.isUserControlled) return 'llm_choose'
-  return 'default'
+function shownModeWithoutServer(sourceChatId?: string | null): OutfitSelectionMode {
+  return sourceChatId ? 'previous_chat' : 'default'
 }
 
 /**
@@ -110,8 +99,14 @@ export type PreviousOutfitSummary = Record<
 export interface OutfitSelectorProps {
   /** LLM-controlled characters in this chat */
   characters: OutfitSelectorCharacter[]
-  /** Callback when selections change */
+  /** Called with the seats the operator has changed (an untouched seat is absent). */
   onSelectionsChange: (selections: OutfitSelection[]) => void
+  /**
+   * characterId → the mode the server gives that seat untouched (the casting
+   * defaults' `outfitModes`). A seat missing here shows
+   * `previous_chat` with a source chat, else `default`.
+   */
+  defaultModes?: Record<string, OutfitSelectionMode> | null
   /** Whether the parent form is submitting */
   disabled?: boolean
   /**
@@ -133,16 +128,12 @@ export interface OutfitSelectorProps {
 interface CharacterOutfitSectionProps {
   character: OutfitSelectorCharacter
   selection: OutfitSelection
+  /** True once the operator has changed this seat; only then is it sent. */
+  touched: boolean
   onChange: (selection: OutfitSelection) => void
   disabled?: boolean
   /** Whether to show the character name header (hidden for single character) */
   showHeader: boolean
-  /**
-   * Continuation mode flag for this character. When true (source chat present),
-   * the section never auto-resolves its mode against the wardrobe — the parent
-   * has already seeded `previous_chat`.
-   */
-  isContinuation?: boolean
   /**
    * Continuation mode: enables the "Same as last conversation" radio option
    * for this character.
@@ -163,35 +154,24 @@ interface CharacterOutfitSectionProps {
 function CharacterOutfitSection({
   character,
   selection,
+  touched,
   onChange,
   disabled,
   showHeader,
-  isContinuation,
   showPreviousChatOption,
   previousChatSlots,
   projectId,
   chatId,
 }: CharacterOutfitSectionProps) {
-  const [internalMode, setInternalMode] = useState<OutfitSelectionMode>(selection.mode)
-
-  // Does this character's opening mode still need to be resolved against their
-  // wardrobe? Continuation chats (previous_chat) and LLM-choose characters are
-  // settled synchronously by the parent; everyone else provisionally opens on
-  // `default` and must be refined to `default`-vs-`manual` here — a character
-  // with no usable default outfit lands on `manual`, expanded.
-  const needsDefaultResolution =
-    !isContinuation && !(character.canChooseOutfit && !character.isUserControlled)
-  const [autoResolved, setAutoResolved] = useState(!needsDefaultResolution)
-
-  // Open expanded when we already know the character has to compose from
-  // scratch; otherwise start collapsed. Auto-resolution below expands the
-  // section if it lands on `manual`.
   const [expanded, setExpanded] = useState(false)
 
-  // Load wardrobe (personal + project + archetypes) when we're in manual mode
-  // OR while we still owe this character a default-vs-manual resolution. The
-  // hook returns an empty list before items are needed.
-  const wardrobeNeeded = internalMode === 'manual' || (needsDefaultResolution && !autoResolved)
+  // A seat the server would dress in its defaults, but whose wardrobe has no
+  // usable default outfit, is shown on `Compose outfit` (expanded, so the
+  // empty slots are visible). Display only: the mode is not sent until the
+  // operator changes something, and `default` with nothing marked dresses
+  // the seat in exactly what an empty composer would.
+  const mayShowAsCompose = !touched && selection.mode === 'default'
+  const wardrobeNeeded = selection.mode === 'manual' || mayShowAsCompose
   const {
     items: allWardrobeItems,
     loading: loadingWardrobe,
@@ -208,42 +188,35 @@ function CharacterOutfitSection({
    */
   const wardrobeItems = allWardrobeItems
 
+  const hasUsableDefault = useMemo(() => {
+    const defaults = buildDefaultOutfit(allWardrobeItems)
+    return WARDROBE_SLOT_TYPES.some((slot) => defaults[slot].length > 0)
+  }, [allWardrobeItems])
+  const showsAsCompose = mayShowAsCompose && wardrobeItemsFetched && !hasUsableDefault
+  const mode: OutfitSelectionMode = showsAsCompose ? 'manual' : selection.mode
+
+  // Expand once when the seat first shows as Compose (state adjusted during
+  // render, React's pattern for state that follows a derived value).
+  const [sawCompose, setSawCompose] = useState(false)
+  if (showsAsCompose && !sawCompose) {
+    setSawCompose(true)
+    setExpanded(true)
+  }
+
   const itemsById = useMemo(
     () => new Map(wardrobeItems.map((i) => [i.id, i])),
     [wardrobeItems],
   )
 
   // Pronoun-aware pickers (on by default); seeded defaults stay as they are.
-  const pronounFilter = usePronounGuidanceFilter(internalMode === 'manual' ? character.id : null)
+  const pronounFilter = usePronounGuidanceFilter(mode === 'manual' ? character.id : null)
   const pickableItems = useMemo(() => pronounFilter.offer(wardrobeItems), [pronounFilter, wardrobeItems])
 
-  // Resolve the provisional opening mode once the wardrobe has been read. A
-  // character with a usable default outfit (any non-archived default item —
-  // someone deliberately configured defaults) opens on `Use defaults`; one
-  // with none opens on `Compose outfit`, expanded, so the empty slots are
-  // visible. Runs at most once and never after the user has touched the radio
-  // (handleModeChange pins `autoResolved`).
-  useEffect(() => {
-    if (autoResolved) return
-    if (!wardrobeItemsFetched) return
-    const defaults = buildDefaultOutfit(allWardrobeItems)
-    const hasUsableDefault = WARDROBE_SLOT_TYPES.some((slot) => defaults[slot].length > 0)
-    const resolved: OutfitSelectionMode = hasUsableDefault ? 'default' : 'manual'
-    /* eslint-disable react-hooks/set-state-in-effect -- a one-time latch that
-       reacts to the async wardrobe load (guarded by wardrobeItemsFetched and
-       autoResolved); the state lands after the fetch tick, not on every render. */
-    setAutoResolved(true)
-    setInternalMode(resolved)
-    if (resolved === 'manual') setExpanded(true)
-    /* eslint-enable react-hooks/set-state-in-effect */
-    onChange({ characterId: character.id, mode: resolved })
-  }, [autoResolved, wardrobeItemsFetched, allWardrobeItems, character.id, onChange])
-
-  // Track whether we've already seeded the manual slots from defaults — once
-  // seeded, subsequent edits stay user-driven.
+  // When the operator picks `Compose outfit`, seed the slots from the
+  // wardrobe's defaults once — subsequent edits stay theirs.
   const seededRef = useRef(false)
   useEffect(() => {
-    if (internalMode !== 'manual') return
+    if (!touched || selection.mode !== 'manual') return
     if (seededRef.current) return
     if (wardrobeItems.length === 0) return
     if (selection.slots && Object.values(selection.slots).some((arr) => arr.length > 0)) {
@@ -258,14 +231,10 @@ function CharacterOutfitSection({
       slots: defaults.slots,
       wornBundleIds: defaults.wornBundles.map((b) => b.id),
     })
-  }, [internalMode, wardrobeItems, selection.slots, character.id, onChange])
+  }, [touched, selection.mode, wardrobeItems, selection.slots, character.id, onChange])
 
   const handleModeChange = useCallback(
     (mode: OutfitSelectionMode) => {
-      // A deliberate pick pins the mode so the wardrobe-driven auto-resolution
-      // can't come back and clobber it a tick later.
-      setAutoResolved(true)
-      setInternalMode(mode)
       const updated: OutfitSelection = {
         characterId: character.id,
         mode,
@@ -338,7 +307,7 @@ function CharacterOutfitSection({
           {
             value: 'llm_choose' as OutfitSelectionMode,
             label: 'Let character choose',
-            description: 'The character picks based on the scenario.',
+            description: 'The character picks clothes, and what to carry, based on the scenario.',
           },
         ]),
     {
@@ -380,7 +349,7 @@ function CharacterOutfitSection({
         >
           <span className="text-sm font-medium qt-text-primary">{character.name}</span>
           <span className="flex items-center gap-2">
-            <span className="text-xs qt-text-secondary">{MODE_SUMMARY_LABELS[internalMode]}</span>
+            <span className="text-xs qt-text-secondary">{MODE_SUMMARY_LABELS[mode]}</span>
             <Icon name="chevron-down" className={`w-4 h-4 qt-text-secondary transition-transform ${expanded ? 'rotate-180' : ''}`} />
           </span>
         </button>
@@ -399,7 +368,7 @@ function CharacterOutfitSection({
                   type="radio"
                   name={`outfit-mode-${character.id}`}
                   value={opt.value}
-                  checked={internalMode === opt.value}
+                  checked={mode === opt.value}
                   onChange={() => handleModeChange(opt.value)}
                   disabled={disabled}
                   className="mt-0.5 accent-[var(--primary)]"
@@ -419,7 +388,7 @@ function CharacterOutfitSection({
           {/* Compose outfit — embedded composer, with bundle actions and a
               `Clear all` escape hatch so the user isn't stuck with whatever
               the defaults seeded (e.g. a `Work` bundle they want to replace). */}
-          {internalMode === 'manual' && (
+          {mode === 'manual' && (
             <div className="mt-3 pl-6">
               {loadingWardrobe ? (
                 <p className="text-xs qt-text-secondary">Loading wardrobe…</p>
@@ -453,14 +422,14 @@ function CharacterOutfitSection({
           )}
 
           {/* Warning for "Start undressed" */}
-          {internalMode === 'none' && (
+          {mode === 'none' && (
             <div className="mt-2 ml-6 rounded border qt-border-warning/50 qt-bg-warning/10 px-2 py-1.5 text-xs qt-text-warning">
               Character will start undressed
             </div>
           )}
 
           {/* Continuation mode preview */}
-          {internalMode === 'previous_chat' && previousChatPreview && (
+          {mode === 'previous_chat' && previousChatPreview && (
             <div className="mt-2 ml-6 rounded border qt-border-default qt-bg-muted/40 px-2 py-1.5 text-xs qt-text-secondary">
               {previousChatPreview}
             </div>
@@ -478,62 +447,27 @@ function CharacterOutfitSection({
 export function OutfitSelector({
   characters,
   onSelectionsChange,
+  defaultModes,
   disabled,
   sourceChatId,
   previousOutfitSummary,
   projectId,
   chatId,
 }: OutfitSelectorProps) {
-  // Seed each character's opening mode from what we can know synchronously
-  // (see computeSyncInitialMode): continuation chats carry the previous outfit
-  // forward; a `canChooseOutfit` character lets the character choose; everyone
-  // else opens provisionally on `default` and each section refines that to
-  // `default`-vs-`manual` once its wardrobe loads.
-  const [selections, setSelections] = useState<Map<string, OutfitSelection>>(
-    () => {
-      const map = new Map<string, OutfitSelection>()
-      for (const char of characters) {
-        map.set(char.id, { characterId: char.id, mode: computeSyncInitialMode(char, sourceChatId) })
-      }
-      return map
-    }
-  )
+  // Only the seats the operator changed. Every other seat shows the server's
+  // mode and is left out of what is reported, so the server applies it.
+  const [changed, setChanged] = useState<Map<string, OutfitSelection>>(() => new Map())
 
-  // Keep the selection map in step with the cast: characters added after the
-  // dialog opened get their synchronous default seeded (so the form reports a
-  // choice for them), and characters removed from the cast are dropped.
-  // Existing entries are never overwritten, so a section's own resolution and
-  // any user pick both survive.
+  // Report the changed seats still in the cast (a seat removed from the cast
+  // takes its choice with it).
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing the selection map to a changed cast; the updater is a no-op (returns prev) once stable, so no cascading renders.
-    setSelections((prev) => {
-      let changed = false
-      const next = new Map(prev)
-      const liveIds = new Set(characters.map((c) => c.id))
-      for (const char of characters) {
-        if (!next.has(char.id)) {
-          next.set(char.id, { characterId: char.id, mode: computeSyncInitialMode(char, sourceChatId) })
-          changed = true
-        }
-      }
-      for (const id of Array.from(next.keys())) {
-        if (!liveIds.has(id)) {
-          next.delete(id)
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [characters, sourceChatId])
-
-  // Notify parent when selections change
-  useEffect(() => {
-    onSelectionsChange(Array.from(selections.values()))
-  }, [selections, onSelectionsChange])
+    const liveIds = new Set(characters.map((c) => c.id))
+    onSelectionsChange(Array.from(changed.values()).filter((s) => liveIds.has(s.characterId)))
+  }, [changed, characters, onSelectionsChange])
 
   const handleSelectionChange = useCallback(
     (selection: OutfitSelection) => {
-      setSelections((prev) => {
+      setChanged((prev) => {
         const next = new Map(prev)
         next.set(selection.characterId, selection)
         return next
@@ -548,27 +482,30 @@ export function OutfitSelector({
 
   return (
     <div className="space-y-2">
-      <label className="mb-2 block text-sm qt-text-primary">Starting Outfit</label>
-      {characters.map((char) => (
-        <CharacterOutfitSection
-          key={char.id}
-          character={char}
-          selection={
-            selections.get(char.id) || {
-              characterId: char.id,
-              mode: computeSyncInitialMode(char, sourceChatId),
+      <label className="mb-2 qt-label">Starting Outfit</label>
+      {characters.map((char) => {
+        const choice = changed.get(char.id)
+        return (
+          <CharacterOutfitSection
+            key={char.id}
+            character={char}
+            selection={
+              choice ?? {
+                characterId: char.id,
+                mode: defaultModes?.[char.id] ?? shownModeWithoutServer(sourceChatId),
+              }
             }
-          }
-          onChange={handleSelectionChange}
-          disabled={disabled}
-          showHeader={showHeaders}
-          isContinuation={Boolean(sourceChatId)}
-          showPreviousChatOption={Boolean(sourceChatId)}
-          previousChatSlots={previousOutfitSummary?.[char.id] ?? null}
-          projectId={projectId}
-          chatId={chatId}
-        />
-      ))}
+            touched={Boolean(choice)}
+            onChange={handleSelectionChange}
+            disabled={disabled}
+            showHeader={showHeaders}
+            showPreviousChatOption={Boolean(sourceChatId)}
+            previousChatSlots={previousOutfitSummary?.[char.id] ?? null}
+            projectId={projectId}
+            chatId={chatId}
+          />
+        )
+      })}
     </div>
   )
 }

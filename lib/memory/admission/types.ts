@@ -76,7 +76,8 @@ export type AdmissionActionKind = AdmissionAction['kind']
  * One neighbour as the decider sees it: a live row and its cosine to the
  * candidate. A cold member superseded by a digest arrives already replaced by
  * the digest (`via` names the member it was reached through); a cold row
- * whose digest is gone arrives as itself with `danglingDigest` set.
+ * whose superseder is gone, or is not a digest listing it among its members
+ * (a contradiction's marker, A7), arrives as itself with `danglingDigest` set.
  */
 export interface AdmissionNeighbour {
   memory: Memory

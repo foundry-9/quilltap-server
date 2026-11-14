@@ -96,6 +96,20 @@ describe('topicsForWriteBatch', () => {
     expect(topicsForWriteBatch(writes)).toEqual([{ topic: 'chats', id: 'chat-1' }]);
   });
 
+  it('names the atlas topic for a document write under an Atlas/ folder', () => {
+    const hints = topicsForWriteBatch([
+      { method: 'docMountDocuments.upsert', args: [{ mountPointId: 'mp-1', relativePath: 'Atlas/Vehicles/Convertible.md' }] },
+    ]);
+    expect(hints).toContainEqual({ topic: 'atlas' });
+  });
+
+  it('does not name the atlas topic for a document outside Atlas/', () => {
+    const hints = topicsForWriteBatch([
+      { method: 'docMountDocuments.upsert', args: [{ mountPointId: 'mp-1', relativePath: 'Notes/Atlas of the world.md' }] },
+    ]);
+    expect(hints).not.toContainEqual({ topic: 'atlas' });
+  });
+
   it('skips repository namespaces with no client-visible topic', () => {
     expect(topicsForWriteBatch([{ method: 'llmLogs.create', args: [{}] }])).toEqual([]);
   });

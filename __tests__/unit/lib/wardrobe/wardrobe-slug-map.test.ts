@@ -11,10 +11,7 @@
  * NOBODY — every reference to a collider is written as an exact UUID.
  */
 
-import {
-  buildSlugByItemIdMap,
-  buildWardrobeItemFile,
-} from '@/lib/mount-index/character-vault'
+import { buildSlugByItemIdMap, buildWardrobeItemFile } from '@/lib/mount-index/character-vault'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 
 const NOW = '2026-01-01T00:00:00.000Z'

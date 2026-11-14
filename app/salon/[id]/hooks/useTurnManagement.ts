@@ -59,18 +59,27 @@ interface TurnActionResponse {
 /**
  * Call the backend turn action API to persist state changes
  */
+/** The `?action=` each turn action is sent as. */
+const TURN_ACTION_NAMES = {
+  nudge: 'turn-nudge',
+  queue: 'turn-queue',
+  dequeue: 'turn-dequeue',
+  query: 'turn-query',
+  skipUserTurn: 'turn-skip-user',
+} as const
+
 async function callTurnAction(
   chatId: string,
   action: 'nudge' | 'queue' | 'dequeue' | 'query' | 'skipUserTurn',
   participantId?: string,
 ): Promise<TurnActionResponse | null> {
   try {
-    const body: Record<string, string> = { action }
+    const body: Record<string, string> = {}
     if (participantId) {
       body.participantId = participantId
     }
 
-    const res = await fetch(`/api/v1/chats/${chatId}?action=turn`, {
+    const res = await fetch(`/api/v1/chats/${chatId}?action=${TURN_ACTION_NAMES[action]}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -205,14 +214,18 @@ export function useTurnManagement(
 
     const { nextSpeakerId, nextSpeakerControlledBy } = response.turn
 
-    if (nextSpeakerId && nextSpeakerId !== userParticipantId) {
-      if (nextSpeakerControlledBy === 'user') {
-        return
-      }
-      triggerContinueMode(nextSpeakerId)
-    } else {
+    if (!nextSpeakerId) {
       showInfoToast('No characters available to speak. Try adding or activating a character.')
+      return
     }
+    // The operator's own seat (or another seat they drive) is on deck: nothing
+    // to summon. Next Round in Turns mode lands here whenever a fresh round
+    // opens on the operator.
+    if (nextSpeakerId === userParticipantId || nextSpeakerControlledBy === 'user') {
+      showInfoToast('The floor is yours — post a line, or skip your turn.')
+      return
+    }
+    triggerContinueMode(nextSpeakerId)
   }, [chatId, hasActiveCharacters, userParticipantId, turnState, setTurnState, setTurnSelectionResult, triggerContinueMode])
 
   // Skip is offered whenever the human can type as a seat — their own character

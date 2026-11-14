@@ -12,7 +12,8 @@
  */
 
 import { ImportFromImageModal } from '@/components/wardrobe/import-from-image-modal'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { renderWithQuery as render } from '@/__tests__/helpers/renderWithQuery'
 import React from 'react'
 import { showErrorToast, showWarningToast } from '@/lib/toast'
 
@@ -43,6 +44,18 @@ const ANALYSIS = {
   model: 'claude',
 }
 
+/** What GET analyze-image offers the dropdown. */
+const VISION_PROFILES = {
+  profiles: [
+    { id: 'profile-usual', name: 'Usual Eye', provider: 'ANTHROPIC', modelName: 'claude' },
+    { id: 'profile-other', name: 'Other Eye', provider: 'OPENAI', modelName: 'gpt-4o' },
+  ],
+  defaultProfileId: 'profile-usual',
+}
+
+/** Bodies posted to analyze-image, in order. */
+let analyzeBodies: Record<string, unknown>[] = []
+
 /** Posted wardrobe bodies, in order. */
 let posted: Record<string, unknown>[] = []
 
@@ -55,12 +68,15 @@ const UPLOAD_RE = /\/api\/v1\/wardrobe\/([^/?]+)\/images\?(.*)$/
 
 function routeFetch(analysis: unknown = ANALYSIS, options: { failUploads?: boolean } = {}): void {
   posted = []
+  analyzeBodies = []
   uploads = []
   links = []
   let nextId = 0
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
-    if (url.endsWith('/api/v1/wardrobe/analyze-image')) {
+    if (url.endsWith('/api/v1/wardrobe?action=analyze-image')) {
+      if (init?.method !== 'POST') return jsonResponse(VISION_PROFILES)
+      analyzeBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>)
       return jsonResponse(analysis)
     }
     if (url.endsWith(WARDROBE_URL) && init?.method === 'POST') {
@@ -97,16 +113,44 @@ function routeFetch(analysis: unknown = ANALYSIS, options: { failUploads?: boole
 }
 
 async function analyzeAnImage(): Promise<void> {
-  const { container } = render(
+  render(
     <ImportFromImageModal characterId={CHARACTER_ID} onClose={jest.fn()} onImported={jest.fn()} />
   )
-  const input = container.querySelector('input[type="file"]') as HTMLInputElement
+  const select = await screen.findByLabelText('Reading the photograph') as HTMLSelectElement
+  await waitFor(() => expect(select.value).toBe('profile-usual'))
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement // the modal is portalled to <body>
   const file = new File(['png-bytes'], 'look.png', { type: 'image/png' })
   fireEvent.change(input, { target: { files: [file] } })
   await waitFor(() => expect(screen.getByAltText('Selected reference image')).toBeTruthy())
   fireEvent.click(screen.getByText('Analyze Image'))
   await screen.findByText('2 items identified')
 }
+
+describe('ImportFromImageModal — choosing the vision profile', () => {
+  it('presets the usual profile and sends it with the analysis', async () => {
+    routeFetch()
+    await analyzeAnImage()
+    expect(analyzeBodies[0].profileId).toBe('profile-usual')
+    expect(screen.getByText(/Read by Usual Eye/)).toBeTruthy()
+  })
+
+  it('sends the profile the operator picks instead', async () => {
+    routeFetch()
+    render(
+      <ImportFromImageModal characterId={CHARACTER_ID} onClose={jest.fn()} onImported={jest.fn()} />
+    )
+    const select = await screen.findByLabelText('Reading the photograph') as HTMLSelectElement
+    await waitFor(() => expect(select.value).toBe('profile-usual'))
+    fireEvent.change(select, { target: { value: 'profile-other' } })
+    const input = document.body.querySelector('input[type="file"]') as HTMLInputElement // the modal is portalled to <body>
+    fireEvent.change(input, { target: { files: [new File(['png-bytes'], 'look.png', { type: 'image/png' })] } })
+    await waitFor(() => expect(screen.getByAltText('Selected reference image')).toBeTruthy())
+    fireEvent.click(screen.getByText('Analyze Image'))
+    await screen.findByText('2 items identified')
+    expect(analyzeBodies[0].profileId).toBe('profile-other')
+    expect(screen.getByText(/Read by Other Eye/)).toBeTruthy()
+  })
+})
 
 describe('ImportFromImageModal — the ensemble offer', () => {
   it('pre-fills the outfit the model named and bundles the created pieces by their new ids', async () => {
@@ -230,10 +274,10 @@ describe('ImportFromImageModal — keeping the photograph', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     routeFetch(ANALYSIS, { failUploads: true })
     const onImported = jest.fn()
-    const { container } = render(
+    render(
       <ImportFromImageModal characterId={CHARACTER_ID} onClose={jest.fn()} onImported={onImported} />
     )
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    const input = document.body.querySelector('input[type="file"]') as HTMLInputElement // the modal is portalled to <body>
     fireEvent.change(input, { target: { files: [new File(['png-bytes'], 'look.png', { type: 'image/png' })] } })
     await waitFor(() => expect(screen.getByAltText('Selected reference image')).toBeTruthy())
     fireEvent.click(screen.getByText('Analyze Image'))

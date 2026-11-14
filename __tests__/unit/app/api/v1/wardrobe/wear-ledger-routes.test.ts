@@ -36,7 +36,7 @@ jest.mock('@/lib/api/middleware', () => {
 })
 
 // The folder reader answers by tier: the character's vault, or General.
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
+jest.mock('@/lib/wardrobe/vault-writes', () => ({
   WardrobeComponentCycleError: class WardrobeComponentCycleError extends Error {},
   readMountItems: jest.fn(),
   createInMount: jest.fn(),
@@ -45,7 +45,7 @@ jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
   resolveWardrobeMount: jest.fn(),
 }))
 
-jest.mock('@/lib/database/repositories/characters.repository', () => ({
+jest.mock('@/lib/characters/archive-guard', () => ({
   CharacterArchivedError: class CharacterArchivedError extends Error {},
 }))
 
@@ -77,7 +77,7 @@ import { GET as GET_CHARACTER_LIST } from '@/app/api/v1/characters/[id]/wardrobe
 import { GET as GET_CHARACTER_ITEM } from '@/app/api/v1/characters/[id]/wardrobe/[itemId]/route'
 import { GET as GET_GENERAL_LIST } from '@/app/api/v1/wardrobe/route'
 import { GET as GET_GENERAL_ITEM } from '@/app/api/v1/wardrobe/[itemId]/route'
-import { readMountItems } from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
+import { readMountItems } from '@/lib/wardrobe/vault-writes'
 import { getGeneralMountPointId } from '@/lib/instance-settings'
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111'

@@ -50,7 +50,15 @@ import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm
 
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ChatMetadataBase, ConnectionProfile } from '@/lib/schemas/types'
-import type { AttachedFile, ProcessMessageResult, StreamingState } from './types'
+import type {
+  AttachedFile,
+  FormatToolsFor,
+  GeneratedImage,
+  ProcessMessageResult,
+  StreamingState,
+  ToolMessage,
+  TurnToolMode,
+} from './types'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 const logger = createServiceLogger('PrimaryStream')
@@ -75,6 +83,12 @@ export interface MakePreservePartialOnErrorOptions {
    * the turn is now a persisted message.
    */
   mailAlertsOwed?: MailAlertsOwed | null
+  /**
+   * The turn's live tool results, read when a partial is preserved. A tool
+   * that ran before the stream fell over took effect; its TOOL row is saved
+   * beside the partial rather than lost. Absent saves none.
+   */
+  getToolArtifacts?: () => { toolMessages: ToolMessage[]; generatedImagePaths: GeneratedImage[] }
 }
 
 /**
@@ -86,15 +100,22 @@ export interface MakePreservePartialOnErrorOptions {
 export function makePreservePartialOnError(
   opts: MakePreservePartialOnErrorOptions
 ): (error: unknown) => Promise<void> {
-  const { repos, chatId, character, characterParticipant, streaming, preGeneratedAssistantMessageId, informRowIds, mailAlertsOwed } = opts
+  const {
+    repos, chatId, character, characterParticipant, streaming, preGeneratedAssistantMessageId,
+    informRowIds, mailAlertsOwed, getToolArtifacts,
+  } = opts
   let partialPreserved = false
 
   return async function preservePartialOnError(error: unknown): Promise<void> {
     if (partialPreserved) return
-    if (!streaming.hasStartedStreaming || streaming.fullResponse.length === 0) {
+    // Gated on prose alone. `hasStartedStreaming` is set by the primary stream
+    // only, so a native tool loop continuation after a silent tool call — the
+    // prose the user has already seen — used to be dropped on a stall.
+    if (streaming.fullResponse.length === 0) {
       return
     }
     partialPreserved = true
+    const { toolMessages, generatedImagePaths } = getToolArtifacts?.() ?? { toolMessages: [], generatedImagePaths: [] }
     const errorReason = error instanceof Error ? error.message : String(error)
     const normalizedPartial = normalizeContentBlockFormat(streaming.fullResponse)
     const cleanedPartial = stripCharacterNamePrefix(normalizedPartial, character.name, character.aliases)
@@ -110,8 +131,8 @@ export function makePreservePartialOnError(
         streaming.usage,
         streaming.rawResponse,
         streaming.thoughtSignature,
-        [],
-        [],
+        generatedImagePaths,
+        toolMessages,
         preGeneratedAssistantMessageId,
         streaming.effectiveProfile.provider,
         streaming.effectiveProfile.modelName,
@@ -144,6 +165,7 @@ export function makePreservePartialOnError(
         provider: streaming.effectiveProfile.provider,
         model: streaming.effectiveProfile.modelName,
         partialLength: streaming.fullResponse.length,
+        toolMessageCount: toolMessages.length,
         error: errorReason,
       })
     } catch (persistError) {
@@ -172,6 +194,10 @@ export interface RunPrimaryStreamOptions {
   useNativeWebSearch: boolean
   /** Optional provider stop sequences (e.g. simple-json's `</tool_call>`). */
   stop?: string[]
+  /** The turn's resolved tool mode; a stand-in in another mode is passed over. */
+  resolvedToolMode: TurnToolMode
+  /** `TurnToolSlate.formatToolsFor`: a stand-in's tools in its own shape (#181). */
+  formatToolsFor: FormatToolsFor
   preGeneratedAssistantMessageId: string
   attachedFiles: AttachedFile[]
   originalMessage?: string
@@ -213,7 +239,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
   const {
     chatId, userId, chat, character, characterParticipant, userParticipantId, isMultiCharacter,
     formattedMessages, modelParams, actualTools, useNativeWebSearch,
-    stop, preGeneratedAssistantMessageId,
+    stop, resolvedToolMode, formatToolsFor, preGeneratedAssistantMessageId,
     attachedFiles, originalMessage, connectionProfile, isDangerousRouted, conciergePolicy,
     streaming, controller, encoder, preservePartialOnError,
     repos,
@@ -419,6 +445,8 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
       modelParams,
       actualTools,
       useNativeWebSearch,
+      resolvedToolMode,
+      formatToolsFor,
       chatId,
       character,
       controller,

@@ -205,10 +205,17 @@ export async function testProviderConnection(
     if (isValid) {
       return { valid: true };
     }
+    // The plugin contract answers only yes or no, so name the likely causes
+    // rather than leave "failed to validate" to be puzzled over.
     const metadata = providerRegistry.getProviderMetadata(provider);
+    const name = metadata?.displayName ?? provider;
+    logger.debug('Provider rejected the connection test', {
+      provider,
+      context: 'provider-validation.testProviderConnection',
+    });
     return {
       valid: false,
-      error: `Failed to validate connection to ${metadata?.displayName ?? provider}`,
+      error: `${name} did not accept this key. Check that it was copied whole and that the account has credit; if both are right, ${name} may be unreachable just now.`,
     };
   } catch (error) {
     const errorMessage = getErrorMessage(error);

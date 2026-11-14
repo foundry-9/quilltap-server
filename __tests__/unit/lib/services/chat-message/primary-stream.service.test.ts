@@ -180,6 +180,51 @@ describe('primary-stream.service', () => {
       expect(mockSaveAssistantMessage).not.toHaveBeenCalled()
     })
 
+    it('A3: preserves prose a tool-loop continuation streamed, though the primary stream never did', async () => {
+      // The first response was a silent tool call, so `hasStartedStreaming`
+      // was never set; the continuation's prose reached the user all the same.
+      const streaming = makeStreaming({ hasStartedStreaming: false, fullResponse: 'Searching the moor, I find' })
+      const toolMessages = [{ toolName: 'search', content: 'found', success: true, callId: 'tc-1' }]
+      const generatedImagePaths: any[] = []
+      const preserve = makePreservePartialOnError({
+        repos: {} as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming,
+        preGeneratedAssistantMessageId: 'pre',
+        getToolArtifacts: () => ({ toolMessages: toolMessages as any, generatedImagePaths }),
+      })
+
+      await preserve(new Error('stalled'))
+
+      expect(mockSaveAssistantMessage).toHaveBeenCalledTimes(1)
+      const args = mockSaveAssistantMessage.mock.calls[0] as unknown[]
+      expect(args[4]).toContain('Searching the moor, I find')
+      // The tool that ran took effect; its row is kept beside the partial.
+      expect(args[8]).toBe(generatedImagePaths)
+      expect(args[9]).toBe(toolMessages)
+    })
+
+    it('A3: reads the tool results at preservation time, not when the preserver was made', async () => {
+      const streaming = makeStreaming({ fullResponse: 'partial' })
+      const toolMessages: any[] = []
+      const preserve = makePreservePartialOnError({
+        repos: {} as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming,
+        preGeneratedAssistantMessageId: 'pre',
+        getToolArtifacts: () => ({ toolMessages, generatedImagePaths: [] }),
+      })
+      toolMessages.push({ toolName: 'search', content: 'found', success: true })
+
+      await preserve(new Error('stalled'))
+
+      expect((mockSaveAssistantMessage.mock.calls[0] as unknown[])[9]).toHaveLength(1)
+    })
+
     it('preserves once and is idempotent on subsequent calls', async () => {
       const streaming = makeStreaming({
         hasStartedStreaming: true,

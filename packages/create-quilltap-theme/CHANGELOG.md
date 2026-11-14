@@ -2,6 +2,11 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.0.24] - 2026-11-10
+
+### Changed
+- Bundle `styles.css` template: the commented defaults for `--qt-status-*-bg` now show the status colour at full strength, and the tinted badge inks show the app's deeper (light) / lighter (dark) values that meet WCAG 4.5:1.
+
 ## [2.0.19] - 2026-08-30
 
 ### Added

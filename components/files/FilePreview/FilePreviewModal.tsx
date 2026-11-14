@@ -16,6 +16,7 @@ import FilePreviewPdf from './FilePreviewPdf'
 import FilePreviewText from './FilePreviewText'
 import FilePreviewFallback from './FilePreviewFallback'
 import FileDeleteConfirmation from '../FileDeleteConfirmation'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 
 export default function FilePreviewModal({
   file,
@@ -93,18 +94,6 @@ export default function FilePreviewModal({
     }
   }, [])
 
-  // Modal opened
-
-  // Handle click outside to close
-  const handleBackdropClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) {
-        onClose()
-      }
-    },
-    [onClose]
-  )
-
   // Render the appropriate preview component
   const renderPreview = () => {
     switch (previewType) {
@@ -129,79 +118,77 @@ export default function FilePreviewModal({
     }
   }
 
-  // Stop mousedown propagation to prevent parent modal's click-outside detection
-  // FilePreviewModal is rendered outside parent modals in the DOM, so clicks inside
-  // would otherwise trigger their click-outside handlers
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-  }, [])
+  const displayName = file.originalFilename || file.filename
 
+  // Headerless: the action bar is the dialog's top row. The body wrapper is
+  // `contents`, so the bar, the scrolling preview and the side arrows lay out
+  // directly in the dialog's flex column as before.
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay backdrop-blur-sm"
-      onClick={handleBackdropClick}
-      onMouseDown={handleMouseDown}
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      headerless
+      maxWidth="5xl"
+      className="overflow-hidden"
+      bodyClassName="contents"
+      overlayClassName="backdrop-blur-sm"
     >
-      <div
-        className="qt-dialog w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="file-preview-title"
-      >
-        {/* Actions bar */}
-        <FilePreviewActions
-          file={file}
-          currentIndex={currentIndex}
-          totalFiles={files.length}
-          onPrevious={handlePrevious}
-          onNext={handleNext}
-          onDownload={handleDownload}
-          onDelete={handleDelete}
-          onMoveToProject={handleMoveToProject}
-          onClose={onClose}
+      {/* The action bar shows the filename; this names the dialog. */}
+      <ModalTitle className="sr-only">{displayName}</ModalTitle>
+
+      {/* Actions bar */}
+      <FilePreviewActions
+        file={file}
+        currentIndex={currentIndex}
+        totalFiles={files.length}
+        onPrevious={handlePrevious}
+        onNext={handleNext}
+        onDownload={handleDownload}
+        onDelete={handleDelete}
+        onMoveToProject={handleMoveToProject}
+        onClose={onClose}
+        isDeleting={isDeleting}
+        canMoveToProject={canMoveToProject}
+      />
+
+      {/* Preview content */}
+      <div ref={contentRef} className="flex-1 overflow-auto p-4 relative">{renderPreview()}</div>
+
+      {/* Navigation arrows on sides (for larger screens) */}
+      {files.length > 1 && (
+        <>
+          {hasPrevious && (
+            <button
+              onClick={handlePrevious}
+              className="absolute left-4 top-1/2 -translate-y-1/2 qt-button qt-button-secondary p-4 text-2xl hidden lg:block"
+              aria-label="Previous file"
+            >
+              {'\u2190'}
+            </button>
+          )}
+          {hasNext && (
+            <button
+              onClick={handleNext}
+              className="absolute right-4 top-1/2 -translate-y-1/2 qt-button qt-button-secondary p-4 text-2xl hidden lg:block"
+              aria-label="Next file"
+            >
+              {'\u2192'}
+            </button>
+          )}
+        </>
+      )}
+
+      {/* Delete Confirmation for files with associations */}
+      {pendingDelete && (
+        <FileDeleteConfirmation
+          isOpen={!!pendingDelete}
+          filename={file.originalFilename || file.filename || 'file'}
+          associations={pendingDelete.associations}
+          onConfirm={confirmDelete}
+          onCancel={cancelDelete}
           isDeleting={isDeleting}
-          canMoveToProject={canMoveToProject}
         />
-
-        {/* Preview content */}
-        <div ref={contentRef} className="flex-1 overflow-auto p-4 relative">{renderPreview()}</div>
-
-        {/* Navigation arrows on sides (for larger screens) */}
-        {files.length > 1 && (
-          <>
-            {hasPrevious && (
-              <button
-                onClick={handlePrevious}
-                className="absolute left-4 top-1/2 -translate-y-1/2 qt-button qt-button-secondary p-4 text-2xl hidden lg:block"
-                aria-label="Previous file"
-              >
-                {'\u2190'}
-              </button>
-            )}
-            {hasNext && (
-              <button
-                onClick={handleNext}
-                className="absolute right-4 top-1/2 -translate-y-1/2 qt-button qt-button-secondary p-4 text-2xl hidden lg:block"
-                aria-label="Next file"
-              >
-                {'\u2192'}
-              </button>
-            )}
-          </>
-        )}
-
-        {/* Delete Confirmation for files with associations */}
-        {pendingDelete && (
-          <FileDeleteConfirmation
-            isOpen={!!pendingDelete}
-            filename={file.originalFilename || file.filename || 'file'}
-            associations={pendingDelete.associations}
-            onConfirm={confirmDelete}
-            onCancel={cancelDelete}
-            isDeleting={isDeleting}
-          />
-        )}
-      </div>
-    </div>
+      )}
+    </BaseModal>
   )
 }

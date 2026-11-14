@@ -29,6 +29,7 @@ function getVersion() {
 function parseArgs(argv) {
   const opts = {
     port: 3000,
+    host: '',
     dataDir: '',
     instance: '',
     open: false,
@@ -46,6 +47,13 @@ function parseArgs(argv) {
         opts.port = parseInt(args[++i], 10);
         if (isNaN(opts.port) || opts.port < 1 || opts.port > 65535) {
           console.error('Error: --port must be a number between 1 and 65535');
+          process.exit(1);
+        }
+        break;
+      case '--host':
+        opts.host = args[++i];
+        if (!opts.host) {
+          console.error('Error: --host needs an address (e.g. 127.0.0.1 or 0.0.0.0)');
           process.exit(1);
         }
         break;
@@ -108,6 +116,8 @@ Subcommands:
 
 Options:
   -p, --port <number>     Port to listen on (default: 3000)
+  --host <address>        Address to bind (default: 127.0.0.1; 0.0.0.0 for every
+                          interface — there is no login, so only on a trusted network)
   -d, --data-dir <path>   Data directory (default: platform-specific)
   -i, --instance <name>   Use a registered instance (see 'quilltap instances')
   -o, --open              Open browser after server starts
@@ -358,8 +368,11 @@ async function main() {
     ...process.env,
     NODE_ENV: 'production',
     PORT: String(opts.port),
-    HOSTNAME: '0.0.0.0',
   };
+  // Loopback unless asked otherwise: Quilltap has no login.
+  const bindHost = opts.host || process.env.QUILLTAP_HOST || '127.0.0.1';
+  env.QUILLTAP_HOST = bindHost;
+  env.HOSTNAME = bindHost;
 
   if (opts.dataDir && opts.instance) {
     console.error('Error: Specify either --instance or --data-dir, not both.');
@@ -393,6 +406,9 @@ async function main() {
   console.log(`  Quilltap v${version}`);
   console.log('');
   console.log(`  URL:       ${url}`);
+  if (bindHost !== '127.0.0.1' && bindHost !== 'localhost' && bindHost !== '::1') {
+    console.log(`  Bind:      ${bindHost} — reachable from the network; Quilltap has no login`);
+  }
   if (opts.dataDir) {
     console.log(`  Data dir:  ${env.QUILLTAP_DATA_DIR}`);
   }

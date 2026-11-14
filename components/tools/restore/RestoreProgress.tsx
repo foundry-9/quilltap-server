@@ -20,8 +20,22 @@ function PreviewCard({
 }) {
   return (
     <div className="qt-bg-muted p-4 rounded-lg">
-      <p className="qt-heading-2 text-foreground">{value}</p>
+      <p className="qt-heading-2 qt-text">{value}</p>
       <p className="qt-text-xs mt-1">{label}</p>
+    </div>
+  )
+}
+
+function PluginsNotRestoredNotice({ names }: { names?: string[] }) {
+  if (!names || names.length === 0) return null
+  return (
+    <div className="qt-bg-muted p-4 rounded-lg">
+      <p className="qt-label qt-text">Plugins left at the door</p>
+      <p className="qt-text-xs mt-1">
+        This backup carries the following plugins. A restore installs no code, so
+        you must reinstall any you wish to keep from the Foundry:
+      </p>
+      <p className="qt-text-small mt-2 break-words">{names.join(', ')}</p>
     </div>
   )
 }
@@ -29,7 +43,7 @@ function PreviewCard({
 function LoadingSpinner() {
   return (
     <svg
-      className="w-12 h-12 text-primary animate-spin"
+      className="w-12 h-12 qt-text-brand animate-spin"
       fill="none"
       viewBox="0 0 24 24"
     >
@@ -68,6 +82,7 @@ export function RestoreProgress({
           <PreviewCard label="Tags" value={preview.tags} />
           <PreviewCard label="Memories" value={preview.memories} />
         </div>
+        <PluginsNotRestoredNotice names={preview.npmPluginNames} />
       </div>
     )
   }

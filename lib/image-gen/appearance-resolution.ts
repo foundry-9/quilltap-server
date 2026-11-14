@@ -29,6 +29,7 @@ import {
   classifyContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service'
 import { logger } from '@/lib/logger'
+import type { SpeakerNames } from '@/lib/chat/speaker-names'
 import {
   isHumanoid,
   NON_HUMANOID_IMAGE_DIRECTION,
@@ -55,10 +56,8 @@ export interface AppearanceResolutionResult {
 export interface ResolvedCharacterAppearance {
   characterId: string
   characterName: string
-  /** Selected physical description text */
+  /** The physical description text chosen for this scene */
   physicalDescription: string
-  /** The selected physical description's name (for logging) */
-  physicalDescriptionName: string
   /**
    * False when the character has no humanoid body (`isHumanoid` on its
    * physical description). {@link sceneDescriptionParts} then drops the
@@ -194,7 +193,6 @@ function buildDefaultAppearances(
       characterId: char.characterId,
       characterName: char.characterName,
       physicalDescription: physDesc,
-      physicalDescriptionName: primary?.name || 'default',
       ...(isHumanoid(primary) ? {} : { humanoid: false }),
       clothingDescription: hasWardrobe
         ? describeOutfit(wardrobeItemsToSlotValues(char.equippedWardrobeItems!))
@@ -218,8 +216,7 @@ function mapResolutionResults(
   return characters.map(char => {
     const resolved = items.find(i => i.characterId === char.characterId)
 
-    // Only one physical description per character now; the resolver's
-    // selectedDescriptionId is informational only.
+    // One physical description per character; the resolver decides clothing only.
     const selectedDesc: PhysicalDescription | null = char.physicalDescription
 
     const physDesc = pickPhysicalDescription(selectedDesc, 'full-length') || char.characterName
@@ -228,7 +225,6 @@ function mapResolutionResults(
       characterId: char.characterId,
       characterName: char.characterName,
       physicalDescription: physDesc,
-      physicalDescriptionName: selectedDesc?.name || 'default',
       ...(isHumanoid(selectedDesc) ? {} : { humanoid: false }),
       clothingDescription: resolved?.clothingDescription || '',
       clothingSource: resolved?.clothingSource || 'default',
@@ -267,6 +263,33 @@ export async function resolveCharacterAppearances(
   )
   if (!chatId || result.appearances.length === 0) return result
   return { ...result, appearances: await withCarrying(result.appearances, chatId) }
+}
+
+/**
+ * The chat's seats resolved to names, so the transcript the resolver reads is
+ * labelled by speaker, never by role. Fails soft to an empty map — every line
+ * then reads `User` / `Character`, the sanctioned fallback.
+ */
+async function speakerNamesForChat(chatId: string): Promise<SpeakerNames> {
+  try {
+    const { getRepositories } = await import('@/lib/repositories/factory')
+    const { resolveSpeakerNames } = await import('@/lib/chat/speaker-names')
+    const chat = await getRepositories().chats.findById(chatId)
+    const names = chat ? await resolveSpeakerNames(chat) : new Map<string, string>()
+    logger.debug('[AppearanceResolution] Resolved transcript speaker names', {
+      context: 'image-gen.appearance-resolution',
+      chatId,
+      namedSeats: names.size,
+    })
+    return names
+  } catch (error) {
+    logger.warn('[AppearanceResolution] Could not resolve speaker names; using role fallbacks', {
+      context: 'image-gen.appearance-resolution',
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return new Map()
+  }
 }
 
 /**
@@ -324,7 +347,6 @@ async function resolveAppearancesWithoutInventory(
         characterId: char.characterId,
         characterName: char.characterName,
         physicalDescription: physDesc,
-        physicalDescriptionName: primary?.name || 'scene-state',
         ...(isHumanoid(primary) ? {} : { humanoid: false }),
         // If scene state has clothing info, use it. If clothing is explicitly null/empty
         // (e.g. character undressed), do NOT fall back — that would incorrectly redress.
@@ -356,15 +378,12 @@ async function resolveAppearancesWithoutInventory(
     characterId: char.characterId,
     characterName: char.characterName,
     ...(isHumanoid(char.physicalDescription) ? {} : { nonHumanoid: true }),
-    physicalDescriptions: char.physicalDescription
-      ? [{
-          id: char.physicalDescription.id,
-          name: char.physicalDescription.name,
-          usageContext: char.physicalDescription.usageContext,
+    physicalDescription: char.physicalDescription
+      ? {
           shortPrompt: char.physicalDescription.shortPrompt,
           mediumPrompt: char.physicalDescription.mediumPrompt,
-        }]
-      : [],
+        }
+      : null,
     ...(char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
       ? { equippedWardrobeItems: char.equippedWardrobeItems }
       : {}),
@@ -376,7 +395,8 @@ async function resolveAppearancesWithoutInventory(
     imagePrompt,
     cheapLLMSelection,
     userId,
-    chatId
+    chatId,
+    chatId ? await speakerNamesForChat(chatId) : new Map()
   )
 
   if (!result.success || !result.result || result.result.length === 0) {

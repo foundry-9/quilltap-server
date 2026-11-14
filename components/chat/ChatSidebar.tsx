@@ -13,16 +13,19 @@
  */
 
 import { useMemo, useState, useCallback, useEffect, useRef, useId } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
-import { patchChat } from '@/lib/chat/patch-chat'
-import { queryKeys } from '@/lib/query/keys'
+import { usePatchChat } from '@/lib/chat/use-patch-chat'
+import { useApiKeysQuery, useImageProfilesQuery, useRoleplayTemplatesQuery } from '@/lib/hooks/use-profiles'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { ConciergeOffDutyHint } from './ConciergeOffDutyHint'
 import { Icon } from '@/components/ui/icon'
-import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
+import { ParticipantCard, type ParticipantData } from './ParticipantCard'
+import { useChatActions } from '@/components/providers/chat-context'
 import { CopyChatIdButton } from './CopyChatIdButton'
 import { ChatScenarioControl } from './ChatScenarioControl'
+import { ChatConceptsNamed } from './ChatConceptsNamed'
+import { useChatAtlasMentions } from '@/hooks/useAtlasMentions'
+import { useChatAbsentMentions } from '@/hooks/useAbsentMentions'
 import { shouldDismissSidebarOverlay } from './sidebar-overlay-dismiss'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
@@ -36,6 +39,7 @@ import {
   type ConciergeProvenanceNote,
 } from '@/lib/services/dangerous-content/concierge-state-presentation'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
+import type { ChatTurnMode, TurnPosition } from '@/lib/schemas/storyteller.types'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
 import type { TurnOrderEntry, TurnOrderStatus } from '@/lib/chat/turn-manager'
 
@@ -59,7 +63,7 @@ const WIDTH_KEY_STEP = 16
  */
 const NARROW_PANE_WIDTH = 640
 
-type SectionId = 'participants' | 'chat' | 'visibility' | 'organize' | 'edit' | null
+type SectionId = 'participants' | 'concepts' | 'chat' | 'visibility' | 'organize' | 'edit' | null
 
 interface RoleplayTemplate {
   id: string
@@ -152,33 +156,24 @@ export interface ChatSidebarProps {
   waitingForResponse?: boolean
   isPaused?: boolean
   onTogglePause?: () => void
-  /** The chat's turn mode; with `onSetTurnPosition` the pause button becomes a three-way control. */
-  turnMode?: 'rotation' | 'storyteller'
-  /** Normal (rotation, running) / Paused / Storyteller (bids each round). */
-  onSetTurnPosition?: (position: 'normal' | 'paused' | 'storyteller') => void
+  /** The chat's turn mode; with `onSetTurnPosition` the pause button becomes a four-way control. */
+  turnMode?: ChatTurnMode
+  /** Normal (rotation, running) / Manual (paused) / Turns (one round at a time) / Storyteller (bids each round). */
+  onSetTurnPosition?: (position: TurnPosition) => void
+  /** Turns mode: run the next round without posting. */
+  onNextRound?: () => void
   /** Storyteller: invite seats to bid weighted by talkativeness (off = everyone, every round). */
   storytellerInviteFilter?: boolean
   onToggleStorytellerInviteFilter?: () => void
-  onNudge: (participantId: string) => void
-  onQueue: (participantId: string) => void
-  onDequeue: (participantId: string) => void
+  // The per-participant actions (nudge, queue, impersonate, profile and
+  // prompt changes, …) come from `ChatActionsProvider`, not props.
   onSkip?: () => void
-  onTalkativenessChange?: (participantId: string, value: number) => void
   onAddCharacter?: () => void
-  onRemoveCharacter?: (participantId: string) => void
   onWhisper?: (participantId: string) => void
   impersonatingParticipantIds?: string[]
   activeTypingParticipantId?: string | null
-  onImpersonate?: (participantId: string) => void
-  onStopImpersonate?: (participantId: string) => void
-  connectionProfiles?: ConnectionProfileOption[]
-  onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
-  onSystemPromptChange?: (participantId: string, promptId: string | null) => void
-  onSubpromptsChange?: (participantId: string, subpromptIds: string[]) => void
-  onRebuildSystemPrompt?: (participantId: string) => void
   onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
   chatId: string
-  onRegenerateAvatar?: (participantId: string) => void
 
   // --- Chat section ---
   agentModeEnabled?: boolean | null
@@ -289,6 +284,13 @@ export function ChatSidebar(props: ChatSidebarProps) {
 
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState)
   const [openSection, setOpenSection] = useState<SectionId>('participants')
+  // Absent characters and Atlas entries the chat names (the transcript's chips' own reads).
+  const absentMentions = useChatAbsentMentions(props.chatId)
+  const atlasMentions = useChatAtlasMentions(props.chatId)
+  const conceptsDescription = [
+    absentMentions.length > 0 ? `${absentMentions.length} character${absentMentions.length !== 1 ? 's' : ''} not here` : null,
+    atlasMentions.length > 0 ? `${atlasMentions.length} from the Atlas` : null,
+  ].filter(Boolean).join(' · ')
 
   // Resizable width (px), persisted to localStorage. Applies to the expanded
   // panel only; the collapsed strip keeps its own fixed width.
@@ -530,6 +532,21 @@ export function ChatSidebar(props: ChatSidebarProps) {
           />
         </CollapsibleCard>
 
+        {(absentMentions.length > 0 || atlasMentions.length > 0) && (
+          <CollapsibleCard
+            title="Concepts Named"
+            description={conceptsDescription}
+            {...openController('concepts')}
+          >
+            <ChatConceptsNamed
+              chatId={props.chatId}
+              people={absentMentions}
+              things={atlasMentions}
+              onRevealed={isOverlay ? () => setNarrowOpen(false) : undefined}
+            />
+          </CollapsibleCard>
+        )}
+
         <CollapsibleCard
           title="Chat"
           {...openController('chat')}
@@ -621,7 +638,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
       {turnSelectionResult?.debug && (
         <div className="qt-chat-sidebar-debug">
           <details>
-            <summary className="cursor-pointer hover:text-foreground">Turn Debug Info</summary>
+            <summary className="cursor-pointer hover:qt-text">Turn Debug Info</summary>
             <div className="mt-2 space-y-1">
               <div>Reason: {turnSelectionResult.reason}</div>
               <div>Cycle Complete: {turnSelectionResult.cycleComplete ? 'Yes' : 'No'}</div>
@@ -767,9 +784,10 @@ function CollapsedStrip({
 // Turn-mode control
 // =================================================================
 
-const TURN_POSITIONS: Array<{ id: 'normal' | 'paused' | 'storyteller'; label: string; title: string }> = [
+const TURN_POSITIONS: Array<{ id: TurnPosition; label: string; title: string }> = [
   { id: 'normal', label: 'Normal', title: 'The company takes turns on its own' },
-  { id: 'paused', label: 'Paused', title: 'Nobody answers until you nudge them' },
+  { id: 'manual', label: 'Manual', title: 'Nobody answers until you nudge them' },
+  { id: 'turns', label: 'Turns', title: 'Everyone has their turn once, then the room waits for you' },
   { id: 'storyteller', label: 'Storyteller', title: 'Each of your posts asks the company who wishes to answer; you choose' },
 ]
 
@@ -779,16 +797,20 @@ function TurnModeControl({
   onSet,
 }: {
   isPaused: boolean
-  turnMode: 'rotation' | 'storyteller'
-  onSet: (position: 'normal' | 'paused' | 'storyteller') => void
+  turnMode: ChatTurnMode
+  onSet: (position: TurnPosition) => void
 }) {
-  const current = isPaused ? 'paused' : turnMode === 'storyteller' ? 'storyteller' : 'normal'
+  const current: TurnPosition = isPaused
+    ? 'manual'
+    : turnMode === 'storyteller' ? 'storyteller'
+    : turnMode === 'turns' ? 'turns'
+    : 'normal'
   return (
     <div className="qt-storyteller-mode mt-3" role="radiogroup" aria-label="Turn mode">
       {TURN_POSITIONS.map((position) => {
         const active = position.id === current
         const classes = ['qt-storyteller-mode-option']
-        if (active) classes.push(position.id === 'paused' ? 'qt-storyteller-mode-option-paused' : 'qt-storyteller-mode-option-active')
+        if (active) classes.push(position.id === 'manual' ? 'qt-storyteller-mode-option-paused' : 'qt-storyteller-mode-option-active')
         return (
           <button
             key={position.id}
@@ -819,6 +841,7 @@ interface ParticipantsSectionProps extends ChatSidebarProps {
 }
 
 function ParticipantsSection(p: ParticipantsSectionProps) {
+  const actions = useChatActions()
   const activeParticipantCount = useMemo(() => {
     return p.participants.filter(part => part.isActive).length
   }, [p.participants])
@@ -855,6 +878,18 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
           turnMode={p.turnMode ?? 'rotation'}
           onSet={p.onSetTurnPosition}
         />
+      )}
+
+      {p.onSetTurnPosition && p.onNextRound && p.turnMode === 'turns' && p.isPaused !== true && (
+        <button
+          type="button"
+          onClick={p.onNextRound}
+          disabled={p.isGenerating}
+          className="qt-button qt-button-secondary qt-button-sm mt-2 w-full"
+          title="Everyone takes their turn once more, then the room waits again"
+        >
+          Next Round
+        </button>
       )}
 
       {p.onSetTurnPosition && p.turnMode === 'storyteller' && p.onToggleStorytellerInviteFilter && (
@@ -920,23 +955,23 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               isUserParticipant={isUserParticipant}
               turnPosition={turnEntry?.position ?? null}
               turnStatus={turnEntry?.status}
-              onNudge={p.onNudge}
-              onQueue={p.onQueue}
-              onDequeue={p.onDequeue}
+              onNudge={actions.onNudge}
+              onQueue={actions.onQueue}
+              onDequeue={actions.onDequeue}
               onSkip={isUserParticipant ? p.onSkip : undefined}
-              onTalkativenessChange={p.onTalkativenessChange}
-              onRemove={p.onRemoveCharacter}
+              onTalkativenessChange={actions.onTalkativenessChange}
+              onRemove={actions.onRemoveCharacter}
               canRemove={canRemove}
               canSkip={canSkip}
               isImpersonating={isImpersonating}
               isActiveTyping={isActiveTyping}
-              onImpersonate={p.onImpersonate}
-              onStopImpersonate={p.onStopImpersonate}
-              connectionProfiles={p.connectionProfiles}
-              onConnectionProfileChange={p.onConnectionProfileChange}
-              onSystemPromptChange={p.onSystemPromptChange}
-              onSubpromptsChange={p.onSubpromptsChange}
-              onRebuildSystemPrompt={p.onRebuildSystemPrompt}
+              onImpersonate={actions.onImpersonate}
+              onStopImpersonate={actions.onStopImpersonate}
+              connectionProfiles={actions.connectionProfiles}
+              onConnectionProfileChange={actions.onConnectionProfileChange}
+              onSystemPromptChange={actions.onSystemPromptChange}
+              onSubpromptsChange={actions.onSubpromptsChange}
+              onRebuildSystemPrompt={actions.onRebuildSystemPrompt}
               onActiveChange={p.onParticipantSettingsChange
                 ? (pId, active) => p.onParticipantSettingsChange!(pId, { isActive: active })
                 : undefined}
@@ -945,7 +980,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
                 : undefined}
               onWhisper={activeParticipantCount >= 3 ? p.onWhisper : undefined}
               chatId={p.chatId}
-              onRegenerateAvatar={p.onRegenerateAvatar}
+              onRegenerateAvatar={actions.onRegenerateAvatar}
               isDangerousChat={shouldShowDangerStyling({ conciergeState: p.conciergeState })}
             />
           )
@@ -1026,17 +1061,12 @@ function ChatSection({
   sectionOpen,
 }: ChatSectionProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(roleplayTemplateId ?? null)
-  const [templateSaving, setTemplateSaving] = useState(false)
-  const [imageProfileSaving, setImageProfileSaving] = useState(false)
-  const [alertImagesSaving, setAlertImagesSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
-  const [conciergeSaving, setConciergeSaving] = useState(false)
   // Off duty globally, the per-chat state does nothing; the select is
   // disabled (not hidden) and points at the switch.
   const { data: conciergeOnDuty = true } = useChatSettingsQuery(
     (settings) => settings.conciergeSettings?.enabled !== false,
   )
-  const [timelineModeSaving, setTimelineModeSaving] = useState(false)
 
   // Sync from props when chat record changes upstream
   useEffect(() => {
@@ -1054,162 +1084,96 @@ function ChatSection({
     }
   }, [sectionOpen, hasEverOpened])
 
-  const { data: templatesData } = useQuery({
-    queryKey: queryKeys.roleplayTemplates.all,
-    queryFn: ({ signal }) => apiFetch<RoleplayTemplate[]>('/api/v1/roleplay-templates', { signal }),
-    enabled: hasEverOpened,
-  })
-  const { data: imageProfilesData } = useQuery({
-    queryKey: queryKeys.imageProfiles.all,
-    queryFn: ({ signal }) => apiFetch<{ profiles: ImageProfile[] }>('/api/v1/image-profiles', { signal }),
-    enabled: hasEverOpened,
-  })
-  const { data: apiKeysData } = useQuery({
-    queryKey: queryKeys.apiKeys.all,
-    queryFn: ({ signal }) => apiFetch<{ apiKeys: ApiKey[] }>('/api/v1/api-keys', { signal }),
-    enabled: hasEverOpened,
-  })
+  const { data: templatesData } = useRoleplayTemplatesQuery<RoleplayTemplate>({ enabled: hasEverOpened })
+  const { data: imageProfilesData } = useImageProfilesQuery<ImageProfile>({ enabled: hasEverOpened })
+  const { data: apiKeysData } = useApiKeysQuery<ApiKey>({ enabled: hasEverOpened })
 
   const roleplayTemplates = templatesData ?? []
-  const imageProfiles = imageProfilesData?.profiles ?? []
-  const apiKeys = apiKeysData?.apiKeys ?? []
+  const imageProfiles = imageProfilesData ?? []
+  const apiKeys = apiKeysData ?? []
+
+  // Every write to the chat row goes through the one mutation: it toasts a
+  // refusal, refreshes the cached reads, and runs `onChatUpdated` on success.
+  const { patch, update, isSaving } = usePatchChat(chatId, { onSaved: onChatUpdated })
 
   const handleRoleplayTemplateChange = async (templateId: string | null) => {
-    try {
-      setTemplateSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleplayTemplateId: templateId }),
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
-      setSelectedTemplateId(templateId)
-      showSuccessToast('Roleplay template updated')
-      onChatUpdated?.()
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || 'Failed to update roleplay template')
-    } finally {
-      setTemplateSaving(false)
-    }
+    // Top-level form: the route checks the template exists.
+    const ok = await update(
+      { roleplayTemplateId: templateId },
+      { success: 'Roleplay template updated', failure: 'Failed to update roleplay template' },
+    )
+    if (ok) setSelectedTemplateId(templateId)
   }
 
   const handleImageProfileChange = async (profileId: string | null) => {
-    try {
-      setImageProfileSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageProfileId: profileId }),
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
-      showSuccessToast('Image profile updated')
-      onChatUpdated?.()
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || 'Failed to update image profile')
-    } finally {
-      setImageProfileSaving(false)
-    }
+    // Top-level form: the route checks the profile exists.
+    await update(
+      { imageProfileId: profileId },
+      { success: 'Image profile updated', failure: 'Failed to update image profile' },
+    )
   }
 
   const handleAlertImagesChange = async (value: boolean | null) => {
-    try {
-      setAlertImagesSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alertCharactersOfLanternImages: value }),
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
-      showSuccessToast(
-        value === null
+    // Under `chat` — sent at the top level it was stripped and never saved (#176).
+    await patch(
+      { alertCharactersOfLanternImages: value },
+      {
+        success: value === null
           ? 'Lantern announcements will inherit from the project'
           : value
             ? 'Lantern images will be announced to characters'
-            : 'Lantern images will stay silent for this chat'
-      )
-      onChatUpdated?.()
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || 'Failed to update Lantern image announcements')
-    } finally {
-      setAlertImagesSaving(false)
-    }
+            : 'Lantern images will stay silent for this chat',
+        failure: 'Failed to update Lantern image announcements',
+      },
+    )
   }
 
   // Which clock the chat's story keeps for episodic memory. Persisted as the
   // explicit enum value; NULL in the record reads as 'realtime'.
   const handleTimelineModeChange = async (value: 'realtime' | 'narrative') => {
-    try {
-      setTimelineModeSaving(true)
-      await patchChat(chatId, { timelineMode: value })
-      showSuccessToast(
-        value === 'narrative'
+    await patch(
+      { timelineMode: value },
+      {
+        success: value === 'narrative'
           ? 'The story now keeps its own hours'
-          : 'The story is back on the clock on the wall'
-      )
-      onChatUpdated?.()
-    } catch (error) {
-      showErrorToast(apiErrorMessage(error, "Failed to change the story's clock"))
-    } finally {
-      setTimelineModeSaving(false)
-    }
+          : 'The story is back on the clock on the wall',
+        failure: "Failed to change the story's clock",
+      },
+    )
   }
 
   const handleConciergeStateChange = async (next: ConciergeState) => {
-    try {
-      setConciergeSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conciergeState: next }),
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
-      showSuccessToast(
-        next === 'moderated'
+    await update(
+      { conciergeState: next },
+      {
+        success: next === 'moderated'
           ? 'The Concierge is on watch'
           : next === 'unmoderated'
             ? 'The uncensored door stands open'
-            : 'Locked to the usual desks'
-      )
-      onChatUpdated?.()
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || 'Failed to change the Concierge state')
-    } finally {
-      setConciergeSaving(false)
-    }
+            : 'Locked to the usual desks',
+        failure: 'Failed to change the Concierge state',
+      },
+    )
   }
 
+  const templateSaving = isSaving('roleplayTemplateId')
+  const imageProfileSaving = isSaving('imageProfileId')
+  const alertImagesSaving = isSaving('alertCharactersOfLanternImages')
+  const timelineModeSaving = isSaving('timelineMode')
+  const conciergeSaving = isSaving('conciergeState')
+
+  // A server-side toggle action, not a field write: it answers with the new state.
   const handleAvatarGenToggle = async () => {
     try {
       setAvatarGenSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}?action=toggle-avatar-generation`, {
-        method: 'POST',
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
-      const data = await res.json()
+      const data = await apiFetch<{ avatarGenerationEnabled: boolean }>(
+        `/api/v1/chats/${chatId}?action=toggle-avatar-generation`,
+        { method: 'POST' },
+      )
       showSuccessToast(data.avatarGenerationEnabled ? 'Avatar generation enabled' : 'Avatar generation disabled')
       onChatUpdated?.()
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || 'Failed to toggle avatar generation')
+      showErrorToast(apiErrorMessage(error, 'Failed to toggle avatar generation'))
     } finally {
       setAvatarGenSaving(false)
     }
@@ -1488,7 +1452,7 @@ function VisibilitySection({
           <button
             onClick={onToggleAllWhispers}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
+              showAllWhispers ? 'qt-bg-primary' : 'qt-toggle-off'
             }`}
             role="switch"
             aria-checked={!!showAllWhispers}
@@ -1510,7 +1474,7 @@ function VisibilitySection({
           <button
             onClick={onToggleCrossCharacterVaultReads}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              allowCrossCharacterVaultReads ? 'bg-primary' : 'qt-bg-muted'
+              allowCrossCharacterVaultReads ? 'qt-bg-primary' : 'qt-toggle-off'
             }`}
             role="switch"
             aria-checked={!!allowCrossCharacterVaultReads}
@@ -1536,7 +1500,7 @@ function VisibilitySection({
           <button
             onClick={() => onSetTurnSkippingEnabled(turnSkippingEnabled === false ? true : false)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              turnSkippingEnabled !== false ? 'bg-primary' : 'qt-bg-muted'
+              turnSkippingEnabled !== false ? 'qt-bg-primary' : 'qt-toggle-off'
             }`}
             role="switch"
             aria-checked={turnSkippingEnabled !== false}

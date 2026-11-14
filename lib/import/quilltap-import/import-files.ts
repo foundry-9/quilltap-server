@@ -23,6 +23,7 @@ import { getUserRepositories, getRepositories } from '@/lib/repositories/factory
 import { writeLibraryFileBytes } from '@/lib/file-storage/library-file-writer';
 import type { ExportedFolder, ExportedFileWithBytes } from '@/lib/export/types';
 import type { ImportOptions, IdMappingState } from './types';
+import { insertUnderPolicy, OutcomeTally } from '@/lib/backup/insert-policy';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -209,8 +210,7 @@ export async function importFiles(
 
   const { imported: foldersImported } = await importFolders(userId, folders, idMaps, warnings);
 
-  let imported = 0;
-  let skipped = 0;
+  const tally = new OutcomeTally();
   let droppedLinks = 0;
   const messageIdCache = new Map<string, Set<string>>();
 
@@ -220,84 +220,90 @@ export async function importFiles(
         warnings.push(
           `File "${file.originalFilename}" was exported without its contents and was skipped.`
         );
-        skipped++;
+        tally.add({ status: 'skipped' });
         continue;
       }
 
-      const existing = await repos.files.findById(file.id);
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          continue;
-        }
-        if (options.conflictStrategy === 'overwrite') {
-          await repos.files.delete(file.id);
-        }
-        // 'duplicate' falls through — create() mints a fresh id.
-      }
+      const outcome = await insertUnderPolicy<{ id: string }>({
+        kind: 'file',
+        label: file.originalFilename,
+        incomingId: file.id,
+        strategy: options.conflictStrategy,
+        preserveIds: options.preserveIds,
+        findExisting: () => repos.files.findById(file.id),
+        // An overwrite removes the row and writes the bundle's bytes again
+        // under the same id, so anything linking to the file keeps resolving.
+        remove: (existing) => repos.files.delete(existing.id),
+        create: async ({ id }) => {
+          const bytes = Buffer.from(file.dataBase64 as string, 'base64');
+          const projectId = file.projectId
+            ? idMaps.projects.get(file.projectId) ?? file.projectId
+            : null;
 
-      const bytes = Buffer.from(file.dataBase64, 'base64');
-      const projectId = file.projectId
-        ? idMaps.projects.get(file.projectId) ?? file.projectId
-        : null;
+          // Same two bridges the backup restore uses: project-bound files land in
+          // their project's own store, everything else in the Quilltap Uploads
+          // mount under `imported/`.
+          const {
+            storageKey,
+            storedMimeType,
+            sizeBytes,
+            sha256: storedSha256,
+          } = await writeLibraryFileBytes({
+            filename: file.originalFilename,
+            content: bytes,
+            contentType: file.mimeType,
+            projectId,
+            folderPath: file.folderPath,
+            subfolder: 'imported',
+          });
 
-      // Same two bridges the backup restore uses: project-bound files land in
-      // their project's own store, everything else in the Quilltap Uploads
-      // mount under `imported/`.
-      const {
-        storageKey,
-        storedMimeType,
-        sizeBytes,
-        sha256: storedSha256,
-      } = await writeLibraryFileBytes({
-        filename: file.originalFilename,
-        content: bytes,
-        contentType: file.mimeType,
-        projectId,
-        folderPath: file.folderPath,
-        subfolder: 'imported',
+          const { kept, dropped } = await remapLinkedTo(
+            file.linkedTo ?? [],
+            idMaps,
+            repos,
+            messageIdCache
+          );
+          droppedLinks += dropped.length;
+
+          const tags = (file.tags ?? []).map((tagId) => idMaps.tags.get(tagId) ?? tagId);
+
+          const {
+            id: _id,
+            createdAt: _createdAt,
+            updatedAt: _updatedAt,
+            dataBase64: _bytes,
+            _sourceStorageKey,
+            _bytesMissing,
+            ...fileData
+          } = file;
+
+          const created = await repos.files.create(
+            {
+              ...fileData,
+              projectId,
+              linkedTo: kept,
+              tags,
+              // Post-bridge truth, not what the archive claimed (see module header).
+              // sha256 joined that rule in 4.9.0: the bridge transcodes bitmaps to
+              // WebP, and a row carrying the archive's pre-transcode hash cannot be
+              // joined to the mount blob it points at (bug 117).
+              mimeType: storedMimeType,
+              size: sizeBytes,
+              sha256: storedSha256,
+              storageKey,
+            },
+            id ? { id } : undefined
+          );
+          moduleLogger.debug('Imported file', {
+            originalFilename: file.originalFilename,
+            sizeBytes,
+            droppedLinkCount: dropped.length,
+          });
+          return created;
+        },
+        warnings,
       });
-
-      const { kept, dropped } = await remapLinkedTo(
-        file.linkedTo ?? [],
-        idMaps,
-        repos,
-        messageIdCache
-      );
-      droppedLinks += dropped.length;
-
-      const tags = (file.tags ?? []).map((tagId) => idMaps.tags.get(tagId) ?? tagId);
-
-      const {
-        id: _id,
-        createdAt: _createdAt,
-        updatedAt: _updatedAt,
-        dataBase64: _bytes,
-        _sourceStorageKey,
-        _bytesMissing,
-        ...fileData
-      } = file;
-
-      await repos.files.create({
-        ...fileData,
-        projectId,
-        linkedTo: kept,
-        tags,
-        // Post-bridge truth, not what the archive claimed (see module header).
-        // sha256 joined that rule in 4.9.0: the bridge transcodes bitmaps to
-        // WebP, and a row carrying the archive's pre-transcode hash cannot be
-        // joined to the mount blob it points at (bug 117).
-        mimeType: storedMimeType,
-        size: sizeBytes,
-        sha256: storedSha256,
-        storageKey,
-      });
-      imported++;
-      moduleLogger.debug('Imported file', {
-        originalFilename: file.originalFilename,
-        sizeBytes,
-        droppedLinkCount: dropped.length,
-      });
+      tally.add(outcome);
     } catch (error) {
       warnings.push(
         `Failed to import file "${file.originalFilename}": ${
@@ -308,7 +314,7 @@ export async function importFiles(
         fileId: file.id,
         error: error instanceof Error ? error.message : String(error),
       });
-      skipped++;
+      tally.add({ status: 'failed' });
     }
   }
 
@@ -320,11 +326,12 @@ export async function importFiles(
 
   moduleLogger.debug('File library import complete', {
     userId,
-    imported,
-    skipped,
+    imported: tally.written,
+    skipped: tally.skipped,
+    failed: tally.failed,
     foldersImported,
     droppedLinks,
   });
 
-  return { files: imported, folders: foldersImported, skipped };
+  return { files: tally.written, folders: foldersImported, skipped: tally.skipped + tally.failed };
 }

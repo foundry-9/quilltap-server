@@ -30,7 +30,7 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
   // ============================================================================
 
   async create(
-    data: Omit<TerminalSession, 'id'>,
+    data: Omit<TerminalSession, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<TerminalSession> {
     return this.safeQuery(
@@ -198,6 +198,10 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
    * terminal leaves the PTY writing with no row), or when it was modified
    * within `graceMs` (the transcript is opened before the row is created).
    *
+   * The keep-set is every row's raw id and `transcriptPath`, read strictly: a
+   * read failure throws before anything is unlinked, and a row that fails
+   * validation still protects its transcript (#206).
+   *
    * Parent-only. Invoked by the daily maintenance tick.
    */
   async sweepOrphanedTranscripts(options: {
@@ -219,12 +223,18 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
           throw error;
         }
 
-        const rows = await this.findAll();
+        // The keep-set is read strictly and raw (#206). `findAll` reads through
+        // a `[]` fallback and drops rows that fail validation, so a failed read
+        // looked like "no sessions" and an invalid row like "no such session" —
+        // and this pass unlinks what it does not keep. A read failure throws
+        // here (aborting the sweep before any unlink); an unvalidated row still
+        // names its id and transcript.
+        const rows = await this.readTranscriptKeepSet();
         const namedIds = new Set(rows.map((s) => s.id));
         const namedPaths = new Set(
           rows
             .map((s) => s.transcriptPath)
-            .filter((p): p is string => !!p)
+            .filter((p): p is string => typeof p === 'string' && p.length > 0)
             .map((p) => path.resolve(p))
         );
         const cutoffMs = (options.now ?? new Date()).getTime() - options.graceMs;
@@ -268,9 +278,28 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
         logger.info('Swept orphaned terminal transcripts', { scanned, deleted });
         return { scanned, deleted };
       },
+      // No fallback: a failed sweep throws to the maintenance tick, which
+      // records it, rather than reporting "nothing to do" (#206).
       'Error sweeping orphaned terminal transcripts',
-      {},
-      { scanned: 0, deleted: 0 }
+      {}
+    );
+  }
+
+  /**
+   * Every row's id and stored transcript path, unvalidated, with no fallback:
+   * the keep-set of {@link sweepOrphanedTranscripts}. Throws on a read failure.
+   */
+  private async readTranscriptKeepSet(): Promise<Array<{ id: string; transcriptPath: unknown }>> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const docs = (await collection.find({})) as unknown as Array<Record<string, unknown>>;
+        return docs
+          .filter((d) => typeof d.id === 'string')
+          .map((d) => ({ id: d.id as string, transcriptPath: d.transcriptPath }));
+      },
+      'Error reading terminal sessions for the transcript sweep',
+      {}
     );
   }
 

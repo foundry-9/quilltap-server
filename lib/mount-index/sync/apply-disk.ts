@@ -14,6 +14,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { logger } from '@/lib/logger';
+import { PathOutsideBaseError, resolveInsideSync } from '@/lib/paths/resolve-inside';
 import { renderSidecar, sidecarPathFor } from './sidecar';
 import { DISK_TEMP_SUFFIX, type SyncAction } from './types';
 
@@ -26,12 +27,17 @@ export class DiskPathEscapeError extends Error {
 
 /** Resolve a relative path inside the target, refusing anything that escapes. */
 export function resolveInTarget(targetPath: string, relativePath: string): string {
-  const base = path.resolve(targetPath);
-  const absolute = path.resolve(base, relativePath);
-  if (absolute !== base && !absolute.startsWith(base + path.sep)) {
-    throw new DiskPathEscapeError(relativePath);
+  // Symlinks are resolved before the comparison, so a link inside the target
+  // cannot carry a write outside it.
+  try {
+    return resolveInsideSync(targetPath, relativePath, { realpath: true });
+  } catch (err) {
+    if (err instanceof PathOutsideBaseError) {
+      logger.debug('Sync refused a path outside the target', { targetPath, relativePath, reason: err.reason });
+      throw new DiskPathEscapeError(relativePath);
+    }
+    throw err;
   }
-  return absolute;
 }
 
 /**

@@ -14,11 +14,11 @@ jest.mock('@/lib/logger', () => {
   return { logger: makeLogger() }
 })
 
-jest.mock('@/lib/database/repositories/character-properties-overlay', () => ({
-  readVaultTextFile: jest.fn(),
+jest.mock('@/lib/characters/vault/readers', () => ({
+  readVaultFile: jest.fn(),
 }))
 
-import { readVaultTextFile } from '@/lib/database/repositories/character-properties-overlay'
+import { readVaultFile } from '@/lib/characters/vault/readers'
 import {
   loadCanonForObserverAboutSubject,
   loadCanonForSelfWithCommonplace,
@@ -36,7 +36,7 @@ import {
 import { characterIdsFromMemoryWrites } from '../maintenance/triggers'
 import { estimateTokens } from '@/lib/tokens/token-counter'
 
-const mockRead = readVaultTextFile as jest.MockedFunction<typeof readVaultTextFile>
+const mockRead = readVaultFile as jest.MockedFunction<typeof readVaultFile>
 
 const LAURA = { id: 'laura-1', name: 'Laura', identity: 'A cartographer.', description: null }
 const OBSERVER = { characterId: 'friday-1', mountPointId: 'mp-1' }

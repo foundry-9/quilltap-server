@@ -74,7 +74,7 @@ export function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: 
       <h3 className="qt-section-title">Autonomous Room</h3>
 
       <div>
-        <label htmlFor="autonomous-cron" className="mb-2 block text-sm qt-text-primary">
+        <label htmlFor="autonomous-cron" className="mb-2 qt-label">
           Schedule (cron, optional)
         </label>
         <input
@@ -109,7 +109,7 @@ export function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: 
       </div>
 
       <div>
-        <label htmlFor="autonomous-freshness" className="mb-2 block text-sm qt-text-primary">
+        <label htmlFor="autonomous-freshness" className="mb-2 qt-label">
           Catch-up freshness window (hours)
         </label>
         <input
@@ -129,7 +129,7 @@ export function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: 
       </div>
 
       <div>
-        <p className="mb-2 block text-sm qt-text-primary">Budget caps (per run)</p>
+        <p className="mb-2 qt-label">Budget caps (per run)</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <label htmlFor="autonomous-budget-turns" className="block qt-text-xs qt-text-muted mb-1">Max turns</label>
@@ -200,7 +200,7 @@ export function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: 
             className="qt-checkbox mt-1"
           />
           <span>
-            <span className="qt-text-small font-medium text-foreground">Count only the dear tokens</span>
+            <span className="qt-text-small font-medium qt-text">Count only the dear tokens</span>
             <span className="block qt-text-xs qt-text-muted mt-1">
               When ticked, the token cap tallies only the costly cache-miss input and the
               completion — the tokens you truly pay full freight for. Untick it to count
@@ -211,7 +211,7 @@ export function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: 
       </div>
 
       <div>
-        <p className="mb-2 block text-sm qt-text-primary">Visibility</p>
+        <p className="mb-2 qt-label">Visibility</p>
         <div className="space-y-1.5">
           <label className="flex items-start gap-2 cursor-pointer">
             <input
@@ -272,7 +272,7 @@ export function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: 
             className="qt-checkbox mt-1"
           />
           <span>
-            <span className="qt-text-small font-medium text-foreground">Pre-authorize destructive tools</span>
+            <span className="qt-text-small font-medium qt-text">Pre-authorize destructive tools</span>
             <span className="block qt-text-xs qt-text-muted mt-1">
               Allows tools like <code>doc_delete_file</code> and <code>doc_delete_folder</code> in this room.
               {policyAlwaysRefuse && (

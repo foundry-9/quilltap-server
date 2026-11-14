@@ -47,6 +47,16 @@ below are therefore superseded:
 
 The sections below describe the original design; where they conflict, this addendum wins.
 
+**Amendment (4.13, 2026-11-04) — the header vouches for feelings, too.** In two Friday chats
+(2026-11-03), informs reading "You are very alarmed by a tax assessor … openly armed" and "You
+can't let this armed man into the mansion" were delivered correctly under the facts-only header
+and filed as information: the characters kept their standing calm. The header now reads *"Things
+now true in this story and in you, as of this moment — what has happened, what you know, and how
+you feel or what you have resolved. Where any of it conflicts with an older memory, your records,
+or your usual temperament, this is the current truth:"*. It still vouches and nothing more: no
+"do not mention this", no instruction about what to do. Approved by the operator as decision D2 of
+[character-kind-and-roleplay-defaults.md](character-kind-and-roleplay-defaults.md) §5.7.
+
 ## Vocabulary
 
 - **Inform** — one operator-authored passage, posted once, aimed at one or more seats.

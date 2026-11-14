@@ -1,18 +1,18 @@
 ---
-url: /aurora/:id/edit
+url: /aurora/:id?section=abilities
 ---
 
 # System Transparency — A Covenant Between Author and Character
 
 > **[Open this page in Quilltap](/aurora)**
 
-Quilltap quietly furnishes each character with a small set of conveniences for inspecting their own existence: a tool called `self_inventory`, the running gossip of the Staff (the Lantern, Aurora, the Librarian, and a couple of newer arrivals), and access to the contents of every character vault — their own and, when Shared Vaults is enabled, those of their conversational companions. These are not always desirable. A character meant to remain wholly *in* the story should not, perhaps, be able to read the prompt that sets her in motion, nor the dossiers of her colleagues, nor the polite asides by which the system narrates its own bookkeeping.
+Quilltap quietly furnishes each character with a small set of conveniences for inspecting their own existence: a tool called `self_inventory`, the running gossip of the Staff (the Lantern, Aurora, the Librarian, and a couple of newer arrivals), and access to the contents of every character vault — the whole of their own and, when Shared Vaults is enabled, those of their conversational companions. These are not always desirable. A character meant to remain wholly *in* the story should not, perhaps, be able to read the prompt that sets her in motion, nor the dossiers of her colleagues, nor the polite asides by which the system narrates its own bookkeeping.
 
-The **System Transparency** switch on the character edit page settles that question once and for all, on a per-character basis.
+The **System Transparency** switch on the character's page settles that question once and for all, on a per-character basis.
 
 ## What the Switch Says
 
-The toggle lives at the top of the **Details** tab of any character. It carries one of two messages depending on its position:
+The toggle lives in the **Trust & perception** card of the **Abilities** section of any character's page, and saves the moment you flip it. It carries one of two messages depending on its position:
 
 - **Off** (the genteel default): *"My character will trust me without being able to verify me. I accept the covenant of that trust."*
 - **On**: *"My character will be able to verify everything about their existence, including how they are crafted and how they interact with me."*
@@ -25,7 +25,12 @@ A character whose System Transparency is **off** loses three things at once, reg
 
 1. **The `self_inventory` tool is withheld.** Even if the chat or the project has the tool turned on for everyone, this character will not be offered it. They cannot read off their own vault contents (nor the vaults of any groups they belong to), memory totals, conversation totals, assembled system prompt, last-turn LLM usage, nor the `context` ledger by which the tool enumerates this very chat, its project, their groups, the other characters seated alongside them, and the files attached to the conversation. Gone too is the **core-file checklist** (`vault.coreFiles`) — the nine files every character vault is meant to keep, from `properties.json` to `physical-prompts.json`, each marked present, empty or missing, with a line on what belongs inside — and the **holdings** tally, which counts the garments and outfits within reach, the Inventory's objects, kits and archetypes (and how many are in hand in this chat), and the custom tools the character may run, each split by whether it lives in their own vault, a group's, the project's or Quilltap General.
 2. **The Staff go unnamed in the character's view of the conversation.** An announcement authored by the Lantern (image generations), Aurora (avatar refreshes), the Librarian (Document Mode opens and saves), Prospero, or the Host still reaches the character — it is news of the scene, after all — but in its plain, persona-free wording, with no Staff member's name or voice attached. And because a shared room ought to share one reality, the rule is chat-wide: if *any* character in the conversation keeps their transparency off, every character in it hears the Staff in that plain wording. The user still sees the full, named version in the chat — only the models are spared the names. An established fact posted from the [Deus Ex Machina](deus-ex-machina.md) tab follows the same rule: transparent rooms hear the Host make it known, opaque rooms hear it with no speaker at all.
-3. **Every character vault is closed to the document tools.** None of the `doc_*` family — `doc_read_file`, `doc_list_files`, `doc_grep`, `doc_write_file`, and so on — will resolve a path that points at a character vault. Not the character's own vault. Not a peer's vault, even when Shared Vaults is enabled at the chat level. Nor will the reserved `self` shorthand find anything to point at. **Nor are they so much as named.** A vault that cannot be opened is not listed either: `doc_list_files` and `doc_grep`, asked to survey everything within reach, return the group, project and general shelves and make no mention of a vault — a discretion that would be rather undone by reciting the titles on a locked cabinet before declining to unlock it.
+3. **Other characters' vaults are closed, and the heart of her own is locked.** None of the `doc_*` family — `doc_read_file`, `doc_list_files`, `doc_grep`, `doc_write_file`, and so on — will resolve a path in a peer's vault, even when Shared Vaults is enabled at the chat level. Her **own** vault she may still use, as she would any other shelf within reach, with the parts that make her *who she is* kept firmly behind glass:
+
+   - **Locked:** every file at the root of the vault — `identity.md`, `description.md`, `manifesto.md`, `personality.md`, `physical-description.md`, `properties.json`, `metadata.json` and their fellows — and the folders **Prompts**, **Wardrobe**, **Outfits**, **Inventory**, **Mail** and **images**, with everything inside them. She can neither read nor write them, nor delete, move or rename those folders. (The wardrobe, the Inventory, the post and her photograph album keep their own tools, which this does not touch.)
+   - **Open:** **Scenarios**, **Knowledge**, **Tools**, **lore**, **files**, and any folder she makes herself. Inside them she may read, write, search, move and delete as freely as in any other store she can reach. At the root she may make a new folder of her own (and later tidy it away), but not a new file.
+
+   **Nor is the locked part so much as named.** `doc_list_files`, `doc_grep` and `doc_list_blobs` leave out the root files, the locked folders and the peers' vaults entirely — a discretion that would be rather undone by reciting the titles on a locked cabinet before declining to unlock it. The reserved `self` shorthand finds her own vault, subject to the same lock; and should she reach for a locked path regardless, the refusal says plainly that it is part of the core of her own vault, so she need not keep rattling the handle.
 
    **Vaults, and nothing besides.** Group stores, project-linked stores, and Quilltap General remain perfectly accessible — and a character's *group* stores are hers by membership, not by transparency, so the shelf her club keeps in common stays open to her whichever way this switch is thrown. Should you ever find an opaque character insisting she cannot reach a store she plainly belongs to, that is a fault and not a policy.
 
@@ -49,7 +54,7 @@ Consider turning System Transparency on when:
 
 ## Where the Setting Lives
 
-The toggle is stored on the character record (a single boolean column, defaulting to NULL/off). When a character has a linked Scriptorium vault and the Scriptorium overlay is on, the same value also lives in the vault's `properties.json` so the file is the source of truth — handy if you're tracking character configuration in Git.
+The toggle is stored on the character record in the database (a single boolean column, defaulting to NULL/off). Unlike the character's descriptive fields, it is *not* written to the character's vault: it is a matter of who may open which doors, not a fact about the character, and so it is kept where a character cannot edit it by editing her own `properties.json`.
 
 The setting follows the character through exports and imports: a `.qtap` character bundle preserves it, and a backup-restore round-trip preserves it.
 
@@ -70,10 +75,10 @@ In short: an opaque character is opaque, no matter what permissive setting is in
 
 - [Editing Characters](character-editing.md) — The full character edit interface
 - [Shared Character Vaults](shared-character-vaults.md) — The chat-level toggle that lets present characters read each other's vaults
-- [Document Editing Tools](document-editing-tools.md) — The `doc_*` family that systemTransparency gates against character vaults
+- [Document Editing Tools](document-editing-tools.md) — The `doc_*` family that systemTransparency gates against peer vaults and the core of her own
 
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/aurora/:id/edit")`
+`help_navigate(url: "/aurora/:id?section=abilities")`

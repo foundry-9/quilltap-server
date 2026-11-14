@@ -22,8 +22,15 @@ jest.mock('@/components/chat/MessageContent', () => ({
   __esModule: true,
   default: ({ content }: { content: string }) => <div>{content}</div>,
 }))
+// react-markdown and remark-gfm are ESM-only; the Atlas card renders through them.
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
+jest.mock('remark-gfm', () => ({ __esModule: true, default: () => {} }))
 jest.mock('@/components/terminal/TerminalEmbed', () => ({ TerminalEmbed: () => null }))
 jest.mock('@/hooks/useAbsentMentions', () => ({ useAbsentMentions: () => [] }))
+jest.mock('@/hooks/useAtlasMentions', () => ({ useAtlasMentions: () => [] }))
 
 const noop = () => {}
 

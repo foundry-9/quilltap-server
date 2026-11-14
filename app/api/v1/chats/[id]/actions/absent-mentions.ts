@@ -3,7 +3,9 @@
  *
  * GET /api/v1/chats/[id]?action=absent-mentions — for each workspace character
  * named in the chat but not in it, the message that first names them, the
- * name as written there, and their card.
+ * name as written there, their card, and the URL of their current portrait
+ * (`avatarUrl`, via `resolveCharacterAvatar`; null when they have none) for
+ * the chat sidebar's Concepts Named card.
  *
  * Drives the Salon's name chips: the first mention gets a chip, and hovering
  * it shows the card — the same particulars the model gets in its referent
@@ -16,6 +18,7 @@ import { notFound, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { findAbsentMentions, presenceOf } from '@/lib/chat/absent-mentions';
 import { resolveUserIdentity } from '@/lib/services/chat-message/user-identity-resolver.service';
+import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 
 /** GET ?action=absent-mentions */
 export async function handleGetAbsentMentions(chatId: string, { user, repos }: RequestContext): Promise<NextResponse> {
@@ -35,10 +38,21 @@ export async function handleGetAbsentMentions(chatId: string, { user, repos }: R
     userCharacterName: persona.name,
   });
 
+  // The portrait is for the operator's sidebar only; it never reaches the card.
+  const imageIdById = new Map(candidates.map((c) => [c.id, c.defaultImageId ?? null]));
+  const withAvatars = await Promise.all(
+    mentions.map(async (m) => {
+      const imageId = imageIdById.get(m.characterId) ?? null;
+      const avatar = imageId ? await resolveCharacterAvatar(imageId, repos).catch(() => null) : null;
+      return { ...m, avatarUrl: avatar?.url ?? null };
+    }),
+  );
+
   logger.debug('[Chats v1] Read absent-character mentions', {
     chatId,
     mentions: mentions.length,
+    withAvatars: withAvatars.filter((m) => m.avatarUrl).length,
     context: 'absent-mentions',
   });
-  return successResponse({ mentions });
+  return successResponse({ mentions: withAvatars });
 }

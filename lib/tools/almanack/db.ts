@@ -26,6 +26,7 @@ import {
   isMountIndexDegraded,
 } from '@/lib/database/backends/sqlite/mount-index-client';
 import { getErrorMessage } from '@/lib/error-utils';
+import { sqlInList } from '@/lib/database/backends/sqlite/in-list';
 
 const moduleLogger = logger.child({ module: 'almanack:db' });
 
@@ -160,9 +161,9 @@ export function mountCount(sql: string, params: unknown[] = [], context = 'mount
   return num(mountRow<{ n: number }>(sql, params, context)?.n);
 }
 
-/** `IN (?, ?, …)` placeholder list; `'(NULL)'` when the set is empty. */
-export function inClause(ids: Iterable<string>): { sql: string; params: string[] } {
-  const params = [...ids];
-  if (params.length === 0) return { sql: '(NULL)', params: [] };
-  return { sql: `(${params.map(() => '?').join(', ')})`, params };
+/** `IN` right-hand side for any number of ids (`sqlInList`); `'(NULL)'` when the set is empty. */
+export function inClause(ids: Iterable<string>): { sql: string; params: unknown[] } {
+  const values = [...ids];
+  if (values.length === 0) return { sql: '(NULL)', params: [] };
+  return sqlInList(values);
 }

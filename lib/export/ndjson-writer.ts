@@ -33,12 +33,9 @@ import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import { isTextDocumentFileType } from '@/lib/schemas/mount-index.types';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { isFileExcludedFromExport } from './excluded-files';
-import { getPlugin } from '@/lib/plugins/registry';
+import { redactPluginConfigSecrets } from '@/lib/plugins/config-secrets';
 import { listPortableInstanceSettings } from '@/lib/instance-settings';
-import {
-  isWardrobeItemDocumentPath,
-  wardrobeItemIdForDocument,
-} from '@/lib/database/repositories/vault-overlay/parsers';
+import { isWardrobeItemDocumentPath, wardrobeItemIdForDocument } from '@/lib/wardrobe/vault-parsers';
 
 const logger = baseLogger.child({ module: 'export:ndjson-writer' });
 const APP_VERSION = packageJson.version;
@@ -430,6 +427,21 @@ async function* streamChats(
       logger.debug('Exported outfit history', { chatId: id, count: historyRows.length });
     } catch (error) {
       logger.warn('Failed to load outfit history for export', {
+        chatId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Every character's dated avatars in this chat.
+    try {
+      const timelineRows = await getRepositories().avatarTimeline.findByChatId(id);
+      for (const row of timelineRows) {
+        yield { kind: 'avatar_timeline', chatId: id, data: row };
+        bump(counts, 'avatarTimeline');
+      }
+      logger.debug('Exported avatar timeline', { chatId: id, count: timelineRows.length });
+    } catch (error) {
+      logger.warn('Failed to load avatar timeline for export', {
         chatId: id,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -980,18 +992,6 @@ async function* streamProviderModels(
   }
 }
 
-/**
- * Resolve a plugin's manifest and return the set of config keys it declares as
- * `password`-typed. Returns `null` when the manifest can't be resolved — the
- * caller then withholds the whole config rather than guessing.
- */
-function resolveSecretConfigKeys(pluginName: string): Set<string> | null {
-  const plugin = getPlugin(pluginName);
-  if (!plugin) return null;
-  const schema = plugin.manifest.configSchema ?? [];
-  return new Set(schema.filter((field) => field.type === 'password').map((field) => field.key));
-}
-
 async function* streamPluginConfigs(
   userId: string,
   ids: string[],
@@ -1004,27 +1004,12 @@ async function* streamPluginConfigs(
   for (const config of configs) {
     if (!idSet.has(config.id)) continue;
 
-    // Redaction is mandatory. `config` is an untyped bag and manifests may
-    // declare password-typed fields, which are stored in plaintext — fine in
-    // a local backup, never in a portable .qtap.
-    const secretKeys = resolveSecretConfigKeys(config.pluginName);
-    let redactedKeys: string[];
-    let safeConfig: Record<string, unknown>;
-
-    if (secretKeys === null) {
-      // Plugin isn't installed here, so we cannot tell which keys are secret.
-      // Withhold everything rather than leak by omission of knowledge.
-      redactedKeys = ['*'];
-      safeConfig = {};
-      logger.warn('Plugin manifest unavailable during export — withholding entire config', {
-        pluginName: config.pluginName,
-      });
-    } else {
-      redactedKeys = Object.keys(config.config).filter((key) => secretKeys.has(key));
-      safeConfig = Object.fromEntries(
-        Object.entries(config.config).filter(([key]) => !secretKeys.has(key))
-      );
-    }
+    // Redaction is mandatory: secret config keys (password-typed or marked
+    // `secret`) never travel in a portable .qtap.
+    const { config: safeConfig, redactedKeys } = redactPluginConfigSecrets(
+      config.pluginName,
+      config.config
+    );
 
     const { userId: _ownerId, ...rest } = config;
     yield {

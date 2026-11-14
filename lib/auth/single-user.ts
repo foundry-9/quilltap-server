@@ -99,9 +99,12 @@ export async function getOrCreateSingleUser(): Promise<User> {
       updatedAt: now,
     };
 
-    // Insert the single user using the repository
+    // Insert the single user using the repository. The fixed id goes in
+    // `options`: `_create` mints its own id from the data, so passing it in
+    // `singleUser` alone created the user under a random id, and the next
+    // call took it for a legacy user and ran migrateUserId on a new install.
     try {
-      await repos.users.create(singleUser);
+      await repos.users.create(singleUser, { id: SINGLE_USER_ID, createdAt: now, updatedAt: now });
     } catch (error) {
       // Handle race conditions and constraint violations
       if (error instanceof Error) {

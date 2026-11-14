@@ -11,6 +11,7 @@
  */
 
 import type { TabKind } from '@/lib/workspace/types'
+import { resolveCharacterPageSection } from '@/lib/characters/page-sections'
 
 export interface TabIntent {
   kind: TabKind
@@ -58,28 +59,19 @@ export function parseHrefToIntent(href: string): TabIntent | null {
     return { kind: 'aurora', payload: { groupId: groupMatch[1] } }
   }
 
-  // /aurora/<id>/edit (or legacy /characters/<id>/edit) — the character editor.
-  // Note: a bare /aurora/<id> (which redirects to /view) has NO tab equivalent —
-  // when linked to it renders in-place inside the Aurora tab — so it
-  // intentionally falls through to `null` below.
-  const editMatch = path.match(/^\/(?:aurora|characters)\/([^/]+)\/edit$/)
-  if (editMatch) {
+  // /aurora/<id> — the one character page — and every retired spelling of it
+  // (/aurora/<id>/view, /aurora/<id>/edit, /characters/<id>[/view|/edit]). The
+  // old pages' `?tab=` is mapped onto the page's sections; `/aurora/new` is the
+  // create form, not a character. `?action=chat` is not part of the tab (a
+  // persisted tab must not re-open the modal on every reload): callers read it
+  // with {@link characterChatActionFromHref}.
+  const characterMatch = path.match(/^\/(?:aurora|characters)\/([^/]+)(?:\/(?:view|edit))?$/)
+  if (characterMatch && characterMatch[1] !== 'new') {
     const sp = new URLSearchParams(query)
+    const section = resolveCharacterPageSection(sp.get('section'), sp.get('tab'))
     return {
-      kind: 'character-edit',
-      payload: { characterId: editMatch[1], tab: sp.get('tab') ?? undefined },
-    }
-  }
-
-  // /aurora/<id>/view (or legacy /characters/<id>/view) — the read-only character
-  // detail page, opened as its own tab (e.g. from the Salon header) so it never
-  // navigates away from the workspace.
-  const viewMatch = path.match(/^\/(?:aurora|characters)\/([^/]+)\/view$/)
-  if (viewMatch) {
-    const sp = new URLSearchParams(query)
-    return {
-      kind: 'character-view',
-      payload: { characterId: viewMatch[1], tab: sp.get('tab') ?? undefined },
+      kind: 'character',
+      payload: { characterId: characterMatch[1], ...(section ? { section } : {}) },
     }
   }
 
@@ -125,10 +117,31 @@ export function parseHrefToIntent(href: string): TabIntent | null {
       const sp = new URLSearchParams(query)
       return {
         kind: 'settings',
-        payload: { tab: sp.get('tab') ?? undefined, section: sp.get('section') ?? undefined },
+        payload: {
+          group: sp.get('group') ?? undefined,
+          tab: sp.get('tab') ?? undefined,
+          section: sp.get('section') ?? undefined,
+          persona: sp.get('persona') ?? undefined,
+          q: sp.get('q') ?? undefined,
+          provider: sp.get('provider') ?? undefined,
+        },
       }
     }
     default:
       return null
   }
+}
+
+/**
+ * The character id when `href` is a character-page link asking for the New
+ * Chat modal (`/aurora/<id>?action=chat`, or a retired spelling), else null.
+ */
+export function characterChatActionFromHref(href: string): string | null {
+  const intent = parseHrefToIntent(href)
+  if (intent?.kind !== 'character') return null
+  const qIdx = href.indexOf('?')
+  if (qIdx < 0) return null
+  const sp = new URLSearchParams(href.slice(qIdx + 1).split('#')[0])
+  if (sp.get('action') !== 'chat') return null
+  return (intent.payload as { characterId: string }).characterId
 }

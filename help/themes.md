@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=appearance&section=appearance
+url: /settings?section=appearance
 ---
 
 # Themes
 
-> **[Open this page in Quilltap](/settings?tab=appearance&section=appearance)**
+> **[Open this page in Quilltap](/settings?section=appearance)**
 
 Themes control the overall look and feel of Quilltap, including colors, fonts, and visual styling. You can switch between the built-in default theme and custom themes installed as plugins or `.qtap-theme` bundles, and customize your preferred color mode (light, dark, or system).
 
@@ -62,6 +62,8 @@ Theme bundles require no build tools, npm packages, or JavaScript code -- they a
 3. Click the **Install Theme** button
 4. Select a `.qtap-theme` file from your computer
 5. The theme appears in your theme list immediately
+
+A bundle's manifest may name its styles, tokens, preview image, fonts and icons only by relative paths that stay inside the bundle. A registry that publishes a signing key has its index and signed bundles verified, and an install whose signature does not check out is refused. Installing a theme by URL, like importing an image by URL, fetches only from public http(s) addresses and within sensible size limits.
 
 #### Uninstalling a Theme Bundle
 
@@ -219,6 +221,19 @@ the label it is meant to flatter. Secondary text inside a notice (a warning, an
 error, a bit of good news) takes the notice's own colour, and any link within it
 is underlined rather than left to be told apart by hue alone.
 
+The little coloured labels that festoon the place — a character's badge, a tag,
+a memory, a "related" or "manual" marker, the success and warning pills in the
+Scriptorium — are inked a shade deeper in light mode (and a shade brighter in
+dark) than they once were, so each reads at that same 4.5 against its card.
+A switch that stands **off** now wears a fine outline round its track, rather
+than fading into the card like a ghost at a séance, and the theme cards on this
+very page pick a dark or a light hand for their lettering by which of the two
+actually stands out, not by guesswork.
+
+Should the window be drawn very narrow, or the text enlarged to twice its size,
+the formatting toolbar and the buttons along a character's header fold onto a
+second line rather than slipping off the edge.
+
 ### Typography
 
 Themes specify:
@@ -233,7 +248,7 @@ Custom fonts are loaded automatically when you select a theme.
 
 ### Appearance Settings
 
-The **Appearance** tab in Settings gives you full control:
+The **Appearance** group in Settings gives you full control:
 
 - **Theme Selection** — Choose from default and installed plugin themes
 - **Theme Preview** — See how each theme looks
@@ -356,7 +371,7 @@ The `npx quilltap themes validate` command checks the `icons` block as part of i
 
 ### Page Backgrounds
 
-Each of Quilltap's principal halls keeps a faint backdrop behind its furniture — Aurora has its portrait gallery, the Salon its parlour, the Scriptorium its stacks, and so on, with the Settings page changing its scene to suit whichever tab is presently in hand. Like the icons, these backdrops are yours to redress. A theme may hang its own painting in any of these rooms, or strip the walls bare entirely, and the swap is as silent and immediate as the rest.
+Each of Quilltap's principal halls keeps a faint backdrop behind its furniture — Aurora has its portrait gallery, the Salon its parlour, the Scriptorium its stacks, and so on, with the Settings page changing its scene to suit whichever group is presently in hand. Like the icons, these backdrops are yours to redress. A theme may hang its own painting in any of these rooms, or strip the walls bare entirely, and the swap is as silent and immediate as the rest.
 
 #### Declaring Background Overrides
 
@@ -503,7 +518,7 @@ Every time you log in, Quilltap remembers your theme selections.
 - Ensure the theme plugin is installed
 - Try refreshing the browser
 - Check that the plugin is enabled in your system
-- Look in Settings → Plugins to verify installation
+- Look in Settings → Data & Maintenance → Plugins to verify installation
 
 ### Colors Look Wrong
 
@@ -530,6 +545,6 @@ Every time you log in, Quilltap remembers your theme selections.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=appearance&section=appearance")`
+`help_navigate(url: "/settings?section=appearance")`
 
 Themes are a powerful way to personalize Quilltap and make it work for your creative style and environment!

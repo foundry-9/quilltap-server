@@ -16,7 +16,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, serverError, successResponse, unauthorized } from '@/lib/api/responses';
+import { badRequest, errorResponse, serverError, successResponse, unauthorized } from '@/lib/api/responses';
+import {
+  unlockRetryAfterSeconds,
+  recordUnlockFailure,
+  recordUnlockSuccess,
+} from '@/lib/startup/unlock-throttle';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 
 export const dynamic = 'force-dynamic';
@@ -76,7 +81,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   return dispatchAction(request, {
     setup: () => runUnlockAction(request, 'setup', (body) => handleSetup(getPassphrase(body))),
-    unlock: () => runUnlockAction(request, 'unlock', (body) => handleUnlock(getPassphrase(body))),
+    unlock: () => runUnlockAction(request, 'unlock', (body) => handleThrottledUnlock(getPassphrase(body))),
     store: () => runUnlockAction(request, 'store', (body) => handleStore(getPassphrase(body))),
     'change-passphrase': () => runUnlockAction(request, 'change-passphrase', handleChangePassphrase),
     lock: () => runUnlockAction(request, 'lock', () => handleLock()),
@@ -218,12 +223,53 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
     }
   }
 
+  // Jobs enqueued before setup (the seed stores' embeddings, among others)
+  // have been waiting for the pepper; the processor host defers forking the
+  // job child until it exists. Now it does, so start working the queue.
+  if (!requiresRestart) {
+    try {
+      const { ensureProcessorRunning } = await import('@/lib/background-jobs');
+      ensureProcessorRunning();
+      unlockLogger.debug('Background job processor woken after setup');
+    } catch (wakeErr) {
+      unlockLogger.warn('Could not wake the background job processor after setup', {
+        error: wakeErr instanceof Error ? wakeErr.message : String(wakeErr),
+      });
+    }
+  }
+
   // Return the pepper once for the user to save
   return successResponse({
     pepper: result.pepper,
     requiresRestart,
     message: 'Encryption key generated and stored. Save this value — it will not be displayed again.',
   });
+}
+
+/**
+ * Apply the attempt throttle around {@link handleUnlock}: refuse with 429 and
+ * Retry-After while a lockout window is open, count a 401 as a failure, and
+ * clear the counter on success.
+ */
+async function handleThrottledUnlock(passphrase: string): Promise<NextResponse> {
+  const retryAfter = unlockRetryAfterSeconds();
+  if (retryAfter > 0) {
+    unlockLogger.warn('Unlock attempt refused: too many failed attempts', { retryAfterSeconds: retryAfter });
+    const response = errorResponse('Too many failed unlock attempts. Try again later.', 429, {
+      retryAfterSeconds: retryAfter,
+    });
+    response.headers.set('Retry-After', String(retryAfter));
+    return response;
+  }
+
+  const response = await handleUnlock(passphrase);
+  if (response.status === 401) {
+    recordUnlockFailure();
+    unlockLogger.debug('Unlock failure recorded for throttling');
+  } else if (response.ok) {
+    recordUnlockSuccess();
+  }
+  return response;
 }
 
 /**
@@ -241,7 +287,7 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
     return badRequest('Passphrase is required to unlock');
   }
 
-  const { unlockDbKey, getDbKeyState, storeEnvPepperInDbKey } = await import('@/lib/startup/dbkey');
+  const { unlockDbKey, getDbKeyState, storeEnvPepperInDbKey, overrideDbKeyState } = await import('@/lib/startup/dbkey');
   const { startupState } = await import('@/lib/startup/startup-state');
 
   let success: boolean;
@@ -261,7 +307,7 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
       unlockLogger.info('Legacy pepper unlocked, migrating to .dbkey file');
       try {
         // Set dbkey state to allow storage, then write the .dbkey file
-        (global as any).__quilltapDbKeyState = 'needs-vault-storage';
+        overrideDbKeyState('needs-vault-storage');
         storeEnvPepperInDbKey(passphrase);
         unlockLogger.info('Legacy pepper migrated to .dbkey file successfully');
       } catch (migrationError) {
@@ -269,7 +315,7 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
         unlockLogger.warn('Failed to migrate legacy pepper to .dbkey file, continuing with unlocked pepper', {
           error: migrationError instanceof Error ? migrationError.message : String(migrationError),
         });
-        (global as any).__quilltapDbKeyState = 'resolved';
+        overrideDbKeyState('resolved');
       }
     }
   } else {

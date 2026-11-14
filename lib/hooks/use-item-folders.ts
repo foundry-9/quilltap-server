@@ -1,11 +1,11 @@
 'use client'
 
 /**
- * One item container's folders — the Wardrobe's or the Inventory's — read and
- * changed through TanStack Query, stated once for both kinds.
+ * One item container's folders — the Wardrobe's, the Inventory's or the
+ * Atlas's — read and changed through TanStack Query, stated once for every kind.
  *
- * Folders are the operator's filing under a tier's `Wardrobe/` or
- * `Inventory/` — the real folder tree in the store, so the Scriptorium shows
+ * Folders are the operator's filing under a tier's `Wardrobe/`,
+ * `Inventory/` or `Atlas/` — the real folder tree in the store, so the Scriptorium shows
  * the same thing. The read is `GET …?action=folders` under the kind's
  * `queryKeys.<kind>.folders`; the mutations are `create-folder`,
  * `rename-folder`, `delete-folder`, `move-items` and `copy-items`.
@@ -17,9 +17,10 @@
  * While the socket is down a write refreshes them itself
  * ({@link refreshUnlessRealtime}).
  *
- * The kinds differ in three small ways, kept in {@link KIND_SPECS}: the URL
- * builder, the error a refusal throws (the Inventory's carries the server's
- * `code`), and the keys its topic refreshes. The Wardrobe's `move-items` /
+ * The kinds differ in a few small ways, kept in {@link KIND_SPECS}: the URL
+ * builder, the error a refusal throws (the Inventory's and the Atlas's carry
+ * the server's `code`), the keys its topic refreshes, and the Atlas's
+ * `entryIds` / `entries` where the others say `itemIds` / `items`. The Wardrobe's `move-items` /
  * `copy-items` also take a `components` mode for an outfit's components.
  *
  * @module lib/hooks/use-item-folders
@@ -33,6 +34,8 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { refreshUnlessRealtime } from '@/lib/query/refresh-unless-realtime'
 import { inventoryRequest } from '@/lib/inventory/request'
 import { inventoryActionUrl } from '@/lib/inventory/container'
+import { atlasRequest } from '@/lib/atlas/request'
+import { atlasActionUrl } from '@/lib/atlas/container'
 import {
   encodeWardrobeContainer,
   wardrobeCollectionActionUrl,
@@ -42,6 +45,7 @@ import type { ItemKind } from '@/lib/folder-browser/item-kind'
 import type { ItemFolder } from '@/lib/mount-index/item-folders'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
+import type { AtlasEntryWithOrigin } from '@/lib/schemas/atlas.types'
 
 export type { ItemKind } from '@/lib/folder-browser/item-kind'
 
@@ -55,6 +59,7 @@ export type WardrobeFolderComponentMode = 'move' | 'copy' | 'none'
 export interface ItemKindItem {
   wardrobe: WardrobeItem
   inventory: ResolvedInventoryItem
+  atlas: AtlasEntryWithOrigin
 }
 
 /** The kind-specific trailing arguments of `fileItems`: the Wardrobe's `components` mode. */
@@ -72,6 +77,9 @@ interface KindSpec {
   refreshKeys: readonly QueryKey[]
   folderKey(tierKey: string): QueryKey
   label: string
+  /** The body key `move-items` / `copy-items` names the ids under, and the answer's list key. */
+  idsKey: 'itemIds' | 'entryIds'
+  itemsKey: 'items' | 'entries'
 }
 
 const KIND_SPECS: Record<ItemKind, KindSpec> = {
@@ -89,6 +97,8 @@ const KIND_SPECS: Record<ItemKind, KindSpec> = {
     refreshKeys: [queryKeys.wardrobe.folderLists, queryKeys.wardrobe.lists],
     folderKey: queryKeys.wardrobe.folders,
     label: 'wardrobe',
+    idsKey: 'itemIds',
+    itemsKey: 'items',
   },
   inventory: {
     actionUrl: (container, action) => inventoryActionUrl(container, action),
@@ -101,6 +111,17 @@ const KIND_SPECS: Record<ItemKind, KindSpec> = {
     ],
     folderKey: queryKeys.inventory.folders,
     label: 'inventory',
+    idsKey: 'itemIds',
+    itemsKey: 'items',
+  },
+  atlas: {
+    actionUrl: (container, action) => atlasActionUrl(container, action),
+    post: async (url, body) => (await atlasRequest<Record<string, unknown>>(url, 'POST', body)) ?? {},
+    refreshKeys: [queryKeys.atlas.lists, queryKeys.atlas.folderLists, queryKeys.atlas.overlapLists],
+    folderKey: queryKeys.atlas.folders,
+    label: 'atlas',
+    idsKey: 'entryIds',
+    itemsKey: 'entries',
   },
 }
 
@@ -127,7 +148,7 @@ export function useItemFolders(kind: ItemKind, container: ItemContainer | null):
   const spec = KIND_SPECS[kind]
   const tierKey = itemFolderTierKey(container)
   // The URL is a pure function of the kind and container, which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- container and spec are left out: tierKey encodes the container and spec.folderKey is the kind's own namespace
   const query = useQuery({
     queryKey: spec.folderKey(tierKey),
     queryFn: async ({ signal }) => {
@@ -217,11 +238,11 @@ export function useItemFolderMutations<K extends ItemKind>(kind: K): ItemFolderM
       const data = await mutateAsync({
         container,
         action: mode === 'move' ? 'move-items' : 'copy-items',
-        body: { itemIds, folder, ...(components ? { components } : {}) },
+        body: { [spec.idsKey]: itemIds, folder, ...(components ? { components } : {}) },
       })
-      return (data.items as ItemKindItem[K][] | undefined) ?? []
+      return (data[spec.itemsKey] as ItemKindItem[K][] | undefined) ?? []
     },
-    [mutateAsync],
+    [mutateAsync, spec],
   )
 
   return { createFolder, renameFolder, deleteFolder, fileItems, pending: mutation.isPending }

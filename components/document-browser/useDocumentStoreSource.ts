@@ -217,8 +217,6 @@ export function useDocumentStoreSource(storeId: string | null) {
   }
 }
 
-export type DocumentStoreOps = ReturnType<typeof useDocumentStoreSource>['ops']
-
 /** Where one file appears (`?action=links`), fetched only while asked for. */
 export function useDocumentFileLinks(storeId: string, path: string | null) {
   return useQuery({

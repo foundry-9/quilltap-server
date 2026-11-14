@@ -574,3 +574,40 @@ describe('useChatData — the transcript', () => {
     })
   })
 })
+
+/**
+ * #173 — one failed chat read used to pin the Salon on its full-page error
+ * screen for the life of the tab: the only `setError` in the hook set it, and
+ * nothing cleared it when a later read came back.
+ */
+describe('useChatData — recovering from a failed read', () => {
+  it('clears the error once a later read succeeds', async () => {
+    let fail = true
+    fetchMock.mockImplementation((url: string) => {
+      const href = String(url)
+      if (href === `/api/v1/chats/${CHAT_ID}`) {
+        if (fail) return Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve({}) })
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ chat: { id: CHAT_ID, transcriptVersion: 1, messages: [] } }),
+        })
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ memoryCount: 0 }) })
+    })
+
+    const { result } = renderHook(() => useChatData(CHAT_ID))
+
+    await act(async () => {
+      await result.current.fetchChat()
+    })
+    expect(result.current.error).toBe('Failed to fetch chat')
+
+    fail = false
+    await act(async () => {
+      await result.current.fetchChat()
+    })
+    expect(result.current.error).toBeNull()
+    expect(result.current.chat?.id).toBe(CHAT_ID)
+  })
+})

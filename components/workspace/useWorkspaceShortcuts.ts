@@ -10,7 +10,7 @@
  *
  *  - Ctrl/Cmd+Alt+→ / ←   — next / previous tab in the focused pane (wraps)
  *  - Ctrl/Cmd+Alt+1 … 9   — jump to the nth tab in the focused pane
- *  - Ctrl/Cmd+Alt+W       — close the focused pane's active tab
+ *  - Ctrl/Cmd+Alt+W       — close the focused pane's active tab (guarded)
  *  - Ctrl/Cmd+Alt+\       — toggle split (split off the active tab / rejoin)
  *
  * The listener attaches once and reads the latest store through a ref, so it
@@ -43,7 +43,7 @@ export function useWorkspaceShortcuts(): void {
       if (!e.altKey || !(e.ctrlKey || e.metaKey)) return
       if (isEditableTarget(e.target)) return
 
-      const { state, setActive, closeTab, unsplit, splitTo } = wsRef.current
+      const { state, setActive, requestCloseTab, unsplit, splitTo } = wsRef.current
       const pane = state.focusedPane
       const ps = getPaneState(state, pane)
       if (!ps) return
@@ -65,7 +65,8 @@ export function useWorkspaceShortcuts(): void {
         case 'W': {
           if (!activeTabId) return
           e.preventDefault()
-          closeTab(activeTabId)
+          // A user close: the tab's close guard may save first or refuse (#222).
+          void requestCloseTab(activeTabId)
           return
         }
         case '\\': {

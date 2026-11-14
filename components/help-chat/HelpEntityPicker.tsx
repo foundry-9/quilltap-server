@@ -3,7 +3,7 @@
 /**
  * HelpEntityPicker
  *
- * When a help navigation link contains a parameterised URL (e.g. /aurora/:id/edit),
+ * When a help navigation link contains a parameterised URL (e.g. /aurora/:id?section=prompts),
  * this component fetches the relevant entity list and lets the user pick one.
  * Once selected, the :id param is replaced with the real ID and navigation proceeds.
  */
@@ -33,7 +33,7 @@ interface ParamRoute {
 
 const PARAM_ROUTES: ParamRoute[] = [
   {
-    pattern: /^\/aurora\/:id(\/|$)/,
+    pattern: /^\/aurora\/:id(\/|\?|$)/,
     entityLabel: 'Character',
     apiUrl: '/api/v1/characters',
     responseKey: 'characters',
@@ -42,7 +42,7 @@ const PARAM_ROUTES: ParamRoute[] = [
     buildUrl: (tpl, id) => tpl.replace(':id', id),
   },
   {
-    pattern: /^\/salon\/:id(\/|$)/,
+    pattern: /^\/salon\/:id(\/|\?|$)/,
     entityLabel: 'Chat',
     apiUrl: '/api/v1/chats',
     responseKey: 'chats',
@@ -51,7 +51,7 @@ const PARAM_ROUTES: ParamRoute[] = [
     buildUrl: (tpl, id) => tpl.replace(':id', id),
   },
   {
-    pattern: /^\/prospero\/:id(\/|$)/,
+    pattern: /^\/prospero\/:id(\/|\?|$)/,
     entityLabel: 'Project',
     apiUrl: '/api/v1/projects',
     responseKey: 'projects',
@@ -81,7 +81,7 @@ interface EntityItem {
 }
 
 interface HelpEntityPickerProps {
-  /** The parameterised URL template, e.g. /aurora/:id/edit */
+  /** The parameterised URL template, e.g. /aurora/:id?section=prompts */
   urlTemplate: string
   /** Called with the resolved (real) URL once the user picks an entity */
   onSelect: (resolvedUrl: string) => void

@@ -16,16 +16,15 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
-import { nextUniqueMountPointName } from '@/lib/mount-index/unique-mount-point-name';
+import { scaffoldCharacterMount } from '@/lib/characters/vault/scaffold';
+import { CHARACTER_VAULT_KEYSTONES } from '@/lib/characters/vault/layout';
+import {
+  ensureOfficialStore,
+  type AdoptableStore,
+  type EnsureOfficialStoreConfig,
+} from '@/lib/mount-index/ensure-official-store';
 import { serializeFrontmatter } from '@/lib/doc-edit/markdown-parser';
-import { writeCharacterVaultManagedFields } from '@/lib/database/repositories/character-properties-overlay';
-import type {
-  Character,
-  PhysicalDescription,
-  CharacterSystemPrompt,
-  CharacterScenario,
-} from '@/lib/schemas/character.types';
+import type { Character } from '@/lib/schemas/character.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { normalizePronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 
@@ -57,29 +56,12 @@ export interface EnsureCharacterVaultResult {
   adopted?: boolean;
 }
 
-/**
- * Files `writeCharacterVaultManagedFields` writes unconditionally (empty string
- * when the field is blank), so a successfully-populated vault always has all of
- * them. Used to decide whether an existing same-name vault is safe to adopt.
- * Mirrors `REQUIRED_VAULT_SINGLE_FILES` in the cutover migration; the physical-*
- * pair is intentionally absent (the writer skips it when there is no physical
- * description, so requiring it would wrongly reject sparse characters).
- */
-const REQUIRED_VAULT_FILES = [
-  'properties.json',
-  'identity.md',
-  'description.md',
-  'manifesto.md',
-  'personality.md',
-  'example-dialogues.md',
-] as const;
-
 /** True if the given mount point holds every file a populated vault must have. */
 async function vaultHasRequiredFiles(mountPointId: string): Promise<boolean> {
   const repos = getRepositories();
   const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
   const present = new Set(links.map((l) => l.relativePath.toLowerCase()));
-  return REQUIRED_VAULT_FILES.every((f) => present.has(f));
+  return CHARACTER_VAULT_KEYSTONES.every((f) => present.has(f.toLowerCase()));
 }
 
 /**
@@ -136,149 +118,118 @@ export async function getArchivedCharacterVaultMountPointIds(): Promise<string[]
 
 /**
  * Ensure the given character has a linked database-backed character vault.
- * Creates, scaffolds, populates, and links if missing. Idempotent.
+ * Creates, scaffolds and links if missing. Idempotent.
+ *
+ * **Never projects content.** A vault created here holds the scaffold alone —
+ * `properties.json` and `metadata.json` at their defaults and blank markdown —
+ * because the caller usually holds a raw row, and a raw row has no content to
+ * project: writing it would lay `''` over files that look authored (#148).
+ * The create path, which does hold content in memory, provisions through
+ * `provisionCharacterVaultWithContent` instead.
  *
  * If the character has no link but a populated same-name vault already exists
  * (e.g. a prior run created and populated the vault but its link write was lost
  * mid cloud-materialization), that vault is ADOPTED rather than duplicated —
  * critical post-cutover, where the legacy content columns are gone, so creating
- * a fresh vault here would populate it with empty files and orphan the good one.
+ * a fresh vault here would orphan the good one. A vault another character is
+ * already linked to is never adopted. `adopt: false` (a brand-new character)
+ * skips adoption entirely.
  */
 export async function ensureCharacterVault(
-  character: Character,
+  character: Pick<Character, 'id' | 'name' | 'characterDocumentMountPointId'>,
+  opts: { adopt?: boolean } = {},
 ): Promise<EnsureCharacterVaultResult> {
-  if (character.characterDocumentMountPointId) {
-    return { mountPointId: character.characterDocumentMountPointId, created: false };
+  const result = await ensureOfficialStore(characterVaultStoreConfig(character, opts), character.id, character.name);
+  if (!result) {
+    // The config reads the caller's row, never the database, so this cannot
+    // happen; keep the type honest.
+    throw new Error(`ensureCharacterVault: no row for character ${character.id}`);
   }
-
-  const repos = getRepositories();
-  const vaultName = `${character.name} Character Vault`;
-
-  // Adopt an existing populated same-name character vault before creating one.
-  const sameName = (await repos.docMountPoints.findByName(vaultName)).filter(
-    (mp) => mp.storeType === 'character',
-  );
-  const populated: string[] = [];
-  for (const mp of sameName) {
-    if (await vaultHasRequiredFiles(mp.id)) populated.push(mp.id);
-  }
-  if (populated.length === 1) {
-    await linkCharacterToVault(character.id, populated[0]);
+  if (result.created) {
+    logger.info('Character vault created, scaffolded, and linked', {
+      characterId: character.id,
+      mountPointId: result.mountPointId,
+    });
+  } else if (result.adopted) {
     logger.warn('Adopted an existing populated character vault for an unlinked character', {
       characterId: character.id,
-      mountPointId: populated[0],
-      name: vaultName,
-    });
-    return { mountPointId: populated[0], created: false, adopted: true };
-  }
-  if (populated.length > 1) {
-    // Ambiguous — don't guess which one holds the real content. Fall through to
-    // create a fresh vault and leave the existing ones for an operator to
-    // reconcile, but log loudly so the duplication surfaces.
-    logger.error('Multiple populated same-name character vaults; cannot auto-adopt, creating fresh', {
-      characterId: character.id,
-      name: vaultName,
-      candidateMountPointIds: populated,
+      mountPointId: result.mountPointId,
     });
   }
-
-  // Vault names live in the one case-insensitive store-name namespace, and
-  // characters may share a name — suffix ` (N)` rather than mint a duplicate.
-  // Adoption above still keys off the un-suffixed base name, so orphaned
-  // vaults from earlier releases stay adoptable.
-  const allStoreNames = new Set((await repos.docMountPoints.findAll()).map(mp => mp.name));
-  const finalVaultName = nextUniqueMountPointName(allStoreNames, vaultName);
-
-  const mountPoint = await repos.docMountPoints.create({
-    name: finalVaultName,
-    basePath: '',
-    mountType: 'database',
-    storeType: 'character',
-    includePatterns: ['*.md', '*.txt', '*.pdf', '*.docx'],
-    excludePatterns: ['.git', 'node_modules', '.obsidian', '.trash'],
-    enabled: true,
-    lastScannedAt: null,
-    scanStatus: 'idle',
-    lastScanError: null,
-    conversionStatus: 'idle',
-    conversionError: null,
-    fileCount: 0,
-    chunkCount: 0,
-    totalSizeBytes: 0,
-  });
-
-  await scaffoldCharacterMount(mountPoint.id);
-
-  // Project the character's content fields into the new vault. Wardrobe is not
-  // projected here — it lives solely in the vault and is written through the
-  // wardrobe-writes path; a brand-new vault has no wardrobe yet.
-  await writeCharacterVaultManagedFields(mountPoint.id, { character });
-
-  await linkCharacterToVault(character.id, mountPoint.id);
-
-  logger.info('Character vault created, populated, and linked', {
-    characterId: character.id,
-    mountPointId: mountPoint.id,
-    name: finalVaultName,
-  });
-
-  return { mountPointId: mountPoint.id, created: true };
+  return result;
 }
 
-export function renderPhysicalPromptsJson(primary: PhysicalDescription | null | undefined): string {
-  return JSON.stringify(
-    {
-      headAndShoulders: primary?.headAndShouldersPrompt ?? null,
-      short: primary?.shortPrompt ?? null,
-      medium: primary?.mediumPrompt ?? null,
-      long: primary?.longPrompt ?? null,
-      complete: primary?.completePrompt ?? null,
-      humanoid: primary?.humanoid ?? true,
-    },
-    null,
-    2,
-  );
-}
-
-export function buildSystemPromptFile(p: CharacterSystemPrompt): string {
-  const frontmatter = p.isDefault
-    ? `---\nname: ${escapeYaml(p.name)}\nisDefault: true\n---\n\n`
-    : `---\nname: ${escapeYaml(p.name)}\n---\n\n`;
-  return `${frontmatter}${p.content}`;
+/** A character's vault name before collision suffixing. */
+function vaultNameFor(name: string): string {
+  return `${name} Character Vault`;
 }
 
 /**
- * Serialize one character scenario back to its `Scenarios/*.md` file.
- *
- * The heading carries the title, as it always has. A frontmatter block is
- * emitted only when there is something to put in it — `archived: true` and/or
- * a `description` — so files that use neither don't churn on every projection.
- * (Before this, `description` was parsed but never written back, so the next
- * projection silently dropped it.) The scenario's `id` is a stable UUID hashed
- * from the file path, so archiving must never rename the file.
+ * The character vault's binding of the official-store core
+ * (`ensure-official-store.ts`). It differs from a project's in four ways:
+ * the pointer is read from the caller's row (a restore re-provisioning a
+ * vault that failed to arrive passes a null pointer on purpose), an existing
+ * pointer is trusted rather than healed, adoption is by name (a populated
+ * same-name vault no other character owns — recovering a link write lost
+ * mid cloud materialisation, bug 185), and a fresh vault is scaffolded.
  */
-export function buildScenarioFile(s: CharacterScenario): string {
-  const frontmatter: string[] = [];
-  if (s.description && s.description.trim().length > 0) {
-    frontmatter.push(`description: ${escapeYaml(s.description.trim())}`);
+function characterVaultStoreConfig(
+  character: Pick<Character, 'id' | 'name' | 'characterDocumentMountPointId'>,
+  opts: { adopt?: boolean },
+): EnsureOfficialStoreConfig {
+  return {
+    entityLabel: 'character',
+    entityLabelCapitalized: 'Character',
+    entityIdLogKey: 'characterId',
+    storeNameFor: vaultNameFor,
+    storeShape: { storeType: 'character', includePatterns: ['*.md', '*.txt', '*.pdf', '*.docx'] },
+    findEntityRaw: async () => ({ officialMountPointId: character.characterDocumentMountPointId ?? null }),
+    stalePointer: 'trust',
+    findAdoptable: async () => (opts.adopt === false ? null : findAdoptableVault(character)),
+    setOfficialMountPointId: linkCharacterToVault,
+    afterCreate: scaffoldCharacterMount,
+  };
+}
+
+/**
+ * A populated same-name character vault no other character is linked to, or
+ * null. Two candidates is ambiguous: neither is adopted (logged loudly) and a
+ * fresh vault is created, leaving them for an operator.
+ */
+async function findAdoptableVault(
+  character: Pick<Character, 'id' | 'name'>,
+): Promise<AdoptableStore | null> {
+  const repos = getRepositories();
+  const vaultName = vaultNameFor(character.name);
+  const sameName = (await repos.docMountPoints.findByName(vaultName)).filter((mp) => mp.storeType === 'character');
+  const populated: AdoptableStore[] = [];
+  for (const mp of sameName) {
+    // A namesake's live vault is theirs, not an orphan to recover.
+    const owner = await repos.characters.findByStorePointerRaw(mp.id);
+    if (owner && owner.id !== character.id) {
+      logger.debug('Same-name vault belongs to another character; not adopting', {
+        characterId: character.id,
+        mountPointId: mp.id,
+        ownerId: owner.id,
+      });
+      continue;
+    }
+    if (await vaultHasRequiredFiles(mp.id)) populated.push({ id: mp.id, name: mp.name });
   }
-  if (s.archived) {
-    frontmatter.push('archived: true');
+  if (populated.length === 1) return populated[0];
+  if (populated.length > 1) {
+    logger.error('Multiple populated same-name character vaults; cannot auto-adopt, creating fresh', {
+      characterId: character.id,
+      name: vaultName,
+      candidateMountPointIds: populated.map((p) => p.id),
+    });
   }
-  const fmBlock = frontmatter.length > 0 ? `---\n${frontmatter.join('\n')}\n---\n\n` : '';
-  return `${fmBlock}# ${s.title}\n\n${s.content}`;
+  return null;
 }
 
 // The sanitiser lives in a client-safe module so the wardrobe's folder rules
 // (`lib/wardrobe/folders.ts`) can share it; re-exported here for its callers.
 export { sanitizeFileName } from '@/lib/mount-index/sanitize-file-name';
-
-function escapeYaml(value: string): string {
-  if (/[:#"'\n]/.test(value)) {
-    return JSON.stringify(value);
-  }
-  return value;
-}
 
 /**
  * Kebab-case slug derived from a wardrobe item's title. Used as the in-vault

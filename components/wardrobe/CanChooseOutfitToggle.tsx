@@ -17,7 +17,7 @@ export interface CanChooseOutfitToggleProps {
 
 export function CanChooseOutfitToggle({ checked, saving, disabled, onChange }: CanChooseOutfitToggleProps) {
   return (
-    <div className="rounded-lg border qt-border-default qt-bg-card p-4">
+    <div className="border qt-border-default rounded-lg p-4 qt-bg-card">
       <label className="flex items-start gap-3 cursor-pointer">
         <input
           type="checkbox"

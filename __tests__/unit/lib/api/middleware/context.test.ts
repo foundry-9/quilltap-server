@@ -16,6 +16,7 @@ jest.mock('@/lib/startup/startup-state', () => ({
     getPhase: jest.fn().mockReturnValue('ready'),
     isPepperResolved: jest.fn().mockReturnValue(true),
     getPepperState: jest.fn().mockReturnValue('resolved'),
+    isLockedMode: jest.fn().mockReturnValue(false),
   },
 }));
 
@@ -29,6 +30,8 @@ const {
 
 const { getServerSession } = require('@/lib/auth/session');
 const { getRepositoriesSafe } = require('@/lib/repositories/factory');
+
+const { startupState } = require('@/lib/startup/startup-state');
 
 const mockGetServerSession = jest.mocked(getServerSession);
 const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe);
@@ -128,6 +131,45 @@ describe('API Context Middleware', () => {
       const handler = jest.fn().mockRejectedValue(new Error('Handler error'));
 
       await expect(withContext(handler)).rejects.toThrow('Handler error');
+    });
+  });
+
+  describe('unresolved database key', () => {
+    it('answers 423 at once while locked, without waiting for readiness', async () => {
+      startupState.isPepperResolved.mockReturnValueOnce(false);
+      startupState.getPepperState.mockReturnValueOnce('needs-passphrase');
+      startupState.isReady.mockReturnValueOnce(false);
+      const handler = jest.fn();
+
+      const response = await withContext(handler);
+
+      expect(response.status).toBe(423);
+      expect(await response.json()).toEqual({
+        error: 'Locked',
+        unlockUrl: '/unlock',
+        pepperState: 'needs-passphrase',
+      });
+      expect(startupState.waitForReady).not.toHaveBeenCalled();
+      expect(mockGetServerSession).not.toHaveBeenCalled();
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('answers 503 at once when first-run setup is still needed', async () => {
+      startupState.isPepperResolved.mockReturnValueOnce(false);
+      startupState.getPepperState.mockReturnValueOnce('needs-setup');
+      startupState.isReady.mockReturnValueOnce(false);
+      const handler = jest.fn();
+
+      const response = await withContext(handler);
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: 'Setup required',
+        setupUrl: '/setup',
+        pepperState: 'needs-setup',
+      });
+      expect(startupState.waitForReady).not.toHaveBeenCalled();
+      expect(handler).not.toHaveBeenCalled();
     });
   });
 

@@ -23,6 +23,7 @@
  * @module mount-index/sync/planner
  */
 
+import { CHARACTER_VAULT_KEYSTONES as LAYOUT_KEYSTONES } from '@/lib/characters/vault/layout';
 import * as posixPath from 'path/posix';
 import { descriptionSha256, descriptionsEqual } from './sidecar';
 import {
@@ -37,20 +38,16 @@ import {
 } from './types';
 
 /**
- * A character vault's keystones. `writeCharacterVaultManagedFields` writes
- * these unconditionally, and the overlay treats a vault without them as
- * broken, so a sync must never propagate their deletion from disk — an
- * operator who tidied a directory would otherwise hollow the character.
- * Mirrors `REQUIRED_VAULT_FILES` in `character-vault.ts`, plus the dressing
- * instructions the wardrobe reads.
+ * A character vault's keystones, lower-cased: the layout's keystones (every
+ * file a populated vault always holds — the overlay treats a vault without its
+ * anchor as broken), plus the dressing instructions the wardrobe reads. A sync
+ * must never propagate their deletion from disk — an operator who tidied a
+ * directory would otherwise hollow the character.
  */
 export const CHARACTER_VAULT_KEYSTONES: readonly string[] = [
-  'properties.json',
-  'identity.md',
-  'description.md',
-  'manifesto.md',
-  'personality.md',
-  'example-dialogues.md',
+  ...LAYOUT_KEYSTONES.map((p) => p.toLowerCase()),
+  // `WARDROBE_INSTRUCTIONS_PATH` in `character-vault.ts`, spelt here so the
+  // planner stays free of the provisioner's imports.
   'wardrobe/instructions.md',
 ];
 

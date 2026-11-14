@@ -1,37 +1,22 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 
-const mockPostHostAddAnnouncement = jest.fn()
 const mockPostHostMergeFromAnnouncement = jest.fn()
 const mockPostHostMergeToAnnouncement = jest.fn()
-const mockCompileIdentityStackForParticipant = jest.fn()
-const mockApplyOutfitSelections = jest.fn()
-const mockApplyInventoryDefaults = jest.fn()
-const mockBuildCheapLLMConfig = jest.fn(() => ({}))
+const mockSeatArrival = jest.fn()
 
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }))
 
 jest.mock('@/lib/services/host-notifications/writer', () => ({
-  postHostAddAnnouncement: (...args: unknown[]) => mockPostHostAddAnnouncement(...args),
   postHostMergeFromAnnouncement: (...args: unknown[]) => mockPostHostMergeFromAnnouncement(...args),
   postHostMergeToAnnouncement: (...args: unknown[]) => mockPostHostMergeToAnnouncement(...args),
 }))
 
-jest.mock('@/lib/services/system-prompt-compiler/compiler', () => ({
-  compileIdentityStackForParticipant: (...args: unknown[]) => mockCompileIdentityStackForParticipant(...args),
-}))
-
-jest.mock('@/lib/wardrobe/apply-outfit-selections', () => ({
-  applyOutfitSelections: (...args: unknown[]) => mockApplyOutfitSelections(...args),
-}))
-
-jest.mock('@/lib/inventory/apply-defaults', () => ({
-  applyInventoryDefaults: (...args: unknown[]) => mockApplyInventoryDefaults(...args),
-}))
-
-jest.mock('@/lib/llm/cheap-llm', () => ({
-  buildCheapLLMConfig: (...args: unknown[]) => mockBuildCheapLLMConfig(...args),
+// The one arrival (dressing, packing, the welcome, the whisper, the avatar)
+// is tested on its own in __tests__/unit/lib/chat/opening/arrival.test.ts.
+jest.mock('@/lib/chat/opening/arrival', () => ({
+  seatArrival: (...args: unknown[]) => mockSeatArrival(...args),
 }))
 
 const { applyChatMerge } = require('@/lib/chat/apply-chat-merge') as {
@@ -103,7 +88,7 @@ describe('applyChatMerge', () => {
     jest.clearAllMocks()
     mockPostHostMergeFromAnnouncement.mockResolvedValue({ id: 'recap' })
     mockPostHostMergeToAnnouncement.mockResolvedValue({ id: 'backlink' })
-    mockPostHostAddAnnouncement.mockResolvedValue({ id: 'add' })
+    mockSeatArrival.mockResolvedValue(undefined)
   })
 
   it('merges missing characters, excludes already-present, converts user-controlled to LLM', async () => {
@@ -131,11 +116,11 @@ describe('applyChatMerge', () => {
     expect(byChar.get('char-user')).toBe('prof-default')
     expect(byChar.get('char-llm')).toBe('prof-1')
 
-    // Host welcome per merged character.
-    expect(mockPostHostAddAnnouncement).toHaveBeenCalledTimes(2)
+    // One arrival (Host welcome and all) per merged character.
+    expect(mockSeatArrival).toHaveBeenCalledTimes(2)
   })
 
-  it('applies previous_chat outfit (sourced from the merged chat) by default', async () => {
+  it('brings each merged character in through the one arrival, from the merged chat', async () => {
     const { repos } = buildRepos()
 
     await applyChatMerge({
@@ -145,18 +130,13 @@ describe('applyChatMerge', () => {
       repos,
     })
 
-    expect(mockApplyOutfitSelections).toHaveBeenCalledTimes(2)
-    for (const call of mockApplyOutfitSelections.mock.calls) {
-      const selections = call[1] as any[]
-      const context = call[3] as any
-      expect(selections[0].mode).toBe('previous_chat')
-      expect(context.sourceChatId).toBe(SOURCE_ID)
-    }
-    // Each merged character brings what they carried in the merged chat.
-    expect(mockApplyInventoryDefaults).toHaveBeenCalledTimes(2)
-    for (const call of mockApplyInventoryDefaults.mock.calls) {
+    // No outfit chosen: the arrival's default rule decides (previous_chat when
+    // the merged chat has one on file for them).
+    expect(mockSeatArrival).toHaveBeenCalledTimes(2)
+    for (const call of mockSeatArrival.mock.calls) {
       expect(call[1]).toBe(TARGET_ID)
-      expect(call[3]).toMatchObject({ source: 'merge', sourceChatId: SOURCE_ID })
+      expect(call[2]).toMatchObject({ outfitSelection: undefined, redress: true })
+      expect(call[3]).toMatchObject({ source: 'merge', sourceChatId: SOURCE_ID, userId: 'user-1' })
     }
   })
 
@@ -203,10 +183,8 @@ describe('applyChatMerge', () => {
       repos,
     })
 
-    const llmCall = mockApplyOutfitSelections.mock.calls.find(
-      (c) => (c[1] as any[])[0].characterId === 'char-llm',
-    )
-    expect((llmCall![1] as any[])[0].mode).toBe('none')
+    const llmCall = mockSeatArrival.mock.calls.find((c) => (c[2] as any).characterId === 'char-llm')
+    expect((llmCall![2] as any).outfitSelection).toEqual({ characterId: 'char-llm', mode: 'none' })
   })
 
   it('posts the recap in the target and a back-link in the source', async () => {

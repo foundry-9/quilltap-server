@@ -39,7 +39,7 @@ State is a JSON object that stores key-value pairs. Unlike regular messages whic
 
 ### General (instance-wide)
 
-1. Repair to **Settings → Chat**
+1. Repair to **Settings → Games & Tools → General State**
 2. Expand the **General State** card (it keeps company with Pascal's custom tools)
 3. Press **Edit General State**
 

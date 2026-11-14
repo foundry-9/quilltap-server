@@ -31,6 +31,8 @@ import { dispatchAction } from '@/lib/api/middleware/actions';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
+import { dispositionFor } from '@/lib/api/content-disposition';
+import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
 import { storeMountFile } from '@/lib/mount-index/store-file';
 import { readMountFile, readMountFileBytes } from '@/lib/mount-index/read-file';
 import { moveFile, deleteFile } from '@/lib/mount-index/file-ops';
@@ -99,14 +101,14 @@ async function handleRead(req: NextRequest, id: string, path: string[]): Promise
       // BodyInit type, which wants Uint8Array<ArrayBuffer> rather than the
       // ArrayBufferLike-generic view.
       const body = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      return new NextResponse(body as unknown as BodyInit, {
-        status: 200,
-        headers: {
-          'Content-Type': mimeType,
-          'Content-Length': String(sizeBytes),
-          'Cache-Control': 'private, max-age=3600',
-          'X-File-Sha256': sha256,
-        },
+      logger.debug('[Mount Points v1] Serving raw file bytes', { mountPointId: id, relativePath, mimeType });
+      return serveStoredBytes(body, {
+        mimeType,
+        filename: relativePath.split('/').pop() || 'file',
+        requested: dispositionFor(req),
+        size: sizeBytes,
+        cacheControl: 'private, max-age=3600',
+        extra: { 'X-File-Sha256': sha256 },
       });
     }
 

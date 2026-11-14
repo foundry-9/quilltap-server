@@ -17,9 +17,13 @@ import {
   isInventoryItemDocument,
   isInventoryItemDocumentPath,
   parseInventoryItemFile,
-} from '@/lib/database/repositories/vault-overlay/inventory-readers'
-import { serializeInventoryRecord } from '@/lib/database/repositories/vault-overlay/inventory-writes'
-import { createInventorySchema, inventoryShapeIssues, updateInventorySchema } from '@/lib/schemas/inventory.types'
+} from '@/lib/inventory/vault-readers'
+import { serializeInventoryRecord } from '@/lib/inventory/vault-writes'
+import {
+  createInventorySchema,
+  inventoryShapeIssues,
+  updateInventorySchema,
+} from '@/lib/schemas/inventory.types'
 
 const SWORD_ID = '0b0b5f3e-6a5e-4d3c-9a1b-2c3d4e5f6a7b'
 const BOW_ID = '1c1c5f3e-6a5e-4d3c-9a1b-2c3d4e5f6a7b'

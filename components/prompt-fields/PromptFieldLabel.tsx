@@ -75,7 +75,7 @@ export function PromptFieldLabel({
   return (
     <div className="mb-2">
       <div className="flex items-center justify-between">
-        <label htmlFor={htmlFor} className="block qt-label text-foreground">
+        <label htmlFor={htmlFor} className="block qt-label qt-text">
           {labelText}
           {optional ? ' (Optional)' : ''}
           {required ? <span className="qt-text-destructive"> *</span> : null}

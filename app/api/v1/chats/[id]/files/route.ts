@@ -19,10 +19,12 @@ import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
 import { buildAttachDescriptionFromKeptImage } from '@/lib/photos/keep-image-markdown';
 import { nativeTextAttachmentMime } from '@/lib/mount-index/path-utils';
 import type { RepositoryContainer } from '@/lib/database/repositories';
+import { z } from 'zod';
 import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types';
 import type { FileAttachment } from '@/lib/llm/base';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { resolveMessageAttachmentEntries } from '@/lib/photos/chat-gallery';
+import { RequestBodyParseError } from '@/lib/api/request-body';
 
 /**
  * POST /api/v1/chats/[id]/files - Upload a file or link an existing file
@@ -31,6 +33,17 @@ import { resolveMessageAttachmentEntries } from '@/lib/photos/chat-gallery';
  *   ?action=link  - Link an existing library file to this chat (JSON body: { fileId })
  *   (default)     - Upload a new file via FormData
  */
+/** `?action=link` body: a library file to link to the chat. A malformed body is the middleware's 400. */
+const LinkFileSchema = z.object({
+  fileId: z.string({ error: 'fileId is required' }).min(1, 'fileId is required'),
+});
+
+/** `?action=attach-mount-file` body: a file in a document store. */
+const AttachMountFileSchema = z.object({
+  mountPointId: z.string({ error: 'mountPointId is required' }).min(1, 'mountPointId is required'),
+  relativePath: z.string({ error: 'relativePath is required' }).min(1, 'relativePath is required'),
+});
+
 export const POST = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id: chatId }) => {
     // Verify chat belongs to user
@@ -113,6 +126,11 @@ async function handleUploadFile(
         }),
       });
   } catch (error) {
+    // A body that is not multipart form data is the caller's mistake (#221).
+    if (error instanceof RequestBodyParseError) {
+      logger.debug('[Chats v1 Files] Upload body is not multipart form data', { chatId });
+      return badRequest(error.message);
+    }
     logger.error('[Chats v1 Files] Error uploading chat file', { chatId }, error as Error);
 
     if (error instanceof Error) {
@@ -162,12 +180,7 @@ async function handleLinkFile(
   repos: RepositoryContainer,
   chatId: string
 ): Promise<NextResponse> {
-  const body = await req.json();
-  const { fileId } = body;
-
-  if (!fileId || typeof fileId !== 'string') {
-    return badRequest('fileId is required');
-  }
+  const { fileId } = LinkFileSchema.parse(await req.json());
 
   // Verify the file exists
   const file = await repos.files.findById(fileId);
@@ -350,15 +363,7 @@ async function handleAttachMountFile(
   userId: string,
   chatId: string,
 ): Promise<NextResponse> {
-  const body = await req.json();
-  const { mountPointId, relativePath } = body ?? {};
-
-  if (!mountPointId || typeof mountPointId !== 'string') {
-    return badRequest('mountPointId is required');
-  }
-  if (!relativePath || typeof relativePath !== 'string') {
-    return badRequest('relativePath is required');
-  }
+  const { mountPointId, relativePath } = AttachMountFileSchema.parse(await req.json());
 
   const mountFile = await repos.docMountFiles.findByMountPointAndPath(mountPointId, relativePath);
   if (!mountFile) {

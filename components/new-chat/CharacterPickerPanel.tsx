@@ -5,22 +5,14 @@ import { Icon } from '@/components/ui/icon'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
-import type {
-  Character,
-  ConnectionProfile,
-  SelectedCharacter,
-} from './types'
+import type { Character } from './types'
 import { USER_CONTROLLED_PROFILE } from './types'
+import { useNewChatForm } from './NewChatFormContext'
 import { SubpromptPicker } from '@/components/subprompts'
 import { resolveDefaultSystemPrompt } from '@/lib/characters/default-system-prompt'
 
 interface CharacterPickerPanelProps {
-  characters: Character[]
-  profiles: ConnectionProfile[]
-  selectedCharacters: SelectedCharacter[]
-  onSelectedCharactersChange: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
-  onCharactersChanged?: () => void
-  disabled?: boolean
+  /** Layout only: focus the search box on mount (the full-page form). */
   autoFocusSearch?: boolean
 }
 
@@ -32,15 +24,16 @@ function getAvatarSrc(character: Character): string | null {
   return character.avatarUrl || null
 }
 
-export function CharacterPickerPanel({
-  characters,
-  profiles,
-  selectedCharacters,
-  onSelectedCharactersChange,
-  onCharactersChanged,
-  disabled,
-  autoFocusSearch,
-}: CharacterPickerPanelProps) {
+/** The New Chat dialog's cast picker; reads and writes the cast through {@link useNewChatForm}. */
+export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelProps) {
+  const {
+    characters,
+    profiles,
+    selectedCharacters,
+    setSelectedCharacters: onSelectedCharactersChange,
+    handleCastChanged: onCharactersChanged,
+    creating: disabled,
+  } = useNewChatForm()
   const id = useId()
   const { style } = useAvatarDisplay()
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -94,7 +87,7 @@ export function CharacterPickerPanel({
   }, [characters, searchQuery])
 
   const handleSelect = (character: Character) => {
-    onCharactersChanged?.()
+    onCharactersChanged()
     if (selectedIds.has(character.id)) {
       onSelectedCharactersChange((prev) => prev.filter((sc) => sc.character.id !== character.id))
     } else {
@@ -113,7 +106,7 @@ export function CharacterPickerPanel({
   }
 
   const handleRemove = (characterId: string) => {
-    onCharactersChanged?.()
+    onCharactersChanged()
     onSelectedCharactersChange((prev) => prev.filter((sc) => sc.character.id !== characterId))
   }
 
@@ -160,7 +153,7 @@ export function CharacterPickerPanel({
             aria-label="Search characters"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border qt-border-default bg-background px-4 py-2 text-foreground placeholder:qt-text-secondary focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full rounded-lg border qt-border-default qt-bg-default px-4 py-2 qt-text placeholder:qt-text-secondary focus:outline-none focus:ring-2 qt-focus-ring"
           />
         </div>
         <div
@@ -209,7 +202,7 @@ export function CharacterPickerPanel({
                     className={
                       'flex h-6 w-6 items-center justify-center rounded-full border-2 ' +
                       (isSelected
-                        ? 'qt-border-primary bg-primary text-primary-foreground'
+                        ? 'qt-border-primary qt-bg-primary qt-text-on-primary'
                         : 'border-muted-foreground')
                     }
                   >
@@ -233,7 +226,7 @@ export function CharacterPickerPanel({
             {selectedCharacters.map((sc, index) => {
               const avatarSrc = getAvatarSrc(sc.character)
               return (
-                <div key={sc.character.id} className="rounded-lg border qt-border-default qt-bg-muted/30 p-4">
+                <div key={sc.character.id} className="border qt-border-default rounded-lg p-4 qt-bg-muted/30">
                   <div className="flex items-start gap-3">
                     {avatarSrc ? (
 
@@ -252,7 +245,7 @@ export function CharacterPickerPanel({
                       <div className="flex items-center gap-2">
                         <span className="qt-text-primary">{sc.character.name}</span>
                         {index === 0 && (
-                          <span className="rounded qt-bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
+                          <span className="rounded qt-bg-primary/20 px-2 py-0.5 text-xs font-medium qt-text-brand">
                             Speaks First
                           </span>
                         )}
@@ -265,7 +258,7 @@ export function CharacterPickerPanel({
                           value={sc.controlledBy === 'user' ? USER_CONTROLLED_PROFILE : sc.connectionProfileId}
                           onChange={(e) => handleProfileChange(sc.character.id, e.target.value)}
                           disabled={disabled}
-                          className="w-full rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                          className="w-full rounded-lg border qt-border-default qt-bg-default px-3 py-1.5 text-sm qt-text focus:outline-none focus:ring-2 qt-focus-ring"
                         >
                           <option value="">Select profile...</option>
                           <option value={USER_CONTROLLED_PROFILE}>Play As (User)</option>
@@ -295,7 +288,7 @@ export function CharacterPickerPanel({
                               handleSystemPromptChange(sc.character.id, e.target.value || null)
                             }
                             disabled={disabled}
-                            className="w-full rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            className="w-full rounded-lg border qt-border-default qt-bg-default px-3 py-1.5 text-sm qt-text focus:outline-none focus:ring-2 qt-focus-ring"
                           >
                             <option value="">Use Default</option>
                             {sc.character.systemPrompts.map((prompt) => (

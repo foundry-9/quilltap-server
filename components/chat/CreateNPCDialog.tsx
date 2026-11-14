@@ -12,13 +12,13 @@
  * - Connection profile selection
  */
 
-import { useState, useEffect, useRef, useCallback, useId } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useState, useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { BaseModal } from '@/components/ui/BaseModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 interface ConnectionProfile {
@@ -27,6 +27,8 @@ interface ConnectionProfile {
   provider: string
   modelName: string
 }
+
+const EMPTY_PROFILES: ConnectionProfile[] = []
 
 interface CreateNPCDialogProps {
   isOpen: boolean
@@ -41,32 +43,23 @@ export default function CreateNPCDialog({
   chatId,
   onNPCCreated,
 }: CreateNPCDialogProps) {
+  const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [physicalDescription, setPhysicalDescription] = useState('')
   const [scenario, setScenario] = useState('')
   const [systemPrompt, setSystemPrompt] = useState('')
-  const [selectedConnectionProfileId, setSelectedConnectionProfileId] = useState<string | null>(null)
+  // The operator's pick; until there is one, the first profile in the list.
+  const [pickedProfileId, setSelectedConnectionProfileId] = useState<string | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data: profilesData, isLoading } = useQuery({
-    queryKey: queryKeys.connectionProfiles.all,
-    queryFn: ({ signal }) => apiFetch<{ profiles: ConnectionProfile[] }>('/api/v1/connection-profiles', { signal }),
-    enabled: isOpen,
-  })
-  const connectionProfiles = profilesData?.profiles || []
+  const { data: profilesData, isLoading } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen })
+  const connectionProfiles = profilesData ?? EMPTY_PROFILES
 
-  // Auto-select first profile when data loads
-  useEffect(() => {
-    if (connectionProfiles.length > 0 && !selectedConnectionProfileId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream connectionProfiles changes (parent renders unconditionally)
-      setSelectedConnectionProfileId(connectionProfiles[0].id)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only initialize once; don't re-run when selectedConnectionProfileId is set
-  }, [connectionProfiles])
+  const selectedConnectionProfileId = pickedProfileId ?? connectionProfiles[0]?.id ?? null
 
   // Load connection profiles when dialog opens and focus name input
   useEffect(() => {
@@ -87,28 +80,6 @@ export default function CreateNPCDialog({
       setAvatarFile(null)
     }
   }, [isOpen, isLoading])
-
-  // Handle escape key to close dialog
-  useEffect(() => {
-    if (!isOpen || isCreating) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, isCreating, onClose])
-
-  // Handle overlay click to close dialog
-  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    // Only close if clicking directly on the overlay, not on the dialog content
-    if (e.target === e.currentTarget && !isCreating) {
-      onClose()
-    }
-  }, [isCreating, onClose])
 
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -165,50 +136,24 @@ export default function CreateNPCDialog({
         uploadedImageId = uploadData.id
       }
 
-      // Step 2: Create character with npc flag
-      const now = new Date().toISOString()
-      const characterData: any = {
+      // Step 2: Create character with npc flag. One create carries everything;
+      // the server mints the ids and timestamps, and makes the prompt the
+      // default (a character's first prompt always is).
+      const characterData: Record<string, unknown> = {
         npc: true,
         name: name.trim(),
         description: description.trim(),
         personality: description.trim(), // Copy description to personality
         defaultConnectionProfileId: selectedConnectionProfileId,
       }
-
-      // Add optional fields. The server schema expects a `scenarios` array of
-      // { id?, title, content }, not a scalar `scenario` (Zod silently strips
-      // the unknown key), so wrap the single field in a one-element array.
       if (scenario.trim()) {
-        characterData.scenarios = [
-          { id: crypto.randomUUID(), title: 'Default', content: scenario.trim() },
-        ]
+        characterData.scenarios = [{ title: 'Default', content: scenario.trim() }]
       }
-
-      // Add system prompt if provided
       if (systemPrompt.trim()) {
-        characterData.systemPrompts = [
-          {
-            id: crypto.randomUUID(),
-            name: 'Default',
-            content: systemPrompt.trim(),
-            isDefault: true,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ]
+        characterData.systemPrompts = [{ name: 'Default', content: systemPrompt.trim() }]
       }
-
-      // Add physical description if provided. The server schema expects a
-      // singular `physicalDescription` object, not a plural `physicalDescriptions`
-      // array (Zod silently strips the unknown plural key), so send the object.
       if (physicalDescription.trim()) {
-        characterData.physicalDescription = {
-          id: crypto.randomUUID(),
-          name: 'Default',
-          fullDescription: physicalDescription.trim(),
-          createdAt: now,
-          updatedAt: now,
-        }
+        characterData.physicalDescription = { fullDescription: physicalDescription.trim() }
       }
 
       const createResponse = await fetch('/api/v1/characters', {
@@ -224,7 +169,8 @@ export default function CreateNPCDialog({
         throw new Error(errorData.error || 'Failed to create NPC')
       }
 
-      const createdCharacter = await createResponse.json()
+      // `{ character }`, like every character-returning route.
+      const { character: createdCharacter } = (await createResponse.json()) as { character: { id: string } }
       const characterId = createdCharacter.id
 
       // Step 3: Set avatar if it was uploaded
@@ -249,6 +195,8 @@ export default function CreateNPCDialog({
       }
 
       showSuccessToast(`NPC "${name}" created successfully`)
+      // Every character picker (Add Character, the Aurora list) shows the new NPC.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
 
       onNPCCreated(characterId)
       onClose()
@@ -262,204 +210,29 @@ export default function CreateNPCDialog({
     }
   }
 
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
-
   if (!isOpen) return null
 
   return (
-    <div className="qt-dialog-overlay p-4" onClick={handleOverlayClick}>
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog max-w-2xl max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="qt-dialog-header flex items-center justify-between">
-          <h2 id={titleId} className="qt-dialog-title">
-            Create Ad-hoc NPC
-          </h2>
-          <button
-            aria-label="Close"
-            onClick={onClose}
-            className="qt-button qt-button-ghost p-2"
-            disabled={isCreating}
-          >
-            <Icon name="close" className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="qt-dialog-body flex-1 overflow-y-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Name (required) */}
-              <div>
-                <label htmlFor="npc-name" className="block text-sm qt-text-primary mb-2">
-                  Name <span className="qt-text-destructive">*</span>
-                </label>
-                <input
-                  ref={nameInputRef}
-                  id="npc-name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter NPC name"
-                  className="qt-input"
-                  disabled={isCreating}
-                />
-              </div>
-
-              {/* Description (required) */}
-              <div>
-                <label htmlFor="npc-description" className="block text-sm qt-text-primary mb-2">
-                  Description <span className="qt-text-destructive">*</span>
-                </label>
-                <p className="qt-text-xs mb-2">
-                  Describe the NPC&rsquo;s personality and characteristics. Used as both description and personality.
-                </p>
-                <MarkdownLexicalEditor
-                  value={description}
-                  onChange={setDescription}
-                  disabled={isCreating}
-                  namespace="CreateNPCDialog.description"
-                  ariaLabel="NPC description"
-                  minHeight="8rem"
-                />
-              </div>
-
-              {/* Physical Description (optional) */}
-              <div>
-                <label htmlFor="npc-physical" className="block text-sm qt-text-primary mb-2">
-                  Physical Description <span className="qt-text-secondary font-normal">(optional)</span>
-                </label>
-                <p className="qt-text-xs mb-2">
-                  Describe the NPC&rsquo;s physical appearance.
-                </p>
-                <MarkdownLexicalEditor
-                  value={physicalDescription}
-                  onChange={setPhysicalDescription}
-                  disabled={isCreating}
-                  namespace="CreateNPCDialog.physicalDescription"
-                  ariaLabel="Physical description"
-                  minHeight="6rem"
-                />
-              </div>
-
-              {/* Scenario (optional) */}
-              <div>
-                <label htmlFor="npc-scenario" className="block text-sm qt-text-primary mb-2">
-                  Scenario <span className="qt-text-secondary font-normal">(optional)</span>
-                </label>
-                <p className="qt-text-xs mb-2">
-                  Describe the scenario or context for this NPC.
-                </p>
-                <MarkdownLexicalEditor
-                  value={scenario}
-                  onChange={setScenario}
-                  disabled={isCreating}
-                  namespace="CreateNPCDialog.scenario"
-                  ariaLabel="Scenario"
-                  minHeight="6rem"
-                />
-              </div>
-
-              {/* System Prompt (optional) */}
-              <div>
-                <label htmlFor="npc-system-prompt" className="block text-sm qt-text-primary mb-2">
-                  System Prompt <span className="qt-text-secondary font-normal">(optional)</span>
-                </label>
-                <p className="qt-text-xs mb-2">
-                  Custom system prompt for this NPC.
-                </p>
-                <MarkdownLexicalEditor
-                  value={systemPrompt}
-                  onChange={setSystemPrompt}
-                  disabled={isCreating}
-                  namespace="CreateNPCDialog.systemPrompt"
-                  ariaLabel="System prompt"
-                  minHeight="6rem"
-                />
-              </div>
-
-              {/* Connection Profile (required) */}
-              <div>
-                <label htmlFor="npc-profile" className="block text-sm qt-text-primary mb-2">
-                  Connection Profile <span className="qt-text-destructive">*</span>
-                </label>
-                <select
-                  id="npc-profile"
-                  value={selectedConnectionProfileId || ''}
-                  onChange={(e) => setSelectedConnectionProfileId(e.target.value || null)}
-                  className="qt-select"
-                  disabled={isCreating}
-                >
-                  <option value="">Select a connection profile...</option>
-                  {connectionProfiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name} ({profile.provider}: {profile.modelName})
-                    </option>
-                  ))}
-                </select>
-                {connectionProfiles.length === 0 && (
-                  <p className="text-sm qt-text-warning mt-1">
-                    No connection profiles available. Please create one in Settings.
-                  </p>
-                )}
-              </div>
-
-              {/* Avatar (optional) */}
-              <div>
-                <label className="block text-sm qt-text-primary mb-2">
-                  Avatar <span className="qt-text-secondary font-normal">(optional)</span>
-                </label>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isCreating}
-                    className="qt-button qt-button-secondary"
-                  >
-                    <Icon name="image" className="w-4 h-4 mr-2" />
-                    Choose Image
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarFileChange}
-                    className="hidden"
-                    disabled={isCreating}
-                  />
-                  {avatarFile ? (
-                    <span className="text-sm qt-text-success flex items-center gap-2">
-                      <Icon name="check" className="w-4 h-4" />
-                      {avatarFile.name}
-                    </span>
-                  ) : (
-                    <span className="qt-text-muted text-sm">No image selected</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="qt-dialog-footer flex items-center justify-end gap-3">
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Create Ad-hoc NPC"
+      maxWidth="2xl"
+      busy={isCreating}
+     
+      headerActions={
+        <button
+          aria-label="Close"
+          onClick={onClose}
+          className="qt-button qt-button-ghost p-2"
+          disabled={isCreating}
+        >
+          <Icon name="close" className="w-6 h-6" />
+        </button>
+      }
+      footerClassName="qt-dialog-footer flex items-center justify-end gap-3"
+      footer={
+        <>
           <button
             onClick={onClose}
             className="qt-button qt-button-secondary"
@@ -487,8 +260,168 @@ export default function CreateNPCDialog({
               </>
             )}
           </button>
+        </>
+      }
+    >
+      {isLoading ? (
+        <div className="qt-loading-state py-12">
+          <svg className="animate-spin h-8 w-8 qt-text-brand" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
         </div>
-      </div>
-    </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Name (required) */}
+          <div>
+            <label htmlFor="npc-name" className="qt-label mb-2">
+              Name <span className="qt-text-destructive">*</span>
+            </label>
+            <input
+              ref={nameInputRef}
+              id="npc-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter NPC name"
+              className="qt-input"
+              disabled={isCreating}
+            />
+          </div>
+
+          {/* Description (required) */}
+          <div>
+            <label htmlFor="npc-description" className="qt-label mb-2">
+              Description <span className="qt-text-destructive">*</span>
+            </label>
+            <p className="qt-text-xs mb-2">
+              Describe the NPC&rsquo;s personality and characteristics. Used as both description and personality.
+            </p>
+            <MarkdownLexicalEditor
+              value={description}
+              onChange={setDescription}
+              disabled={isCreating}
+              namespace="CreateNPCDialog.description"
+              ariaLabel="NPC description"
+              minHeight="8rem"
+            />
+          </div>
+
+          {/* Physical Description (optional) */}
+          <div>
+            <label htmlFor="npc-physical" className="qt-label mb-2">
+              Physical Description <span className="qt-text-secondary font-normal">(optional)</span>
+            </label>
+            <p className="qt-text-xs mb-2">
+              Describe the NPC&rsquo;s physical appearance.
+            </p>
+            <MarkdownLexicalEditor
+              value={physicalDescription}
+              onChange={setPhysicalDescription}
+              disabled={isCreating}
+              namespace="CreateNPCDialog.physicalDescription"
+              ariaLabel="Physical description"
+              minHeight="6rem"
+            />
+          </div>
+
+          {/* Scenario (optional) */}
+          <div>
+            <label htmlFor="npc-scenario" className="qt-label mb-2">
+              Scenario <span className="qt-text-secondary font-normal">(optional)</span>
+            </label>
+            <p className="qt-text-xs mb-2">
+              Describe the scenario or context for this NPC.
+            </p>
+            <MarkdownLexicalEditor
+              value={scenario}
+              onChange={setScenario}
+              disabled={isCreating}
+              namespace="CreateNPCDialog.scenario"
+              ariaLabel="Scenario"
+              minHeight="6rem"
+            />
+          </div>
+
+          {/* System Prompt (optional) */}
+          <div>
+            <label htmlFor="npc-system-prompt" className="qt-label mb-2">
+              System Prompt <span className="qt-text-secondary font-normal">(optional)</span>
+            </label>
+            <p className="qt-text-xs mb-2">
+              Custom system prompt for this NPC.
+            </p>
+            <MarkdownLexicalEditor
+              value={systemPrompt}
+              onChange={setSystemPrompt}
+              disabled={isCreating}
+              namespace="CreateNPCDialog.systemPrompt"
+              ariaLabel="System prompt"
+              minHeight="6rem"
+            />
+          </div>
+
+          {/* Connection Profile (required) */}
+          <div>
+            <label htmlFor="npc-profile" className="qt-label mb-2">
+              Connection Profile <span className="qt-text-destructive">*</span>
+            </label>
+            <select
+              id="npc-profile"
+              value={selectedConnectionProfileId || ''}
+              onChange={(e) => setSelectedConnectionProfileId(e.target.value || null)}
+              className="qt-select"
+              disabled={isCreating}
+            >
+              <option value="">Select a connection profile...</option>
+              {connectionProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider}: {profile.modelName})
+                </option>
+              ))}
+            </select>
+            {connectionProfiles.length === 0 && (
+              <p className="text-sm qt-text-warning mt-1">
+                No connection profiles available. Please create one in Settings.
+              </p>
+            )}
+          </div>
+
+          {/* Avatar (optional) */}
+          <div>
+            <label className="qt-label mb-2">
+              Avatar <span className="qt-text-secondary font-normal">(optional)</span>
+            </label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isCreating}
+                className="qt-button qt-button-secondary"
+              >
+                <Icon name="image" className="w-4 h-4 mr-2" />
+                Choose Image
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarFileChange}
+                className="hidden"
+                disabled={isCreating}
+              />
+              {avatarFile ? (
+                <span className="text-sm qt-text-success flex items-center gap-2">
+                  <Icon name="check" className="w-4 h-4" />
+                  {avatarFile.name}
+                </span>
+              ) : (
+                <span className="qt-text-muted text-sm">No image selected</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </BaseModal>
   )
 }

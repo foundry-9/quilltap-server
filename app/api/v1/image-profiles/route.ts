@@ -13,11 +13,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
-import { successResponse, created, conflict, notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { successResponse, created, conflict, notFound, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { ImageProfileCreateSchema } from '@/lib/image-gen/image-profile-input';
+import { apiKeyExists } from '@/lib/schemas/profile-input';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
-import { validateProfileLoras } from '@/lib/image-gen/lora-validation';
 import { resolveLoraSupport } from '@/lib/image-gen/lora-support';
 import { lookupHuggingFaceLora } from '@/lib/image-gen/huggingface-lookup';
 import type { ImageLoraSupport, ProviderOptionsSchema } from '@quilltap/plugin-types';
@@ -443,95 +444,39 @@ export const POST = createContextHandler(async (req, context) =>
 );
 
 async function handleCreateProfile(req: NextRequest, { user, repos }: RequestContext): Promise<NextResponse> {
+  // A malformed body (the LoRA list included) is the middleware's 400.
+  const input = ImageProfileCreateSchema.parse(await req.json());
+
   try {
-    const body = await req.json();
-    const {
-      name,
-      provider,
-      apiKeyId,
-      baseUrl,
-      modelName,
-      parameters = {},
-      isDefault = false,
-      isDangerousCompatible = false,
-    } = body;
-
-
-    // Validation
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return badRequest('Name is required');
-    }
-
-    if (!provider || typeof provider !== 'string') {
-      return badRequest('Provider is required');
-    }
-
-    try {
-      createImageProvider(provider);
-    } catch {
-      return badRequest(`Provider ${provider} is not available`);
-    }
-
-    if (!modelName || typeof modelName !== 'string' || modelName.trim().length === 0) {
-      return badRequest('Model name is required');
-    }
-
-    if (typeof parameters !== 'object' || Array.isArray(parameters)) {
-      return badRequest('Parameters must be an object');
-    }
-
-    // Validate the reserved `loras` key before anything is written — a
-    // malformed adapter list must not save cleanly and fail at generation.
-    const loraError = validateProfileLoras(parameters);
-    if (loraError) {
-      logger.warn('[Image Profiles v1] Rejected a profile with a malformed LoRA list', {
-        provider,
-        issues: loraError.issues.map(i => `${i.path.join('.')}: ${i.message}`),
-      });
-      return validationError(loraError);
-    }
-
-    // Validate apiKeyId if provided
-    if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId);
-      if (!apiKey) {
-        return notFound('API key');
-      }
-    }
-
-    // Check for duplicate name
-    const existingProfile = await repos.imageProfiles.findByName(user.id, name.trim());
-    if (existingProfile) {
-      return conflict('An image profile with this name already exists');
-    }
-
-    // If setting as default, unset other defaults
-    if (isDefault) {
-      await repos.imageProfiles.unsetAllDefaults(user.id);
-    }
-
-    // Create profile
-    const profile = await repos.imageProfiles.create({
-      userId: user.id,
-      name: name.trim(),
-      provider: provider,
-      apiKeyId: apiKeyId || null,
-      baseUrl: baseUrl || null,
-      modelName: modelName.trim(),
-      parameters: parameters,
-      isDefault,
-      isDangerousCompatible,
-      tags: [],
-    });
-
-    // Enrich with API key info
-    const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
-
-    logger.info('[Image Profiles v1] Profile created', { profileId: profile.id, provider: profile.provider });
-
-    return created({ ...profile, apiKey });
-  } catch (error) {
-    logger.error('[Image Profiles v1] Error creating profile', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to create image profile');
+    createImageProvider(input.provider);
+  } catch {
+    return badRequest(`Provider ${input.provider} is not available`);
   }
+
+  if (!(await apiKeyExists(input.apiKeyId, repos))) {
+    return notFound('API key');
+  }
+
+  if (await repos.imageProfiles.findByName(user.id, input.name)) {
+    return conflict('An image profile with this name already exists');
+  }
+
+  // If setting as default, unset other defaults
+  if (input.isDefault) {
+    await repos.imageProfiles.unsetAllDefaults(user.id);
+  }
+
+  const profile = await repos.imageProfiles.create({
+    ...input,
+    userId: user.id,
+    apiKeyId: input.apiKeyId ?? null,
+    baseUrl: input.baseUrl ?? null,
+    tags: [],
+  });
+
+  const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
+
+  logger.info('[Image Profiles v1] Profile created', { profileId: profile.id, provider: profile.provider });
+
+  return created({ ...profile, apiKey });
 }

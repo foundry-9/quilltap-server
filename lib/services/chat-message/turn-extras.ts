@@ -20,6 +20,7 @@
 import { Provider } from '@/lib/schemas/types'
 import { countMessageTokens, countToolSchemaTokens } from '@/lib/tokens/token-counter'
 import { buildAgentModeInstructions } from './agent-mode-resolver.service'
+import type { AgentModeFlavor } from '@/lib/characters/kind'
 
 /**
  * Extract tool names from provider-shaped tool definitions.
@@ -54,7 +55,7 @@ export interface TurnExtrasOptions {
   /** Tools as they will be sent (already narrowed to the native-calling set) */
   tools: readonly unknown[]
   /** Agent mode state for this turn */
-  agentMode: { enabled: boolean; maxTurns: number }
+  agentMode: { enabled: boolean; maxTurns: number; flavor: AgentModeFlavor }
   /** Whether the user changed tool settings since the last turn */
   toolSettingsChanged: boolean
   /** Provider, for token estimation */
@@ -87,7 +88,7 @@ export function collectTurnExtras(options: TurnExtrasOptions): TurnExtras {
   const { tools, agentMode, toolSettingsChanged, provider } = options
 
   const agentModeInstructions = agentMode.enabled
-    ? buildAgentModeInstructions(agentMode.maxTurns)
+    ? buildAgentModeInstructions(agentMode.maxTurns, agentMode.flavor)
     : null
 
   const toolChangeNotice = toolSettingsChanged

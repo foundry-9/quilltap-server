@@ -4,6 +4,10 @@
  * POST /api/v1/chats/[id]?action=... - Action dispatch
  */
 
+import { handleOpenChat } from '../actions/open';
+import { handleVisit } from '../actions/visit';
+import { TURN_ACTION_KINDS } from '../actions/turn';
+import { deprecatedPath } from '@/lib/api/deprecated-path';
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { notFound } from '@/lib/api/responses';
@@ -42,7 +46,6 @@ import {
   handleToggleAvatarGeneration,
   handleRegenerateAvatar,
   handleRenderConversation,
-  handleActiveDocument,
   handleOpenDocuments,
   handleRecentDocuments,
   handleOpenDocument,
@@ -84,13 +87,22 @@ export async function handlePost(
   }
 
   return dispatchAction(req, {
+    visit: () => handleVisit(chatId, chat, ctx),
     'regenerate-title': () => handleRegenerateTitle(chatId, chat, ctx),
     'rebuild-summary': () => handleRebuildSummary(chatId, chat, ctx),
     'add-tag': () => handleAddTag(req, chatId, ctx),
     'remove-tag': () => handleRemoveTag(req, chatId, ctx),
     impersonate: () => handleImpersonate(req, chatId, chat, ctx),
     'set-active-speaker': () => handleSetActiveSpeaker(req, chatId, chat, ctx),
-    turn: () => handleTurnAction(req, chatId, chat, ctx),
+    ...Object.fromEntries(
+      Object.entries(TURN_ACTION_KINDS).map(([action, kind]) => [action, () => handleTurnAction(req, chatId, chat, ctx, kind)]),
+    ),
+    // Deprecated: the action named in the body. Answers for one release.
+    turn: deprecatedPath(
+      'POST /api/v1/chats/[id]?action=turn',
+      '/api/v1/chats/[id]?action=turn-nudge|turn-queue|turn-dequeue|turn-query|turn-skip-user',
+      () => handleTurnAction(req, chatId, chat, ctx),
+    ),
     'stop-turn': () => handleStopTurn(chatId, chat, ctx),
     'raise-hand': () => handleRaiseHand(req, chatId),
     'add-participant': () => handleAddParticipantAction(req, chatId, chat, ctx),
@@ -119,7 +131,6 @@ export async function handlePost(
     'toggle-avatar-generation': () => handleToggleAvatarGeneration(chatId, ctx),
     'regenerate-avatar': () => handleRegenerateAvatar(req, chatId, ctx),
     'render-conversation': () => handleRenderConversation(chatId, ctx),
-    'active-document': () => handleActiveDocument(chatId, ctx),
     'open-documents': () => handleOpenDocuments(chatId, ctx),
     'recent-documents': () => handleRecentDocuments(chatId, ctx),
     'open-document': () => handleOpenDocument(req, chatId, ctx),
@@ -136,6 +147,7 @@ export async function handlePost(
     'impersonation-voice-preview': () => handleImpersonationVoicePreview(req, chatId, chat, ctx),
     'send-mail': () => handleSendMail(req, chatId, chat, ctx),
     'merge-conversation': () => handleMergeConversation(req, chatId, chat, ctx),
+    open: () => handleOpenChat(chatId, ctx),
     scenario: () => handleSetScenario(req, chatId, ctx),
     'save-image': () => handleSaveGalleryImage(req, chatId, ctx),
     'storyteller-run': () => handleStorytellerRunAction(req, chatId, ctx),

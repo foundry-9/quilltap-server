@@ -50,6 +50,8 @@ export interface WearableNode {
   types: readonly string[];
   componentItemIds?: readonly string[];
   replace?: boolean;
+  /** Set when the item is archived: an archived component is never put on (#184). */
+  archivedAt?: string | null;
 }
 
 /** Item lookup used to resolve a composite's components. */
@@ -79,20 +81,42 @@ export interface CompositeAnalysis {
   truncated: boolean;
   /** True when the item is a composite and a lookup was given but no part was wearable. */
   unresolved: boolean;
+  /** Archived components left off (#184). */
+  archivedSkipped: number;
+}
+
+/** Every id worn in any slot — the archived components a re-wear may keep on. */
+export function wornIdsOf(slots: EquippedSlots): Set<string> {
+  const ids = new Set<string>();
+  for (const slot of WARDROBE_SLOT_TYPES) {
+    for (const id of slots[slot] ?? []) ids.add(id);
+  }
+  return ids;
 }
 
 /**
  * Dissolve a composite and report how it went. The server logs from this; the
  * client only needs {@link dissolveCompositeToLeaves}.
+ *
+ * An archived component is left off unless it is already worn (`alreadyWorn`)
+ * — the same rule as the default outfit and rollback (bug 191, #184). When
+ * every part that resolved was archived, the composite dissolves to nothing
+ * (`leaves: []`) rather than going on whole, which would put the archived
+ * parts back on at read time.
  */
-export function analyzeComposite(item: WearableNode, itemsById?: WearableLookup): CompositeAnalysis {
+export function analyzeComposite(
+  item: WearableNode,
+  itemsById?: WearableLookup,
+  alreadyWorn?: ReadonlySet<string>,
+): CompositeAnalysis {
   if (!itemsById || !isComposite(item)) {
-    return { leaves: null, cycles: 0, truncated: false, unresolved: false };
+    return { leaves: null, cycles: 0, truncated: false, unresolved: false, archivedSkipped: 0 };
   }
 
   const { leafIds, cycles, truncated } = expandComposites(item.componentItemIds ?? [], itemsById);
 
   const leaves: DissolvedLeaf[] = [];
+  let archivedSkipped = 0;
   for (const leafId of leafIds) {
     // A component pointing back at its own composite would have the composite
     // wear itself. `expandComposites` truncates the cycle; drop the echo here.
@@ -101,7 +125,15 @@ export function analyzeComposite(item: WearableNode, itemsById?: WearableLookup)
     if (!leaf) continue;
     const slots = slotsOf(leaf);
     if (slots.length === 0) continue;
+    if (leaf.archivedAt && !alreadyWorn?.has(leafId)) {
+      archivedSkipped++;
+      continue;
+    }
     leaves.push({ id: leafId, slots });
+  }
+
+  if (leaves.length === 0 && archivedSkipped > 0) {
+    return { leaves: [], cycles: cycles.length, truncated, unresolved: false, archivedSkipped };
   }
 
   return {
@@ -109,6 +141,7 @@ export function analyzeComposite(item: WearableNode, itemsById?: WearableLookup)
     cycles: cycles.length,
     truncated,
     unresolved: leaves.length === 0,
+    archivedSkipped,
   };
 }
 
@@ -116,13 +149,15 @@ export function analyzeComposite(item: WearableNode, itemsById?: WearableLookup)
  * Expand a composite into the leaf garments that should be worn in its place,
  * or `null` — "wear this item as its own id" — when the item isn't a
  * composite, no lookup was supplied, or not one component resolved to
- * something wearable.
+ * something wearable. Archived components are left off unless in
+ * `alreadyWorn`; an empty array means every part was archived.
  */
 export function dissolveCompositeToLeaves(
   item: WearableNode,
   itemsById?: WearableLookup,
+  alreadyWorn?: ReadonlySet<string>,
 ): DissolvedLeaf[] | null {
-  return analyzeComposite(item, itemsById).leaves;
+  return analyzeComposite(item, itemsById, alreadyWorn).leaves;
 }
 
 /**
@@ -174,6 +209,7 @@ export function dissolveCompositesInSlots(
   itemsById: WearableLookup,
   only?: ReadonlySet<string>,
 ): { slots: EquippedSlots; wornBundles: WornBundle[] } {
+  const worn = wornIdsOf(currentSlots);
   const dissolved = new Map<string, DissolvedLeaf[]>();
   for (const slot of WARDROBE_SLOT_TYPES) {
     for (const id of currentSlots[slot] ?? []) {
@@ -181,7 +217,7 @@ export function dissolveCompositesInSlots(
       if (only && !only.has(id)) continue;
       const item = itemsById.get(id);
       if (!item) continue;
-      const leaves = dissolveCompositeToLeaves(item, itemsById);
+      const leaves = dissolveCompositeToLeaves(item, itemsById, worn);
       if (leaves) dissolved.set(id, leaves);
     }
   }
@@ -217,7 +253,7 @@ export function dissolveCompositesInSlots(
   const wornBundles = Array.from(dissolved, ([id, leaves]) => ({
     id,
     leafIds: leaves.map((leaf) => leaf.id),
-  }));
+  })).filter((bundle) => bundle.leafIds.length > 0);
   return { slots: next, wornBundles };
 }
 
@@ -342,7 +378,7 @@ export function wearItemIntoSlots(
   item: WearableNode,
   itemsById?: WearableLookup,
 ): EquippedSlots {
-  const leaves = dissolveCompositeToLeaves(item, itemsById);
+  const leaves = dissolveCompositeToLeaves(item, itemsById, wornIdsOf(currentSlots));
   if (leaves) {
     return layLeavesIntoSlots(currentSlots, item, leaves, {
       clearCoveredSlots: item.replace === true,
@@ -362,7 +398,7 @@ function replaceItemIntoSlots(
   item: WearableNode,
   itemsById?: WearableLookup,
 ): EquippedSlots {
-  const leaves = dissolveCompositeToLeaves(item, itemsById);
+  const leaves = dissolveCompositeToLeaves(item, itemsById, wornIdsOf(currentSlots));
   if (leaves) {
     return layLeavesIntoSlots(currentSlots, item, leaves, { clearCoveredSlots: true });
   }
@@ -385,7 +421,10 @@ export function addItemToSlot(
   item: WearableNode,
   itemsById?: WearableLookup,
 ): EquippedSlots {
-  const leaves = dissolveCompositeToLeaves(item, itemsById);
+  const leaves = dissolveCompositeToLeaves(item, itemsById, wornIdsOf(currentSlots));
+  // Every part archived: nothing goes on — the composite's id would bring the
+  // archived parts back at read time.
+  if (leaves && leaves.length === 0) return currentSlots;
   const forSlot = leaves?.filter((leaf) => leaf.slots.includes(slot)) ?? [];
 
   if (forSlot.length > 0) {

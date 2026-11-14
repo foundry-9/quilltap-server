@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=chat
+url: /settings?group=composer-display
 ---
 
 # Document Editing Tools
@@ -34,6 +34,8 @@ doc_list_files(mount_point: "self")
 ```
 
 The convenience is twofold. A character need not recall the formal title its vault was christened with, and should that title ever change, `"self"` keeps pointing true. The vault's actual name and identifier continue to work exactly as before — `"self"` is an addition, never a replacement. The shorthand resolves only for the character acting as itself; an operator or a non-character caller falls through to ordinary name-and-identifier matching, so a store one has genuinely *named* "self" remains reachable in those contexts.
+
+A character without [System Transparency](character-system-transparency.md) holds the same latchkey to a smaller study: her own vault's root-level files and its **Prompts**, **Wardrobe**, **Outfits**, **Inventory**, **Mail** and **images** folders stay locked to her (and unlisted), while **Scenarios**, **Knowledge**, **Tools**, **lore**, **files** and any folder of her own making are hers to use as freely as any other store.
 
 ## A single address for any document: the `qtap://` URI
 
@@ -109,6 +111,8 @@ None of this touches what is *stored*. Quilltap's typographic manners — the cu
 
 - **`doc_move_file`** — Move or rename a file. If the destination is in a different directory, the file is moved; if in the same directory, it is renamed. The destination must not already exist. The Librarian announces the move in the chat, naming the old and new addresses. Any chat with the file open in Document Mode follows it to its new address, however that chat happened to name the shelf — by the project, or by the store's own name — so no reader is left staring at an empty peg. `doc_move_folder` extends the same courtesy to every file beneath the folder.
 - **`doc_copy_file`** — Copy a file from one document store to a different document store. Takes `source_mount_point`, `source_path`, `dest_mount_point`, and `dest_path`; source and destination must be different stores. If `dest_path` is an existing folder, the file is dropped into it with the source filename; otherwise `dest_path` is treated as the full destination path (with filename). Parent directories are created automatically. Will not overwrite an existing file at the destination. Text files only — binary assets should use the blob tools. The Librarian announces the copy in the chat.
+- **`doc_open_document` and `doc_delete_blob`** — `doc_open_document` given an address that names no file is an error; to start a fresh blank document, give neither `uri` nor `path`. `doc_delete_blob` removes only blobs, and respects a document's write policy.
+
 - **`doc_delete_file`** — Permanently delete a file. This cannot be undone, so your characters should confirm intent before calling. On success, the Librarian announces the removal in the chat, attributing the act to the calling character.
 - **`doc_create_folder`** — Create a new folder, including any necessary parent folders. Idempotent — succeeds silently if the folder already exists. For database-backed stores, explicit folder rows are created; for filesystem stores, directories are created on disk. The Librarian announces the new shelf in the chat.
 - **`doc_delete_folder`** — Delete an empty folder. Non-empty folders are rejected for safety; no recursive deletion is permitted. For database-backed stores, the folder row is deleted; for filesystem stores, the directory is removed from disk. The Librarian announces the dismantled shelf in the chat.
@@ -136,5 +140,5 @@ Document editing tools appear as a group in the **Tool Settings** panel (accessi
 To navigate to the chat settings where tools can be configured:
 
 ```
-help_navigate(url: "/settings?tab=chat")
+help_navigate(url: "/settings?group=composer-display")
 ```

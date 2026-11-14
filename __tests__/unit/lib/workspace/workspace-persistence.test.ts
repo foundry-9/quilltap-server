@@ -6,6 +6,7 @@
 import {
   serializeWorkspaceState,
   deserializeWorkspaceState,
+  upgradeLegacyTab,
   pruneWorkspaceState,
   hydrateWorkspaceState,
   workspaceStorageKey,
@@ -98,12 +99,13 @@ describe('serialize/deserialize', () => {
       'home', 'salon', 'terminal', 'document', 'aurora', 'prospero',
       'scriptorium', 'settings', 'files', 'photos', 'scenarios', 'brahma',
       'wardrobe', 'profile', 'about', 'generate-image', 'document-standalone',
-      'character-new', 'character-edit', 'character-view', 'settings-wizard',
+      'character-new', 'character', 'settings-wizard',
     ]
     const tabs: WorkspaceState['tabs'] = {}
     for (const kind of kinds) {
       const id = `t_${kind}`
-      tabs[id] = { id, kind, title: kind }
+      // A character tab without its character is dropped on load; give it one.
+      tabs[id] = kind === 'character' ? { id, kind, title: kind, payload: { characterId: 'c1' } } : { id, kind, title: kind }
     }
     const state: WorkspaceState = {
       tabs,
@@ -210,5 +212,50 @@ describe('hydrateWorkspaceState', () => {
   it('returns a fresh home state for missing/garbage storage', () => {
     expect(hydrateWorkspaceState(null, {}, 'h2')).toEqual(createInitialState('h2'))
     expect(hydrateWorkspaceState('garbage', {}, 'h2')).toEqual(createInitialState('h2'))
+  })
+})
+
+describe('legacy character tabs', () => {
+  const layout = (tabs: Record<string, unknown>, order: string[]) =>
+    JSON.stringify({
+      tabs,
+      panes: { left: { order, activeTabId: order[0] }, right: null },
+      focusedPane: 'left',
+      splitRatio: 0.5,
+    })
+
+  it('upgrades character-view / character-edit tabs to the one character kind, mapping ?tab= to a section', () => {
+    expect(upgradeLegacyTab({ id: 't1', kind: 'character-edit', title: 'Edit Character', payload: { characterId: 'c1', tab: 'system-prompts' } })).toEqual({
+      id: 't1',
+      kind: 'character',
+      title: 'Character',
+      icon: 'characters',
+      payload: { characterId: 'c1', section: 'prompts' },
+    })
+    expect(upgradeLegacyTab({ id: 't2', kind: 'character-view', title: 'Character', payload: { characterId: 'c2' } })).toMatchObject({
+      kind: 'character',
+      payload: { characterId: 'c2' },
+    })
+    const other = { id: 't3', kind: 'aurora', title: 'Aurora' }
+    expect(upgradeLegacyTab(other)).toBe(other)
+  })
+
+  it('restores an old layout, keeping one tab when view and edit named the same character', () => {
+    const restored = deserializeWorkspaceState(
+      layout(
+        {
+          a: { id: 'a', kind: 'character-view', title: 'Character', payload: { characterId: 'c1', tab: 'conversations' } },
+          b: { id: 'b', kind: 'character-edit', title: 'Edit Character', payload: { characterId: 'c1' } },
+          c: { id: 'c', kind: 'character-edit', title: 'Edit Character', payload: { characterId: 'c2', tab: 'rename' } },
+        },
+        ['a', 'b', 'c'],
+      ),
+    )
+    expect(restored).not.toBeNull()
+    const tabs = Object.values(restored!.tabs)
+    expect(tabs.map((t) => t.kind)).toEqual(['character', 'character'])
+    expect(restored!.tabs.a.payload).toEqual({ characterId: 'c1', section: 'history' })
+    expect(restored!.tabs.c.payload).toEqual({ characterId: 'c2', section: 'history' })
+    expect(restored!.tabs.b).toBeUndefined()
   })
 })

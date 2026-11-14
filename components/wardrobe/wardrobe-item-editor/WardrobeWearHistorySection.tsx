@@ -107,7 +107,7 @@ export function WardrobeWearHistorySection({
             {rows.map((row) => (
               <div key={row.label} className="contents">
                 <dt className="qt-text-secondary">{row.label}</dt>
-                <dd className="text-foreground">{row.value}</dd>
+                <dd className="qt-text">{row.value}</dd>
               </div>
             ))}
             {history && history.wearers.length > 0 && (
@@ -123,7 +123,7 @@ export function WardrobeWearHistorySection({
                       return (
                         <li
                           key={w.characterId ?? 'unattributed'}
-                          className="flex items-center gap-2 text-foreground"
+                          className="flex items-center gap-2 qt-text"
                         >
                           {who?.avatarUrl ? (
                             <img

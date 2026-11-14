@@ -18,6 +18,11 @@ import {
 // handler tests that mock the barrel — never drag in native conversion deps.
 import { parseQtapUri } from '@/lib/doc-edit/qtap-uri';
 import { getRepositories } from '@/lib/repositories/factory';
+import {
+  isOwnVaultCorePath,
+  isOwnVaultEntryHidden,
+  ownVaultCoreRefusal,
+} from '@/lib/characters/vault/core-guard';
 
 // The server-side qtap:// URI producers live in their own converters-free
 // module; re-export them here so the doc-edit handlers keep importing from
@@ -171,15 +176,15 @@ export async function collectPeerCharacterIdsForReads(
 
 /**
  * When a character has `systemTransparency !== true` they accept the covenant
- * of trust — every character vault (their own and peers') is hidden from
- * doc_* tools. Returns true if the acting character is opaque; falls back to
- * "opaque" on lookup failure so a transient repo error doesn't accidentally
- * grant access.
+ * of trust: every PEER vault is hidden from the doc_* tools, and her OWN vault
+ * is reachable with its core guarded — no root-level file, and nothing in the
+ * managed folders (`lib/characters/vault/core-guard.ts`). Returns true if the
+ * acting character is opaque; falls back to "opaque" on lookup failure so a
+ * transient repo error doesn't accidentally grant access.
  *
- * Only the two VAULT tiers are hidden. The group, project and global tiers
- * remain accessible regardless — including the stores of the character's own
- * groups, which the callers express via `hideCharacterVaults` rather than by
- * withholding `characterId`, since the group tier is keyed on it (bug 152).
+ * The group, project and global tiers remain accessible regardless —
+ * including the stores of the character's own groups, which the callers keep
+ * by passing `characterId` alongside `guardOwnVault` (bug 152).
  */
 export async function actingCharacterIsOpaqueToVaults(
   context: DocEditToolContext
@@ -254,6 +259,38 @@ export async function assertWriteDoesNotTargetPeerVault(
 // ============================================================================
 
 /**
+ * The own-vault core guard for a file operation (read, write, create, delete,
+ * move). The resolver has already refused the root and the core folders; this
+ * refuses a root-level file, which only a caller that means a file can judge.
+ * No-op unless the resolution carried `ownVaultGuarded`.
+ */
+export function assertOwnVaultFileOpen(
+  target: { ownVaultGuarded?: boolean; relativePath: string; mountPointId?: string },
+  context: DocEditToolContext
+): void {
+  if (!target.ownVaultGuarded) return;
+  if (!isOwnVaultCorePath(target.relativePath, 'file')) return;
+  logger.info('Refused own-vault core file for an opaque character', {
+    characterId: context.characterId,
+    mountPointId: target.mountPointId,
+    relativePath: target.relativePath,
+  });
+  throw new PathResolutionError(ownVaultCoreRefusal(target.relativePath), 'ACCESS_DENIED');
+}
+
+/**
+ * The own-vault core guard for an enumeration (doc_list_files, doc_grep,
+ * doc_list_blobs): a predicate that is true for an entry to leave out. Always
+ * false for any store but her own guarded vault.
+ */
+export function ownVaultEntryFilter(
+  mount: { ownVaultGuarded?: boolean }
+): (relativePath: string, kind: 'file' | 'folder') => boolean {
+  if (!mount.ownVaultGuarded) return () => false;
+  return (relativePath, kind) => isOwnVaultEntryHidden(relativePath, kind);
+}
+
+/**
  * Throw a not-found-style PathResolutionError when the acting character may not
  * read the resolved document (`character_read:false`). No-op for the operator,
  * for non-mount scopes (project-legacy / general have no policy row), and for
@@ -264,6 +301,7 @@ export async function assertCharacterMayRead(
   context: DocEditToolContext
 ): Promise<void> {
   if (context.operatorOverride === true) return;
+  assertOwnVaultFileOpen(resolved, context);
   if (!resolved.mountPointId) return;
   const repos = getRepositories();
   const link = await repos.docMountFileLinks.findByMountPointAndPath(
@@ -293,6 +331,9 @@ export async function assertCharacterMayWrite(
   context: DocEditToolContext
 ): Promise<void> {
   if (context.operatorOverride === true) return;
+  // Before the "new file" early return: creating a root-level file in her own
+  // vault is as closed as editing one.
+  assertOwnVaultFileOpen(resolved, context);
   if (!resolved.mountPointId) return;
   const repos = getRepositories();
   const link = await repos.docMountFileLinks.findByMountPointAndPath(
@@ -395,15 +436,14 @@ export async function buildReadResolutionContext(
   input = applyQtapUriToInput(input);
   const opaque = await actingCharacterIsOpaqueToVaults(context);
   if (opaque) {
-    // `hideCharacterVaults` subtracts the two vault tiers and leaves group,
-    // project and global reachable. The character is still passed: group
-    // membership is derived from `characterId` and from nothing else, so the
-    // old shape — withholding it — also hid every group store she belongs to
-    // (bug 152).
+    // `guardOwnVault` hides peer vaults and guards the core of her own, and
+    // leaves group, project and global reachable. The character is still
+    // passed: group membership is derived from `characterId` and from nothing
+    // else (bug 152).
     return {
       projectId: context.projectId,
       characterId: context.characterId,
-      hideCharacterVaults: true,
+      guardOwnVault: true,
       mountPoint: input.mount_point,
       operatorOverride: context.operatorOverride,
       mountPool: context.mountPool,
@@ -433,12 +473,11 @@ export async function buildWriteResolutionContext(
   input = applyQtapUriToInput(input);
   const opaque = await actingCharacterIsOpaqueToVaults(context);
   if (opaque) {
-    // See the read builder: hide the vault tiers by naming them, not by
-    // withholding the character the group tier is keyed on (bug 152).
+    // See the read builder (bug 152).
     return {
       projectId: context.projectId,
       characterId: context.characterId,
-      hideCharacterVaults: true,
+      guardOwnVault: true,
       mountPoint: input.mount_point,
       operatorOverride: context.operatorOverride,
       mountPool: context.mountPool,

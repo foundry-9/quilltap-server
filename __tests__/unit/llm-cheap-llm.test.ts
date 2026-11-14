@@ -11,12 +11,18 @@ import {
   resolveUncensoredCheapLLMSelection,
   profileParams,
   DEFAULT_CHEAP_LLM_CONFIG,
-  RECOMMENDED_CHEAP_MODELS,
   type CheapLLMConfig,
   type CheapLLMSelection,
 } from '@/lib/llm/cheap-llm'
 import type { ConnectionProfile, Provider } from '@/lib/schemas/types'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { getResolvedCheapModel } from '@/lib/llm/cheap-model-resolver'
+
+// Anthropic names its cheap model at run time; stand in for the cached answer
+jest.mock('@/lib/llm/cheap-model-resolver', () => ({
+  getResolvedCheapModel: jest.fn((profile: { provider: string }) =>
+    profile.provider === 'ANTHROPIC' ? 'claude-haiku-resolved' : null),
+}))
 
 // Helper to create a mock connection profile
 function createMockProfile(
@@ -45,9 +51,13 @@ function createMockProfile(
 
 describe('Cheap LLM Provider Selection', () => {
   describe('getCheapestModel', () => {
-    it('should return the cheapest model for Anthropic', () => {
-      const model = getCheapestModel('ANTHROPIC')
-      expect(model).toBe('claude-haiku-4-5-20251001')
+    it('should return the run-time resolved model for Anthropic', () => {
+      const profile = createMockProfile('p', 'ANTHROPIC', 'claude-sonnet-5-5')
+      expect(getCheapestModel('ANTHROPIC', profile)).toBe('claude-haiku-resolved')
+    })
+
+    it('should return null for Anthropic when nothing is resolved and no profile is given', () => {
+      expect(getCheapestModel('ANTHROPIC')).toBeNull()
     })
 
     it('should return the cheapest model for OpenAI', () => {
@@ -147,7 +157,7 @@ describe('Cheap LLM Provider Selection', () => {
         )
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
+        expect(selection.modelName).toBe('claude-haiku-resolved')
       })
     })
 
@@ -156,7 +166,7 @@ describe('Cheap LLM Provider Selection', () => {
         const selection = getCheapLLMProvider(anthropicProfile)
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
+        expect(selection.modelName).toBe('claude-haiku-resolved')
         expect(selection.connectionProfileId).toBe('anthropic-profile')
         expect(selection.isLocal).toBe(false)
       })
@@ -203,12 +213,18 @@ describe('Cheap LLM Provider Selection', () => {
         )
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
+        expect(selection.modelName).toBe('claude-haiku-resolved')
       })
     })
 
-    describe('isCheap profile flag (priority 3)', () => {
-      it('should use any profile marked as isCheap=true', () => {
+    describe('isCheap profile flag (priority 3, User Defined only)', () => {
+      // User Defined with no profile chosen: a cheap-flagged profile stands in.
+      const userDefinedNoProfile: CheapLLMConfig = {
+        strategy: 'USER_DEFINED',
+        fallbackToLocal: true,
+      }
+
+      it('should use a profile marked as isCheap=true when User Defined has no profile', () => {
         const cheapOpenAIProfile = createMockProfile(
           'cheap-openai',
           'OPENAI',
@@ -219,7 +235,7 @@ describe('Cheap LLM Provider Selection', () => {
 
         const selection = getCheapLLMProvider(
           anthropicProfile,
-          DEFAULT_CHEAP_LLM_CONFIG,
+          userDefinedNoProfile,
           [anthropicProfile, cheapOpenAIProfile]
         )
 
@@ -246,7 +262,7 @@ describe('Cheap LLM Provider Selection', () => {
 
         const selection = getCheapLLMProvider(
           anthropicProfile,
-          DEFAULT_CHEAP_LLM_CONFIG,
+          userDefinedNoProfile,
           [anthropicProfile, cheapOpenAIProfile, cheapOllamaProfile]
         )
 
@@ -273,13 +289,76 @@ describe('Cheap LLM Provider Selection', () => {
 
         const selection = getCheapLLMProvider(
           anthropicProfile,
-          DEFAULT_CHEAP_LLM_CONFIG,
+          userDefinedNoProfile,
           [anthropicProfile, cheapOpenAIProfile, cheapGoogleProfile]
         )
 
         // Should use the first cheap profile found
         expect(selection.provider).toBe('OPENAI')
         expect(selection.connectionProfileId).toBe('cheap-openai')
+      })
+    
+      it('is ignored by Provider Cheapest — the strategy wins', () => {
+        const cheapOllamaProfile = createMockProfile(
+          'cheap-ollama',
+          'OLLAMA',
+          'qwen3.5:9b',
+          'http://localhost:11434',
+          true
+        )
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          DEFAULT_CHEAP_LLM_CONFIG,
+          [anthropicProfile, cheapOllamaProfile]
+        )
+
+        expect(selection.provider).toBe('ANTHROPIC')
+        expect(selection.modelName).toBe('claude-haiku-resolved')
+      })
+
+      it('does not let a non-local cheap profile overrule Local First', () => {
+        const cheapOpenAIProfile = createMockProfile(
+          'cheap-openai',
+          'OPENAI',
+          'gpt-4o-mini',
+          undefined,
+          true
+        )
+        const ollamaProfile = createMockProfile(
+          'ollama',
+          'OLLAMA',
+          'llama3.2:3b',
+          'http://localhost:11434'
+        )
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          { strategy: 'LOCAL_FIRST', fallbackToLocal: true },
+          [anthropicProfile, cheapOpenAIProfile, ollamaProfile]
+        )
+
+        expect(selection.provider).toBe('OLLAMA')
+        expect(selection.connectionProfileId).toBe('ollama')
+      })
+
+      it('still loses to a chosen User Defined profile', () => {
+        const cheapOllamaProfile = createMockProfile(
+          'cheap-ollama',
+          'OLLAMA',
+          'qwen3.5:9b',
+          'http://localhost:11434',
+          true
+        )
+        const chosen = createMockProfile('chosen', 'OPENAI', 'gpt-4o-mini')
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          { strategy: 'USER_DEFINED', userDefinedProfileId: 'chosen', fallbackToLocal: true },
+          [anthropicProfile, cheapOllamaProfile, chosen]
+        )
+
+        expect(selection.connectionProfileId).toBe('chosen')
       })
     })
 
@@ -314,7 +393,7 @@ describe('Cheap LLM Provider Selection', () => {
         )
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
+        expect(selection.modelName).toBe('claude-haiku-resolved')
       })
     })
 
@@ -375,6 +454,21 @@ describe('Cheap LLM Provider Selection', () => {
         expect(onNoCheapLLMCallback).toHaveBeenCalled()
       })
 
+      it('should not call onNoCheapLLM when PROVIDER_CHEAPEST picks the provider\'s cheapest model (the chosen path)', () => {
+        const onNoCheapLLMCallback = jest.fn()
+
+        const result = getCheapLLMProvider(
+          anthropicProfile,
+          { strategy: 'PROVIDER_CHEAPEST', fallbackToLocal: false },
+          [anthropicProfile],
+          false,
+          onNoCheapLLMCallback
+        )
+
+        expect(result.provider).toBe(anthropicProfile.provider)
+        expect(onNoCheapLLMCallback).not.toHaveBeenCalled()
+      })
+
       it('should not call onNoCheapLLM when a cheap LLM is available', () => {
         const onNoCheapLLMCallback = jest.fn()
 
@@ -388,7 +482,7 @@ describe('Cheap LLM Provider Selection', () => {
 
         getCheapLLMProvider(
           anthropicProfile,
-          DEFAULT_CHEAP_LLM_CONFIG,
+          { strategy: 'USER_DEFINED', fallbackToLocal: true },
           [anthropicProfile, cheapOpenAIProfile],
           false,
           onNoCheapLLMCallback
@@ -406,25 +500,6 @@ describe('Cheap LLM Provider Selection', () => {
 
     it('should enable fallbackToLocal by default', () => {
       expect(DEFAULT_CHEAP_LLM_CONFIG.fallbackToLocal).toBe(true)
-    })
-  })
-
-  describe('RECOMMENDED_CHEAP_MODELS', () => {
-    it('should have recommendations for all providers', () => {
-      const providers: Provider[] = [
-        'ANTHROPIC',
-        'OPENAI',
-        'GOOGLE',
-        'GROK',
-        'OPENROUTER',
-        'OLLAMA',
-        'OPENAI_COMPATIBLE',
-      ]
-
-      for (const provider of providers) {
-        expect(RECOMMENDED_CHEAP_MODELS[provider]).toBeDefined()
-        expect(RECOMMENDED_CHEAP_MODELS[provider].length).toBeGreaterThan(0)
-      }
     })
   })
 
@@ -594,5 +669,16 @@ describe('profileParams', () => {
     const params = { temperature: 0.7 }
     profileParams({ provider: 'OLLAMA', parameters: params, maxContext: 40960 })
     expect(params).toEqual({ temperature: 0.7 })
+  })
+
+  describe('cheap model not resolved yet', () => {
+    it('uses the profile\'s own model under Provider Cheapest', () => {
+      ;(getResolvedCheapModel as jest.Mock).mockReturnValueOnce(null)
+      const profile = createMockProfile('p', 'ANTHROPIC', 'claude-sonnet-5-5')
+      const selection = getCheapLLMProvider(profile, DEFAULT_CHEAP_LLM_CONFIG, [profile])
+      expect(selection.provider).toBe('ANTHROPIC')
+      expect(selection.modelName).toBe('claude-sonnet-5-5')
+      expect(selection.connectionProfileId).toBe('p')
+    })
   })
 })

@@ -2,9 +2,12 @@ import {
   buildRenderItems,
   isAlwaysExpandedAnnouncement,
   isCollapsedAnnouncement,
+  insertGreenRoomItems,
+  renderItemMessageIds,
   type RenderItem,
 } from './announcement-render-items'
 import type { Message } from './types'
+import type { GreenRoomState } from './hooks/useGreenRoom'
 
 let seq = 0
 function msg(partial: Partial<Message> & { role: string }): Message {
@@ -23,7 +26,7 @@ function ann(sender: NonNullable<Message['systemSender']>, kind?: string): Messa
 
 /** Convenience: ids of a render-item (group → its members' ids). */
 function ids(item: RenderItem): string[] {
-  return item.kind === 'message' ? [item.message.id] : item.members.map(m => m.message.id)
+  return renderItemMessageIds(item)
 }
 
 describe('buildRenderItems', () => {
@@ -188,5 +191,53 @@ describe('isCollapsedAnnouncement', () => {
     const a = ann('host', 'add')
     expect(isCollapsedAnnouncement(a, new Set([a.id]))).toBe(false)
     expect(isCollapsedAnnouncement(msg({ role: 'ASSISTANT', content: 'hi' }), none)).toBe(false)
+  })
+})
+
+describe('insertGreenRoomItems', () => {
+  function room(id: string, priorMessageIds: string[]): GreenRoomState {
+    return {
+      id, running: false, docked: true, expanded: false, priorMessageIds,
+      title: 'The Green Room', status: '', wardrobe: [], packed: [], logs: [],
+    }
+  }
+  const kinds = (items: RenderItem[]) => items.map(i => (i.kind === 'green-room' ? i.id : renderItemMessageIds(i).join('+')))
+
+  it('returns the items unchanged with no docked rooms', () => {
+    const items = buildRenderItems([msg({ role: 'USER' })], new Set())
+    expect(insertGreenRoomItems(items, [])).toBe(items)
+  })
+
+  it('puts an opening room at the top when nothing preceded it', () => {
+    const a = msg({ role: 'ASSISTANT' })
+    const b = msg({ role: 'USER' })
+    const out = insertGreenRoomItems(buildRenderItems([a, b], new Set()), [room('r1', [])])
+    expect(kinds(out)).toEqual(['green-room:r1', a.id, b.id])
+  })
+
+  it('puts a join room after the last message that was already on the page', () => {
+    const a = msg({ role: 'ASSISTANT' })
+    const b = msg({ role: 'USER' })
+    const c = msg({ role: 'ASSISTANT' })
+    const out = insertGreenRoomItems(buildRenderItems([a, b, c], new Set()), [room('r1', [a.id, b.id, 'hidden'])])
+    expect(kinds(out)).toEqual([a.id, b.id, 'green-room:r1', c.id])
+  })
+
+  it('anchors on a message packed in a chip group', () => {
+    const a = msg({ role: 'ASSISTANT' })
+    const h = ann('host', 'add')
+    const c = msg({ role: 'ASSISTANT' })
+    const out = insertGreenRoomItems(buildRenderItems([a, h, c], new Set()), [room('r1', [a.id, h.id])])
+    expect(kinds(out)).toEqual([a.id, h.id, 'green-room:r1', c.id])
+  })
+
+  it('keeps several rooms in session order', () => {
+    const a = msg({ role: 'ASSISTANT' })
+    const b = msg({ role: 'USER' })
+    const out = insertGreenRoomItems(
+      buildRenderItems([a, b], new Set()),
+      [room('r1', []), room('r2', [a.id]), room('r3', [a.id])],
+    )
+    expect(kinds(out)).toEqual(['green-room:r1', a.id, 'green-room:r2', 'green-room:r3', b.id])
   })
 })

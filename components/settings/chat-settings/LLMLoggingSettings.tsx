@@ -1,6 +1,7 @@
 'use client'
 
 import { SettingsCard } from '@/components/ui/SettingsCard'
+import { useDraft } from '@/lib/hooks/use-draft'
 import { ChatSettings, LLMLoggingSettings, DEFAULT_LLM_LOGGING_SETTINGS } from './types'
 
 export interface LLMLoggingSettingsProps {
@@ -21,6 +22,22 @@ export function LLMLoggingSettingsComponent({
   // Use default settings if not defined
   const loggingSettings = settings.llmLoggingSettings || DEFAULT_LLM_LOGGING_SETTINGS
 
+  // The retention field is typed into and saved on blur or Enter, never per
+  // keystroke (typing "60" over "30" used to save 6 first). An empty or
+  // unreadable field is "no change" — 0 means unlimited, so it is never
+  // inferred from a blank.
+  const [retentionDraft, setRetentionDraft, retention] = useDraft(String(loggingSettings.retentionDays))
+  const commitRetention = () => {
+    const parsed = Number.parseInt(retentionDraft, 10)
+    if (retentionDraft.trim() === '' || Number.isNaN(parsed)) {
+      retention.reset()
+      return
+    }
+    const days = Math.min(365, Math.max(0, parsed))
+    setRetentionDraft(String(days))
+    if (days !== loggingSettings.retentionDays) void onLLMLoggingChange('retentionDays', days)
+  }
+
   return (
     <SettingsCard
       title="LLM Request Logging"
@@ -34,7 +51,7 @@ export function LLMLoggingSettingsComponent({
             checked={loggingSettings.enabled}
             onChange={(e) => onLLMLoggingChange('enabled', e.target.checked)}
             disabled={saving}
-            className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+            className="mt-1 qt-checkbox"
           />
           <div className="flex-1">
             <div className="font-medium">Enable Logging</div>
@@ -51,7 +68,7 @@ export function LLMLoggingSettingsComponent({
             checked={loggingSettings.verboseMode}
             onChange={(e) => onLLMLoggingChange('verboseMode', e.target.checked)}
             disabled={saving || !loggingSettings.enabled}
-            className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+            className="mt-1 qt-checkbox"
           />
           <div className="flex-1">
             <div className="font-medium">Verbose Mode</div>
@@ -76,8 +93,12 @@ export function LLMLoggingSettingsComponent({
                 aria-label="Log retention in days"
                 min={0}
                 max={365}
-                value={loggingSettings.retentionDays}
-                onChange={(e) => onLLMLoggingChange('retentionDays', parseInt(e.target.value, 10) || 0)}
+                value={retentionDraft}
+                onChange={(e) => setRetentionDraft(e.target.value)}
+                onBlur={commitRetention}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRetention()
+                }}
                 disabled={saving || !loggingSettings.enabled}
                 className="w-20 px-2 py-1 border qt-border-default rounded text-center"
               />

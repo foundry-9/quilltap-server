@@ -36,6 +36,23 @@ const ANCHOR_GAP = 6
 /** grace period letting the pointer cross the gap into an interactive bubble */
 const CLOSE_GRACE_MS = 120
 
+/** What opened the bubble — it decides what is allowed to keep it open. */
+type OpenReason = 'hover' | 'focus'
+
+/**
+ * Whether focus arrived by keyboard. A mouse click focuses a button too, and so
+ * does a dialog handing focus back to its trigger on close — neither is a
+ * request for a tooltip, and a bubble opened that way has nothing to close it
+ * until the next blur. Engines without `:focus-visible` count every focus.
+ */
+function isKeyboardFocus(element: Element): boolean {
+  try {
+    return element.matches(':focus-visible')
+  } catch {
+    return true
+  }
+}
+
 interface TooltipCoords {
   top: number
   left: number
@@ -76,6 +93,7 @@ export function Tooltip({
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pinnedRef = useRef(false)
+  const openReason = useRef<OpenReason | null>(null)
 
   const [open, setOpen] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -89,18 +107,23 @@ export function Tooltip({
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null }
   }, [])
 
-  const openNow = useCallback(() => {
+  const openNow = useCallback((reason: OpenReason) => {
     clearTimers()
+    openReason.current = reason
     setOpen(true)
   }, [clearTimers])
 
   const openAfterDelay = useCallback(() => {
     clearTimers()
-    openTimer.current = setTimeout(() => setOpen(true), delay)
+    openTimer.current = setTimeout(() => {
+      openReason.current = 'hover'
+      setOpen(true)
+    }, delay)
   }, [clearTimers, delay])
 
   const closeNow = useCallback(() => {
     clearTimers()
+    openReason.current = null
     setPinned(false)
     setOpen(false)
     setCoords(null)
@@ -111,6 +134,7 @@ export function Tooltip({
     clearTimers()
     closeTimer.current = setTimeout(() => {
       if (pinnedRef.current) return
+      openReason.current = null
       setOpen(false)
       setCoords(null)
     }, CLOSE_GRACE_MS)
@@ -151,8 +175,14 @@ export function Tooltip({
     if (open) position()
   }, [open, position, content])
 
-  // Follow the anchor while the page moves under it; dismiss on Escape or on a
-  // click elsewhere (only a pinned bubble survives long enough to need that).
+  // Follow the anchor while the page moves under it, and dismiss on Escape, on a
+  // press elsewhere, or when the window loses focus.
+  //
+  // The anchor's own pointerleave/blur are not enough on their own: neither
+  // fires when the trigger re-renders or vanishes under the pointer, when an
+  // overlay lands on top of it, or when the window is left mid-hover — and a
+  // bubble that misses its one cue to close stays up for good. So while it is
+  // open, every pointer movement re-checks that something still justifies it.
   useEffect(() => {
     if (!open) return
 
@@ -164,25 +194,48 @@ export function Tooltip({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeNow()
     }
+    const isInside = (target: EventTarget | null): boolean => {
+      if (!(target instanceof Node)) return false
+      return Boolean(anchorRef.current?.contains(target) || bubbleRef.current?.contains(target))
+    }
+    const stillFocused = () => {
+      const active = document.activeElement
+      return openReason.current === 'focus'
+        && Boolean(active && anchorRef.current?.contains(active))
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      if (pinnedRef.current || isInside(event.target) || stillFocused()) return
+      // Hand off to the grace period rather than closing outright, so the
+      // pointer can still cross the gap into an interactive bubble.
+      if (!closeTimer.current) closeSoon()
+    }
     const onPointerDown = (event: PointerEvent) => {
-      if (!pinnedRef.current) return
-      const target = event.target as Node
-      if (anchorRef.current?.contains(target) || bubbleRef.current?.contains(target)) return
+      // A press on a pinnable trigger is its pin toggle; let onClick decide.
+      if (pinnable && anchorRef.current?.contains(event.target as Node)) return
+      if (bubbleRef.current?.contains(event.target as Node)) return
       closeNow()
     }
+    const onWindowBlur = () => { if (!pinnedRef.current) closeNow() }
+    const onVisibility = () => { if (document.hidden) closeNow() }
 
     window.addEventListener('scroll', reposition, true)
     window.addEventListener('resize', reposition)
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true })
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('blur', onWindowBlur)
     return () => {
       if (frame) cancelAnimationFrame(frame)
       window.removeEventListener('scroll', reposition, true)
       window.removeEventListener('resize', reposition)
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('pointermove', onPointerMove, true)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('blur', onWindowBlur)
     }
-  }, [open, position, closeNow])
+  }, [open, position, closeNow, closeSoon, pinnable])
 
   const bubbleInteractive = interactive || pinned
 
@@ -191,15 +244,21 @@ export function Tooltip({
       <span
         ref={anchorRef}
         className={`qt-tooltip-anchor ${anchorClassName}`.trim()}
-        onPointerEnter={openAfterDelay}
+        onPointerEnter={(event) => {
+          // A tap has no "leave" to close on; pinnable triggers open on click.
+          if (event.pointerType === 'touch') return
+          if (open) clearTimers()
+          else openAfterDelay()
+        }}
         onPointerLeave={() => { if (!pinned) closeSoon() }}
-        onFocus={openNow}
+        onFocus={(event) => { if (isKeyboardFocus(event.target)) openNow('focus') }}
         onBlur={() => { if (!pinned) closeNow() }}
         onClick={pinnable
           ? () => {
               clearTimers()
               setPinned(prev => {
                 const next = !prev
+                openReason.current = next ? 'hover' : null
                 setOpen(next)
                 if (!next) setCoords(null)
                 return next

@@ -11,6 +11,7 @@ import { ProviderBadge } from './ProviderBadge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { EmbeddingProfile } from './types'
+import { settingsCardHref } from '@/lib/settings/hrefs'
 
 interface ProfileListProps {
   profiles: EmbeddingProfile[]
@@ -186,7 +187,7 @@ export function ProfileList({
           <div className="flex items-center justify-between gap-4">
             <p className="qt-label flex-1">{reindexMismatchedSuccess}</p>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Link href="/settings?tab=system" className="qt-button-ghost qt-button-sm">
+              <Link href={settingsCardHref('tasks-queue')} className="qt-button-ghost qt-button-sm">
                 View Tasks Queue
               </Link>
               <button
@@ -206,7 +207,7 @@ export function ProfileList({
           <div className="flex items-center justify-between gap-4">
             <p className="qt-label flex-1">{reapplySuccess}</p>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Link href="/settings?tab=system" className="qt-button-ghost qt-button-sm">
+              <Link href={settingsCardHref('tasks-queue')} className="qt-button-ghost qt-button-sm">
                 View Tasks Queue
               </Link>
               <button
@@ -226,7 +227,7 @@ export function ProfileList({
           <div className="flex items-center justify-between gap-4">
             <p className="qt-label flex-1">{refitSuccess}</p>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Link href="/settings?tab=system" className="qt-button-ghost qt-button-sm">
+              <Link href={settingsCardHref('tasks-queue')} className="qt-button-ghost qt-button-sm">
                 View Tasks Queue
               </Link>
               <button
@@ -256,7 +257,7 @@ export function ProfileList({
           if (profile.provider !== 'BUILTIN') {
             metadata.push({
               label: 'Model',
-              value: <span className="font-mono text-sm text-foreground">{profile.modelName}</span>
+              value: <span className="font-mono text-sm qt-text">{profile.modelName}</span>
             })
           }
 

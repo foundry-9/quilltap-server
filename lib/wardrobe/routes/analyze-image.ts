@@ -1,0 +1,111 @@
+/**
+ * Wardrobe Image Analysis — handlers for `/api/v1/wardrobe?action=analyze-image`
+ * (formerly the `/api/v1/wardrobe/analyze-image` path, which still answers for
+ * one release).
+ *
+ * POST ?action=analyze-image
+ * Accepts a base64-encoded image and optional guidance text,
+ * analyzes it using a vision-capable LLM, and returns proposed wardrobe items
+ * plus an optional proposed name for the ensemble they make together.
+ * An optional `profileId` names the vision profile to read it with.
+ *
+ * GET ?action=analyze-image
+ * The vision profiles the dialog may offer (every profile that can genuinely
+ * receive an image) and the one the analysis would use if none is chosen.
+ */
+
+import type { NextRequest } from 'next/server'
+import type { RequestContext } from '@/lib/api/middleware'
+import { logger } from '@/lib/logger'
+import { z } from 'zod'
+import { successResponse, badRequest, serverError } from '@/lib/api/responses'
+import { analyzeImageForWardrobeItems } from '@/lib/wardrobe/image-analysis'
+import { listVisionProfiles, resolveVisionProfile } from '@/lib/llm/vision-request'
+
+const analyzeImageSchema = z.object({
+  image: z.string().min(1, 'Image data is required'),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif'], {
+    error: 'Unsupported image format. Use JPEG, PNG, WebP, or GIF.',
+  }),
+  guidance: z.string().max(2000).optional(),
+  profileId: z.uuid().optional(),
+})
+
+/** GET ?action=analyze-image — the vision profiles the dialog may offer. */
+export async function handleAnalyzeImageProfiles(_req: NextRequest, { repos, user }: RequestContext) {
+  const [profiles, defaultProfile] = await Promise.all([
+    listVisionProfiles(repos, user.id),
+    // The same resolution the POST uses when no profile is chosen.
+    resolveVisionProfile(repos, user.id, { prefer: 'capable', configured: 'skip-incapable' }),
+  ])
+
+  logger.debug('[Wardrobe Image Analysis API] Listed vision profiles', {
+    count: profiles.length,
+    defaultProfileId: defaultProfile?.id ?? null,
+  })
+
+  return successResponse({
+    profiles: profiles.map(p => ({
+      id: p.id,
+      name: p.name,
+      provider: p.provider,
+      modelName: p.modelName,
+    })),
+    defaultProfileId: defaultProfile?.id ?? null,
+  })
+}
+
+/** POST ?action=analyze-image — propose wardrobe items from a picture. */
+export async function handleAnalyzeImage(req: NextRequest, { repos, user }: RequestContext) {
+  const body = await req.json()
+  const validated = analyzeImageSchema.parse(body)
+
+  // Basic size check (~10MB base64 ≈ ~13.3MB string)
+  if (validated.image.length > 14_000_000) {
+    return badRequest('Image is too large. Maximum file size is 10 MB.')
+  }
+
+  try {
+    const result = await analyzeImageForWardrobeItems(
+      {
+        image: validated.image,
+        mimeType: validated.mimeType,
+        guidance: validated.guidance,
+        profileId: validated.profileId,
+      },
+      repos,
+      user.id
+    )
+
+    logger.info('[Wardrobe Image Analysis API] Analysis complete', {
+      itemCount: result.proposedItems.length,
+      hasOutfit: result.proposedOutfit !== null,
+      provider: result.provider,
+      model: result.model,
+    })
+
+    return successResponse({
+      proposedItems: result.proposedItems,
+      proposedOutfit: result.proposedOutfit,
+      provider: result.provider,
+      model: result.model,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Image analysis failed'
+
+    // User-facing errors (no vision provider, parse failures) are not server errors
+    if (message.includes('No vision-capable') ||
+        message.includes('API key not found') ||
+        message.includes('The AI returned')) {
+      logger.warn('[Wardrobe Image Analysis API] Analysis failed with user-facing error', {
+        error: message,
+      })
+      return badRequest(message)
+    }
+
+    logger.error('[Wardrobe Image Analysis API] Analysis failed', {},
+      error instanceof Error ? error : new Error(String(error))
+    )
+    return serverError(message)
+  }
+}

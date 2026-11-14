@@ -26,7 +26,7 @@ jest.mock('@/lib/mount-index/item-folder-location', () => ({
   deleteItemFolder: jest.fn(),
 }));
 
-jest.mock('@/lib/database/repositories/characters.repository', () => {
+jest.mock('@/lib/characters/archive-guard', () => {
   class CharacterArchivedError extends Error {}
   return { CharacterArchivedError };
 });
@@ -39,7 +39,7 @@ import {
   type ItemErrorKind,
   type ItemRouteKind,
 } from '@/lib/mount-index/item-folder-routes';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 import { WardrobeFolderConflictError, WardrobeFolderNotFoundError, WardrobeFolderPathError } from '@/lib/wardrobe/folders';
 import { InventoryFolderNotFoundError, InventoryItemNotInLocationError } from '@/lib/inventory/folders';
 

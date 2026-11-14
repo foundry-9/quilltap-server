@@ -17,9 +17,26 @@
 import { z } from 'zod';
 import type { ToolEffect } from '@/lib/tools/effect-types';
 
-/** A chat's turn mode. NULL in storage reads as `rotation`. */
-export const ChatTurnModeSchema = z.enum(['rotation', 'storyteller']);
+/**
+ * A chat's turn mode. NULL in storage reads as `rotation`.
+ *
+ * - `rotation` (Normal): the company takes turns on its own.
+ * - `turns`: the chain runs one full cycle — every present seat speaks or
+ *   passes once — then stops, with memory extraction queued, until the
+ *   operator posts or asks for the next round.
+ * - `storyteller`: each operator post opens a round of bids.
+ *
+ * Manual (the old "Paused") is not a turn mode: it is `isPaused`, which holds
+ * every post whatever the mode.
+ */
+export const ChatTurnModeSchema = z.enum(['rotation', 'turns', 'storyteller']);
 export type ChatTurnMode = z.infer<typeof ChatTurnModeSchema>;
+
+/**
+ * The Salon's four-way turn control. `manual` is `isPaused` (any mode); the
+ * other three un-pause and set the turn mode.
+ */
+export type TurnPosition = 'normal' | 'manual' | 'turns' | 'storyteller';
 
 /** The tiers a bid may claim, lowest first. */
 export const StorytellerTierSchema = z.enum(['simple', 'lookup', 'act', 'destroy']);

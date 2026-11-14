@@ -712,7 +712,7 @@ export async function postProsperoGroupContextWhisper(
 // ---------------------------------------------------------------------------
 
 /** The failure that prevented a Carina query from being answered. */
-export type CarinaErrorKind = 'not-found' | 'no-profile' | 'llm-failed';
+export type CarinaErrorKind = 'not-found' | 'no-profile' | 'llm-failed' | 'refused';
 
 export function buildCarinaErrorContent(
   kind: CarinaErrorKind,
@@ -731,6 +731,10 @@ export function buildCarinaErrorContent(
       const who = characterName ? `${characterName}` : 'the answerer';
       return `Prospero reports that ${who} was unable to respond${trailer}.`;
     }
+    case 'refused': {
+      const who = characterName ? `${characterName}` : 'the answerer';
+      return `Prospero must decline: ${who} may not be consulted from a turn confined to lookups, and nothing was set in motion.`;
+    }
   }
 }
 
@@ -746,6 +750,8 @@ export function buildCarinaErrorOpaqueContent(
       return `System: No connection profile available for the requested answerer character${characterName ? ` (${characterName})` : ''}.`;
     case 'llm-failed':
       return `System: The Carina answerer call failed${detail ? ` — ${detail}` : ''}.`;
+    case 'refused':
+      return `System: The Carina query was refused${detail ? ` — ${detail}` : ''}.`;
   }
 }
 

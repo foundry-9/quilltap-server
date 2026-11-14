@@ -98,6 +98,19 @@ function shouldGiveUp(): boolean {
   return state.restartTimestamps.length >= RESTART_CAP;
 }
 
+/**
+ * The child refuses to run without the encryption pepper (it cannot open the
+ * database), and it inherits the pepper from this process's environment at
+ * fork time. Before first-run setup, or while a passphrase-locked instance
+ * waits to be unlocked, there is no pepper — so a fork would only exit 1 and
+ * spend the restart budget, and once that budget is gone nothing respawns the
+ * child after setup succeeds. Jobs enqueued in that window simply stay
+ * pending until the pepper arrives and someone wakes the processor.
+ */
+function pepperAvailable(): boolean {
+  return !!process.env.ENCRYPTION_MASTER_PEPPER;
+}
+
 // ============================================================================
 // Spawning the child
 // ============================================================================
@@ -181,6 +194,10 @@ function spawnChild(): ChildProcess {
       }
       setTimeout(() => {
         if (!state.shuttingDown && !state.child) {
+          if (!pepperAvailable()) {
+            log.debug('Not respawning background-job child: encryption key not resolved yet');
+            return;
+          }
           log.info('Respawning background-job child after crash backoff', {
             backoffMs: RESTART_BACKOFF_MS,
           });
@@ -305,6 +322,10 @@ export function ensureProcessorRunning(): void {
   // setTimeout respawn — not the lazy spawn from this entrypoint.
   if (state.childCrashed) return;
   if (!state.child) {
+    if (!pepperAvailable()) {
+      log.debug('Deferring background-job child until the encryption key is resolved');
+      return;
+    }
     spawnChild();
     startDispatcher();
   }

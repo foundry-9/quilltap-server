@@ -14,6 +14,7 @@ import {
   updateParticipantSchema,
   addParticipantSchema,
   chatUpdateRequestSchema,
+  withManualRenameFlag,
 } from './schemas';
 import {
   postHostAddAnnouncement,
@@ -516,7 +517,7 @@ export async function processChatUpdates(
       }
     }
 
-    const result = await repos.chats.update(chatId, validatedData.chat);
+    const result = await repos.chats.update(chatId, withManualRenameFlag(validatedData.chat));
     if (result) updatedChat = result;
 
     // Phase H note: `chat.scenarioText` feeds the {{scenario}} template

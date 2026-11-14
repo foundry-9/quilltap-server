@@ -18,6 +18,7 @@
  */
 
 import { sanitizeFileName } from '@/lib/mount-index/sanitize-file-name';
+import { foldStorePath } from '@/lib/mount-index/store-path-fold';
 
 /** The rules one item tree files by. */
 export interface ItemFolderRules {
@@ -69,6 +70,67 @@ export class ItemNotInLocationError extends Error {
   }
 }
 
+/**
+ * The four folder errors for one family, each a subclass of the shared base
+ * (so the routes' status mapping holds) named for the family — e.g.
+ * `defineItemFolderErrors('Inventory', 'inventory')` gives
+ * `InventoryFolderPathError` … `InventoryItemNotInLocationError`. `member`
+ * names what is filed (`Entry` for the Atlas).
+ */
+export function defineItemFolderErrors(prefix: string, noun: string, member = 'Item') {
+  class FolderPathError extends ItemFolderPathError {
+    constructor(message: string) {
+      super(message);
+      this.name = `${prefix}FolderPathError`;
+    }
+  }
+  class FolderNotFoundError extends ItemFolderNotFoundError {
+    constructor(folder: string) {
+      super(folder, noun);
+      this.name = `${prefix}FolderNotFoundError`;
+    }
+  }
+  class FolderConflictError extends ItemFolderConflictError {
+    constructor(folder: string, message?: string) {
+      super(folder, message, noun);
+      this.name = `${prefix}FolderConflictError`;
+    }
+  }
+  class NotInLocationError extends ItemNotInLocationError {
+    constructor(ids: string[]) {
+      super(ids, noun);
+      this.name = `${prefix}${member}NotInLocationError`;
+    }
+  }
+  return { FolderPathError, FolderNotFoundError, FolderConflictError, NotInLocationError };
+}
+
+/**
+ * One family's folder helpers, bound to its rules and file extension: what
+ * each family's `folders.ts` re-exports under its own names, so the rules
+ * live once.
+ */
+export function defineItemFolderFamily(rules: ItemFolderRules, ext: string, errors: { FolderPathError: new (message: string) => Error }) {
+  const pathError = (message: string) => new errors.FolderPathError(message);
+  return {
+    /** Normalise an operator-typed folder path. */
+    normalizePath: (input: string | null | undefined): string => normalizeItemFolderPath(rules, input, pathError),
+    /** A folder an existing item carries, in normal form or the root. */
+    normalizeOrRoot: (input: string | null | undefined): string => normalizeItemFolderPathOrRoot(rules, input),
+    /** True when `path` is structurally safe to write under the root. */
+    isSafe: (path: string): boolean => isSafeItemFolderPath(rules, path),
+    /** Resolve an operator's requested folder against the folders a tier already has. */
+    resolve: (existing: readonly string[], requested: string | null | undefined): string =>
+      resolveItemFolder(rules, existing, requested, pathError),
+    /** True when `path` is already in normal form. */
+    isValid: (path: string): boolean => isValidItemFolderPath(rules, path),
+    /** The folder a document lives in: `Root/A/B/x.ext` → `A/B`. */
+    folderOf: (relativePath: string): string => folderOfItemPath(rules, relativePath),
+    /** True for a document path that can hold an item: an `ext` file under the root, outside reserved folders. */
+    isDocumentPath: (relativePath: string): boolean => isItemDocumentPath(rules, relativePath, ext),
+  };
+}
+
 /** A folder as the browser and the folder routes see it. */
 export interface ItemFolder {
   /** Path relative to the root folder, e.g. `Formal/Evening`. Never `''`. */
@@ -81,7 +143,7 @@ export interface ItemFolder {
 
 /** True when `segment` is reserved by `rules`, case-insensitively. */
 export function isReservedItemFolderSegment(rules: ItemFolderRules, segment: string): boolean {
-  const lower = segment.toLowerCase();
+  const lower = foldStorePath(segment);
   return rules.reserved.some((reserved) => reserved === lower);
 }
 
@@ -184,9 +246,9 @@ export function resolveItemFolder(
     .filter((segment) => segment.length > 0);
   if (raw.length === 0) return '';
 
-  const byKey = new Map(existing.map((path) => [path.toLowerCase(), path]));
+  const byKey = new Map(existing.map((path) => [foldStorePath(path), path]));
   for (let depth = raw.length; depth > 0; depth--) {
-    const stored = byKey.get(raw.slice(0, depth).join('/').toLowerCase());
+    const stored = byKey.get(foldStorePath(raw.slice(0, depth).join('/')));
     if (!stored) continue;
     if (depth === raw.length) return stored;
     const rest = normalizeItemFolderPath(rules, raw.slice(depth).join('/'), makeError);
@@ -214,7 +276,7 @@ export function isValidItemFolderPath(rules: ItemFolderRules, path: string): boo
  */
 export function folderOfItemPath(rules: ItemFolderRules, relativePath: string): string {
   const prefix = `${rules.root}/`;
-  if (!relativePath.toLowerCase().startsWith(prefix.toLowerCase())) return '';
+  if (!foldStorePath(relativePath).startsWith(foldStorePath(prefix))) return '';
   const rest = relativePath.slice(prefix.length);
   const slash = rest.lastIndexOf('/');
   return slash < 0 ? '' : rest.slice(0, slash);
@@ -231,7 +293,7 @@ export function itemFolderStorePath(rules: ItemFolderRules, folder: string): str
  */
 export function folderUnderItemRoot(rules: ItemFolderRules, storePath: string): string | null {
   const prefix = `${rules.root}/`;
-  if (!storePath.toLowerCase().startsWith(prefix.toLowerCase())) return null;
+  if (!foldStorePath(storePath).startsWith(foldStorePath(prefix))) return null;
   const folder = storePath.slice(prefix.length);
   if (!folder) return null;
   if (isReservedItemFolderSegment(rules, folderSegments(folder)[0])) return null;
@@ -250,11 +312,11 @@ export function isItemDocumentPath(
   ext: string,
   skipFileName?: (fileName: string) => boolean,
 ): boolean {
-  const prefix = `${rules.root}/`.toLowerCase();
-  const pathLower = relativePath.toLowerCase();
+  const prefix = foldStorePath(`${rules.root}/`);
+  const pathLower = foldStorePath(relativePath);
   if (!pathLower.startsWith(prefix)) return false;
   const rest = pathLower.slice(prefix.length);
-  if (rest.length === 0 || !rest.endsWith(ext.toLowerCase())) return false;
+  if (rest.length === 0 || !rest.endsWith(foldStorePath(ext))) return false;
   const segments = rest.split('/');
   if (segments.some((segment) => segment.length === 0)) return false;
   if (segments.length > 1 && isReservedItemFolderSegment(rules, segments[0])) return false;
@@ -278,16 +340,20 @@ export function joinFolder(...parts: string[]): string {
   return parts.filter((part) => part.length > 0).join('/');
 }
 
-/** Folder names are case-insensitive: `Formal` and `formal` are one folder. */
+/**
+ * Folder names are case-insensitive the way the store is (`foldStorePath`,
+ * ASCII only): `Formal` and `formal` are one folder; `Café` and `CAFÉ` are two
+ * (#224).
+ */
 export function isSameFolder(a: string | null | undefined, b: string | null | undefined): boolean {
-  return (a ?? '').toLowerCase() === (b ?? '').toLowerCase();
+  return foldStorePath(a ?? '') === foldStorePath(b ?? '');
 }
 
 /** True when `folder` is `ancestor` or nested anywhere beneath it. */
 export function isUnderFolder(folder: string, ancestor: string): boolean {
   if (ancestor.length === 0) return true;
-  const f = folder.toLowerCase();
-  const a = ancestor.toLowerCase();
+  const f = foldStorePath(folder);
+  const a = foldStorePath(ancestor);
   return f === a || f.startsWith(`${a}/`);
 }
 

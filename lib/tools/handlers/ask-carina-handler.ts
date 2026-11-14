@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { validateAskCarinaInput } from '../ask-carina-tool';
 import type { AskCarinaToolOutput } from '../ask-carina-tool';
 import type { MessageEvent } from '@/lib/schemas/types';
+import type { ToolEffect } from '../effect-types';
 
 export type { AskCarinaToolOutput };
 
@@ -29,6 +30,11 @@ export interface AskCarinaToolContext {
    * autonomous-room/forked-child path (no client stream).
    */
   emitCarinaAnswer?: (message: MessageEvent) => void;
+  /**
+   * The calling turn's effect ceiling. The answerer's own tool loop inherits
+   * it, and the Brahma Console is refused below `write`.
+   */
+  effectCeiling?: ToolEffect;
 }
 
 const moduleLogger = logger.child({ module: 'ask-carina-handler' });
@@ -37,10 +43,12 @@ const moduleLogger = logger.child({ module: 'ask-carina-handler' });
  * Derive a short human-readable error string from a CarinaErrorKind.
  */
 function errorMessage(
-  kind: 'not-found' | 'no-profile' | 'llm-failed',
+  kind: 'not-found' | 'no-profile' | 'llm-failed' | 'refused',
   detail?: string | null,
 ): string {
   switch (kind) {
+    case 'refused':
+      return detail || 'That answerer cannot be consulted from this turn.';
     case 'not-found':
       return 'No answerer by that name is on duty.';
     case 'no-profile':
@@ -84,6 +92,7 @@ export async function executeAskCarinaTool(
       whisper: parsed.whisper,
       askerParticipantId: context.callingParticipantId ?? null,
       onPosted: context.emitCarinaAnswer,
+      effectCeiling: context.effectCeiling,
     });
 
     if (result.ok) {

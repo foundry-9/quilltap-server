@@ -23,11 +23,11 @@ Export characters for:
 
 ### How to Export a Character
 
-**Method 1: From Character View**
+**Method 1: From the Character's Page**
 
-1. Open character to view
-2. Click menu (⋮ or ⋯) at top
-3. Select **Export** or **Download**
+1. Open the character's page
+2. Click the **⋯** menu in the header
+3. Select **Export…**
 4. Export options appear
 5. Choose format (usually JSON)
 6. File downloads to computer
@@ -42,11 +42,11 @@ Export characters for:
 5. Select desired format
 6. File downloads
 
-**Method 3: From Character Edit**
+**Method 3: From the Character's Page**
 
-1. Open character edit
-2. Click menu at top
-3. Select **Export**
+1. Open the character's page
+2. Click the **⋯** menu in the header
+3. Select **Export…**
 4. Choose format
 5. File downloads
 
@@ -245,23 +245,22 @@ Before finalizing import, see preview of:
 
 **Issue: Character imports but name is weird**
 
-1. Edit character after import
-2. Change name as desired
-3. Save
+1. Open the character's page after import
+2. Change the name in the **Facts** card on **Details**
+3. It saves when you leave the field
 
 **Issue: Avatar/image doesn't import**
 
 1. Character imports without image
-2. Edit character
-3. Upload new avatar
-4. Re-save
+2. Open the character's page
+3. Click the avatar in the header and choose **Upload…**
 
 **Issue: System prompt looks wrong**
 
 1. Character imported with original prompt
-2. Edit System Prompts tab
-3. Correct or replace prompt
-4. Save
+2. Open the character's **Prompts** section
+3. Open the prompt with its pencil, correct or replace it
+4. Save the dialog
 
 **Issue: Tags don't exist in new Quilltap**
 
@@ -490,7 +489,7 @@ This makes it easy to:
 
 1. Check original character
 2. If export was wrong, re-export
-3. Manually edit character after import
+3. Correct the character on their page after import
 4. Test character
 
 ### Problem: SillyTavern Character Won't Import

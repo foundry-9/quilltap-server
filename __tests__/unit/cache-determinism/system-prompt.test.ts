@@ -47,13 +47,11 @@ const FIXTURE_CHARACTER: Character = {
   exampleDialogues: '"Two readings off — never one." Iris tapped the brass dial of her sextant.',
   physicalDescription: {
     id: '33333333-3333-3333-3333-333333333333',
-    name: 'standard',
     shortPrompt: 'auburn hair, ink-stained fingers, brass goggles around her neck',
     mediumPrompt: '',
     longPrompt: '',
     completePrompt: '',
     fullDescription: '',
-    usageContext: 'general',
   } as NonNullable<Character['physicalDescription']>,
   defaultImageProfileId: null,
   imageProfileId: null,
@@ -112,6 +110,11 @@ const IDENTITY_STACK_GOLDENS: Record<number, string> = {
   //   personality/example dialogues. See
   //   docs/developer/features/complete/prompt-person-consistency.md §3.1–3.2.
   2: '1408705ab29bb3ba',
+  // 3 (2026-11-06): the physical description's name and usage context were
+  //   retired — the appearance line is now "This is how you look: …" with no
+  //   quoted label (it was always "default" for a vault character) and no
+  //   "(best used: …)" note.
+  3: '5ba4cb7896b87c9d',
 }
 
 describe('cache-determinism: system prompt', () => {
@@ -162,10 +165,13 @@ describe('cache-determinism: system prompt', () => {
   //     wrappers added to manifesto/personality/example dialogues. Verified as
   //     the sole delta: the diff touches only those six template literals (plus
   //     comments). See prompt-person-consistency.md §3.1–3.2.
+  //   937ea8197a65d022 → e38cd30373a0b89c  (2026-11-06) the physical
+  //     description's name and usage context retired (builder version 3):
+  //     the appearance line drops its quoted label and "(best used: …)" note.
   it('buildSystemPrompt fixture hash matches checked-in golden', () => {
     const golden = process.env.UPDATE_GOLDEN_PROMPT_HASH === '1'
       ? hash(buildSystemPrompt(FIXTURE_OPTIONS))
-      : '937ea8197a65d022'
+      : 'e38cd30373a0b89c'
     const actual = hash(buildSystemPrompt(FIXTURE_OPTIONS))
     if (actual !== golden) {
       // Surface the new hash so the engineer can update the golden
@@ -192,10 +198,12 @@ describe('cache-determinism: system prompt', () => {
   // second-person tool-reinforcement change as the base golden above.
   // 74c9b488b4a1517c → bc37032e92411263 (2026-08-22), the same identity-stack
   // person-consistency wording (builder version 2) as the base golden above.
+  // bc37032e92411263 → 9eb848b166a7f17f (2026-11-06), the retired appearance
+  // label and usage context (builder version 3).
   it('buildSystemPrompt with a Taboo list matches its own checked-in golden', () => {
     const golden = process.env.UPDATE_GOLDEN_PROMPT_HASH === '1'
       ? hash(buildSystemPrompt(FIXTURE_OPTIONS_WITH_TABOO))
-      : 'bc37032e92411263'
+      : '9eb848b166a7f17f'
     const actual = hash(buildSystemPrompt(FIXTURE_OPTIONS_WITH_TABOO))
     if (actual !== golden) {
       console.error(
@@ -220,7 +228,8 @@ describe('cache-determinism: system prompt', () => {
     const stack = buildIdentityStack(FIXTURE_STACK_ARGS)
     expect(stack).toContain('You also go by: Vee, The Mapmaker. Others may address you by any of these names.')
     expect(stack).toContain('Your pronouns are she/her/hers. Use them whenever you refer to yourself in narration, and expect others to use them for you.')
-    expect(stack).toContain('This is how you look — "standard"')
+    expect(stack).toContain('This is how you look: auburn hair')
+    expect(stack).not.toContain('best used')
     expect(stack).toContain('## Character Personality\nThe following is what you know about yourself. Others do not see it unless you show them.')
     expect(stack).toContain('## Example Dialogue Style\nThis is how you speak.')
     expect(stack).not.toContain('This character')

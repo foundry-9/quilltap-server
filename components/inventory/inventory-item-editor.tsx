@@ -279,7 +279,7 @@ export function InventoryItemEditor({
   const textField = (key: 'name' | 'title' | 'emoji', label: string, placeholder?: string) => (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <label className="text-sm text-foreground" htmlFor={`inventory-${key}`}>{label}</label>
+        <label className="text-sm qt-text" htmlFor={`inventory-${key}`}>{label}</label>
         {inheritToggle(key)}
       </div>
       <input
@@ -296,7 +296,7 @@ export function InventoryItemEditor({
   const areaField = (key: 'description' | 'imageDescription' | 'metadataText', label: string, hint: string, rows = 3) => (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <label className="text-sm text-foreground" htmlFor={`inventory-${key}`}>{label}</label>
+        <label className="text-sm qt-text" htmlFor={`inventory-${key}`}>{label}</label>
         {inheritToggle(key)}
       </div>
       <p className="qt-text-xs qt-text-secondary">{hint}</p>
@@ -312,7 +312,7 @@ export function InventoryItemEditor({
 
   const checkField = (key: 'equippedByDefault' | 'canCopy' | 'isArchetype', label: string, hint: string) => (
     <div className="flex items-start justify-between gap-2">
-      <label className="flex items-start gap-2 text-sm text-foreground">
+      <label className="flex items-start gap-2 text-sm qt-text">
         <input
           type="checkbox"
           className="qt-checkbox mt-0.5"
@@ -363,7 +363,7 @@ export function InventoryItemEditor({
         {areaField('imageDescription', 'How it should be drawn', 'Rendering hints joined to the character\'s appearance while carried, and the subject of the object\'s own picture. Leave empty and the object is invisible in avatars, story backgrounds and every other picture of the character (its own picture falls back to the description above).', 2)}
         {isKit && (
           <fieldset className="space-y-1">
-            <legend className="text-sm text-foreground">Members</legend>
+            <legend className="text-sm qt-text">Members</legend>
             <p className="qt-text-xs qt-text-secondary">
               Equipping the kit takes up every member; an archetype member is made into an instance for the character who equips it.
             </p>
@@ -398,7 +398,7 @@ export function InventoryItemEditor({
             {checkField('canCopy', 'Can be copied', 'Off refuses Duplicate and copy-transfers; moving and instantiating stay allowed.')}
             {!isInstance && checkField('isArchetype', 'Archetype', 'A class of object, never carried itself; characters get instances of it.')}
             <div className="flex items-center gap-2">
-              <label className="text-sm text-foreground" htmlFor="inventory-maxEquipped">Carried at most</label>
+              <label className="text-sm qt-text" htmlFor="inventory-maxEquipped">Carried at most</label>
               <input
                 id="inventory-maxEquipped"
                 type="number"
@@ -423,14 +423,14 @@ export function InventoryItemEditor({
             rootLabel="Inventory (top level)"
             placeholder={isKit ? 'e.g., Loadouts' : 'e.g., Weapons/Edged'}
             hint="Where it is filed for your browsing; it never changes what anyone carries."
-            labelClassName="text-sm text-foreground block mb-1"
+            labelClassName="text-sm qt-text block mb-1"
             inputClassName="qt-input qt-input-sm w-full"
             selectClassName="qt-select qt-select-sm w-full"
           />
         </div>
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <label className="text-sm text-foreground" htmlFor="inventory-svg">SVG glyph</label>
+            <label className="text-sm qt-text" htmlFor="inventory-svg">SVG glyph</label>
             {inheritToggle('svg')}
           </div>
           <div className="flex items-start gap-3">
@@ -495,7 +495,7 @@ function InventoryPicturesSection({ container, item }: { container: InventoryCon
   return (
     <section className="space-y-2 border-t qt-border-default pt-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm text-foreground">Pictures</h3>
+        <h3 className="text-sm qt-text">Pictures</h3>
         <div className="flex items-center gap-2">
           <label className="qt-button-ghost qt-button-sm cursor-pointer">
             Upload…

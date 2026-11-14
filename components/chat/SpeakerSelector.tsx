@@ -124,7 +124,7 @@ export function SpeakerSelector({
                   className={`
                     w-full flex items-center gap-3 px-3 py-2 text-left transition-colors
                     ${isActive
-                      ? 'qt-bg-primary/10 text-primary'
+                      ? 'qt-bg-primary/10 qt-text-brand'
                       : 'hover:qt-bg-muted'
                     }
                   `}

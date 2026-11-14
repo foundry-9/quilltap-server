@@ -62,6 +62,7 @@ export { StorytellerRoundsRepository } from './storyteller-rounds.repository';
 export { MemoryExtractionCursorsRepository } from './memory-extraction-cursors.repository';
 export { WardrobeWearRepository } from './wardrobe-wear.repository';
 export { ChatWardrobeHistoryRepository } from './chat-wardrobe-history.repository';
+export { ChatAvatarTimelineRepository } from './chat-avatar-timeline.repository';
 export { TerminalSessionsRepository } from './terminal-sessions.repository';
 export { TextReplacementRulesRepository, TextReplacementRuleConflictError } from './text-replacement-rules.repository';
 
@@ -110,6 +111,7 @@ import { StorytellerRoundsRepository } from './storyteller-rounds.repository';
 import { MemoryExtractionCursorsRepository } from './memory-extraction-cursors.repository';
 import { WardrobeWearRepository } from './wardrobe-wear.repository';
 import { ChatWardrobeHistoryRepository } from './chat-wardrobe-history.repository';
+import { ChatAvatarTimelineRepository } from './chat-avatar-timeline.repository';
 import { TerminalSessionsRepository } from './terminal-sessions.repository';
 import { TextReplacementRulesRepository } from './text-replacement-rules.repository';
 
@@ -163,6 +165,7 @@ export interface RepositoryContainer {
   memoryExtractionCursors: MemoryExtractionCursorsRepository;
   wardrobeWear: WardrobeWearRepository;
   wardrobeHistory: ChatWardrobeHistoryRepository;
+  avatarTimeline: ChatAvatarTimelineRepository;
   terminalSessions: TerminalSessionsRepository;
   textReplacementRules: TextReplacementRulesRepository;
 }
@@ -231,6 +234,8 @@ export function createRepositories(): RepositoryContainer {
       wardrobeWear: new WardrobeWearRepository(chatsRepo),
       // Outfit history: `settle` reads the live slots through this chats repo.
       wardrobeHistory: new ChatWardrobeHistoryRepository(chatsRepo),
+      // Salon avatar timeline: `record` is the one runtime writer.
+      avatarTimeline: new ChatAvatarTimelineRepository(),
       terminalSessions: new TerminalSessionsRepository(),
       textReplacementRules: new TextReplacementRulesRepository(),
     };

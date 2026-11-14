@@ -38,10 +38,10 @@ export function useTasksQueue() {
 
   const [error, setError] = useState<string | null>(null)
 
-  // Sync error from SWR
+  // Copy the query error into local state the handlers also set
   useEffect(() => {
     if (loadError) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync SWR error to local error state so handlers can also set errors
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- copies the query error into local error state, which the queue action handlers also set
       setError(getErrorMessage(loadError))
     } else {
       setError(null)
@@ -57,11 +57,7 @@ export function useTasksQueue() {
         setControlLoading(true)
         setError(null)
 
-        const res = await fetch('/api/v1/system/tools?action=tasks-queue', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
-        })
+        const res = await fetch(`/api/v1/system/tools?action=tasks-queue-${action}`, { method: 'POST' })
 
         if (!res.ok) {
           throw new Error(`Failed to ${action} queue`)

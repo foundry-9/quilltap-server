@@ -874,7 +874,16 @@ function renderScriptorium(push: Push, data: AlmanackReportData): void {
     push(
       `- **⚠ Missing the keystone**: ${s.characterVaults.missingKeystone}. ` +
         'Reading one of these characters raises `CharacterVaultUnavailableError` — a hard failure ' +
-        'for that character, not a silently empty one.',
+        'for that character, not a silently empty one. `GET /api/v1/characters/[id]?action=vault-health` ' +
+        'reports which files are absent; `POST …?action=repair-vault` seeds them (and only them).',
+    );
+  }
+  if (s.characterVaults.invalidKeystone.length > 0) {
+    push(
+      `- **⚠ Keystone present but invalid**: ${s.characterVaults.invalidKeystone.length} ` +
+        `(${s.characterVaults.invalidKeystone.map((v) => v.name).join(', ')}). The startup heal left these ` +
+        'untouched — their settings live nowhere else. Fix `properties.json` by hand; the character page shows ' +
+        'the parse error.',
     );
   }
   push(`- **With a \`metadata.json\`**: ${s.characterVaults.withMetadata}`, '');

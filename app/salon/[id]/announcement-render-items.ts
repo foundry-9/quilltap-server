@@ -1,11 +1,14 @@
 import type { Message } from './types'
+import type { GreenRoomState } from './hooks/useGreenRoom'
 import { isEstablishedFactAnnouncement } from '@/lib/chat/established-fact'
 
 /**
  * A single entry in the virtualized Salon message list. Either an ordinary
  * message row (regular turn, expanded announcement, standalone TOOL row) or a
  * group of consecutive *collapsed* announcements that the UI packs into one
- * flex-wrapping row of chips.
+ * flex-wrapping row of chips, or a docked Green Room card (a UI-only record
+ * of an opening or a watched join, placed where its part of the conversation
+ * began).
  *
  * `messageIndex` is the index into the flat `renderMessages` array (the
  * post-tool-grouping list). It is preserved through this transform because the
@@ -20,6 +23,14 @@ export type RenderItem =
       id: string
       members: { message: Message; messageIndex: number }[]
     }
+  | { kind: 'green-room'; id: string; room: GreenRoomState }
+
+/** The message ids a render-item stands for (none for a Green Room card). */
+export function renderItemMessageIds(item: RenderItem): string[] {
+  if (item.kind === 'message') return [item.message.id]
+  if (item.kind === 'announcement-group') return item.members.map(m => m.message.id)
+  return []
+}
 
 /**
  * Whether a Staff-authored announcement always renders as a full, expanded row
@@ -113,4 +124,35 @@ export function buildRenderItems(
   flushGroup()
 
   return items
+}
+
+/**
+ * Place docked Green Room cards into the render-items, each at the head of its
+ * own part of the conversation: just after the last item that holds a message
+ * already on the page when that room began (the very top when none does).
+ * Rooms keep their session order, so two docked at one point stay in order.
+ *
+ * Pure transform: no React, no side effects.
+ */
+export function insertGreenRoomItems(items: RenderItem[], rooms: GreenRoomState[]): RenderItem[] {
+  if (rooms.length === 0) return items
+  const placements = rooms.map((room, order) => {
+    const prior = new Set(room.priorMessageIds)
+    let at = 0
+    for (let i = items.length - 1; i >= 0; i--) {
+      if (renderItemMessageIds(items[i]).some(id => prior.has(id))) {
+        at = i + 1
+        break
+      }
+    }
+    return { at, order, item: { kind: 'green-room', id: `green-room:${room.id}`, room } as RenderItem }
+  })
+  const out: RenderItem[] = []
+  let p = 0
+  placements.sort((a, b) => a.at - b.at || a.order - b.order)
+  for (let i = 0; i <= items.length; i++) {
+    while (p < placements.length && placements[p].at === i) out.push(placements[p++].item)
+    if (i < items.length) out.push(items[i])
+  }
+  return out
 }

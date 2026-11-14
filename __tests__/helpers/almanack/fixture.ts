@@ -447,7 +447,13 @@ export function makeAlmanackFixture(
         policyCharacterReadDenied: 4,
         policyCharacterWriteDenied: 11,
       },
-      characterVaults: { total: 40, withKeystone: 39, missingKeystone: 1, withMetadata: 22 },
+      characterVaults: {
+        total: 40,
+        withKeystone: 39,
+        missingKeystone: 1,
+        invalidKeystone: [{ characterId: 'char-broken', name: 'Fenwick', detail: 'properties.json unparseable' }],
+        withMetadata: 22,
+      },
       wardrobe: [
         { tier: 'character', items: 410, archived: 38 },
         { tier: 'project', items: 12, archived: 0 },

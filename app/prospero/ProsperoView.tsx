@@ -6,7 +6,7 @@
  * Displays all user projects with counts and actions.
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useProjects } from './hooks/useProjects'
 import { ProjectsGrid, CreateProjectDialog, DeleteProjectDialog } from './components'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
@@ -37,14 +37,10 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
     setSelectedId: setSelectedProjectId,
   } = useInTabDrilldown(initialProjectId)
 
-  useEffect(() => {
-    fetchProjects()
-  }, [fetchProjects])
-
-  // Navigating back to this tab refreshes the list in place (silent — no
-  // loading flip, which would unmount an in-place project detail).
+  // Navigating back to this tab refreshes the list in place (a cached list
+  // stays on screen, so an in-place project detail stays mounted).
   useOnTabActivated(() => {
-    void fetchProjects({ silent: true })
+    void fetchProjects()
   })
 
   const handleCreate = async (name: string, description: string | null) => {
@@ -66,7 +62,7 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading projects...</p>
+        <p className="text-lg qt-text">Loading projects...</p>
       </div>
     )
   }
@@ -95,7 +91,7 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
         <h1 className="qt-heading-1 leading-tight">Projects</h1>
         <button
           onClick={() => setCreateDialogOpen(true)}
-          className="qt-button inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="qt-button qt-button-primary"
         >
           Create Project
         </button>
@@ -138,7 +134,7 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
 function ProsperoListShell({ children }: { children: ReactNode }) {
   const bgStyle = useSubsystemBackgroundStyle('prospero')
   return (
-    <div className="qt-page-container text-foreground" style={bgStyle}>
+    <div className="qt-page-container qt-text" style={bgStyle}>
       {children}
     </div>
   )

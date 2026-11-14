@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
+import { usePatchChat } from '@/lib/chat/use-patch-chat'
 
 interface ChatRenameModalProps {
   isOpen: boolean
@@ -24,7 +25,8 @@ export default function ChatRenameModal({
   const inputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState(currentTitle)
   const [useAutoRename, setUseAutoRename] = useState(!initialIsManuallyRenamed)
-  const [saving, setSaving] = useState(false)
+  const { patch, isSaving } = usePatchChat(chatId)
+  const saving = isSaving('title')
   const [regenerating, setRegenerating] = useState(false)
 
   // Sync local state when upstream props change
@@ -94,36 +96,13 @@ export default function ChatRenameModal({
       return
     }
 
-    try {
-      setSaving(true)
-
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat: {
-            title: trimmedTitle,
-            isManuallyRenamed: !useAutoRename,
-          },
-        }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to rename chat')
-      }
-
-      showSuccessToast('Chat renamed')
-
+    const ok = await patch(
+      { title: trimmedTitle, isManuallyRenamed: !useAutoRename },
+      { success: 'Chat renamed', failure: 'Failed to rename chat' },
+    )
+    if (ok) {
       onSuccess?.(trimmedTitle, !useAutoRename)
       onClose()
-    } catch (error) {
-      console.error('[ChatRenameModal] Failed to rename chat', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      showErrorToast(error instanceof Error ? error.message : 'Failed to rename chat')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -189,7 +168,7 @@ export default function ChatRenameModal({
             checked={useAutoRename}
             onChange={(e) => handleAutoRenameToggle(e.target.checked)}
             disabled={isLoading}
-            className="rounded border-input"
+            className="qt-checkbox"
           />
           <span className="qt-text-small">
             Use automatic naming

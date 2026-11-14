@@ -6,11 +6,15 @@
  * JSON envelope the model can read.
  *
  * This is the load-bearing safety surface. The server holds all three
- * databases open with **read-write** handles, so read-only is guaranteed here,
- * by defense in depth (any one layer failing closed is enough):
+ *   databases open with **read-write** handles, so queries run on a separate
+ *   `readonly: true` connection to the same file, and read-only is further
+ *   guaranteed here by defense in depth (any one layer failing closed is
+ *   enough):
  *
  *   1. A single-statement + write-keyword pre-scan (literals/comments stripped
- *      first so semicolons and keywords inside strings don't trip it).
+ *      first so semicolons and keywords inside strings don't trip it). PRAGMA
+ *      is limited to an allowlist of introspection pragmas taking a single
+ *      identifier argument.
  *   2. The authoritative `better-sqlite3` `stmt.readonly` check — fail closed
  *      if it is anything but exactly `true`.
  *   3. A `max_rows` cap on materialized results.
@@ -21,6 +25,7 @@
 
 import type { Database as DatabaseType } from 'better-sqlite3';
 import { logger } from '@/lib/logger';
+import { getReadonlyQueryClient } from '@/lib/database/backends/sqlite/readonly-query-client';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { getRawLLMLogsDatabase } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
@@ -156,6 +161,36 @@ function stripSqlLiteralsAndComments(sql: string): string {
   return out;
 }
 
+/** Introspection pragmas that may be used, with a single identifier argument. */
+const ALLOWED_PRAGMAS = new Set([
+  'table_info', 'table_xinfo', 'table_list', 'index_list', 'index_info',
+  'index_xinfo', 'foreign_key_list',
+]);
+
+const PRAGMA_REFUSAL =
+  "Only introspection PRAGMAs are permitted (table_info, table_xinfo, table_list, index_list, index_info, index_xinfo, foreign_key_list), with a single table or index name and no assignment. Prefer the table-valued forms, e.g. SELECT * FROM pragma_table_info('memories').";
+
+/**
+ * Validate a statement that begins with PRAGMA against the allowlist. The
+ * argument must be one bare identifier or one quoted name, in either the
+ * `name(arg)` or `name arg` form; `name = value` is never accepted. Works on
+ * the original text because the argument may be a quoted literal.
+ */
+function pragmaRejection(sql: string): string | null {
+  const text = sql.trim().replace(/;\s*$/, '');
+  // One bare word, or one quoted name (", ', `, or [ ]).
+  const ident = '(?:[A-Za-z_]\\w*|"(?:[^"]|"")+"|\'(?:[^\']|\'\')+\'|`[^`]+`|\\[[^\\]]+\\])';
+  const re = new RegExp(
+    '^PRAGMA\\s+(?:' + ident + '\\s*\\.\\s*)?([A-Za-z_]\\w*)\\s*(?:\\(\\s*' + ident + '\\s*\\)|\\s+' + ident + ')?$',
+    'i'
+  );
+  const match = re.exec(text);
+  if (!match || !ALLOWED_PRAGMAS.has(match[1].toLowerCase())) {
+    return PRAGMA_REFUSAL;
+  }
+  return null;
+}
+
 /**
  * Layer 1: single-statement + write-keyword pre-scan. Returns an error message
  * to reject with, or null if the query passes the structural checks. This is
@@ -180,9 +215,19 @@ function preScanRejection(sql: string): string | null {
     return 'Only read-only queries are permitted (SELECT, WITH … SELECT, EXPLAIN, or a read-only PRAGMA).';
   }
 
-  // Reject the mutating PRAGMA assignment form: PRAGMA <name> = <value>.
-  if (/^PRAGMA\b/i.test(withoutTrailing) && /^PRAGMA\s+[\w.]+\s*=/i.test(withoutTrailing)) {
-    return 'Mutating PRAGMA assignments are not permitted; only read-only PRAGMAs (e.g. PRAGMA table_info(<table>)) are allowed.';
+  // PRAGMA: only allowlisted introspection pragmas with one identifier argument.
+  if (/^PRAGMA\b/i.test(withoutTrailing)) {
+    const pragmaError = pragmaRejection(sql);
+    if (pragmaError) return pragmaError;
+  }
+
+  // Table-valued pragma_*() functions: allowlisted names only.
+  const tvfRe = /\bpragma_([A-Za-z_]\w*)/gi;
+  let tvf: RegExpExecArray | null;
+  while ((tvf = tvfRe.exec(withoutTrailing)) !== null) {
+    if (!ALLOWED_PRAGMAS.has(tvf[1].toLowerCase())) {
+      return PRAGMA_REFUSAL;
+    }
   }
 
   // Reject any write-statement keyword appearing as a standalone word — catches
@@ -325,12 +370,23 @@ export async function executeRunSqlTool(
   }
 
   // Resolve the raw database handle (already open + decrypted by the server).
-  const db = resolveDatabase(database);
-  if (!db) {
+  const sharedDb = resolveDatabase(database);
+  if (!sharedDb) {
     return {
       success: false,
       error: `The ${database} database is not available (uninitialized or degraded).`,
     };
+  }
+
+  // Run on a dedicated read-only connection to the same file, so nothing a
+  // statement does at prepare time can write. In-memory handles (no file to
+  // reopen) keep the shared handle; the allowlist and readonly checks still apply.
+  const db = getReadonlyQueryClient(sharedDb) ?? sharedDb;
+  if (db === sharedDb) {
+    sqlLogger.debug('run_sql using the shared handle (no read-only connection available)', {
+      userId: context.userId,
+      database,
+    });
   }
 
   // Prepare the statement (also rejects multi-statement SQL authoritatively).

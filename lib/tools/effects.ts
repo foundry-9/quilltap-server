@@ -11,16 +11,17 @@
  * built-in tool has no entry here, so declaring an effect is as much a part of
  * adding a tool as registering it there.
  *
- * Consumers: the executor's ceiling check (`lib/chat/tool-executor.ts`, the
- * real guarantee), `buildTools()`'s tool-list filter, the autonomous-room
- * destructive gate, and the storyteller bid tier.
+ * Consumers: the tool permit ({@link resolveToolPermit}, asked by the executor
+ * in `lib/chat/tool-executor.ts` before every call — the real guarantee),
+ * `buildTools()`'s tool-list filter, the autonomous-room destructive gate, and
+ * the storyteller bid tier.
  *
  * @module tools/effects
  */
 
 import {
   isComputedToolEffect,
-  TOOL_EFFECT_RANK,
+  isWithinCeiling,
   UNDECLARED_TOOL_EFFECT,
   type ToolEffect,
   type ToolEffectLookups,
@@ -221,15 +222,6 @@ export function maxEffectOfTool(name: string, ctx: ToolEffectContext = {}): Tool
   return ctx.pluginToolEffects?.get(name) ?? UNDECLARED_TOOL_EFFECT;
 }
 
-/** The highest of a set of effects (`none` for an empty set). */
-export function highestToolEffect(effects: Iterable<ToolEffect>): ToolEffect {
-  let highest: ToolEffect = 'none';
-  for (const effect of effects) {
-    if (TOOL_EFFECT_RANK[effect] > TOOL_EFFECT_RANK[highest]) highest = effect;
-  }
-  return highest;
-}
-
 /** The tool result's text when a call is refused for exceeding the turn's ceiling. */
 export function describeCeilingRefusal(name: string, effect: ToolEffect, ceiling: ToolEffect): string {
   return (
@@ -249,4 +241,113 @@ function ceilingPhrase(ceiling: ToolEffect): string {
     case 'destroy':
       return 'any tool';
   }
+}
+
+// ---------------------------------------------------------------------------
+// The tool permit — "may this seat run this tool now?"
+// ---------------------------------------------------------------------------
+
+/**
+ * What a seat was offered this turn. A model-driven loop carries the names of
+ * the tools it listed (`buildTools()` builds it, after the per-character
+ * switches, the surface flags and the chat's disabled tools are applied); a run
+ * the operator started by hand (the Salon's Run Tool) carries `operator`, which
+ * skips the membership test but never the ceiling or the operator-surface gate.
+ */
+export type ToolOffer =
+  | { readonly kind: 'offered'; readonly names: ReadonlySet<string> }
+  | { readonly kind: 'operator' };
+
+/** The offer for a model-driven loop: exactly these tool names. */
+export function offeredTools(names: Iterable<string>): ToolOffer {
+  return { kind: 'offered', names: new Set(names) };
+}
+
+/** The offer for a run the operator started by hand. */
+export const OPERATOR_TOOL_OFFER: ToolOffer = Object.freeze({ kind: 'operator' as const });
+
+/**
+ * Tools that only ever run on the operator surface (the Brahma Console):
+ * read-only SQL and the lookup shortcuts, which read every character's
+ * memories and every conversation. Refused off that surface whatever the offer.
+ */
+export const OPERATOR_SURFACE_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  'run_sql',
+  'lookup_character',
+  'lookup_memories',
+  'lookup_messages',
+  'read_messages',
+]);
+
+/** Everything the permit needs beyond the call itself. */
+export interface ToolPermitContext extends ToolEffectContext {
+  /** What this seat was offered this turn; absent means nothing was, and every call is refused. */
+  offer: ToolOffer | undefined;
+  /** The highest effect a call may have this turn; unset = no ceiling. */
+  effectCeiling?: ToolEffect;
+  /** The call runs on the operator surface (the Brahma Console). */
+  operatorSurface?: boolean;
+}
+
+export type ToolPermitRefusal = 'no-offer' | 'operator-surface-only' | 'not-offered' | 'above-ceiling';
+
+export type ToolPermit =
+  | { readonly permitted: true; readonly effect: ToolEffect }
+  | {
+      readonly permitted: false;
+      readonly refusal: ToolPermitRefusal;
+      readonly effect: ToolEffect;
+      /** The tool result's text: says the call was not run and why. */
+      readonly message: string;
+    };
+
+/**
+ * May this seat run this tool now? In order: an offer must exist; an
+ * operator-surface-only tool needs the operator surface; a model-driven call
+ * must name a tool it was offered; and the call's effect must sit within the
+ * turn's ceiling. The executor asks this before every call — it is the
+ * guarantee, and the tool list only spares the model offers it cannot use.
+ */
+export function resolveToolPermit(name: string, input: unknown, ctx: ToolPermitContext): ToolPermit {
+  const effect = effectOfToolCall(name, input, ctx);
+
+  if (!ctx.offer) {
+    return {
+      permitted: false,
+      refusal: 'no-offer',
+      effect,
+      message: `Not run: \`${name}\` was called with no tool slate for this turn. Nothing was changed.`,
+    };
+  }
+
+  if (OPERATOR_SURFACE_ONLY_TOOLS.has(name) && !ctx.operatorSurface) {
+    return {
+      permitted: false,
+      refusal: 'operator-surface-only',
+      effect,
+      message: `${name} is only available in the Brahma Console.`,
+    };
+  }
+
+  if (ctx.offer.kind === 'offered' && !ctx.offer.names.has(name)) {
+    return {
+      permitted: false,
+      refusal: 'not-offered',
+      effect,
+      message:
+        `Not run: \`${name}\` is not among the tools offered to you this turn. ` +
+        'Nothing was changed. Carry on without it.',
+    };
+  }
+
+  if (ctx.effectCeiling && !isWithinCeiling(effect, ctx.effectCeiling)) {
+    return {
+      permitted: false,
+      refusal: 'above-ceiling',
+      effect,
+      message: describeCeilingRefusal(name, effect, ctx.effectCeiling),
+    };
+  }
+
+  return { permitted: true, effect };
 }

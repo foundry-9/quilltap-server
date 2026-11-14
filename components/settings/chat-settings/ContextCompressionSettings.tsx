@@ -150,15 +150,15 @@ export function ContextCompressionSettingsComponent({
             disabled={saving}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
               compressionSettings.enabled
-                ? 'bg-primary'
-                : 'qt-bg-muted'
+                ? 'qt-bg-primary'
+                : 'qt-toggle-off'
             } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
             role="switch"
             aria-checked={compressionSettings.enabled}
             aria-labelledby={`${id}-enabled`}
           >
             <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
+              className={`inline-block h-4 w-4 transform rounded-full qt-bg-default transition-transform ${
                 compressionSettings.enabled ? 'translate-x-6' : 'translate-x-1'
               }`}
             />

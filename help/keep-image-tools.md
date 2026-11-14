@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=chat
+url: /settings?group=composer-display
 ---
 
 # The Photo Album — Looking At, Keeping, Listing, and Re-Attaching Images
@@ -85,5 +85,5 @@ The four photo album tools live in the same group as the document editing tools 
 To navigate to the chat settings where tools can be configured:
 
 ```
-help_navigate(url: "/settings?tab=chat")
+help_navigate(url: "/settings?group=composer-display")
 ```

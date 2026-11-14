@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=memory
+url: /settings?group=context-memory
 ---
 
 # When You Take the Reins Yourself
 
-> **[Open this page in Quilltap](/settings?tab=memory)**
+> **[Open this page in Quilltap](/settings?group=context-memory)**
 
 It is one of the quieter pleasures of this establishment that you need not always leave a character to the machine's devices. Now and again you may wish to *be* them for a spell — to take up the pen, speak in their voice, and play the part with your own hand. Quilltap has long allowed this courtesy. What it did not, until lately, allow was for the character to **remember** any of it.
 
@@ -54,7 +54,7 @@ If a character is still nursing a grudge that the story has long since settled, 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=memory")`
+`help_navigate(url: "/settings?group=context-memory")`
 
 ## Related Settings
 

@@ -33,6 +33,11 @@ jest.mock('@/lib/database/backends/sqlite/mount-index-client', () => ({
 }));
 
 const mockFilesFindAll = jest.fn();
+const mockCharactersFindAllRaw = jest.fn();
+const mockCharactersDelete = jest.fn();
+const mockProjectsFindAllRaw = jest.fn();
+const mockProjectsDelete = jest.fn();
+const mockLlmLogsDeleteByUserId = jest.fn();
 const mockFilesDelete = jest.fn();
 const mockCharactersFindAll = jest.fn();
 const mockMemoriesFindByCharacterId = jest.fn();
@@ -47,7 +52,7 @@ jest.mock('@/lib/repositories/user-scoped', () => ({
   getUserRepositories: () => ({
     characters: {
       findAll: (...args: unknown[]) => mockCharactersFindAll(...args),
-      delete: jest.fn(),
+      delete: (...args: unknown[]) => mockCharactersDelete(...args),
     },
     chats: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     tags: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
@@ -63,7 +68,7 @@ jest.mock('@/lib/repositories/user-scoped', () => ({
     },
     imageProfiles: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     embeddingProfiles: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
-    projects: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
+    projects: { findAll: jest.fn().mockResolvedValue([]), delete: (...args: unknown[]) => mockProjectsDelete(...args) },
     groups: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     llmLogs: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     memories: {
@@ -81,6 +86,13 @@ jest.mock('@/lib/repositories/factory', () => ({
     folders: { findByUserId: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     wardrobe: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     logEntries: { deleteAll: (...args: unknown[]) => mockLogEntriesDeleteAll(...args) },
+    characters: { findAllRaw: (...args: unknown[]) => mockCharactersFindAllRaw(...args) },
+    projects: { findAllRaw: (...args: unknown[]) => mockProjectsFindAllRaw(...args) },
+    groups: { findAllRaw: jest.fn().mockResolvedValue([]) },
+    llmLogs: {
+      findByUserId: jest.fn().mockResolvedValue([]),
+      deleteByUserId: (...args: unknown[]) => mockLlmLogsDeleteByUserId(...args),
+    },
   }),
 }));
 
@@ -118,6 +130,35 @@ describe('delete-service keepArchivedCharacterBundles', () => {
     mockMemoriesFindByCharacterId.mockResolvedValue([]);
     mockRetireMemories.mockResolvedValue({ retired: 0 });
     mockLogEntriesDeleteAll.mockResolvedValue(0);
+    mockCharactersFindAllRaw.mockResolvedValue([]);
+    mockProjectsFindAllRaw.mockResolvedValue([]);
+    mockLlmLogsDeleteByUserId.mockResolvedValue(0);
+  });
+
+  it('deletes a character, project and its memories even when their store cannot be read', async () => {
+    // The hydrated reads drop a row whose store is unreadable; the raw rows do not.
+    mockCharactersFindAll.mockResolvedValue([]);
+    mockCharactersFindAllRaw.mockResolvedValue([
+      { id: 'char-broken', userId: USER },
+      { id: 'char-someone-else', userId: 'user-2' },
+    ]);
+    mockProjectsFindAllRaw.mockResolvedValue([{ id: 'proj-broken' }]);
+    mockMemoriesFindByCharacterId.mockResolvedValue([{ id: 'mem-of-broken' }]);
+
+    await deleteUserData(USER);
+
+    expect(mockCharactersDelete).toHaveBeenCalledWith('char-broken');
+    expect(mockCharactersDelete).not.toHaveBeenCalledWith('char-someone-else');
+    expect(mockProjectsDelete).toHaveBeenCalledWith('proj-broken');
+    expect(mockRetireMemories).toHaveBeenCalledWith(['mem-of-broken'], { reason: 'restore-replace' });
+  });
+
+  it('deletes every LLM log, not only the newest 10,000', async () => {
+    mockLlmLogsDeleteByUserId.mockResolvedValue(12_345);
+
+    await deleteUserData(USER);
+
+    expect(mockLlmLogsDeleteByUserId).toHaveBeenCalledWith(USER);
   });
 
   it('clears the Log, which the per-user deletes never reach', async () => {

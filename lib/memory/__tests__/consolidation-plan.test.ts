@@ -145,7 +145,7 @@ describe('planConsolidationWrites — a new digest', () => {
   })
 
   it('sends members cold under the digest and marks the standalone considered', () => {
-    expect(plan.tierMoves).toEqual([{ supersededById: 'new-1', ids: ['m1', 'm2'] }])
+    expect(plan.tierMoves).toEqual([{ supersededById: 'new-1', ids: ['m1', 'm2'], clusterIndex: 0 }])
     expect(plan.considered).toEqual(['m3'])
   })
 
@@ -224,15 +224,24 @@ describe('planConsolidationWrites — existing digest updated in place', () => {
     expect(plan.updates).toHaveLength(1)
     const update = plan.updates[0]
     expect(update.id).toBe('d1')
-    expect(update.patch.consolidatedFrom).toEqual(['old-1', 'old-2', 'm1'])
-    expect(update.patch.reinforcementCount).toBe(7)
     expect(update.patch.importance).toBe(0.5) // clamped up to the members' (digest included) floor
-    expect(update.patch.relatedMemoryIds).toEqual(['y1'])
+    // A9: the count, links and members are deltas, never absolute fields of the patch.
+    for (const field of ['reinforcementCount', 'reinforcedImportance', 'lastReinforcedAt', 'relatedMemoryIds', 'consolidatedFrom']) {
+      expect(update.patch).not.toHaveProperty(field)
+    }
+    expect(update.baseContent).toBe(digest.content)
+    expect(update.addMembers).toEqual(['m1'])
+    expect(update.countDelta).toBe(7 - (digest.reinforcementCount ?? 1))
+    expect(update.reinforcedAt).toBe(NOW)
+    // What the deltas leave on the row as read (corpus and report only).
+    expect(update.projected.consolidatedFrom).toEqual(['old-1', 'old-2', 'm1'])
+    expect(update.projected.reinforcementCount).toBe(7)
+    expect(update.projected.relatedMemoryIds).toEqual(['y1'])
     expect(update.embedding).toEqual(new Float32Array([0, 1]))
   })
 
   it('sends the new member cold under the existing digest', () => {
-    expect(plan.tierMoves).toEqual([{ supersededById: 'd1', ids: ['m1'] }])
+    expect(plan.tierMoves).toEqual([{ supersededById: 'd1', ids: ['m1'], clusterIndex: 0 }])
   })
 })
 
@@ -257,7 +266,7 @@ describe('planConsolidationWrites — contradictions and cross-cluster links', (
       newId: ids(),
     })
     expect(plan.supersededBy.get('old')).toBe('new-1')
-    expect(plan.tierMoves).toEqual([{ supersededById: 'new-1', ids: ['new', 'other', 'old'] }])
+    expect(plan.tierMoves).toEqual([{ supersededById: 'new-1', ids: ['new', 'other', 'old'], clusterIndex: 0 }])
     expect(plan.considered).toEqual([])
   })
 
@@ -279,7 +288,7 @@ describe('planConsolidationWrites — contradictions and cross-cluster links', (
       nowIso: NOW,
       newId: ids(),
     })
-    expect(plan.tierMoves).toEqual([{ supersededById: 'new', ids: ['old'] }])
+    expect(plan.tierMoves).toEqual([{ supersededById: 'new', ids: ['old'], clusterIndex: 0 }])
     expect(plan.considered).toEqual(['new'])
   })
 
@@ -329,7 +338,7 @@ describe('planConsolidationWrites — resolved grievances (probation §9.6)', ()
   })
 
   it('marks a settled hurt, keeping its keywords and adding the tag once', () => {
-    expect(plan.resolvedMarks).toEqual([{ id: 'h1', keywords: ['brad', 'past', 'scope: wide', 'relationships', 'resolved'] }])
+    expect(plan.resolvedMarks).toEqual([{ id: 'h1', keywords: ['brad', 'past', 'scope: wide', 'relationships', 'resolved'], clusterIndex: 0 }])
   })
 
   it('never deletes or sends the marked row cold on its own account', () => {

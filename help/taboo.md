@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=chat&section=taboo
+url: /settings?section=taboo
 ---
 
 # Taboo — Phrases Not Uttered in This House
 
-> **[Open this setting in Quilltap](/settings?tab=chat&section=taboo)**
+> **[Open this setting in Quilltap](/settings?section=taboo)**
 
 Every age has its verbal tics: the turn of phrase that arrives sounding clever, is repeated by everyone within the month, and by the third month has all the freshness of a boiled handkerchief. Language models, having read rather a lot of the age, are especially prone to them. One morning your dour sea-captain, your Edwardian governess, and your dyspeptic house-elf all independently observe that a thing is "not nothing," and the illusion goes out like a gaslamp in a draught.
 
@@ -24,7 +24,7 @@ Finally, characters are forbidden to **mention, quote, or allude to the list its
 
 ## Adding and removing phrases
 
-1. Open **Settings → Chat Settings → Taboo**
+1. Open **Settings → Characters & Prompts → Taboo**
 2. Type a phrase into the box and press **Enter**, or use **Add**
 3. To lift a prohibition, click the small **×** beside the phrase
 
@@ -52,7 +52,7 @@ The list travels with your instance: it is included in exports and full backups,
 
 Characters with help tools enabled can navigate directly to this setting:
 
-`help_navigate(url: "/settings?tab=chat&section=taboo")`
+`help_navigate(url: "/settings?section=taboo")`
 
 ## Related Settings
 

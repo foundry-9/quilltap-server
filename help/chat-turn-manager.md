@@ -344,7 +344,7 @@ Some turn behavior can be configured:
 - **Auto-pause threshold** — How many turns before pausing all-LLM chats
 - **Queue behavior** — Whether queue persists across your messages
 
-Access these in Chat Settings if available.
+Access these in Settings → Games & Tools if available.
 
 ## Troubleshooting
 

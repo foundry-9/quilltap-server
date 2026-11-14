@@ -1,5 +1,5 @@
 ---
-url: /aurora/:id/edit
+url: /aurora/:id?section=prompts
 ---
 
 # Character Subprompts
@@ -38,7 +38,7 @@ Two things a subprompt is not:
 
 ## Managing subprompts on the character page
 
-Open the character in Aurora, choose the **System Prompts** tab, and look beneath the list of primary prompts. There you will find **Subprompts** with its own **+ Add Subprompt** button. Each card shows the title, the vault path, and the opening of the instruction, with pencil and bin buttons for editing and deletion.
+Open the character in Aurora, choose the **Prompts** section, and look beneath the list of primary prompts. There you will find **Subprompts** with its own **+ Add Subprompt** button. Each card shows the title, the vault path, and the opening of the instruction, with pencil and bin buttons for editing and deletion.
 
 Deleting a subprompt strikes it from every chat that had it in play, and those chats rebuild their prompt at once. Editing a subprompt likewise reaches every chat carrying it — there is no need to press the rebuild button afterwards.
 
@@ -82,7 +82,7 @@ A chat with no subprompts ticked receives nothing extra at all — not even the 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/aurora/:id/edit")`
+`help_navigate(url: "/aurora/:id?section=prompts")`
 
 ## Related Topics
 

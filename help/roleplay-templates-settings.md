@@ -1,17 +1,17 @@
 ---
-url: /settings?tab=templates&section=roleplay-templates
+url: /settings?section=roleplay-templates
 ---
 
 # Roleplay Templates Settings
 
-> **[Open this page in Quilltap](/settings?tab=templates&section=roleplay-templates)**
+> **[Open this page in Quilltap](/settings?section=roleplay-templates)**
 
-The Roleplay Templates settings tab is where you manage all your templates, set defaults, and customize formatting rules for your roleplay sessions. Here you can view built-in templates, create custom ones, and organize your formatting conventions.
+The Roleplay Templates card (in the Characters & Prompts group of Settings) is where you manage all your templates, set defaults, and customize formatting rules for your roleplay sessions. Here you can view built-in templates, create custom ones, and organize your formatting conventions.
 
 ## Accessing Roleplay Templates Settings
 
 1. Click **Settings** in the sidebar (gear icon)
-2. Look for the **Roleplay Templates** tab
+2. Open the **Characters & Prompts** group and find the **Roleplay Templates** card
 3. You'll see three main sections: Default Template, Built-in Templates, and My Templates
 
 ## Default Template Section
@@ -247,6 +247,10 @@ A delimiter's span may hold another's: emphasis inside dialogue (`"I said *stop*
 
 A delimiter is defined once and drives three things at once: the composer toolbar button, and how matching text is styled in both the live chat and the server-rendered views — so they always agree.
 
+#### Class Names and Patterns, Kept Respectable
+
+A rendering pattern's CSS class name (and a dialogue class name) takes only letters, digits, underscores, hyphens and spaces; offer it anything else and the save is politely refused, while older stored names are tidied on read. A pattern itself may run to 500 characters and may not nest repetition after the fashion of `(a+)+`; such a pattern is refused on save, and one already on the shelf is simply skipped when the text is dressed.
+
 #### Draft Formatting Instructions
 
 Next to the **LLM Prompt** label is a **Draft formatting instructions** button. Click it to append a starter paragraph describing your current delimiters to the prompt (for example, "Narration and action: wrap in `*…*`"). It knows about unmarked narration, curly-quote and unclosed-paragraph wraps, and a template that has taken the asterisk from Markdown. It is only a starting point — edit the text freely; the prompt remains exactly what is sent to the model.
@@ -364,7 +368,7 @@ When creating a new template:
 
 1. **Create and save** — Get the template into the system
 2. **Start a test chat** — Create a chat specifically for testing
-3. **Select the template** — Set it in Chat Settings
+3. **Select the template** — Set it in the chat's sidebar
 4. **Try it out** — Send a few test messages
 5. **Review results** — Do responses follow your formatting?
 6. **Refine** — Edit the system prompt if needed
@@ -476,7 +480,7 @@ While using the settings:
 - Refresh the page
 - Check that you saved the changes
 - Verify the chat is using the correct template
-- Check Chat Settings to confirm template selection
+- Check the chat's sidebar to confirm template selection
 
 ### Default Template Not Working
 
@@ -487,7 +491,7 @@ While using the settings:
 - Check that you selected a template (not "None")
 - Verify the change was saved
 - Create a new chat to test
-- Check the Chat Settings to see what template was assigned
+- Check the chat's sidebar to see what template was assigned
 - Try a different template
 
 ## Tips for Success
@@ -509,6 +513,6 @@ Characters with help tools enabled can read your roleplay template configuration
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=templates&section=roleplay-templates")`
+`help_navigate(url: "/settings?section=roleplay-templates")`
 
 The Roleplay Templates settings give you complete control over how your chats are formatted—take advantage of them to create the perfect style for your creative work!

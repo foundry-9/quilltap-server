@@ -19,10 +19,7 @@ import {
   WardrobeWearStatsRowSchema,
   type WardrobeWearStatsRow,
 } from '@/lib/schemas/wardrobe-wear.types';
-import {
-  isWardrobeItemDocumentPath,
-  wardrobeItemIdForDocument,
-} from '@/lib/database/repositories/vault-overlay/parsers';
+import { isWardrobeItemDocumentPath, wardrobeItemIdForDocument } from '@/lib/wardrobe/vault-parsers';
 import type { ExportedDocumentStoreDocument } from '@/lib/export/types';
 import type { IdMappingState } from './types';
 

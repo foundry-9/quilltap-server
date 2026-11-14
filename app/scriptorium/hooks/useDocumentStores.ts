@@ -3,12 +3,19 @@
 /**
  * useDocumentStores Hook
  *
- * Manages document stores data and CRUD operations.
+ * The Scriptorium's store list and its writes. The list is the shared
+ * `useDocumentStoresQuery` read, so the `mountPoints` realtime topic refreshes
+ * it; the writes edit the cached entry for their optimistic status and then
+ * invalidate it.
  *
- * @module app/document-stores/hooks/useDocumentStores
+ * @module app/scriptorium/hooks/useDocumentStores
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { apiErrorMessage } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useDocumentStoresQuery, type DocumentStoresResponse } from '@/lib/hooks/use-document-stores'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type {
@@ -21,31 +28,37 @@ import type {
   UseDocumentStoresReturn,
 } from '../types'
 
+const EMPTY: DocumentStore[] = []
+
 export function useDocumentStores(): UseDocumentStoresReturn {
-  const [stores, setStores] = useState<DocumentStore[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const query = useDocumentStoresQuery<DocumentStore>()
+  const stores = query.data ?? EMPTY
 
-  const fetchStores = useCallback(async (opts?: { silent?: boolean }) => {
-    try {
-      // A silent refresh (workspace tab re-activation) keeps the current list
-      // on screen instead of flipping the whole view back to its loading state.
-      if (!opts?.silent) setLoading(true)
-      setError(null)
+  /** Edit the cached list in place (optimistic status flips, a row the server returned). */
+  const setStores = useCallback(
+    (update: (prev: DocumentStore[]) => DocumentStore[]) => {
+      queryClient.setQueryData<DocumentStoresResponse<DocumentStore>>(queryKeys.mountPoints.list(), (prev) =>
+        prev ? { ...prev, mountPoints: update(prev.mountPoints ?? []) } : prev,
+      )
+    },
+    [queryClient],
+  )
 
-      const res = await fetch('/api/v1/mount-points')
-      if (!res.ok) throw new Error('Failed to fetch document stores')
+  /** Re-read every store list and, given an id, that store's own reads. */
+  const refresh = useCallback(
+    async (id?: string) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.mountPoints.lists }),
+        id ? queryClient.invalidateQueries({ queryKey: queryKeys.mountPoints.store(id) }) : undefined,
+      ])
+    },
+    [queryClient],
+  )
 
-      const data = await res.json()
-      setStores(data.mountPoints)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-      console.error('useDocumentStores: fetch error', { error: errorMsg })
-      setError(errorMsg)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const fetchStores = useCallback(async () => {
+    await refresh()
+  }, [refresh])
 
   const createStore = useCallback(async (data: CreateDocumentStoreData): Promise<DocumentStore | null> => {
     try {
@@ -58,7 +71,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
       if (!res.ok) throw new Error('Failed to create document store')
 
       const result = await res.json()
-      setStores(prev => [result.mountPoint, ...prev])
+      await refresh()
 
       if (result.warning) {
         showErrorToast(result.warning)
@@ -73,7 +86,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
       showErrorToast(errorMsg)
       return null
     }
-  }, [])
+  }, [refresh])
 
   const updateStore = useCallback(async (id: string, data: UpdateDocumentStoreData): Promise<DocumentStore | null> => {
     try {
@@ -87,6 +100,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
       const result = await res.json()
       setStores(prev => prev.map(s => s.id === id ? result.mountPoint : s))
+      await refresh(id)
       showSuccessToast('Document store updated successfully!')
 
       return result.mountPoint
@@ -96,7 +110,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
       showErrorToast(errorMsg)
       return null
     }
-  }, [])
+  }, [setStores, refresh])
 
   const deleteStore = useCallback(async (id: string): Promise<boolean> => {
     try {
@@ -104,6 +118,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
       if (!res.ok) throw new Error('Failed to delete document store')
 
       setStores(prev => prev.filter(s => s.id !== id))
+      await queryClient.invalidateQueries({ queryKey: queryKeys.mountPoints.all })
       showSuccessToast('Document store deleted successfully!')
 
       return true
@@ -113,7 +128,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
       showErrorToast(errorMsg)
       return false
     }
-  }, [])
+  }, [setStores, queryClient])
 
   const scanStore = useCallback(async (id: string): Promise<{ scanResult: ScanResult; embeddingJobsEnqueued: number } | null> => {
     try {
@@ -128,12 +143,8 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
       const result = await res.json()
 
-      // Refresh the store data after scan to get updated counts
-      const storeRes = await fetch(`/api/v1/mount-points/${id}`)
-      if (storeRes.ok) {
-        const storeData = await storeRes.json()
-        setStores(prev => prev.map(s => s.id === id ? storeData.mountPoint : s))
-      }
+      // Re-read the store for its updated counts.
+      await refresh(id)
 
       showSuccessToast(
         `Scan complete: ${result.scanResult.filesScanned} files scanned, ${result.embeddingJobsEnqueued} embedding jobs queued`
@@ -154,7 +165,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
       return null
     }
-  }, [])
+  }, [setStores, refresh])
 
   const convertStore = useCallback(async (id: string): Promise<ConvertResult | null> => {
     try {
@@ -178,11 +189,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
       const result = await res.json()
 
-      const storeRes = await fetch(`/api/v1/mount-points/${id}`)
-      if (storeRes.ok) {
-        const storeData = await storeRes.json()
-        setStores(prev => prev.map(s => s.id === id ? storeData.mountPoint : s))
-      }
+      await refresh(id)
 
       const cr = result.convertResult as ConvertResult
       const previousBasePath = result.previousBasePath as string | undefined
@@ -208,7 +215,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
       ))
       return null
     }
-  }, [])
+  }, [setStores, refresh])
 
   const deconvertStore = useCallback(async (id: string, targetPath: string): Promise<DeconvertResult | null> => {
     try {
@@ -230,11 +237,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
       const result = await res.json()
 
-      const storeRes = await fetch(`/api/v1/mount-points/${id}`)
-      if (storeRes.ok) {
-        const storeData = await storeRes.json()
-        setStores(prev => prev.map(s => s.id === id ? storeData.mountPoint : s))
-      }
+      await refresh(id)
 
       const dr = result.deconvertResult as DeconvertResult
       const parts = [`${dr.filesWritten} document${dr.filesWritten === 1 ? '' : 's'}`]
@@ -253,12 +256,12 @@ export function useDocumentStores(): UseDocumentStoresReturn {
       ))
       return null
     }
-  }, [])
+  }, [setStores, refresh])
 
   return {
     stores,
-    loading,
-    error,
+    loading: query.isPending,
+    error: query.error ? apiErrorMessage(query.error, 'Failed to fetch document stores') : null,
     fetchStores,
     createStore,
     updateStore,

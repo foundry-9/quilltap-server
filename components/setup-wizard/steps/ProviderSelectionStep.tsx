@@ -66,7 +66,7 @@ export function ProviderSelectionStep({ state, dispatch }: ProviderSelectionStep
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="qt-loading-state py-12">
         <div className="qt-spinner qt-spinner-sm mr-3" />
         <span className="qt-text-muted">Loading available providers...</span>
       </div>
@@ -118,6 +118,7 @@ export function ProviderSelectionStep({ state, dispatch }: ProviderSelectionStep
               key={provider.id}
               type="button"
               onClick={() => handleToggle(provider.id)}
+              aria-pressed={isSelected}
               className={`w-full p-4 text-left rounded-lg transition-all ${
                 isSelected
                   ? 'qt-option-selected'
@@ -134,7 +135,7 @@ export function ProviderSelectionStep({ state, dispatch }: ProviderSelectionStep
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{provider.displayName}</span>
                     {isSelected && (
-                      <Icon name="check" className="w-5 h-5 text-[var(--qt-color-primary)]" />
+                      <Icon name="check" className="w-5 h-5 qt-text-brand" />
                     )}
                   </div>
                   <p className="qt-text-muted qt-text-small mt-1">{provider.description}</p>
@@ -142,7 +143,7 @@ export function ProviderSelectionStep({ state, dispatch }: ProviderSelectionStep
                     {capabilities.map((cap) => (
                       <span
                         key={cap}
-                        className="qt-text-xs px-2 py-0.5 rounded-full bg-[var(--qt-color-primary)]/10 qt-text-primary"
+                        className="qt-text-xs px-2 py-0.5 rounded-full qt-bg-primary/10 qt-text-primary"
                       >
                         {cap}
                       </span>

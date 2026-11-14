@@ -27,6 +27,7 @@ function Probe() {
       const p = (t.payload ?? {}) as {
         characterId?: string
         tab?: string
+        section?: string
         projectId?: string
         storeId?: string
         groupId?: string
@@ -34,7 +35,7 @@ function Probe() {
         sessionId?: string
       }
       const id = p.characterId ?? p.projectId ?? p.storeId ?? p.groupId ?? p.chatId ?? ''
-      return `${t.kind}:${id}:${p.tab ?? p.sessionId ?? ''}`
+      return `${t.kind}:${id}:${p.section ?? p.tab ?? p.sessionId ?? ''}`
     })
     .sort()
   return <div data-testid="tabs">{entries.join('|')}</div>
@@ -61,14 +62,19 @@ describe('WorkspaceIntent', () => {
     expect(mockReplace).toHaveBeenCalledWith('/workspace')
   })
 
-  it('opens the character editor with its characterId + tab payload', () => {
-    setup('open=character-edit&characterId=abc&tab=system-prompts')
-    expect(screen.getByTestId('tabs').textContent).toContain('character-edit:abc:system-prompts')
+  it('opens the character page with its characterId + section payload', () => {
+    setup('open=character&characterId=abc&section=prompts')
+    expect(screen.getByTestId('tabs').textContent).toContain('character:abc:prompts')
   })
 
-  it('skips character-edit when the characterId is missing', () => {
-    setup('open=character-edit')
-    expect(screen.getByTestId('tabs').textContent).not.toContain('character-edit')
+  it('maps a retired character-edit intent and its ?tab= onto the character page', () => {
+    setup('open=character-edit&characterId=abc&tab=system-prompts')
+    expect(screen.getByTestId('tabs').textContent).toContain('character:abc:prompts')
+  })
+
+  it('skips the character page when the characterId is missing', () => {
+    setup('open=character')
+    expect(screen.getByTestId('tabs').textContent).not.toContain('character:')
   })
 
   it('ignores an unknown open kind (only the default home tab remains)', () => {
@@ -96,14 +102,9 @@ describe('WorkspaceIntent', () => {
     expect(screen.getByTestId('tabs').textContent).toContain('aurora:g1:')
   })
 
-  it('opens the character detail view with its characterId + tab payload', () => {
+  it('maps a retired character-view intent and its ?tab= onto the character page', () => {
     setup('open=character-view&characterId=abc&tab=conversations')
-    expect(screen.getByTestId('tabs').textContent).toContain('character-view:abc:conversations')
-  })
-
-  it('skips character-view when the characterId is missing', () => {
-    setup('open=character-view')
-    expect(screen.getByTestId('tabs').textContent).not.toContain('character-view')
+    expect(screen.getByTestId('tabs').textContent).toContain('character:abc:history')
   })
 
   it('opens the conversation plus a child terminal tab for a terminal intent', () => {
@@ -124,9 +125,9 @@ describe('WorkspaceIntent', () => {
     expect(mockReplace).toHaveBeenCalledWith('/workspace')
   })
 
-  it('pops the new-chat modal for a character detail ?action=chat deep-link', () => {
-    setup('open=character-view&characterId=abc&action=chat')
-    expect(screen.getByTestId('tabs').textContent).toContain('character-view:abc:')
+  it('pops the new-chat modal for a character page ?action=chat deep-link', () => {
+    setup('open=character&characterId=abc&action=chat')
+    expect(screen.getByTestId('tabs').textContent).toContain('character:abc:')
     expect(mockOpenNewChat).toHaveBeenCalledWith({ characterId: 'abc' })
   })
 })

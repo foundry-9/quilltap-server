@@ -34,7 +34,7 @@ export function ProjectCard({ project, onClick, onDelete, onOpen }: ProjectCardP
             {project.icon || <Icon name="folder" className="w-5 h-5 qt-text-secondary" />}
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-foreground">{project.name}</h2>
+            <h2 className="text-xl font-semibold qt-text">{project.name}</h2>
             <p className="qt-text-small">
               {project.chatCount} chat{project.chatCount !== 1 ? 's' : ''} &bull; {project.fileCount} file{project.fileCount !== 1 ? 's' : ''}
             </p>
@@ -50,14 +50,14 @@ export function ProjectCard({ project, onClick, onDelete, onOpen }: ProjectCardP
         {onOpen ? (
           <button
             onClick={(e) => { e.stopPropagation(); onOpen(project.id) }}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
+            className="qt-button qt-button-primary flex-1"
           >
             Open
           </button>
         ) : (
           <Link
             href={`/projects/${project.id}`}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
+            className="qt-button qt-button-primary flex-1"
           >
             Open
           </Link>

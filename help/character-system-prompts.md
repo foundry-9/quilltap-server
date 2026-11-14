@@ -1,5 +1,5 @@
 ---
-url: /aurora/:id/edit
+url: /aurora/:id?section=prompts
 ---
 
 # Character System Prompts
@@ -603,15 +603,15 @@ Two further conveniences, so that no character is ever left prompt-less:
 - Delete the default and the badge passes to whichever prompt remains, rather
   than vanishing along with it.
 
-The Details tab carries a **default system prompt** picker saying the same thing
-in a different chair; the two stay in agreement whichever one you use. And none
+The star is the only place the default is chosen on the character's page;
+there is no second picker elsewhere to fall out of step with it. And none
 of this binds you at the table — the New Chat dialog and the Participants drawer
 will both let you choose a different prompt for a particular conversation,
 leaving the default exactly where it stands.
 
 ## Subprompts: The Smaller Instrument
 
-Only one system prompt is in play at a time. For the smaller adjustments — "be terse," "no spoilers," "we are at a funeral" — a character may also carry **subprompts**: short instructions kept as Markdown files in the vault's `Subprompts/` folder, listed beneath the primary prompts on this tab, and switched on or off per chat from the New Chat dialog or the Participants drawer. They are delivered directly after the system prompt and follow the same rule: write to the character, in the second person. See [Character Subprompts](character-subprompts.md).
+Only one system prompt is in play at a time. For the smaller adjustments — "be terse," "no spoilers," "we are at a funeral" — a character may also carry **subprompts**: short instructions kept as Markdown files in the vault's `Subprompts/` folder, listed beneath the primary prompts in this same **Prompts** section, and switched on or off per chat from the New Chat dialog or the Participants drawer. They are delivered directly after the system prompt and follow the same rule: write to the character, in the second person. See [Character Subprompts](character-subprompts.md).
 
 Below both of those sits a third card, **Progressions** — not instructions at all, but things the character is *carrying*: a gestation, a recharging weapon, a countdown. Quilltap works out how far along each one is and tells the character so at the top of their turn. See [Progressions](character-progressions.md).
 
@@ -636,14 +636,14 @@ If you used the AI Wizard to generate system prompt:
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/aurora/:id/edit")`
+`help_navigate(url: "/aurora/:id?section=prompts")`
 
 ## Related Topics
 
 - [Character Creation](character-creation.md) — Creating characters with prompts
 - [Editing Characters](character-editing.md) — Modifying system prompts
 - [Character Subprompts](character-subprompts.md) — Smaller instructions switched on per chat
-- [Progressions](character-progressions.md) — Timed spans reported to the character each turn, listed on this same tab
+- [Progressions](character-progressions.md) — Timed spans reported to the character each turn, listed in the **Details** section
 - [Characters Overview](characters.md) — About the character system
 - [Chats](chats.md) — Testing characters in conversation
 - [Settings: Connection Profiles](connection-profiles.md) — LLM selection affects prompts

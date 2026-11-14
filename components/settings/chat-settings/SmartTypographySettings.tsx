@@ -150,7 +150,7 @@ export function SmartTypographySettings({
 
         {/* Try it */}
         <div className="qt-settings-section-heading">Try it</div>
-        <div className="qt-text-small text-muted-foreground">
+        <div className="qt-text-small qt-text-secondary">
           Type a couple of hyphens or three periods here to watch the substitution happen.
           This box does not save anything.
           {!dashes && !ellipsis && ' (Both toggles are off — substitutions are paused.)'}

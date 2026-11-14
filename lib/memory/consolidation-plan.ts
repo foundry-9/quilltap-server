@@ -1,11 +1,14 @@
 /**
  * Consolidation write planning — pure.
  *
- * The consolidation job runs in the forked job child, where repository reads
- * never see the job's own buffered writes. So it computes *everything* first —
- * this module — and only then issues the writes (memory-consolidation-and-tiers.md
- * §C5). Keeping the planner pure is also what makes the write rules testable
- * without a database:
+ * The run reads the corpus once, so it computes *everything* first — this
+ * module — and only then hands the plan to the parent-side writer
+ * (`admission/consolidation-writes.ts`), which re-reads the rows under
+ * admission's per-character lock and applies the plan as **deltas** (A9):
+ * counts, links and digest members are what this run adds, never an absolute
+ * value from the snapshot, so whatever admission wrote between the read and
+ * the write survives. Keeping the planner pure is also what makes the write
+ * rules testable without a database:
  *
  *   - **New digest** (`source: 'CONSOLIDATED'`): `consolidatedFrom` = its
  *     members; `reinforcementCount` = Σ member counts, capped at
@@ -18,8 +21,11 @@
  *     for a standing fact; `chatId` / `projectId` only when every member shares
  *     one; keywords end with the three targeting tags.
  *   - **Existing digest** (the cluster formed around it): updated in place —
- *     the model's first digest is its revision, `consolidatedFrom` grows, the
- *     digest's own count and links are carried, and it is re-embedded.
+ *     the model's first digest is its revision (`patch`), and it is
+ *     re-embedded. Its count grows by the new members' counts (`countDelta`),
+ *     `consolidatedFrom` by them (`addMembers`), `lastReinforcedAt` moves
+ *     forward to now (`reinforcedAt`); `projected` is what those deltas leave
+ *     on the row as read, for the corpus and the dry-run report.
  *   - **Members** go cold with `supersededById` = their digest and
  *     `consolidatedAt` = now.
  *   - **Contradictions**: the older row goes cold, superseded by the digest
@@ -101,23 +107,43 @@ export interface PlannedDigestCreate extends PlannedDigest {
 
 export interface PlannedDigestUpdate extends PlannedDigest {
   action: 'update'
+  /**
+   * The revision's absolute fields (text, keywords, importance, anchors).
+   * Never the count, `reinforcedImportance`, `lastReinforcedAt`, links or
+   * members — those are deltas below, applied against the row at write time.
+   */
   patch: Partial<Memory>
+  /** The digest's content as the run read it; the writer refuses a revision of text that changed since (A9). */
+  baseContent: string
+  /** Members to add to `consolidatedFrom`. */
+  addMembers: string[]
+  /** Observations the new members bring (their counts summed), before the cap is applied at write time. */
+  countDelta: number
+  /** `lastReinforcedAt` moves forward to this, never back. */
+  reinforcedAt: string
+  /** What the deltas leave on the row as read: for the corpus and the report, never written. */
+  projected: Pick<Memory, 'reinforcementCount' | 'reinforcedImportance' | 'lastReinforcedAt' | 'relatedMemoryIds' | 'consolidatedFrom'>
 }
 
 export interface ConsolidationWritePlan {
   creates: PlannedDigestCreate[]
   updates: PlannedDigestUpdate[]
-  /** Rows to send cold, grouped by the row that supersedes them. */
-  tierMoves: Array<{ supersededById: string; ids: string[] }>
+  /**
+   * Rows to send cold, grouped by the cluster they came from and the row that
+   * supersedes them. The writer applies one cluster's moves with its digests.
+   */
+  tierMoves: Array<{ supersededById: string; ids: string[]; clusterIndex: number }>
   /** Standalone rows that stay hot and only get `consolidatedAt`. */
   considered: string[]
+  /** {@link considered}, per input cluster (a cluster the writer skips keeps its rows unconsidered). */
+  consideredByCluster: string[][]
   /** Surviving rows whose links are re-aimed at digests. */
   linkRewrites: Array<{ id: string; relatedMemoryIds: string[] }>
   /**
    * Rows whose hurt a repair settles, with their keywords gaining
    * {@link RESOLVED_KEYWORD}; recall ranks them down (recall/tags.ts).
    */
-  resolvedMarks: Array<{ id: string; keywords: string[] }>
+  resolvedMarks: Array<{ id: string; keywords: string[]; clusterIndex: number }>
   /** Every superseded row → the row that supersedes it. */
   supersededBy: Map<string, string>
   /** Planned digests per input cluster, in cluster order (for the report). */
@@ -261,6 +287,7 @@ export function planConsolidationWrites(input: PlanInput): ConsolidationWritePla
   const supersededBy = new Map<string, string>()
   const digestOfMember = new Map<string, string>()
   const plannedDigestIds = new Set<string>()
+  const clusterOfSuperseded = new Map<string, number>()
   clusters.forEach((cluster, c) => {
     const ids = cluster.digests.map((_, k) =>
       k === 0 && cluster.existingDigest ? cluster.existingDigest.id : newId(),
@@ -271,16 +298,18 @@ export function planConsolidationWrites(input: PlanInput): ConsolidationWritePla
       for (const memberId of digest.memberIds) {
         supersededBy.set(memberId, ids[k])
         digestOfMember.set(memberId, ids[k])
+        clusterOfSuperseded.set(memberId, c)
       }
     })
   })
 
   // Contradictions: the older row goes cold under whatever carries the newer fact.
-  clusters.forEach((cluster) => {
+  clusters.forEach((cluster, c) => {
     for (const { olderId, newerId } of cluster.contradictions) {
       const target = digestOfMember.get(newerId) ?? newerId
       if (target === olderId) continue
       supersededBy.set(olderId, target)
+      clusterOfSuperseded.set(olderId, c)
     }
   })
 
@@ -344,7 +373,7 @@ export function planConsolidationWrites(input: PlanInput): ConsolidationWritePla
       const witnessedContext = deriveWitnessedContext(rows.map((r) => r.witnessedContext))
       const consolidatedFrom = union([existing?.consolidatedFrom ?? [], digest.memberIds])
       const lastReinforcedAt = isUpdate
-        ? nowIso
+        ? [existing?.lastReinforcedAt ?? '', nowIso].sort().at(-1) as string
         : memberRows.map(referenceTimeIso).sort().at(-1) ?? nowIso
 
       const base: PlannedDigest = {
@@ -367,21 +396,22 @@ export function planConsolidationWrites(input: PlanInput): ConsolidationWritePla
       }
       planned.push(base)
 
-      if (isUpdate) {
+      if (isUpdate && existing) {
+        const priorMembers = new Set(existing.consolidatedFrom ?? [])
         updates.push({
           ...base,
           action: 'update',
+          baseContent: existing.content,
+          addMembers: digest.memberIds.filter((mid) => !priorMembers.has(mid)),
+          countDelta: memberRows.reduce((sum, r) => sum + (r.reinforcementCount ?? 1), 0),
+          reinforcedAt: nowIso,
+          projected: { reinforcementCount, reinforcedImportance, lastReinforcedAt, relatedMemoryIds, consolidatedFrom },
           patch: {
             content: digest.content,
             summary: digest.summary,
             keywords,
             tags,
             importance,
-            reinforcementCount,
-            reinforcedImportance,
-            lastReinforcedAt,
-            relatedMemoryIds,
-            consolidatedFrom,
             consolidatedAt: nowIso,
             occurredAt,
             narrativeTime,
@@ -429,19 +459,22 @@ export function planConsolidationWrites(input: PlanInput): ConsolidationWritePla
   })
 
   // ── Pass 3: tier moves, standalones, inbound links. ──────────────────────
-  const moves = new Map<string, string[]>()
+  const moves = new Map<string, { supersededById: string; ids: string[]; clusterIndex: number }>()
   for (const [rowId, target] of supersededBy) {
     if (plannedDigestIds.has(rowId)) continue // a digest never goes cold here
     const finalTarget = remap(target)
-    const list = moves.get(finalTarget) ?? []
-    list.push(rowId)
-    moves.set(finalTarget, list)
+    const clusterIndex = clusterOfSuperseded.get(rowId) ?? 0
+    const key = `${clusterIndex}\u0000${finalTarget}`
+    const move = moves.get(key) ?? { supersededById: finalTarget, ids: [], clusterIndex }
+    move.ids.push(rowId)
+    moves.set(key, move)
   }
-  const tierMoves = Array.from(moves, ([supersededById, ids]) => ({ supersededById, ids }))
+  const tierMoves = Array.from(moves.values())
 
-  const considered = union(
-    clusters.map((cluster) => cluster.keepStandalone.filter((id) => !supersededBy.has(id))),
+  const consideredByCluster = clusters.map((cluster) =>
+    union([cluster.keepStandalone.filter((id) => !supersededBy.has(id))]),
   )
+  const considered = union(consideredByCluster)
 
   const linkRewrites: Array<{ id: string; relatedMemoryIds: string[] }> = []
   for (const row of rowIndex.values()) {
@@ -454,9 +487,9 @@ export function planConsolidationWrites(input: PlanInput): ConsolidationWritePla
 
   // Resolved grievances: keep the row (history stays), mark it so recall ranks
   // it below the repair. Only this cluster's own members, never a digest.
-  const resolvedMarks: Array<{ id: string; keywords: string[] }> = []
+  const resolvedMarks: Array<{ id: string; keywords: string[]; clusterIndex: number }> = []
   const marked = new Set<string>()
-  for (const cluster of clusters) {
+  for (const [clusterIndex, cluster] of clusters.entries()) {
     const membersById = new Map(cluster.members.map((m) => [m.id, m]))
     for (const id of cluster.resolvedIds ?? []) {
       const member = membersById.get(id)
@@ -464,7 +497,7 @@ export function planConsolidationWrites(input: PlanInput): ConsolidationWritePla
       marked.add(id)
       const keywords = member.keywords ?? []
       if (keywords.includes(RESOLVED_KEYWORD)) continue
-      resolvedMarks.push({ id, keywords: [...keywords, RESOLVED_KEYWORD] })
+      resolvedMarks.push({ id, keywords: [...keywords, RESOLVED_KEYWORD], clusterIndex })
     }
   }
 
@@ -473,6 +506,7 @@ export function planConsolidationWrites(input: PlanInput): ConsolidationWritePla
     updates,
     tierMoves,
     considered,
+    consideredByCluster,
     linkRewrites,
     resolvedMarks,
     supersededBy,

@@ -3,7 +3,8 @@
 import { useState, useCallback, useId } from 'react'
 import { Icon } from '@/components/ui/icon'
 import type { WizardState, WizardAction, ProviderInfo } from '../useProviderWizardState'
-import { createApiKey, testConnection } from '../wizard-api'
+import { createApiKey, testConnection, updateApiKeyValue } from '../wizard-api'
+import { planKeyValidation } from '../key-validation'
 
 interface ApiKeyEntryStepProps {
   state: WizardState
@@ -17,6 +18,7 @@ interface ProviderKeyFormState {
   validated: boolean
   error: string | null
   apiKeyId: string | null
+  storedByWizard: boolean
 }
 
 export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
@@ -33,6 +35,7 @@ export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
         validated: existingKey?.validated || false,
         error: existingKey?.error || null,
         apiKeyId: existingKey?.apiKeyId || null,
+        storedByWizard: existingKey?.storedByWizard || false,
       }
     }
     return initial
@@ -48,6 +51,7 @@ export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
           validated: false,
           error: null,
           apiKeyId: null,
+          storedByWizard: false,
         }
       )
     },
@@ -67,59 +71,75 @@ export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
   const handleValidate = useCallback(
     async (provider: ProviderInfo) => {
       const form = getFormState(provider.id)
+      const baseUrl = form.baseUrl || undefined
+      const label = `${provider.displayName} (Setup Wizard)`
+      const plan = planKeyValidation({
+        requiresKey: provider.configRequirements.requiresApiKey,
+        key: form.key,
+        apiKeyId: form.apiKeyId,
+        storedByWizard: form.storedByWizard,
+      })
+
+      if (plan.kind === 'missing') {
+        updateFormState(provider.id, { error: 'API key is required' })
+        return
+      }
+
       updateFormState(provider.id, { validating: true, error: null })
 
       try {
-        let apiKeyId = form.apiKeyId
-        const baseUrl = form.baseUrl || undefined
+        // Test first; nothing is stored unless the provider accepts the key.
+        const testResult = await testConnection({
+          provider: provider.id,
+          apiKey: plan.kind === 'new' ? plan.key : undefined,
+          apiKeyId: plan.kind === 'stored' ? plan.apiKeyId : undefined,
+          baseUrl,
+        })
 
-        // Store the API key if provider requires one
-        if (provider.configRequirements.requiresApiKey) {
-          if (!form.key.trim()) {
-            updateFormState(provider.id, { validating: false, error: 'API key is required' })
-            return
-          }
-          const label = `${provider.displayName} (Setup Wizard)`
-          const result = await createApiKey(provider.id, label, form.key.trim())
-          apiKeyId = result.id
-        }
-
-        // Test the connection
-        const testResult = await testConnection(
-          provider.id,
-          apiKeyId || '',
-          baseUrl
-        )
-
-        if (testResult.valid) {
-          updateFormState(provider.id, {
-            validating: false,
-            validated: true,
-            error: null,
-            apiKeyId,
-          })
-
-          // Sync to wizard state
-          dispatch({
-            type: 'SET_API_KEY',
-            providerId: provider.id,
-            entry: {
-              label: `${provider.displayName} (Setup Wizard)`,
-              key: form.key,
-              validated: true,
-              apiKeyId: apiKeyId || undefined,
-            },
-          })
-
-          if (baseUrl) {
-            dispatch({ type: 'SET_BASE_URL', providerId: provider.id, url: baseUrl })
-          }
-        } else {
+        if (!testResult.valid) {
           updateFormState(provider.id, {
             validating: false,
             validated: false,
             error: testResult.error || 'Connection test failed',
           })
+          return
+        }
+
+        let apiKeyId = plan.kind === 'stored' ? plan.apiKeyId : form.apiKeyId
+        let storedByWizard = form.storedByWizard
+        if (plan.kind === 'new') {
+          if (plan.replaceId) {
+            await updateApiKeyValue(plan.replaceId, plan.key)
+            apiKeyId = plan.replaceId
+          } else {
+            apiKeyId = (await createApiKey(provider.id, label, plan.key)).id
+          }
+          storedByWizard = true
+        }
+
+        updateFormState(provider.id, {
+          validating: false,
+          validated: true,
+          error: null,
+          apiKeyId,
+          storedByWizard,
+        })
+
+        // Sync to wizard state
+        dispatch({
+          type: 'SET_API_KEY',
+          providerId: provider.id,
+          entry: {
+            label,
+            key: form.key,
+            validated: true,
+            apiKeyId: apiKeyId || undefined,
+            storedByWizard,
+          },
+        })
+
+        if (baseUrl) {
+          dispatch({ type: 'SET_BASE_URL', providerId: provider.id, url: baseUrl })
         }
       } catch (err) {
         updateFormState(provider.id, {

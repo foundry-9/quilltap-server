@@ -14,7 +14,7 @@ import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connectio
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
 import { evaluateThinkingTurn } from '@/lib/llm/thinking-turn'
 import { providerAcceptsApiKey } from '@/lib/llm/api-key-support'
-import { MAX_IMAGES_PER_REQUEST_CEILING } from '@/lib/schemas/profile.types'
+import { MAX_IMAGES_PER_REQUEST_CEILING, TOOL_RESULT_VERBATIM_TURNS_CEILING } from '@/lib/schemas/profile.types'
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -31,6 +31,13 @@ interface ProfileModalProps {
    * understudies, which is the right answer rather than a crash.
    */
   allProfiles?: ConnectionProfile[]
+  /**
+   * Provider to preselect on a *new* profile (the per-provider card's Add
+   * menu). Applied through the same path as picking it from the select, so
+   * the base-URL default and capability seeds follow; its key is chosen too
+   * when the provider has exactly one. Ignored when editing.
+   */
+  initialProvider?: string
   form: {
     formData: ProfileFormData
     setField: (name: keyof ProfileFormData, value: any) => void
@@ -62,6 +69,7 @@ export function ProfileModal({
   providers,
   takenNames,
   allProfiles = [],
+  initialProvider,
   form,
   operations,
 }: ProfileModalProps) {
@@ -198,7 +206,9 @@ export function ProfileModal({
   const getModelSuggestions = (provider: string): string[] => {
     const models: Record<string, string[]> = {
       OPENAI: ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo'],
-      ANTHROPIC: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-1-20250805'],
+      // Anthropic: none — every ID is a pinned snapshot that retires; the live
+      // list (fetched with the key) is the only trustworthy source
+      ANTHROPIC: [],
       GOOGLE: ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-1.0-pro', 'gemini-pro-vision'],
       GROK: ['grok-beta', 'grok-2', 'grok-vision-beta'],
       OLLAMA: ['llama2', 'neural-chat', 'mistral'],
@@ -281,7 +291,7 @@ export function ProfileModal({
     )
     // Re-running on every keystroke would fight the checkbox; the model list
     // landing is the one event that changes the answer.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-running on form changes would fight the checkbox; only the model list landing changes the answer
   }, [storedPrefillIsUnset, fetchedModelsWithInfo, runsThinkingTurn])
 
   // Directive state: schema fields marked `affects: 'modelInput'` toggle
@@ -342,6 +352,18 @@ export function ProfileModal({
       form.setField('multiCharacterPrefill', defaultMultiCharacterPrefill(newProvider))
     }
   }
+
+  // Preselect the provider on opening a new profile from a provider card.
+  useEffect(() => {
+    if (!isOpen || profile?.id || !initialProvider) return
+    handleProviderChange(initialProvider)
+    const keysForProvider = apiKeys.filter((k) => k.provider === initialProvider)
+    if (keysForProvider.length === 1) {
+      form.setField('apiKeyId', keysForProvider[0].id)
+    }
+    // Once per opening: re-running on every render would undo the user's own choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening; handleProviderChange, form and apiKeys omitted so re-renders do not undo the user's choice
+  }, [isOpen, initialProvider, profile?.id])
 
   // Handle model change - auto-fill name if empty (new profile only)
   const handleModelChange = (modelName: string) => {
@@ -899,6 +921,27 @@ export function ProfileModal({
                   </select>
                   <p className="qt-text-xs mt-1">
                     Auto: native for capable models, otherwise simple JSON. Override only if your model needs a particular dialect.
+                  </p>
+                  <label htmlFor="toolResultVerbatimTurns" className="qt-text-label mt-3">
+                    Keep tool results in full for (turns)
+                  </label>
+                  <input
+                    type="number"
+                    id="toolResultVerbatimTurns"
+                    name="toolResultVerbatimTurns"
+                    value={form.formData.toolResultVerbatimTurns}
+                    onChange={(e) => form.setField('toolResultVerbatimTurns', e.target.value)}
+                    min="0"
+                    max={TOOL_RESULT_VERBATIM_TURNS_CEILING}
+                    step="1"
+                    className="qt-input w-full max-w-xs"
+                    aria-describedby="toolResultVerbatimTurns-hint"
+                  />
+                  <p id="toolResultVerbatimTurns-hint" className="qt-text-xs mt-1">
+                    After this many turns, an old search or reading is folded down to a one-line note
+                    and the model must ask again to see it. Fewer turns keep the conversation lean; but
+                    each fold rewrites the history behind it, which spoils a prompt cache from that
+                    point. Set 0 to keep every result in full — kindest to a cached model.
                   </p>
                 </div>
               )}

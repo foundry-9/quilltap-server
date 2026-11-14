@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=system
+url: /settings?group=data-maintenance
 ---
 
 # The Instance Registry
@@ -148,5 +148,5 @@ The Instance Registry is part of the Quilltap CLI and lives outside the chat int
 ## help_navigate
 
 ```
-help_navigate(url: "/settings?tab=system")
+help_navigate(url: "/settings?group=data-maintenance")
 ```

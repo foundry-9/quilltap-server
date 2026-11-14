@@ -12,6 +12,7 @@ import { processTemplate, type TemplateContext } from '@/lib/templates/processor
 import { firstActiveScenarioContent } from '@/lib/characters/active-scenarios'
 import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
 import { isHumanoid, pickPhysicalDescription } from '@/lib/characters/physical-description'
+import { publicIdentityFacts, renderPublicIdentityFacts } from '@/lib/characters/public-identity'
 
 /**
  * Universal formatting note appended to every character's system prompt,
@@ -165,7 +166,7 @@ export interface BuildIdentityStackOptions {
  * versions one function's output for OUR compiled-stack cache; colocation
  * with the function is deliberate so whoever edits the strings sees it.
  */
-export const IDENTITY_STACK_BUILDER_VERSION = 2
+export const IDENTITY_STACK_BUILDER_VERSION = 3
 
 /**
  * Build just the static character-identity portion of the system prompt,
@@ -257,7 +258,6 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
   // and diffusion models take noun phrases, not "you have auburn hair".
   if (character.physicalDescription) {
     const desc = character.physicalDescription
-    const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : ''
     const descText = pickPhysicalDescription(desc, 'self-image')
     // A non-humanoid character (`humanoid: false` in physical-prompts.json)
     // is told so, lest it narrate a shrug or a nod it has no body for. Only
@@ -266,7 +266,7 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
       ? ''
       : '\nYou have no humanoid body: no head, face, shoulders, hands or limbs. Never describe yourself as having or using one.'
     if (descText) {
-      parts.push(`\n## Physical Appearance\nThis is how you look — "${desc.name}"${contextNote}: ${descText}${formNote}`)
+      parts.push(`\n## Physical Appearance\nThis is how you look: ${descText}${formNote}`)
     } else if (formNote) {
       // Flag set before any prompt is written: the reminder still goes out.
       parts.push(`\n## Physical Appearance${formNote}`)
@@ -291,7 +291,8 @@ export const NO_PUBLIC_IDENTITY_FALLBACK =
 /**
  * Build a compact, SURFACE-LEVEL identity card for `character`: the public view
  * one character would have of another who has just addressed them — name, title,
- * pronouns, aliases, and the `identity` field (the project's "what strangers
+ * aliases, the known facts (age, public progressions, pronouns — see
+ * `lib/characters/public-identity.ts`), and the `identity` field (the project's "what strangers
  * know" vantage point), falling back to `description` (the acquaintance view) and
  * then {@link NO_PUBLIC_IDENTITY_FALLBACK} when neither is set.
  *
@@ -310,14 +311,11 @@ export function buildPublicIdentityCard(character: Character, userName?: string 
     const title = render(character.title)
     if (title) lines.push(`Title: ${title}`)
   }
-  if (character.pronouns) {
-    lines.push(
-      `Pronouns: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}`,
-    )
-  }
   if (character.aliases && character.aliases.length > 0) {
     lines.push(`Also known as: ${character.aliases.join(', ')}`)
   }
+  // Age, public progressions, pronouns — the known facts, before the prose.
+  lines.push(...renderPublicIdentityFacts(publicIdentityFacts(character)))
   const body = render(character.identity?.trim() || character.description?.trim() || '')
   lines.push(body || NO_PUBLIC_IDENTITY_FALLBACK)
   return lines.join('\n')

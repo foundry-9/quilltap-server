@@ -27,7 +27,7 @@
  * overlay logs and DROPS a character whose vault is unavailable, where the
  * single-character overlay behind `findById` throws
  * `CharacterVaultUnavailableError` — which, in the old loops, threw straight out
- * of speaker selection and took the whole turn (and the read-only `?action=turn`
+ * of speaker selection and took the whole turn (and the `?action=turn-query`
  * projection behind the participant sidebar) with it.
  */
 

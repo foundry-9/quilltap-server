@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { serverError } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { diagramStyleOrDefault } from '@/lib/markdown/diagrams';
+import { resolveCharacterKind } from '@/lib/characters/kind';
 
 export async function handleGet(
   req: NextRequest,
@@ -80,6 +81,7 @@ export async function handleGet(
           canChooseOutfit: character.canChooseOutfit ?? false,
           canDrawDiagrams: character.canDrawDiagrams ?? false,
           diagramStyle: diagramStyleOrDefault(character.diagramStyle),
+          kind: resolveCharacterKind(character),
           defaultConnectionProfileId: character.defaultConnectionProfileId || null,
           defaultPartnerId: character.defaultPartnerId || null,
           defaultPartnerName,

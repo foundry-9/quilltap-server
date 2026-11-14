@@ -34,27 +34,46 @@ export default function UnlockPage() {
     window.location.href = returnUrl;
   }, []);
 
-  const checkState = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/system/unlock');
-      const data = await res.json();
-      setState(data.state);
-
-      if (data.state === 'resolved') {
-        returnToApp();
-      } else if (data.state === 'needs-setup') {
-        // This is a cold start, not an auto-lock — go to setup
-        router.push('/setup');
-      }
-    } catch {
-      setError('Unable to reach the server. Please try again in a moment.');
-    }
-  }, [returnToApp, router]);
+  // The state check retries until it gets a usable answer. A cold dev server
+  // can fail or answer non-JSON while the route compiles, and a one-shot check
+  // left the page on a bare spinner with nothing to say for itself.
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function checkState() {
+      try {
+        const res = await fetch('/api/v1/system/unlock', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (typeof data?.state !== 'string') throw new Error('no state in response');
+
+        setRetrying(false);
+        setState(data.state);
+
+        if (data.state === 'resolved' || data.state === 'needs-vault-storage') {
+          // Both are operational: the key is in hand.
+          returnToApp();
+        } else if (data.state === 'needs-setup') {
+          // This is a cold start, not an auto-lock — go to setup
+          router.push('/setup');
+        }
+      } catch {
+        if (cancelled) return;
+        setRetrying(true);
+        timer = setTimeout(checkState, 2000);
+      }
+    }
+
     checkState();
-  }, [checkState]);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [returnToApp, router]);
 
   const handleUnlock = async () => {
     setError('');
@@ -93,18 +112,15 @@ export default function UnlockPage() {
     }
   };
 
-  if (state === 'loading') {
-    return (
-      <div className="qt-auth-page flex items-center justify-center min-h-screen">
-        <div className="qt-spinner" />
-      </div>
-    );
-  }
-
   if (state !== 'needs-passphrase') {
     return (
-      <div className="qt-auth-page flex items-center justify-center min-h-screen">
+      <div className="qt-auth-page flex flex-col items-center justify-center gap-3 min-h-screen">
         <div className="qt-spinner" />
+        {retrying && (
+          <p className="qt-text-small qt-text-muted" role="status">
+            The front desk is not answering just yet. Ringing again presently&hellip;
+          </p>
+        )}
       </div>
     );
   }

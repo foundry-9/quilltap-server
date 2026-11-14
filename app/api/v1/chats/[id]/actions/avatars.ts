@@ -1,7 +1,7 @@
 /**
  * Chats API v1 - Avatar Actions
  *
- * Handles get-avatars, set-avatar, and remove-avatar actions
+ * Handles get-avatars, avatar-timeline, set-avatar, and remove-avatar actions
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,6 +10,7 @@ import { notFound, serverError } from '@/lib/api/responses';
 import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 import { getPhotoLinkSummaryBySha256 } from '@/lib/photos/photo-link-summary';
 import { avatarOverrideSchema, removeAvatarSchema } from '../schemas';
+import { loadAvatarTimeline } from '@/lib/chat/salon-avatar-loader';
 import type { RequestContext } from '@/lib/api/middleware';
 
 /**
@@ -90,6 +91,16 @@ export async function handleSetAvatar(
   const existingOverrides = character.avatarOverrides || [];
   const overrideIndex = existingOverrides.findIndex(o => o.chatId === chatId);
 
+  // Salon avatar timeline: from now on this chat's bubbles for the character
+  // carry the hand-set avatar; earlier bubbles keep theirs.
+  await repos.avatarTimeline.record({
+    chatId,
+    characterId,
+    imageId,
+    source: 'operator',
+    priorImageId: overrideIndex >= 0 ? existingOverrides[overrideIndex].imageId : null,
+  });
+
   let updatedOverrides;
   if (overrideIndex >= 0) {
     // Update existing override
@@ -144,10 +155,45 @@ export async function handleRemoveAvatar(
   // Remove avatar override from character's avatarOverrides array
   const existingOverrides = character.avatarOverrides || [];
   const updatedOverrides = existingOverrides.filter(o => o.chatId !== chatId);
+  const removed = existingOverrides.find(o => o.chatId === chatId);
+
+  // Salon avatar timeline: the character's own avatar from here on. Nothing
+  // to record when the chat had no per-chat avatar to remove.
+  if (removed) {
+    await repos.avatarTimeline.record({
+      chatId,
+      characterId,
+      imageId: null,
+      source: 'operator-removed',
+      priorImageId: removed.imageId,
+    });
+  }
 
   await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
 
   logger.info('[Chats v1] Avatar override removed', { chatId, characterId });
 
   return NextResponse.json({ data: { success: true } });
+}
+
+/**
+ * The chat's avatar timeline, images resolved: what each bubble's author
+ * looked like when it was written. Read by the Salon's `getMessageAvatar`
+ * through `avatarAt` (`lib/chat/salon-avatar.ts`).
+ */
+export async function handleGetAvatarTimeline(
+  chatId: string,
+  { repos }: RequestContext
+): Promise<NextResponse> {
+  try {
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
+    const segments = await loadAvatarTimeline(chatId, repos);
+    return NextResponse.json({ data: segments });
+  } catch (error) {
+    logger.error('[Chats v1] Error loading avatar timeline', { chatId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to load avatar timeline');
+  }
 }

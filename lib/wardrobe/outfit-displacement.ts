@@ -23,6 +23,7 @@ import { cloneEquippedSlots, makeEmptyEquippedSlots } from '@/lib/schemas/wardro
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import {
   analyzeComposite,
+  wornIdsOf,
   computeDisplacedSlots,
   wornBundlesForMode,
   type ComputeDisplacedOptions,
@@ -54,9 +55,25 @@ async function loadSlots(
 }
 
 /** Log a composite that could not dissolve cleanly — the client-safe math can't. */
-function logCompositeIssues(options: ComputeDisplacedOptions, characterId: string): void {
+function logCompositeIssues(
+  options: ComputeDisplacedOptions,
+  characterId: string,
+  current: EquippedSlots,
+): void {
   if (!options.item || !options.itemsById) return;
-  const { cycles, truncated, unresolved } = analyzeComposite(options.item, options.itemsById);
+  const { cycles, truncated, unresolved, archivedSkipped } = analyzeComposite(
+    options.item,
+    options.itemsById,
+    wornIdsOf(current),
+  );
+  if (archivedSkipped > 0) {
+    logger.debug('[applyDisplacement] Archived composite components left off', {
+      context: 'wardrobe',
+      characterId,
+      itemId: options.item.id,
+      archivedSkipped,
+    });
+  }
   if (cycles > 0 || truncated) {
     logger.warn('[applyDisplacement] Malformed composite graph; expansion truncated', {
       context: 'wardrobe',
@@ -92,7 +109,7 @@ export async function applyDisplacement(
   source: Extract<EquipSource, 'ui' | 'tool'> = 'ui',
 ): Promise<EquippedSlots> {
   const current = await loadSlots(repos, chatId, characterId);
-  logCompositeIssues(options, characterId);
+  logCompositeIssues(options, characterId, current);
   const nextSlots = computeDisplacedSlots(current, options);
   const takeOff = options.mode === 'remove_from_slot' || options.mode === 'clear_slot';
   await repos.wardrobeWear.commitEquippedOutfit({

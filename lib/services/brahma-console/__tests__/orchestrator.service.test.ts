@@ -271,6 +271,52 @@ describe('handleBrahmaConsoleMessage — tool-call threading', () => {
     expect(followUp.some(m => typeof m.content === 'string' && m.content.includes('"success"'))).toBe(false)
   })
 
+  it('attaches each turn\'s reasoning to the message it led to, so thinking interleaves with SQL', async () => {
+    jest.mocked(buildTools).mockResolvedValue({
+      tools: [{ name: 'run_sql' }],
+      modelSupportsNativeTools: true,
+      useNativeWebSearch: false,
+    } as never)
+
+    let call = 0
+    jest.mocked(streamMessage).mockImplementation(async function* () {
+      call++
+      if (call === 1) {
+        yield { content: '', reasoningContent: 'First, count the chats.' }
+        yield { done: true, rawResponse: { tool: 1 } }
+      } else {
+        yield { content: '', reasoningContent: 'Twelve. Now answer.' }
+        yield { content: 'There are twelve.' }
+        yield { done: true, rawResponse: { finishReason: 'stop' } }
+      }
+    } as never)
+    jest.mocked(detectToolCallsInResponse)
+      .mockReturnValueOnce([{ name: 'run_sql', arguments: { database: 'main', sql: 'SELECT 12' }, callId: 'call_1' }] as never)
+      .mockReturnValue([] as never)
+    jest.mocked(processToolCalls).mockResolvedValue({
+      toolMessages: [{ toolName: 'run_sql', success: true, content: '{"rows":[12]}', callId: 'call_1', arguments: {} }],
+      generatedImagePaths: [],
+    } as never)
+    jest.mocked(saveToolMessages).mockResolvedValue(undefined as never)
+
+    const repos = makeMockRepos()
+    const stream = await handleBrahmaConsoleMessage(repos as never, 'chat-1', 'user-1', { content: 'how many chats?' })
+    await drain(stream)
+
+    const assistants = repos.chats.addMessage.mock.calls
+      .map((c: unknown[]) => c[1] as { role: string; content: string; reasoningContent?: string | null })
+      .filter(m => m.role === 'ASSISTANT')
+    expect(assistants).toHaveLength(2)
+    // The tool-call turn carries only the thinking that preceded its SQL…
+    expect(assistants[0]).toMatchObject({ content: '', reasoningContent: 'First, count the chats.' })
+    // …and the answer only the thinking since.
+    expect(assistants[1]).toMatchObject({ content: 'There are twelve.', reasoningContent: 'Twelve. Now answer.' })
+
+    // The live stream still carries one continuous chain.
+    expect(jest.mocked(encodeReasoningChunk).mock.calls.map(c => c[1]).at(-1))
+      .toBe('First, count the chats.\n\nTwelve. Now answer.')
+  })
+
   it('replays prior tool activity as readable [Tool Result] text, dropping empty tool-turn assistants', async () => {
     jest.mocked(buildTools).mockResolvedValue({
       tools: [{ name: 'run_sql' }],

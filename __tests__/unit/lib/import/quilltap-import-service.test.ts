@@ -241,6 +241,25 @@ describe('quilltap-import-service', () => {
       expect(preview.entities.memories!.count).toBe(2);
     });
 
+    it('shows the folder a host-path document store names, and none for a database store', async () => {
+      const exportData = createMockQuilltapExport();
+      Object.assign(exportData.data as any, {
+        mountPoints: [
+          { id: 'fs-1', name: 'Notes', basePath: '/home/someone/notes', mountType: 'filesystem',
+            storeType: 'documents', includePatterns: [], excludePatterns: [], enabled: true },
+          { id: 'db-1', name: 'Lore', basePath: '', mountType: 'database',
+            storeType: 'documents', includePatterns: [], excludePatterns: [], enabled: true },
+        ],
+      });
+
+      const preview = await previewImport(testUserId, exportData);
+
+      const stores = preview.entities.documentStores!;
+      expect(stores[0].basePath).toBe('/home/someone/notes');
+      expect(stores[0].detail).toMatch(/disabled/);
+      expect(stores[1].basePath).toBeUndefined();
+    });
+
     it('should report no conflicts when all entities are new', async () => {
       const exportData = createMockQuilltapExport();
 
@@ -346,7 +365,7 @@ describe('quilltap-import-service', () => {
   // ============================================================================
 
   describe('executeImport() - overwrite strategy', () => {
-    it('should overwrite existing entities', async () => {
+    it('should overwrite existing entities under their existing id (#188)', async () => {
       const existingChar = createMockCharacter({ userId: testUserId, name: 'Old Name' });
       const exportData = createMockQuilltapExport({
         characters: [
@@ -365,7 +384,32 @@ describe('quilltap-import-service', () => {
       expect(result.success).toBe(true);
       expect(result.imported.characters).toBe(1);
       expect(mockUserRepos.characters.delete).toHaveBeenCalledWith(existingChar.id);
-      expect(mockUserRepos.characters.create).toHaveBeenCalled();
+      // Recreated under the same id, so chats and memories naming it still resolve.
+      expect(mockUserRepos.characters.create).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'New Name' }),
+        { id: existingChar.id }
+      );
+      expect(result.importedCharacterIds).toEqual([existingChar.id]);
+    });
+
+    it('should overwrite a name-matched character under its existing id (#188)', async () => {
+      const existingChar = createMockCharacter({ userId: testUserId, name: 'Same Name' });
+      const exportData = createMockQuilltapExport({
+        characters: [createMockExportedCharacter({ id: 'foreign-id', name: 'Same Name' })],
+      });
+      configureFindAll(mockUserRepos.characters.findAll, [existingChar]);
+
+      const result = await executeImport(testUserId, exportData, {
+        conflictStrategy: 'overwrite',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(mockUserRepos.characters.create).toHaveBeenCalledWith(
+        expect.anything(),
+        { id: existingChar.id }
+      );
+      expect(result.importedCharacterIds).toEqual([existingChar.id]);
     });
 
     it('should delete existing before creating new', async () => {
@@ -376,16 +420,14 @@ describe('quilltap-import-service', () => {
 
       configureFindById(mockUserRepos.characters.findById, [existingChar]);
 
-      const deleteCall = jest.fn();
-      const createCall = jest.fn();
-
+      const order: string[] = [];
       mockUserRepos.characters.delete.mockImplementation(async () => {
-        deleteCall();
+        order.push('delete');
         return true;
       });
-      mockUserRepos.characters.create.mockImplementation(async (data) => {
-        createCall();
-        return { ...data, id: existingChar.id } as any;
+      mockUserRepos.characters.create.mockImplementation(async (data, options) => {
+        order.push('create');
+        return { ...data, id: (options as { id?: string } | undefined)?.id ?? 'fresh' } as any;
       });
 
       await executeImport(testUserId, exportData, {
@@ -394,8 +436,7 @@ describe('quilltap-import-service', () => {
         includeRelatedEntities: false,
       });
 
-      expect(deleteCall).toHaveBeenCalled();
-      expect(createCall).toHaveBeenCalled();
+      expect(order).toEqual(['delete', 'create']);
     });
 
     it('should import new entities without deletion', async () => {
@@ -992,7 +1033,7 @@ describe('quilltap-import-service', () => {
       expect(result.success).toBe(true);
       expect(result.imported.characters).toBe(1);
       expect(mockUserRepos.characters.create).toHaveBeenCalledWith(
-        expect.objectContaining({ id: exportedCharacter.id }),
+        expect.objectContaining({ name: 'Preserved' }),
         expect.objectContaining({ id: exportedCharacter.id })
       );
       expect(mockUserRepos.memories.create).toHaveBeenCalledWith(
@@ -1460,7 +1501,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: character.id,
       }) as any);
-      mockUserRepos.characters.findById.mockResolvedValue({
+      mockUserRepos.characters.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...character,
         defaultConnectionProfileId: oldProfileId,
       } as any);
@@ -1503,7 +1544,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: character.id,
       }) as any);
-      mockUserRepos.characters.findById.mockResolvedValue({
+      mockUserRepos.characters.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...character,
         defaultImageProfileId: oldProfileId,
       } as any);
@@ -1550,7 +1591,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: character.id,
       }) as any);
-      mockUserRepos.characters.findById.mockResolvedValue({
+      mockUserRepos.characters.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...character,
         defaultRoleplayTemplateId: oldTemplateId,
       } as any);
@@ -1580,7 +1621,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: character.id,
       }) as any);
-      mockUserRepos.characters.findById.mockResolvedValue({
+      mockUserRepos.characters.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...character,
         defaultRoleplayTemplateId: pluginTemplateId,
       } as any);
@@ -1636,7 +1677,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: chat.id,
       }) as any);
-      mockUserRepos.chats.findById.mockResolvedValue({
+      mockUserRepos.chats.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...chat,
         participants: chat.participants,
       } as any);
@@ -1668,7 +1709,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: chat.id,
       }) as any);
-      mockUserRepos.chats.findById.mockResolvedValue({
+      mockUserRepos.chats.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...chat,
         participants: chat.participants,
       } as any);
@@ -1679,9 +1720,11 @@ describe('quilltap-import-service', () => {
         includeRelatedEntities: false,
       });
 
-      // Plugin template ID should be preserved unchanged
-      const updateCall = mockUserRepos.chats.update.mock.calls[0];
-      expect(updateCall[1].participants[0].roleplayTemplateId).toBe(pluginTemplateId);
+      // Plugin template ID should be preserved unchanged: nothing about the
+      // participants moved, so they are not rewritten at all.
+      for (const [, patch] of mockUserRepos.chats.update.mock.calls as Array<[string, any]>) {
+        if (patch.participants) expect(patch.participants[0].roleplayTemplateId).toBe(pluginTemplateId);
+      }
     });
   });
 
@@ -1713,7 +1756,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: profile.id,
       }) as any);
-      mockUserRepos.connections.findById.mockResolvedValue({
+      mockUserRepos.connections.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...profile,
         tags: [oldTagId],
       } as any);
@@ -1755,7 +1798,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: profile.id,
       }) as any);
-      mockUserRepos.imageProfiles.findById.mockResolvedValue({
+      mockUserRepos.imageProfiles.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...profile,
         tags: [oldTagId],
       } as any);
@@ -1797,7 +1840,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: profile.id,
       }) as any);
-      mockUserRepos.embeddingProfiles.findById.mockResolvedValue({
+      mockUserRepos.embeddingProfiles.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...profile,
         tags: [oldTagId],
       } as any);
@@ -1848,7 +1891,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: template.id,
       }) as any);
-      mockGlobalRepos.roleplayTemplates.findById.mockResolvedValue({
+      mockGlobalRepos.roleplayTemplates.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...template,
         tags: [oldTagId],
       } as any);
@@ -1927,7 +1970,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: newProfileId,
       }) as any);
-      mockUserRepos.projects.findById.mockResolvedValue({
+      mockUserRepos.projects.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...project,
         defaultImageProfileId: oldProfileId,
       } as any);
@@ -1938,8 +1981,9 @@ describe('quilltap-import-service', () => {
         includeRelatedEntities: false,
       });
 
+      // The project was created by this import (under the mock's generated id).
       expect(mockUserRepos.projects.update).toHaveBeenCalledWith(
-        project.id,
+        'generated-id',
         expect.objectContaining({
           defaultImageProfileId: newProfileId,
         })
@@ -1968,7 +2012,7 @@ describe('quilltap-import-service', () => {
         ...data,
         id: newTemplateId,
       }) as any);
-      mockUserRepos.projects.findById.mockResolvedValue({
+      mockUserRepos.projects.findById.mockResolvedValueOnce(null).mockResolvedValue({
         ...project,
         defaultRoleplayTemplateId: oldTemplateId,
       } as any);
@@ -1979,8 +2023,9 @@ describe('quilltap-import-service', () => {
         includeRelatedEntities: false,
       });
 
+      // The project was created by this import (under the mock's generated id).
       expect(mockUserRepos.projects.update).toHaveBeenCalledWith(
-        project.id,
+        'generated-id',
         expect.objectContaining({
           defaultRoleplayTemplateId: newTemplateId,
         })

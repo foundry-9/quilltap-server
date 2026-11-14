@@ -38,7 +38,6 @@ export interface GenerationProgress {
 }
 
 export interface GeneratedPhysicalDescription {
-  name: string
   headAndShouldersPrompt: string
   shortPrompt: string
   mediumPrompt: string

@@ -36,8 +36,17 @@ export interface ComparisonCondition {
   $in?: unknown[];
   $nin?: unknown[];
   $exists?: boolean;
+  /**
+   * Hand-written pattern only (`.*` → `%`, `.` → `_`, wrapped in `%…%`).
+   * Refused when it contains a backslash: that is an escaped user string,
+   * which this translation cannot represent — use `$contains`.
+   */
   $regex?: RegExp | string;
   $like?: string;
+  /** Literal substring match (ASCII case-insensitive), safe for user text: `LIKE '%…%' ESCAPE '\'`. */
+  $contains?: string;
+  /** Literal prefix match (ASCII case-insensitive), safe for user text: `LIKE '…%' ESCAPE '\'`. */
+  $startsWith?: string;
 }
 
 /**

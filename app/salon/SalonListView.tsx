@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
 import { ChatCard } from '@/components/chat/ChatCard'
@@ -26,6 +28,7 @@ interface AutonomousRoomsListResponse {
 }
 
 export function SalonListView() {
+  const queryClient = useQueryClient()
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
@@ -47,16 +50,8 @@ export function SalonListView() {
         { signal }
       ),
   })
-  const { data: charactersData, isLoading: charactersLoading } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) =>
-      apiFetch<{ characters: Array<{ id: string; name: string; title?: string | null }> }>('/api/v1/characters', { signal }),
-  })
-  const { data: profilesData, isLoading: profilesLoading } = useQuery({
-    queryKey: queryKeys.connectionProfiles.all,
-    queryFn: ({ signal }) =>
-      apiFetch<{ profiles: Array<{ id: string; name: string }> }>('/api/v1/connection-profiles', { signal }),
-  })
+  const { data: charactersData, isLoading: charactersLoading } = useCharactersList<{ id: string; name: string; title?: string | null }>()
+  const { data: profilesData, isLoading: profilesLoading } = useConnectionProfilesQuery()
 
   // Whether the user actually owns any autonomous rooms — used to decide
   // whether to surface the "hidden" hint when the toggle is off. Cheap GET;
@@ -70,11 +65,11 @@ export function SalonListView() {
 
   const chats = useMemo(() => chatsData?.chats ?? [], [chatsData])
   const characters = useMemo(
-    () => (charactersData?.characters ?? []).map((c) => ({ id: c.id, name: c.name, title: c.title })),
+    () => (charactersData ?? []).map((c) => ({ id: c.id, name: c.name, title: c.title })),
     [charactersData]
   )
   const profiles = useMemo(
-    () => (profilesData?.profiles ?? []).map((p) => ({ id: p.id, name: p.name })),
+    () => (profilesData ?? []).map((p) => ({ id: p.id, name: p.name })),
     [profilesData]
   )
   const loading = chatsLoading || charactersLoading || profilesLoading
@@ -167,15 +162,17 @@ export function SalonListView() {
    * Handle import completion from the new wizard
    */
   const handleImportComplete = useCallback(async (chatId: string) => {
-    // Highlight the imported chat
+    // Re-read every chat list (it was missing until the next refetch), then
+    // highlight the imported chat.
+    await queryClient.invalidateQueries({ queryKey: queryKeys.chats.lists })
     setHighlightedChatId(chatId)
     setImportDialogOpen(false)
-  }, [])
+  }, [queryClient])
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading chats...</p>
+        <p className="text-lg qt-text">Loading chats...</p>
       </div>
     )
   }
@@ -189,7 +186,7 @@ export function SalonListView() {
   }
 
   return (
-    <div className="chat-page qt-page-container text-foreground" style={bgStyle}>
+    <div className="chat-page qt-page-container qt-text" style={bgStyle}>
       {/* Highlight animation styles */}
       <style>{`
         @keyframes chatCardHighlight {
@@ -207,20 +204,20 @@ export function SalonListView() {
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 qt-focus-ring"
           >
             Import SillyTavern Chat
           </button>
           <Link
             href="/salon/new?autonomous=1"
-            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 qt-focus-ring"
             title="Create an autonomous character-to-character room"
           >
             New Autonomous Room
           </Link>
           <Link
             href="/salon/new"
-            className="qt-button chat-toolbar__button chat-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button chat-toolbar__button chat-toolbar__button--primary qt-button-primary"
           >
             New Chat
           </Link>
@@ -238,7 +235,7 @@ export function SalonListView() {
           <p className="mb-4 text-lg qt-text-small">No chats yet</p>
           <Link
             href="/salon/new"
-            className="font-medium text-primary hover:text-primary/80"
+            className="font-medium qt-text-brand hover:qt-text-brand/80"
           >
             Start a new chat
           </Link>

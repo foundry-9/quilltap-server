@@ -94,6 +94,16 @@ export async function beginAutonomousRun(
     return { ok: false, reason: 'not_autonomous', message: 'This chat is not an autonomous room.' };
   }
 
+  // A room cast but never opened is opened first — dressed, packed, compiled,
+  // introduced — so its first run turn sees the room as it should be. Silent:
+  // nobody is watching a run start. Once opened, this is a single read.
+  const opening = await repos.chats.getOpeningState(chatId);
+  if (opening.state !== 'done') {
+    const { runOpening } = await import('@/lib/chat/opening/run');
+    logger.info('Autonomous run-start: opening the room first', { context: HANDLER, chatId, state: opening.state });
+    await runOpening({ repos, chatId, userId, trigger: 'run-start' });
+  }
+
   // Flip straight to `running` (counters zeroed, pause state cleared) plus any
   // schedule bookkeeping the caller asked for. This commits before the enqueue
   // below, so the first turn job always sees the live `currentRunId`.

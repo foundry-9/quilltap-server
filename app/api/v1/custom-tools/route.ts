@@ -23,7 +23,11 @@ import { MockInventorySchema, mockInventoryContext } from '@/lib/pascal/bench-in
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { createContextHandler, withCollectionActionDispatch, type RequestContext } from '@/lib/api/middleware';
+import {
+  createContextHandler,
+  withCollectionActionDispatch,
+  type RequestContext,
+} from '@/lib/api/middleware';
 import { badRequest, errorResponse, notFound, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import {
@@ -45,7 +49,7 @@ import { flattenProgressions } from '@/lib/progressions/engine';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildCustomToolLibrary, listCustomToolDestinations } from '@/lib/pascal/workbench';
 import { resolveBenchWardrobe } from '@/lib/pascal/bench-wardrobe';
-import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
+import { CharacterVaultUnavailableError } from '@/lib/characters/vault/layout';
 
 const HANDLER = 'api.v1.custom-tools';
 

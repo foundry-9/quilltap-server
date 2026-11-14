@@ -34,17 +34,17 @@ let memberships: Record<string, string[]>
 const repos = () => ({
   characters: {
     findByIdRaw: async (id: string) => characters[id] ?? null,
-    findByDocumentMountPointIdRaw: async (mp: string) =>
+    findByStorePointerRaw: async (mp: string) =>
       Object.values(characters).find((c) => c.characterDocumentMountPointId === mp) ?? null,
   },
   projects: {
     findByIdRaw: async (id: string) => projects[id] ?? null,
-    findByOfficialMountPointIdRaw: async (mp: string) =>
+    findByStorePointerRaw: async (mp: string) =>
       Object.values(projects).find((p) => p.officialMountPointId === mp) ?? null,
   },
   groups: {
     findByIdRaw: async (id: string) => groups[id] ?? null,
-    findByOfficialMountPointIdRaw: async (mp: string) =>
+    findByStorePointerRaw: async (mp: string) =>
       Object.values(groups).find((g) => g.officialMountPointId === mp) ?? null,
   },
   projectDocMountLinks: {

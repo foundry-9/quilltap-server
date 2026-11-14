@@ -2,6 +2,33 @@
 import { NanoGPTImageProvider } from '@/plugins/dist/qtap-plugin-nanogpt/image-provider';
 
 // Mock OpenAI (NanoGPT's images route is OpenAI-shaped)
+/** A minimal fetch Response: headers, status and a streamed body. */
+function fakeResponse(status: number, headers: Record<string, string>, bytes?: Uint8Array) {
+  let sent = false;
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
+    body: {
+      cancel: async () => undefined,
+      getReader: () => ({
+        read: async () => {
+          if (sent || !bytes) return { done: true, value: undefined };
+          sent = true;
+          return { done: false, value: bytes };
+        },
+        cancel: async () => undefined,
+        releaseLock: () => undefined,
+      }),
+    },
+  };
+}
+
+// Provider image URLs are resolved before download; answer with a public address.
+jest.mock('node:dns', () => ({
+  promises: { lookup: jest.fn(async () => [{ address: '93.184.216.34', family: 4 }]) },
+}));
+
 jest.mock('openai', () => {
   return {
     __esModule: true,
@@ -116,15 +143,13 @@ describe('NanoGPTImageProvider.generateImage', () => {
     }));
 
     const bytes = Uint8Array.from([1, 2, 3, 4]);
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      headers: { get: () => 'image/jpeg' },
-      arrayBuffer: async () => bytes.buffer,
-    }) as unknown as typeof fetch;
+    global.fetch = jest.fn().mockResolvedValue(
+      fakeResponse(200, { 'content-type': 'image/jpeg' }, bytes),
+    ) as unknown as typeof fetch;
 
     const result = await provider.generateImage({ prompt: 'a hat' }, mockApiKey);
 
-    expect(global.fetch).toHaveBeenCalledWith('https://cdn.example/img.png');
+    expect(global.fetch).toHaveBeenCalledWith('https://cdn.example/img.png', expect.objectContaining({ redirect: 'manual' }));
     expect(result.images[0].data).toBe(Buffer.from(bytes).toString('base64'));
     expect(result.images[0].mimeType).toBe('image/jpeg');
   });
@@ -138,7 +163,7 @@ describe('NanoGPTImageProvider.generateImage', () => {
       },
       models: { list: jest.fn() },
     }));
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 404 }) as unknown as typeof fetch;
+    global.fetch = jest.fn().mockResolvedValue(fakeResponse(404, {})) as unknown as typeof fetch;
 
     await expect(provider.generateImage({ prompt: 'a hat' }, mockApiKey)).rejects.toThrow('HTTP 404');
   });

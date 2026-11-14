@@ -2,12 +2,15 @@
  * Image, scene, and attachment-focused cheap LLM tasks.
  */
 
+import { z } from 'zod'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
+import { renderLabelledTranscript, type SpeakerNames } from '@/lib/chat/speaker-names'
 import { describeOutfit, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
 import { stripCodeFences } from '@/lib/llm/llm-json'
 import { executeCheapLLMTask } from './core-execution'
+import { renderKnownThings } from '@/lib/atlas/image-reference'
 import type {
   AppearanceResolutionItem,
   AppearanceSanitizeMode,
@@ -338,7 +341,14 @@ const STORY_BACKGROUND_PROMPT_CLOSING = `Respond with ONLY the final prompt - no
  *   Concierge uncensored image provider, which swaps cinematic concealment for
  *   a candid depiction. Defaults to false: concealment is the default.
  */
-function buildStoryBackgroundPrompt(uncensoredImageTarget: boolean): string {
+/**
+ * Taught only when the request carries the Atlas's known-things block, so a
+ * background that names nothing is crafted exactly as before.
+ */
+const STORY_BACKGROUND_KNOWN_THINGS = `KNOWN THINGS:
+You may also receive a list of known things (a vehicle, a house, a device, a place) with what each looks like. It is a reference, not a shopping list: if one of them is in the scene you are depicting, describe it exactly as given; if it is not in the scene, leave it out — never add a thing merely because it is listed.`
+
+function buildStoryBackgroundPrompt(uncensoredImageTarget: boolean, hasKnownThings = false): string {
   const intimacy = uncensoredImageTarget
     ? STORY_BACKGROUND_CANDID_INTIMACY
     : STORY_BACKGROUND_CONCEALED_INTIMACY
@@ -349,6 +359,7 @@ function buildStoryBackgroundPrompt(uncensoredImageTarget: boolean): string {
     STORY_BACKGROUND_PROMPT_HEAD,
     intimacy,
     STORY_BACKGROUND_PROMPT_TAIL,
+    ...(hasKnownThings ? [STORY_BACKGROUND_KNOWN_THINGS] : []),
     example,
     STORY_BACKGROUND_PROMPT_CLOSING,
   ].join('\n\n')
@@ -363,11 +374,9 @@ const APPEARANCE_RESOLUTION_PROMPT = `You are analyzing a conversation to determ
 You will receive:
 - Recent conversation messages
 - An image prompt that is about to be used for image generation
-- For each character: their available physical descriptions (with usage contexts) and the items they currently have equipped in their wardrobe
+- For each character: their physical description and the items they currently have equipped in their wardrobe
 
-Your task is to determine for each character:
-1. Which physical description best matches the current scene context (by usage context)
-2. What the character is currently wearing
+Your task is to determine what each character is currently wearing.
 
 CLOTHING PRIORITY (highest to lowest):
 1. NARRATIVE: If the conversation explicitly describes what a character changed into or is currently wearing, use the conversation's wording — paraphrased into a single concise visual sentence (not copied verbatim).
@@ -379,14 +388,12 @@ Respond with a JSON array, one entry per character:
 [
   {
     "characterId": "uuid-here",
-    "selectedDescriptionId": "uuid-of-best-matching-description-or-null",
     "clothingDescription": "what they are wearing right now",
     "clothingSource": "narrative" | "stored" | "default"
   }
 ]
 
 IMPORTANT:
-- For selectedDescriptionId, pick the description whose usageContext best fits the current scene. Use null to indicate the first/default.
 - clothingDescription MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visible (garment + color/material + any standout detail). No markdown, no bullet lists, no parentheticals, no commentary about purpose or feel, no quoted item names.
 - clothingSource must be "narrative" if from conversation, "stored" if from equipped wardrobe, "default" if using first/fallback.
 
@@ -532,9 +539,6 @@ export async function craftImagePrompt(
         parts.push(`  Gender: ${p.gender === 'male' ? 'man' : 'woman'} — always refer to this person as a ${p.gender === 'male' ? 'man' : 'woman'} in the prompt`);
       }
 
-      if (p.usageContext) {
-        parts.push(`  Usage context: ${p.usageContext}`);
-      }
 
       if (p.tiers.complete) {
         parts.push(`  Complete: "${p.tiers.complete}"`);
@@ -578,6 +582,9 @@ Style trigger phrase (MUST include exactly as shown): "${expansionContext.styleT
 
   // Default aesthetics + the Ariel Clause (empty unless any are set).
   const aestheticSection = buildAestheticSection(expansionContext)
+  // Atlas things the prompt names (empty unless any): what each looks like.
+  const knownThings = renderKnownThings(expansionContext.knownThings)
+  const knownThingsSection = knownThings ? `\n${knownThings}\n` : ''
 
   const llmMessages: LLMMessage[] = [
     {
@@ -589,8 +596,8 @@ Style trigger phrase (MUST include exactly as shown): "${expansionContext.styleT
       content: `Original prompt: ${expansionContext.originalPrompt}
 
 Available descriptions:
-${placeholderDetails}
-${styleTriggerSection}${aestheticSection}
+${placeholderDetails || (knownThings ? '(no characters named)' : '')}
+${styleTriggerSection}${aestheticSection}${knownThingsSection}
 Target length: ${expansionContext.targetLength} characters (for ${expansionContext.provider})
 
 Create the final image prompt (maximize detail while staying under the limit):`,
@@ -641,14 +648,13 @@ export async function deriveSceneContext(
   chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   // Format recent messages for the prompt
-  const messageText = input.recentMessages
-    .map(m => {
-      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
-      // Truncate long messages to keep context manageable
-      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
-      return `${speaker}: ${content}`
-    })
-    .join('\n\n')
+  // Truncate long messages to keep context manageable
+  const messageText = renderLabelledTranscript(input.recentMessages, input.speakerNames, { maxChars: 500 })
+  logger.debug('[deriveSceneContext] Rendered labelled transcript', {
+    chatId,
+    lines: input.recentMessages.length,
+    namedSeats: input.speakerNames?.size ?? 0,
+  })
 
   // Build the context section
   let contextInfo = `Chat Title: "${input.chatTitle}"`
@@ -696,6 +702,26 @@ Based on this conversation, describe the scene these characters might be in:`,
 }
 
 /**
+ * What the scene-state tracker's model answers with: the stored `SceneState`
+ * minus the timestamps the handler adds, read leniently. A model may leave a
+ * field out (a missing or "Unknown" location is how a refusal shows up, and the
+ * handler retries on it), and keys the schema does not name pass through to the
+ * stored row untouched. Only a reply that is not this shape at all is refused.
+ */
+const SceneStateLLMCharacterSchema = z.looseObject({
+  characterId: z.string().optional(),
+  clothing: z.unknown().optional(),
+  clothingHash: z.string().nullable().optional(),
+})
+
+export const SceneStateLLMResultSchema = z.looseObject({
+  location: z.string().optional(),
+  characters: z.array(SceneStateLLMCharacterSchema).optional(),
+})
+
+export type SceneStateLLMResult = z.infer<typeof SceneStateLLMResultSchema>
+
+/**
  * Updates scene state based on conversation messages
  *
  * Tracks the current state of a scene including location, character actions,
@@ -714,15 +740,15 @@ export async function updateSceneState(
   userId: string,
   chatId?: string,
   uncensoredFallback?: UncensoredFallbackOptions
-): Promise<CheapLLMTaskResult<Record<string, unknown>>> {
+): Promise<CheapLLMTaskResult<SceneStateLLMResult>> {
   // Format recent messages for the prompt — no truncation for scene state tracking,
   // because clothing/appearance details often appear deep in longer messages
-  const messageText = input.recentMessages
-    .map(m => {
-      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
-      return `${speaker}: ${m.content}`
-    })
-    .join('\n\n')
+  const messageText = renderLabelledTranscript(input.recentMessages, input.speakerNames)
+  logger.debug('[updateSceneState] Rendered labelled transcript', {
+    chatId,
+    lines: input.recentMessages.length,
+    namedSeats: input.speakerNames?.size ?? 0,
+  })
 
   // Build character baseline section
   const characterBaselines = input.characters
@@ -803,7 +829,14 @@ Update the scene state based on these new messages:`,
       }
 
       const cleanContent = stripCodeFences(content)
-      const parsed = JSON.parse(cleanContent)
+      const shaped = SceneStateLLMResultSchema.safeParse(JSON.parse(cleanContent))
+      if (!shaped.success) {
+        logger.warn('[SceneStateTracking] LLM response is not a scene state', {
+          issues: shaped.error.issues.slice(0, 5).map((i) => `${i.path.join('.')}: ${i.message}`),
+        })
+        throw new Error('LLM response is not a scene state')
+      }
+      const parsed = shaped.data
 
       // Validate the parsed result has meaningful content
       if (!parsed.location || parsed.location === 'Unknown' || parsed.location === 'unknown') {
@@ -815,14 +848,8 @@ Update the scene state based on these new messages:`,
 
       // Defensively cap each character's clothing summary to the ≤200-char
       // budget the prompt requests, so a verbose model can't bloat the whisper.
-      if (Array.isArray(parsed.characters)) {
-        for (const ch of parsed.characters) {
-          if (ch && typeof ch === 'object' && 'clothing' in ch) {
-            ;(ch as { clothing?: unknown }).clothing = capClothingSummary(
-              (ch as { clothing?: unknown }).clothing,
-            )
-          }
-        }
+      for (const ch of parsed.characters ?? []) {
+        if ('clothing' in ch) ch.clothing = capClothingSummary(ch.clothing)
       }
 
       return parsed
@@ -862,17 +889,20 @@ export async function craftStoryBackgroundPrompt(
 
   // Default aesthetics + the Ariel Clause (empty unless any are set).
   const aestheticSection = buildAestheticSection(context)
+  // Atlas things named around the scene, beside the aesthetic (empty unless any).
+  const knownThings = renderKnownThings(context.knownThings)
+  const knownThingsSection = knownThings ? `\n${knownThings}\n` : ''
 
   const llmMessages: LLMMessage[] = [
     {
       role: 'system',
-      content: buildStoryBackgroundPrompt(context.uncensoredImageTarget === true),
+      content: buildStoryBackgroundPrompt(context.uncensoredImageTarget === true, !!knownThings),
     },
     {
       role: 'user',
       content: `Scene context: ${context.sceneContext}
 ${characterSection}
-${aestheticSection}
+${aestheticSection}${knownThingsSection}
 Provider: ${context.provider}
 ${lengthGuidance}
 
@@ -920,15 +950,16 @@ export async function resolveAppearance(
   imagePrompt: string,
   selection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  speakerNames: SpeakerNames = new Map()
 ): Promise<CheapLLMTaskResult<AppearanceResolutionItem[]>> {
   // Build character data section
   const characterSection = characters.map(char => {
-    const descParts = char.physicalDescriptions.map(d => {
-      const context = d.usageContext ? ` (context: ${d.usageContext})` : ''
-      const preview = pickPhysicalDescription(d, 'scene') || '(no description text)'
-      return `    - ID: ${d.id}, Name: "${d.name}"${context}: ${preview}`
-    })
+    // One physical description per character: shown as reference for the
+    // body the clothing goes on, never something to choose between.
+    const appearance = char.physicalDescription
+      ? pickPhysicalDescription(char.physicalDescription, 'scene') || '(no description text)'
+      : '(none)'
 
     // Build equipped wardrobe items section using canonical describeOutfit.
     // Multiple entries per slot represent layering; we feed describeOutfit
@@ -951,19 +982,17 @@ export async function resolveAppearance(
       ? ` [not humanoid]\n  Form: NOT HUMANOID — no head, face, neck, shoulders, torso or limbs. Describe anything it wears or bears without naming a body part it lacks.`
       : ''
     return `  Character: ${char.characterName} (ID: ${char.characterId})${form}
-  Physical Descriptions:
-${descParts.length > 0 ? descParts.join('\n') : '    (none)'}${wardrobeSection}`
+  Physical Description: ${appearance}${wardrobeSection}`
   }).join('\n\n')
 
   // Format recent messages
-  const messageText = recentMessages
-    .slice(-20)
-    .map(m => {
-      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
-      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
-      return `${speaker}: ${content}`
-    })
-    .join('\n\n')
+  const lastTwenty = recentMessages.slice(-20)
+  const messageText = renderLabelledTranscript(lastTwenty, speakerNames, { maxChars: 500 })
+  logger.debug('[resolveAppearance] Rendered labelled transcript', {
+    chatId,
+    lines: lastTwenty.length,
+    namedSeats: speakerNames.size,
+  })
 
   const messages: LLMMessage[] = [
     {
@@ -998,7 +1027,6 @@ Determine what each character currently looks like and is wearing:`,
 
         return parsed.map((item: Record<string, unknown>) => ({
           characterId: String(item.characterId || ''),
-          selectedDescriptionId: item.selectedDescriptionId ? String(item.selectedDescriptionId) : null,
           clothingDescription: String(item.clothingDescription || ''),
           clothingSource: (['narrative', 'stored', 'default'].includes(String(item.clothingSource))
             ? String(item.clothingSource)

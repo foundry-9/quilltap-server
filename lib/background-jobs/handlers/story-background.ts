@@ -18,6 +18,7 @@ import { parseStoredSceneState, isParticipantPresent, type SceneState } from '@/
 import { type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { logger } from '@/lib/logger';
+import { resolveSpeakerNames } from '@/lib/chat/speaker-names';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
 import {
@@ -57,6 +58,7 @@ import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool
 import { figureGenderPrefix } from '@/lib/characters/pronoun-gender';
 import type { Character, ImageProfile } from '@/lib/schemas/types';
 import { isHumanoid, pickPhysicalDescription } from '@/lib/characters/physical-description';
+import { loadImageAtlasView, resolveAtlasImageReferences, type KnownThing } from '@/lib/atlas/image-reference';
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -334,6 +336,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   if (isDangerousChat && uncensoredLLMSelection) {
   }
 
+  // The scene-context transcript is labelled by speaker, never by role.
+  const sceneSpeakerNames = recentMessages.length > 0 && !sceneStateData
+    ? await resolveSpeakerNames(chat)
+    : undefined;
+  logger.debug('[StoryBackground] Resolved transcript speaker names', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    namedSeats: sceneSpeakerNames?.size ?? 0,
+  });
+
   // Run scene context derivation and appearance resolution in parallel
   const [sceneResult, appearanceResolutionResult] = await Promise.all([
     // Scene context derivation
@@ -344,6 +356,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
             contextSummary: chat.contextSummary,
             recentMessages,
             characterNames: validCharacters.map(c => c!.name),
+            speakerNames: sceneSpeakerNames,
           },
           cheapLLMSelection,
           job.userId,
@@ -557,6 +570,45 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     });
   }
 
+  // 9c. The Atlas: things named in the scene, the scene state, the recent
+  // conversation or the scenario, with what each looks like — offered to the
+  // crafter as a reference, never appended, so a thing named only in the
+  // scenario is painted only when the crafter puts it in the scene. The view
+  // is the cast's (a background is public). Never fails the job.
+  let knownThings: KnownThing[] = [];
+  try {
+    const atlasView = await loadImageAtlasView(repos, { chat, path: 'story-background' });
+    if (atlasView.entries.length > 0) {
+      const people = await repos.characters.findByUserId(job.userId);
+      knownThings = resolveAtlasImageReferences({
+        view: atlasView,
+        texts: [
+          sceneContext,
+          ...(sceneStateData ? [sceneStateData.location, ...sceneStateData.characters.map(c => c.action)] : []),
+          ...[...recentMessages].reverse().map(m => m.content),
+          chat.scenarioText ?? null,
+        ],
+        people: people.map(c => ({ name: c.name, aliases: c.aliases ?? [] })),
+        path: 'story-background',
+      });
+    }
+  } catch (err) {
+    logger.warn('[StoryBackground] Could not resolve Atlas things for the background; continuing without them', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      chatId: payload.chatId,
+      error: getErrorMessage(err),
+    });
+  }
+  if (knownThings.length > 0) {
+    logger.debug('[StoryBackground] Offering Atlas things to the crafter', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      chatId: payload.chatId,
+      things: knownThings.map(t => t.name),
+    });
+  }
+
   // 10. Craft the background prompt using cheap LLM
 
   const craftResult = await craftStoryBackgroundPrompt(
@@ -568,6 +620,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       characterAesthetic,
       depictionGuidelines,
       uncensoredImageTarget,
+      ...(knownThings.length > 0 && { knownThings }),
     },
     cheapLLMSelection,
     job.userId,
@@ -614,6 +667,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           characterAesthetic,
           depictionGuidelines,
           uncensoredImageTarget,
+          ...(knownThings.length > 0 && { knownThings }),
         },
         uncensoredLLMSelection,
         job.userId,

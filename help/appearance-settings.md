@@ -1,17 +1,17 @@
 ---
-url: /settings?tab=appearance
+url: /settings?group=appearance
 ---
 
 # Appearance Settings
 
-> **[Open this page in Quilltap](/settings?tab=appearance)**
+> **[Open this page in Quilltap](/settings?group=appearance)**
 
-The Appearance settings tab is where you customize how Quilltap looks and feels. Here you can change themes, select your preferred color mode (light/dark/system), enable the theme quick-switcher, and adjust sidebar width.
+The Appearance group of Settings is where you customize how Quilltap looks and feels. Here you can change themes, select your preferred color mode (light/dark/system), enable the theme quick-switcher, and adjust sidebar width.
 
 ## Accessing Appearance Settings
 
 1. Click **Settings** in the sidebar (gear icon)
-2. Look for the **Appearance** tab
+2. Open the **Appearance** group in the left rail
 3. You'll see options for themes, color modes, and layout controls
 
 ## Theme Selection
@@ -224,6 +224,10 @@ Your sidebar can be collapsed to show only icons:
 4. Icons show labels on hover
 5. Your collapse preference is saved
 
+### A Word on Tooltips
+
+The little labels that appear when you rest the pointer on a button are Quilltap's own, not the browser's. They arrive after a short pause, and they take their leave the moment the pointer wanders elsewhere, you click anywhere, press **Esc**, or step away to another window. Reach a control by **Tab** and its label appears and stays put until you move on; a mouse click, or a dialog handing focus back to the button that opened it, summons no label at all. On a touch screen, a tap does not raise one.
+
 ## Debug and Development Features
 
 ### Development Settings (if visible)
@@ -293,7 +297,7 @@ The very first press of Tab on any page now offers a **Skip to content** link, s
 
 **Solutions:**
 
-- Make sure theme plugins are installed in Settings → Plugins
+- Make sure theme plugins are installed in Settings → Data & Maintenance → Plugins
 - Refresh the page
 - Restart Quilltap if plugin installation required a restart
 - Check that theme plugins are enabled
@@ -360,7 +364,7 @@ Characters with help tools enabled can read your current appearance settings dur
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=appearance")`
+`help_navigate(url: "/settings?group=appearance")`
 
 ## Related Help
 

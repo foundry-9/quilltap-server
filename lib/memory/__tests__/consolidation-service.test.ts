@@ -57,8 +57,23 @@ jest.mock('../commonplace-mirror', () => ({
 jest.mock('@/lib/llm/cheap-llm-user-selection', () => ({ selectCheapLLMFromProfiles: jest.fn() }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 jest.mock('../recall/archive', () => ({ invalidateFrozenArchive: jest.fn() }))
-jest.mock('@/lib/database/repositories/character-properties-overlay', () => ({
-  readVaultTextFile: jest.fn(async () => null),
+jest.mock('@/lib/characters/vault/readers', () => ({
+  readVaultFile: jest.fn(async () => null),
+}))
+jest.mock('@/lib/background-jobs/host/processor-host', () => ({ notifyChild: jest.fn() }))
+// The job child reaches the writer over host-RPC; the parent runs it with the flag unset.
+jest.mock('@/lib/background-jobs/child/host-rpc-client', () => ({
+  callHost: jest.fn(async (method: string, request: unknown) => {
+    if (method !== 'applyConsolidation') throw new Error(`unexpected host-rpc ${method}`)
+    const { applyConsolidationPlan } = jest.requireActual('../admission/consolidation-writes')
+    const flag = process.env.QUILLTAP_JOB_CHILD
+    delete process.env.QUILLTAP_JOB_CHILD
+    try {
+      return await applyConsolidationPlan(request)
+    } finally {
+      if (flag !== undefined) process.env.QUILLTAP_JOB_CHILD = flag
+    }
+  }),
 }))
 jest.mock('../cheap-llm-tasks/consolidation-tasks', () => ({
   ...jest.requireActual('../cheap-llm-tasks/consolidation-tasks'),
@@ -127,8 +142,12 @@ const corpus: Memory[] = [
 
 let repos: any
 
+/** The rows the corpus read returns, as the writer's re-read sees them. */
+let liveRows: () => Memory[] = () => corpus
+
 beforeEach(() => {
   jest.clearAllMocks()
+  liveRows = () => corpus
   ;(memoryIndex.indexInserted as jest.Mock).mockResolvedValue(undefined)
   ;(memoryIndex.upsert as jest.Mock).mockResolvedValue([])
   ;(memoryIndex.setTier as jest.Mock).mockResolvedValue(0)
@@ -138,9 +157,16 @@ beforeEach(() => {
         yield corpus
       }),
       create: jest.fn(async (data: any, opts: any) => ({ ...data, id: opts.id })),
+      // The writer re-reads its rows inside the lock (A9).
+      findByIds: jest.fn(async (ids: string[]) => liveRows().filter((m) => ids.includes(m.id))),
+      findIdsLinkingTo: jest.fn(async () => []),
       updateForCharacter: jest.fn(),
       updateTierBulk: jest.fn(),
       markConsidered: jest.fn(),
+      incrementReinforcement: jest.fn(),
+      addConsolidatedMembers: jest.fn(),
+      addRelatedMemoryIds: jest.fn(),
+      removeRelatedMemoryIds: jest.fn(),
     },
     characters: {
       findByIdRaw: jest.fn(async (id: string) =>
@@ -303,7 +329,10 @@ describe('the consolidate phase', () => {
   it('bug 208: in the job child the mirror waits for the parent commit hook', async () => {
     process.env.QUILLTAP_JOB_CHILD = '1'
     const report = await runConsolidation(HOLDER, { now: NOW })
-    expect(repos.memories.create).toHaveBeenCalledTimes(1) // buffered in a real child
+    // Written by the parent over host-RPC (A9).
+    const { callHost } = jest.requireMock('@/lib/background-jobs/child/host-rpc-client') as { callHost: jest.Mock }
+    expect(callHost).toHaveBeenCalledWith('applyConsolidation', expect.objectContaining({ characterId: HOLDER }))
+    expect(repos.memories.create).toHaveBeenCalledTimes(1)
     expect(mirrorCommonplaceForSubjects).not.toHaveBeenCalled()
     expect(report.run.mirror).toEqual({ subjects: [LAURA], filesWritten: 0, deferredToCommit: true })
   })
@@ -314,6 +343,7 @@ describe('the consolidate phase', () => {
     repos.memories.findByCharacterIdInBatches.mockImplementation(async function* () {
       yield [...corpus, demoted]
     })
+    liveRows = () => [...corpus, demoted]
     const report = await runConsolidation(HOLDER, { now: NOW })
 
     expect(report.stats.candidates).toBe(5) // l1, l2, l3, demoted, self-1
@@ -331,6 +361,19 @@ describe('the consolidate phase', () => {
       'cold',
       { supersededById: opts.id, consolidatedAt: NOW.toISOString() },
     )
+  })
+
+  it('A9: skips a cluster whose member was retired between the read and the write, and retries it later', async () => {
+    // The corpus read sees l1–l3; by the write, digest member l1 is gone.
+    liveRows = () => corpus.filter((m) => m.id !== 'l1')
+    const report = await runConsolidation(HOLDER, { now: NOW })
+    expect(report.clusters[0].status).toBe('changed')
+    expect(report.stats.clustersChangedBeforeWrite).toBe(1)
+    expect(report.stats.digestsCreated).toBe(0)
+    expect(repos.memories.create).not.toHaveBeenCalled()
+    expect(memoryIndex.setTier).not.toHaveBeenCalled()
+    // Only the lone self row is stamped: the changed cluster's rows stay unconsidered.
+    expect(repos.memories.markConsidered.mock.calls[0][1]).toEqual(['self-1'])
   })
 
   it('skips a cluster whose answer fails validation, writing nothing for it', async () => {

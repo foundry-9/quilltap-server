@@ -30,12 +30,24 @@ export const queryKeys = {
     prompts: (id: string) => ['characters', id, 'prompts'] as const,
     subprompts: (id: string) => ['characters', id, 'subprompts'] as const,
     photos: (id: string) => ['characters', id, 'photos'] as const,
+    /** The character page header's counts, groups and vault summary (`?action=stats`). */
+    stats: (id: string) => ['characters', id, 'stats'] as const,
+    /** The vault-health report (`?action=vault-health`) the repair card reads. */
+    vaultHealth: (id: string) => ['characters', id, 'vault-health'] as const,
     /**
      * Avatar rolls — the plates the avatar configuration cache holds for this
      * character. A separate key from `photos` because they are a separate
      * collection with a separate endpoint, not a filtered view of the album.
      */
     avatarRolls: (id: string) => ['characters', id, 'avatar-rolls'] as const,
+    /**
+     * One page of the character's conversations (`?action=chats`). The search
+     * term and page are in the key, so an older term's slow answer never lands
+     * over a newer one.
+     */
+    chats: (id: string, filters: Filters) => ['characters', id, 'chats', filters ?? {}] as const,
+    /** Prefix of every `chats(id, …)` page. */
+    chatLists: (id: string) => ['characters', id, 'chats'] as const,
     /** Generated pictures of every wardrobe item the character can reach. */
     wardrobeImages: (id: string) => ['characters', id, 'wardrobe-images'] as const,
   },
@@ -67,12 +79,31 @@ export const queryKeys = {
      */
     informs: (id: string) => ['chats', id, 'informs'] as const,
     /**
+     * The chat's avatar timeline (`?action=avatar-timeline`): each character's
+     * dated avatars, so a bubble shows its author as they looked when it was
+     * written. Rides the `chats` realtime topic — the avatar job's completion
+     * and the timeline's own writer both publish it.
+     */
+    avatarTimeline: (id: string) => ['chats', id, 'avatar-timeline'] as const,
+    /**
      * Absent workspace characters named in one conversation, from
      * `?action=absent-mentions`: the message that first names each, and their
      * card. Drives the Salon's name chips; rides the `chats` realtime topic,
      * since a new message is what can add one.
      */
     absentMentions: (id: string) => ['chats', id, 'absent-mentions'] as const,
+    /**
+     * Prefix of every `atlasMentions(...)` key. Kept outside `['chats', id]`
+     * so the `atlas` topic can refresh every chat's chips with one prefix.
+     */
+    atlasMentionLists: ['atlas-mentions'] as const,
+    /**
+     * Atlas entries of the cast view named in one conversation, from
+     * `?action=atlas-mentions`: the message that first names each, and its
+     * card. Rides the `chats` topic (a new message) and the `atlas` topic (an
+     * edited entry).
+     */
+    atlasMentions: (id: string) => ['atlas-mentions', id] as const,
     /**
      * The chat's current storyteller round (open, running, or the last closed
      * one for the summary line), from `?action=storyteller-round`.
@@ -91,6 +122,12 @@ export const queryKeys = {
      * so a scenario change — which posts the Host's announcement — refreshes it.
      */
     scenarioSource: (id: string) => ['chats', id, 'scenario-source'] as const,
+    /**
+     * An autonomous room's schedule, budgets and run settings
+     * (`/api/v1/chats/{id}/autonomous-room`), as the Edit Enclave dialog edits
+     * them. Under the chat so a `chats` sweep refreshes it.
+     */
+    autonomousRoom: (id: string) => ['chats', id, 'autonomous-room'] as const,
   },
   /**
    * Scenario option lists, per tier. Read by the New Chat dialog and the
@@ -123,8 +160,35 @@ export const queryKeys = {
     all: ['groups'] as const,
     list: () => ['groups', 'list'] as const,
     state: (id: string) => ['groups', id, 'state'] as const,
+    /** One group's record (`GET /api/v1/groups/{id}`). */
+    detail: (id: string) => ['groups', id, 'detail'] as const,
+    /** One group's members (`?action=members`). */
+    members: (id: string) => ['groups', id, 'members'] as const,
+    /** The group's linked stores (`/api/v1/groups/{id}/mount-points`). */
+    stores: (id: string) => ['groups', id, 'stores'] as const,
+    /** Prefix of every `byCharacters(...)` key — invalidate after a group write. */
+    byCharactersAll: ['groups', 'by-characters'] as const,
     /** Groups any of these characters belongs to; keyed by comma-joined, sorted ids. */
     byCharacters: (characterIdsKey: string) => ['groups', 'by-characters', characterIdsKey] as const,
+  },
+  /**
+   * What a prospective cast would get if the operator changed nothing
+   * (`GET /api/v1/chats?action=casting-defaults`) — the New Chat dialog's
+   * shown defaults. Keyed by the cast, which of it the operator plays, the
+   * project, the continuation source and the chat type. Its own namespace
+   * rather than under `chats`: no chat exists yet, and the `chats` topic's
+   * per-message churn has nothing to say about it. The dialog re-reads it on
+   * the `characters`, `projects` and `wardrobe` topics.
+   */
+  casting: {
+    all: ['casting'] as const,
+    defaults: (filters: {
+      characterIds: string
+      userCharacterIds: string
+      projectId: string | null
+      continuationFromChatId: string | null
+      chatType: 'salon' | 'autonomous'
+    }) => ['casting', 'defaults', filters] as const,
   },
   /** The Host's Scenario Builder — only its capability probe is cached; runs are streams. */
   scenarioBuilder: {
@@ -144,9 +208,16 @@ export const queryKeys = {
   },
   embeddingProfiles: {
     all: ['embedding-profiles'] as const,
+    /** The static embedding-model catalogue (`?action=list-models`) the profile modal offers. */
+    models: ['embedding-profiles', 'models'] as const,
+    /** The embedding providers the profile modal's picker offers (`?action=list-providers`). */
+    providerNames: ['embedding-profiles', 'provider-names'] as const,
   },
   imageProfiles: {
     all: ['image-profiles'] as const,
+    /** The list ordered for a character / user-character (tag matches first). Nested under `all`, so a profile write refreshes it too. */
+    sorted: (characterId?: string, userCharacterId?: string) =>
+      ['image-profiles', 'sorted', characterId ?? null, userCharacterId ?? null] as const,
     /** The per-model options schema + LoRA support flag the profile editor renders from. */
     optionsSchema: (provider: string, model: string) =>
       ['image-profiles', 'options-schema', provider, model] as const,
@@ -156,9 +227,14 @@ export const queryKeys = {
   },
   projects: {
     all: ['projects'] as const,
+    /** Prefix of every `list(...)` key — invalidate after a project write. */
+    lists: ['projects', 'list'] as const,
     list: (filters?: Filters) => ['projects', 'list', filters ?? {}] as const,
     detail: (id: string) => ['projects', 'detail', id] as const,
+    /** The project's files (`?action=list-files`): its store's files, else legacy rows. */
     files: (projectId: string) => ['projects', projectId, 'files'] as const,
+    /** The project's chats, paged (`?action=list-chats`) — an infinite query. */
+    chats: (projectId: string) => ['projects', projectId, 'chats'] as const,
     /** The project's linked stores and its own (`/api/v1/projects/{id}/mount-points`). */
     stores: (projectId: string) => ['projects', projectId, 'stores'] as const,
     background: (id: string) => ['projects', id, 'background'] as const,
@@ -184,6 +260,8 @@ export const queryKeys = {
     conversationSummaryRegenerate: ['system', 'conversation-summary-regenerate'] as const,
     dataDir: ['system', 'data-dir'] as const,
     unlock: ['system', 'unlock'] as const,
+    /** Whether this install is user-managed or hosted (`/api/v1/system/deployment`). */
+    deployment: ['system', 'deployment'] as const,
   },
   tools: {
     all: ['tools'] as const,
@@ -193,6 +271,8 @@ export const queryKeys = {
      * composer's `/` command menu while it is open.
      */
     byChat: (chatId: string) => ['tools', 'chat', chatId] as const,
+    /** The same tools with their availability for one chat, no schemas (`?chatId=…`) — the tool settings dialog. */
+    availability: (chatId: string) => ['tools', 'availability', chatId] as const,
   },
   customTools: {
     all: ['custom-tools'] as const,
@@ -250,6 +330,14 @@ export const queryKeys = {
     /** The maintenance ledger (parent memory); the `memories` topic refreshes it after a run. */
     maintenanceStatus: ['memories', 'maintenance-status'] as const,
     characterMemoryCounts: ['memories', 'character-memory-counts'] as const,
+    /** Prefix of every `list(...)` key — invalidate after a memory write. */
+    lists: ['memories', 'list'] as const,
+    /**
+     * One page of one character's memories (`GET /api/v1/memories?…`). The
+     * search term, sort, filters and page are all in the key, so a slow
+     * response for an older search term can never land over a newer one.
+     */
+    list: (filters: Filters) => ['memories', 'list', filters ?? {}] as const,
     /** The per-chat row count the Salon sidebar renders beside its delete control. */
     chatCount: (chatId: string) => ['memories', 'chat-count', chatId] as const,
   },
@@ -294,6 +382,12 @@ export const queryKeys = {
   },
   plugins: {
     all: ['plugins'] as const,
+    /** Every loaded plugin with the registry's stats (`GET /api/v1/plugins`). */
+    list: () => ['plugins', 'list'] as const,
+    /** The site-installed plugins (`?filter=installed`). */
+    installed: () => ['plugins', 'installed'] as const,
+    /** Newer versions on npm (`?action=check-upgrades`). */
+    upgrades: () => ['plugins', 'upgrades'] as const,
     config: (pluginName: string) => ['plugins', pluginName, 'config'] as const,
   },
   photos: {
@@ -330,6 +424,8 @@ export const queryKeys = {
     folderLists: ['wardrobe', 'folders'] as const,
     /** One wardrobe container's folder tree (`?action=folders`), by `wardrobeTierKey`. */
     folders: (tierKey: string) => ['wardrobe', 'folders', tierKey] as const,
+    /** The vision profiles Import from image may read a photograph with (GET analyze-image). */
+    visionProfiles: ['wardrobe', 'vision-profiles'] as const,
     /**
      * What every character in one chat is wearing (`?action=outfit`). Under
      * `wardrobe` so `wardrobe.all` invalidation after an equip refreshes it.
@@ -383,6 +479,25 @@ export const queryKeys = {
     /** What every cast member carries in one chat (`?action=inventory`). The `chats` topic refetches it. */
     equipped: (chatId: string) => ['inventory', 'equipped', chatId] as const,
   },
+  /**
+   * The Atlas: named things in four tiers. `tierKey` is
+   * `encodeWardrobeContainer`'s `scope:id`.
+   */
+  atlas: {
+    all: ['atlas'] as const,
+    /** Prefix of every `list(...)` key. */
+    lists: ['atlas', 'list'] as const,
+    list: (tierKey: string, filters: { includeArchived: boolean }) => ['atlas', 'list', tierKey, filters] as const,
+    /** Prefix of every `folders(...)` key. */
+    folderLists: ['atlas', 'folders'] as const,
+    folders: (tierKey: string) => ['atlas', 'folders', tierKey] as const,
+    /** Prefix of every `overlaps(...)` key. */
+    overlapLists: ['atlas', 'overlaps'] as const,
+    /** Terms a tier's entries share with other reachable entries or with characters. */
+    overlaps: (tierKey: string) => ['atlas', 'overlaps', tierKey] as const,
+    /** One entry's pictures. */
+    images: (entryId: string) => ['atlas', 'images', entryId] as const,
+  },
   mailbox: {
     all: ['mailbox'] as const,
     /** Letters in a chat-participant character's Mail/ folder (Compose Mail dialog). */
@@ -399,6 +514,15 @@ export const queryKeys = {
     all: ['brahma-console'] as const,
     entity: (apiUrl: string) => ['brahma-console', 'entity', apiUrl] as const,
     pastChats: ['brahma-console', 'past-chats'] as const,
+  },
+  /**
+   * The global search dialog (`GET /api/v1/ui/search`), paged as an infinite
+   * query. The term and the type filter are the key, so a slow answer for an
+   * earlier term or filter is never the one on screen.
+   */
+  uiSearch: {
+    all: ['ui-search'] as const,
+    results: (query: string, types: readonly string[]) => ['ui-search', query, [...types].sort()] as const,
   },
   home: {
     /** Home dashboard payload for the workspace home tab. */

@@ -18,7 +18,7 @@ Tags are custom keywords you assign to your content to help you organize and fin
 
 Each character can have multiple tags assigned to help you organize your character roster:
 
-- Tags appear in the character's **Tags tab** on their profile
+- Tags appear in the **Facts** card of the **Details** section on the character's page
 - Tags help filter your characters in the sidebar
 - Tagged characters can be hidden using the **quick-hide** feature
 - When creating a new chat, you can filter character suggestions by tags
@@ -51,7 +51,7 @@ Use the global search bar to find content by tag:
 
 ### In Settings
 
-The **Tags customization tab** in Settings is your central hub for managing all tags and their appearance:
+The **Tags** card in the Appearance group of Settings is your central hub for managing all tags and their appearance:
 
 - View all tags in your system
 - Customize how each tag looks
@@ -63,7 +63,7 @@ The **Tags customization tab** in Settings is your central hub for managing all 
 ### How to Add Tags
 
 1. Navigate to the item you want to tag (a character, profile, or file)
-2. Find the **Tags** section or **Tags tab**
+2. Find the **Tags** field (for a character, in the **Facts** card on **Details**) or the **Tags** tab
 3. Click to add a tag
 4. Search for existing tags or create a new tag by typing
 5. Click the tag to add it
@@ -154,7 +154,7 @@ Quick-hide is temporary and non-destructive:
 
 ### Tag List
 
-In the Tags customization tab, you'll see:
+In the Tags card, you'll see:
 
 - **All tags** in your system listed in order
 - **Tag preview** showing how each tag appears with its customization
@@ -163,7 +163,7 @@ In the Tags customization tab, you'll see:
 
 ### Deleting Tags
 
-The **Tag Management** section at the bottom of the Tags tab lets you delete any tag. Each tag shows its usage count across all entity types. When deleted, the tag is automatically removed from all characters, chats, profiles, and files that use it. See the [Tag Customization](tags-customization.md) page for full details.
+The **Tag Management** section at the bottom of the Tags card lets you delete any tag. Each tag shows its usage count across all entity types. When deleted, the tag is automatically removed from all characters, chats, profiles, and files that use it. See the [Tag Customization](tags-customization.md) page for full details.
 
 ### Organizing Your Tags
 

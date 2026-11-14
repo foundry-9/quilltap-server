@@ -15,9 +15,23 @@ When Agent Mode is enabled, the AI can:
 - **Self-correct** - Fix mistakes and improve answers based on intermediate results
 - **Work autonomously** - Handle multi-step tasks without constant user input
 
-The AI signals completion by calling the `submit_final_response` tool when it's confident in its answer.
+What Agent Mode *means* depends on the kind of character who is speaking (set in the **Facts** card of the character's **Details** section — see [Character Editing](character-editing.md)):
 
-## How It Works
+- **A roleplay character** (the default) acts in the scene. Their tools become their hands: looking something up, checking a ledger, sending word, moving an object. They may take several such steps in a turn, and then they write the turn as they always would — in character, in prose, with no summary and no report.
+- **An assistant** researches and reports. They iterate, verify, and signal completion by calling the `submit_final_response` tool when confident in their answer.
+
+The switch below turns Agent Mode on or off; the character's kind decides which of the two it is. In a scene with several characters, each speaker gets the flavour that suits them.
+
+## Acting in the Scene (Roleplay Characters)
+
+1. **You send a message** - The step counter resets to zero
+2. **The character acts** - They use their tools as the moment calls for, one step at a time
+3. **The character speaks** - When they have done what they meant to do, they write their turn in prose
+4. **Step limit** - If the limit is reached, they are told to put the tools down and write their turn from what they have found and done
+
+A roleplay character is never offered `submit_final_response`.
+
+## How It Works (Assistants)
 
 1. **User sends a message** - The agent mode iteration counter resets to zero
 2. **AI works iteratively** - Uses available tools to gather information (each tool use = 1 turn)
@@ -30,7 +44,7 @@ The AI signals completion by calling the `submit_final_response` tool when it's 
 Agent mode settings follow a cascade from global to specific:
 
 ```
-Global Chat Settings (default for all chats)
+Global Settings → Games & Tools → Agent Mode (default for all chats)
     ↓
 Character Setting (null = inherit from global)
     ↓
@@ -46,7 +60,7 @@ Each level can override the previous if explicitly set.
 ### Global Settings (The Salon)
 
 - **Enable Agent Mode by Default**: When enabled, new chats will use agent mode
-- **Maximum Agent Turns**: The maximum number of tool iterations (1-25, default: 10)
+- **Maximum Agent Turns**: The maximum number of tool iterations (1-50, default: 10)
 
 ### Per-Chat Toggle
 
@@ -54,7 +68,7 @@ To toggle agent mode for the current chat, open the **Chat Sidebar** on the righ
 
 ### Character Defaults
 
-Characters can have their own default agent mode setting that overrides the global default. Configure this in the character's **Profiles** tab under **Agent Mode**:
+Characters can have their own default agent mode setting that overrides the global default. Configure this in the **Chat Defaults** section of the character's page, under **Agent mode** (it saves the moment you choose):
 - **Inherit from global settings**: Use the global chat settings default
 - **Enabled by default**: Agent mode is on for new chats with this character
 - **Disabled by default**: Agent mode is off for new chats with this character
@@ -65,7 +79,7 @@ Projects can also override the agent mode default for all chats within that proj
 
 ## The submit_final_response Tool
 
-This special tool signals that the AI has completed multi-step agentic work for the current turn:
+This special tool belongs to assistants alone; roleplay characters never see it. It signals that the AI has completed multi-step agentic work for the current turn:
 
 - **response** (required): The final, polished answer to deliver to the user
 - **summary** (optional): Brief description of what was accomplished
@@ -81,9 +95,9 @@ If the model calls `submit_final_response` on its very first iteration with no o
 
 When the maximum turn limit is reached:
 
-1. A system message prompts the AI to submit its final response immediately
+1. A system message asks for the final word: an assistant is told to submit its best answer now; a roleplay character is told to stop using tools and write the turn
 2. One additional LLM call is made with this prompt
-3. The AI should call `submit_final_response` with its best answer
+3. An assistant should call `submit_final_response` with its best answer; a roleplay character simply speaks
 
 This prevents runaway iterations while ensuring the user gets a response.
 
@@ -105,8 +119,8 @@ This prevents runaway iterations while ensuring the user gets a response.
 
 - **5 turns**: Quick tasks, cost-conscious
 - **10 turns** (default): Balanced for most use cases
-- **15-20 turns**: Complex research or multi-step operations
-- **25 turns**: Maximum for very complex tasks
+- **15-25 turns**: Complex research or multi-step operations
+- **30-50 turns**: Long investigations; 50 is the maximum
 
 ## Status Events
 
@@ -114,7 +128,7 @@ During agent mode, you may see status messages like:
 
 - **"Turn N: Used tool1, tool2"** - Summary of what happened in each turn
 - **"Requesting final response..."** - Turn limit reached, forcing completion
-- **"Agent completed task"** - AI successfully submitted final response
+- **"Agent completed task"** - An assistant successfully submitted its final response
 
 ## Troubleshooting
 

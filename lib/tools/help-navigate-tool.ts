@@ -41,7 +41,7 @@ export const helpNavigateToolInputSchema = z.object({
       { message: 'URL must point to an allowed Quilltap route' }
     )
     .describe(
-      'The internal Quilltap URL to navigate to. Must start with /. Examples: "/settings?tab=concierge&section=uncensored-desk", "/settings?tab=appearance", "/aurora", "/salon"'
+      'The internal Quilltap URL to navigate to. Must start with /. Examples: "/settings?section=uncensored-desk" (a card), "/settings?group=appearance" (a group), "/settings?persona=pascal" (one persona\'s settings), "/settings?q=password" (the settings page, searched), "/aurora", "/salon"'
     ),
 })
 

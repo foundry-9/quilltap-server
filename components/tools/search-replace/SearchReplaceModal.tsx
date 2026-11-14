@@ -195,9 +195,9 @@ export function SearchReplaceModal({
                       className={`
                         w-8 h-8 rounded-full flex items-center justify-center qt-label
                         ${isComplete
-                          ? 'bg-primary text-primary-foreground'
+                          ? 'qt-bg-primary qt-text-on-primary'
                           : isActive
-                            ? 'bg-primary text-primary-foreground'
+                            ? 'qt-bg-primary qt-text-on-primary'
                             : 'qt-bg-muted qt-text-secondary'
                         }
                       `}
@@ -211,7 +211,7 @@ export function SearchReplaceModal({
                   {index < 2 && (
                     <div className={`
                       flex-1 h-0.5 mx-4
-                      ${isComplete ? 'bg-primary' : 'qt-bg-muted'}
+                      ${isComplete ? 'qt-bg-primary' : 'qt-bg-muted'}
                     `} />
                   )}
                 </div>

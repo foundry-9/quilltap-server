@@ -24,4 +24,5 @@ export type {
   AttachmentSupport,
   ModelInfo,
   ProviderOptionsSchema,
+  CheapModelConfig,
 } from '@quilltap/plugin-types';

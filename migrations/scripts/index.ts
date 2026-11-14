@@ -293,7 +293,10 @@ import { repairDanglingRelatedMemoryEdgesV1Migration } from './repair-dangling-r
 // Add pseudoToolMode column to connection_profiles (selects native/simple-json/text-block pseudo-tool surface)
 import { addPseudoToolModeFieldMigration } from './add-pseudo-tool-mode-field';
 // Reconcile files.mimeType/size with the mount blob (bridges transcode bitmaps to WebP; the FileEntry must reflect what is on disk)
-import { repairFilesMimeAndSizeFromMountBlobMigration } from './repair-files-mime-and-size-from-mount-blob';
+import {
+  repairFilesMimeAndSizeFromMountBlobMigration,
+  repairFilesMimeAndSizeFromMountBlobV2Migration,
+} from './repair-files-mime-and-size-from-mount-blob';
 // Recompute doc_mount_blobs.sha256 from stored bytes; upload paths recorded input-bytes hash instead of stored-bytes hash
 import { repairMountBlobSha256FromBytesMigration } from './repair-mount-blob-sha256-from-bytes';
 // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
@@ -465,6 +468,15 @@ import { reindexChatMessageFtsCharacterOnlyMigration } from './reindex-chat-mess
 import { addEstablishedFactFieldMigration } from './add-established-fact-field-v1';
 // Vision input cap: connection_profiles.maxImagesPerRequest
 import { addProfileMaxImagesPerRequestMigration } from './add-profile-max-images-per-request-v1';
+// Tool-result elision window: connection_profiles.toolResultVerbatimTurns
+import { addProfileToolResultVerbatimTurnsMigration } from './add-profile-tool-result-verbatim-turns-v1';
+import { addChatAvatarTimelineTableMigration } from './add-chat-avatar-timeline-table-v1';
+import { addChatOpeningStateMigration } from './add-chat-opening-state-v1';
+import { rekeyBuiltInRoleplayTemplatesMigration } from './rekey-built-in-roleplay-templates-v1';
+import { backfillDeadJobCompletedAtMigration } from './backfill-dead-job-completed-at-v1';
+import { symmetrizeMemoryLinksMigration } from './symmetrize-memory-links-v1';
+// Brahma Console Writing Assistant: consoleMode + consoleContext on chats
+import { addConsoleWritingAssistantFieldsMigration } from './add-console-writing-assistant-fields';
 
 /**
  * All available migrations.
@@ -958,6 +970,22 @@ export const migrations: Migration[] = [
   addEstablishedFactFieldMigration,
   // Vision input cap: connection_profiles.maxImagesPerRequest (most images sent in one request)
   addProfileMaxImagesPerRequestMigration,
+  // Tool-result elision window: connection_profiles.toolResultVerbatimTurns (turns a result stays in full)
+  addProfileToolResultVerbatimTurnsMigration,
+  // Salon avatar timeline: chat_avatar_timeline (each bubble keeps the look it was written in)
+  addChatAvatarTimelineTableMigration,
+  // The opening: chats.openingState / openingPhase (a chat is cast, then opened)
+  addChatOpeningStateMigration,
+  // Built-in roleplay templates: fixed (UUIDv5) ids, every pointer re-keyed (#190)
+  rekeyBuiltInRoleplayTemplatesMigration,
+  // Background jobs: completedAt on DEAD rows, so the reaper can retire them (#194)
+  backfillDeadJobCompletedAtMigration,
+  // Memory: one-way links left by the pre-4.13 consolidation writes made two-way (A9)
+  symmetrizeMemoryLinksMigration,
+  // Brahma Console Writing Assistant: chats.consoleMode / consoleContext
+  addConsoleWritingAssistantFieldsMigration,
+  // Files: mimeType / size realigned after the 4.10 blob re-encode left them stale
+  repairFilesMimeAndSizeFromMountBlobV2Migration,
 ];
 
 export {
@@ -1423,5 +1451,13 @@ export {
   reindexChatMessageFtsCharacterOnlyMigration,
   addEstablishedFactFieldMigration,
   addProfileMaxImagesPerRequestMigration,
+  addProfileToolResultVerbatimTurnsMigration,
+  addChatAvatarTimelineTableMigration,
+  addChatOpeningStateMigration,
+  rekeyBuiltInRoleplayTemplatesMigration,
+  backfillDeadJobCompletedAtMigration,
+  symmetrizeMemoryLinksMigration,
+  addConsoleWritingAssistantFieldsMigration,
+  repairFilesMimeAndSizeFromMountBlobV2Migration,
 };
 

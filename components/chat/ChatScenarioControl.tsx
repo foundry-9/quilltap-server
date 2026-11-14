@@ -157,7 +157,7 @@ export function ChatScenarioControl({
     queryFn: ({ signal }) =>
       apiFetch<{ groupScenarios: GroupScenarioGroup[] }>(
         withArchivedParam(
-          `/api/v1/groups/scenarios?characterIds=${encodeURIComponent(characterIdsKey)}`,
+          `/api/v1/groups?action=scenarios&characterIds=${encodeURIComponent(characterIdsKey)}`,
           showArchived,
         ),
         { signal },

@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { publishRealtime } from '@/lib/realtime/bus';
 import { notFound, serverError, created, successResponse } from '@/lib/api/responses';
 
 const createPromptSchema = z.object({
@@ -40,7 +41,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
   async (request, { user, repos }, { id: characterId }) => {
     const body = await request.json();
     const validated = createPromptSchema.parse(body);// First verify the character exists and belongs to the user
-    const character = await repos.characters.findById(characterId);
+    const character = await repos.characters.findByIdRaw(characterId);
 
     if (!exists(character)) {
       return notFound('Character');
@@ -67,6 +68,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
       promptName: validated.name,
     });
 
+    publishRealtime('characters', characterId);
     return created({ prompt });
   }
 );

@@ -11,6 +11,8 @@ import { EMBEDDING_MAX_CHARS, averageEmbeddings, generateEmbeddingForUser } from
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { requireMountIndexDb } from '@/lib/database/backends/sqlite/mount-index-guard';
 import { buildHelpDocChunks, helpChunkEmbeddingText } from '@/lib/help/help-doc-chunking';
+import { embeddedTextHash } from '@/lib/embedding/embedded-text-hash';
+import { isEmbeddingProfileReady } from '@/lib/embedding/profile-readiness';
 import { logger } from '@/lib/logger';
 import { memoryIndex, embeddingTextFor, lexicalEmbeddingTextFor } from '@/lib/memory/index-store';
 import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh';
@@ -105,6 +107,21 @@ async function skipIfOversize(
 export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as EmbeddingGeneratePayload;
   const repos = getRepositories();
+
+  // An unfitted Built-in profile can embed nothing yet. That is "not yet", not
+  // a failure: complete quietly without marking the row FAILED, so the job is
+  // not retried to DEAD. The first fit enqueues a full reindex.
+  const profile = await repos.embeddingProfiles.findById(payload.profileId);
+  if (profile && !(await isEmbeddingProfileReady(profile, repos))) {
+    logger.debug('[EmbeddingGenerate] Deferred: Built-in profile not fitted yet', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      entityType: payload.entityType,
+      entityId: payload.entityId,
+      profileId: payload.profileId,
+    });
+    return;
+  }
 
   // Route to entity-specific handler
   if (payload.entityType === 'HELP_DOC') {
@@ -260,7 +277,11 @@ async function handleConversationChunkEmbedding(
     );
 
     // Store embedding directly on the chunk (same Float32 BLOB format as memories)
-    await repos.conversationChunks.updateEmbedding(chunk.id, embeddingResult.embedding);
+    // Conditional on the text still being what was embedded: a re-render
+    // between the read and the parent's replay must not get the old vector.
+    await repos.conversationChunks.updateEmbedding(chunk.id, embeddingResult.embedding, {
+      expectedTextHash: embeddedTextHash(chunk.content),
+    });
 
     await repos.embeddingStatus.markAsEmbedded(
       'CONVERSATION_CHUNK',
@@ -593,7 +614,10 @@ async function handleMountChunkEmbedding(
       { priority: 'background' }
     );
 
-    await repos.docMountChunks.updateEmbedding(chunk.id, embeddingResult.embedding);
+    // Conditional on the text still being what was embedded (see above).
+    await repos.docMountChunks.updateEmbedding(chunk.id, embeddingResult.embedding, {
+      expectedTextHash: embeddedTextHash(chunk.content),
+    });
 
     // Invalidate the in-memory cache for this mount point so the next
     // document search reloads fresh chunks.

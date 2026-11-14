@@ -283,7 +283,7 @@ overwrite; the fix (make the primitives take the prior slots from the previous o
 within a tool call, or move the whole op list into one `commitEquippedOutfit`) is outside this
 spec.
 
-**Filed as [bug 179](../../bugs/fixed/bug-179-buffered-outfit-overwrite.md) and fixed
+**Filed as [bug 179](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-179-buffered-outfit-overwrite.md) and fixed
 2026-10-07** — neither of the two fixes above: the job child's repository proxy now keeps a
 per-job overlay of the slots each buffered `commitEquippedOutfit` leaves behind, and answers
 `chats.getEquippedOutfitForCharacter` from it, so every reader in the job (not only the

@@ -329,7 +329,7 @@ export function SettingsCard({
           {metadata.map((item, index) => (
             <div key={index}>
               <p className="qt-text-xs uppercase">{item.label}</p>
-              <p className={item.small ? 'qt-text-small' : 'text-sm text-foreground'}>
+              <p className={item.small ? 'qt-text-small' : 'text-sm qt-text'}>
                 {item.value}
               </p>
             </div>

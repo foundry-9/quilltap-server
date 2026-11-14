@@ -3,7 +3,7 @@
  */
 
 import type { ProviderOptionsSchema, ThinkingTurnRule } from '@quilltap/plugin-types'
-import { DEFAULT_MAX_IMAGES_PER_REQUEST } from '@/lib/schemas/profile.types'
+import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types'
 
 export type { ProviderOptionsSchema, ThinkingTurnRule }
 
@@ -104,6 +104,8 @@ export interface ConnectionProfile {
   supportsImageUpload?: boolean
   /** The most images sent in one request; resolve through `resolveMaxImagesPerRequest`. */
   maxImagesPerRequest?: number | null
+  /** Turns a tool result stays in full (0 = never elided); resolve through `resolveToolResultVerbatimTurns`. */
+  toolResultVerbatimTurns?: number | null
   modelClass?: string | null
   /** The understudy: another profile to try when this one's provider fails. */
   fallbackProfileId?: string | null
@@ -159,6 +161,8 @@ export interface ProfileFormData {
   supportsImageUpload: boolean
   /** The most images sent in one request, as typed (validated on save). */
   maxImagesPerRequest: string
+  /** Turns a tool result stays in full, as typed (validated on save). */
+  toolResultVerbatimTurns: string
   allowWebSearch: boolean
   useNativeWebSearch: boolean
   modelClass: string
@@ -200,6 +204,7 @@ export const initialFormState: ProfileFormData = {
   multiCharacterPrefill: true,
   supportsImageUpload: false,
   maxImagesPerRequest: String(DEFAULT_MAX_IMAGES_PER_REQUEST),
+  toolResultVerbatimTurns: String(DEFAULT_TOOL_RESULT_VERBATIM_TURNS),
   allowWebSearch: false,
   useNativeWebSearch: false,
   modelClass: '',

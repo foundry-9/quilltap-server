@@ -4,6 +4,7 @@ import { useId } from 'react'
 import Link from 'next/link'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import { ChatSettings, ConnectionProfile } from './types'
+import { settingsCardHref } from '@/lib/settings/hrefs'
 
 export interface ImageDescriptionSettingsProps {
   settings: ChatSettings
@@ -41,7 +42,7 @@ export function ImageDescriptionSettings({
             Primary image description profile
           </label>
           <p className="qt-text-xs mb-2">
-            Select a vision-capable profile (like gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash) to describe images.
+            Select a vision-capable profile (like gpt-4o-mini, a Claude Haiku model, or gemini-2.0-flash) to describe images.
             If not set, the system will automatically use any available vision-capable profile.
           </p>
           <select
@@ -71,7 +72,7 @@ export function ImageDescriptionSettings({
         <p className="qt-text-xs">
           The uncensored fallback, for when this profile refuses to describe an image, now keeps company with the
           Concierge: see its vision profile under{' '}
-          <Link href="/settings?tab=concierge&section=uncensored-desk" className="qt-link">
+          <Link href={settingsCardHref('uncensored-desk')} className="qt-link">
             The Concierge → The Uncensored Desk
           </Link>.
         </p>

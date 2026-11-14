@@ -2,128 +2,160 @@
 url: /settings
 ---
 
-# Settings
+# Settings (The Foundry)
 
 > **[Open this page in Quilltap](/settings)**
 
-The Settings page is the central bureau of operations for your Quilltap estate --- a single, well-appointed room where every lever, dial, and velvet rope can be found without having to remember which wing of the house conceals which control. Everything is organized into eight plainly-labeled tabs, each a model of efficiency that would make even the most fastidious butler weep with approval.
+The Settings page --- whose door bears the grander name **The Foundry** --- is the central bureau of operations for your Quilltap estate: a single, well-appointed room where every lever, dial, and velvet rope can be found by reasoning about *what it does*, rather than by remembering which member of staff happened to be standing nearest when it was installed. The settings are filed in ten plainly-labelled groups down the left-hand side; the staff who look after each one wear their likenesses on the cards themselves.
 
 ## Accessing Settings
 
 1. Click the **Settings** icon (wrench) in the left sidebar footer
-2. You will arrive at the Settings page with the **AI Providers** tab selected by default
-3. Click any tab to view and manage its settings
+2. You will arrive in **Connections** --- unless something in the house needs your attention, in which case you arrive wherever it is (see *The Attention Strip*, below)
+3. Choose a group from the rail on the left (on a narrow screen, from the **Section** menu at the top) and open whichever card you require
 
-You may also navigate directly to a specific tab by appending `?tab=` to the URL --- for example, `/settings?tab=chat` will open the Chat tab directly. To jump straight to a particular section within a tab, add `&section=` as well --- for example, `/settings?tab=concierge&section=uncensored-desk` will open the Concierge's tab and scroll directly to the Uncensored Desk card with its accordion already open.
+### Addresses worth knowing
 
-## The Eight Tabs
+| Address | Where it takes you |
+|---|---|
+| `/settings?group=security` | A group |
+| `/settings?section=uncensored-desk` | A card --- its group opens, the card opens, and the page scrolls to it |
+| `/settings?persona=pascal` | One member of staff's settings, wherever they live |
+| `/settings?q=password` | The page, already searched |
 
-### AI Providers
+## Finding a Setting
 
-The beating mechanical heart of the operation. Here you configure everything that makes Quilltap talk to the various Large Language Model services of the world.
+### The search field
 
-- **AI Stack Setup Wizard** --- A guided walkthrough for configuring providers, API keys, models, and profiles in one efficient swoop
-- **API Keys** --- Store authentication credentials for LLM providers and services
-- **Connection Profiles** --- Link API keys to specific providers and models for AI chat
-- **Cheap LLM Settings** --- Configure the lightweight model that handles background tasks (summarization, memory extraction, and the like)
-- **The Almanack (System Report)** --- Compile a compendium of the whole establishment: configuration, contents and condition
+At the top of the page sits a search field (press **/** from anywhere on the page to put your cursor in it, and **Escape** to clear it). Type, and the page narrows as you go: the rail keeps only the groups with something to offer, each with a count of its matches; the cards that match open themselves; and the words you typed are marked in their titles. Plain speech is welcome --- "password", "dice", "censor", "backup" --- and so is the name of a member of staff: search for "Pascal" and you will see precisely the cards the Croupier minds. Clear the search and the page returns to exactly the group and the open cards you left.
 
-> See [API Keys Settings](api-keys-settings.md), [Connection Profiles](connection-profiles.md), and [Setup Wizard](setup-wizard.md) for full details
+### The staff, and their lenses
 
-### Chat
+Above the rail stands a row of the household staff --- the Forge, Saquel, the Salon, the Commonplace Book, Aurora, the Lantern, Pascal, Prospero, Brahma, the Concierge and Calliope. Choose one and the whole page is seen through their eyes: every card they are responsible for, in whichever group it lives, and nothing else, against their own backdrop. A banner names whom you are looking through; **Show everything** (or choosing the same chip again) puts the page back as it was. The lens and the search work together, should you wish to search only Prospero's affairs.
 
-The conversational drawing-room. Every setting that governs how the AI behaves during a chat --- from the counting of tokens to the compression of a long evening's talk.
+Every card, lens or no lens, wears a small badge with the likeness of the member of staff responsible for it; hover over the badge to be told who they are.
 
-- **Token Display** --- Show or hide token usage and cost estimates in chat
-- **Context Compression** --- Configure how older messages are compressed to fit the context window
-- **Memory Cascade** --- Control how memories flow into conversations when messages change
-- **Image Description** --- How the AI describes images shared in chat
-- **Automation** --- Configure automatic detection features (dice rolls, etc.)
-- **Agent Mode** --- Enable iterative tool-use behaviors where the AI can verify and self-correct
+### Advanced cards
 
-> See [Chat Settings](chat-settings.md) for full details
+Some groups keep their rarer, weightier instruments below a rule marked **Advanced** --- the regeneration of every memory, the deletion of everything, the Concierge's optional doorman. They work exactly as the others do; they are merely kept further from the elbow.
 
-### The Concierge
+## The Attention Strip
 
-The front desk, where the handling of content that might cause a maiden aunt to reach for the smelling salts is decided --- who is asked when the usual providers decline, and how the result is shown.
+When something in the house wants seeing to, a row of chips appears above the staff:
 
-- **On Duty** --- One switch: whether the Concierge reroutes, announces, switches and pre-screens at all
-- **The Uncensored Desk** --- The uncensored text, image and vision profiles, and the image-prompt crafter
-- **When a Provider Refuses** --- How many refusals before a chat is switched to Unmoderated, and what posture new chats start in
-- **Display** --- Show, blur or collapse flagged content, and warning badges
-- **Pre-screening** (advanced) --- The optional classifier and the background reading of chat summaries
+- a connection, image or embedding profile whose key has gone missing or whose provider plugin is absent;
+- the Concierge off duty;
+- memories waiting for their embeddings;
+- a background task that has failed;
+- a plugin that failed to load.
 
-> See [The Concierge](the-concierge.md) for full details
+Each chip says what is the matter and, when clicked, opens the card that will put it right. When nothing is amiss the strip simply isn't there. Arrive at a plain `/settings` while a chip is lit and you are taken straight to the first one's group.
+
+## The Ten Groups
+
+### Connections
+
+Where Quilltap is introduced to the model-making concerns of the world.
+
+- **AI Stack Setup Wizard** --- A guided walk through providers, keys, models and profiles in one efficient swoop
+- **Providers** --- Every provider you use, each with its keys and every profile --- connection, image or embedding --- that relies on it. Switch to **By kind** for the four familiar lists: API Keys, Connection Profiles, Image Profiles, Embedding Profiles
+- **Cheap LLM Settings** --- The lightweight model that handles background tasks (summaries, titles, memory extraction and the like)
+
+> See [API Keys Settings](api-keys-settings.md), [Connection Profiles](connection-profiles.md), [Image Generation Profiles](image-generation-profiles.md), [Embedding Provider Profiles](embedding-profiles.md) and [Setup Wizard](setup-wizard.md)
+
+### Composer & Display
+
+How you write in the Salon, and how the conversation is laid before you.
+
+- **Composition Mode**, **Composer** (spellcheck, emoji, unicode, impersonation voice), **Slash Commands**, **Text Replacement**, **Smart Typography**, **Auto-Scroll**, **Token Display**, **Thinking / Reasoning**
+
+> See [Chat Settings](chat-settings.md) and [Composer Settings](chat-settings-composer.md)
+
+### Context & Memory
+
+What the characters remember, and how much of the past they are handed each turn.
+
+- **Context Compression**, **Memory Cascade**, **Data Retention**, **Extraction Grain**, **Recall Relevance**, **Maintenance**
+- Advanced: **Repair Missing Embeddings**, **Regenerate Memories**, **Regenerate Conversation Summaries**
+
+> See [Memory Maintenance](memory-maintenance.md), [Recall Relevance](memory-recall-relevance.md) and [Data Retention](data-retention.md)
+
+### Characters & Prompts
+
+The scriptwriting department, and the list of words no one in the house may say.
+
+- **Roleplay Templates**, **Prompts**, **Aurora's Core Whisper**, **Taboo**
+
+> See [Roleplay Templates](roleplay-templates.md), [Prompts](prompts.md), [Core Whisper](core-whisper.md) and [Taboo](taboo.md)
+
+### Images
+
+The gallery and the lighting both.
+
+- **Story Backgrounds**, **Wardrobe Images**, **Default Aesthetics**, **Image Description**
+
+> See [Story Backgrounds](story-backgrounds.md), [Wardrobe Images](wardrobe-images.md) and [Image Aesthetics](image-aesthetics.md)
+
+### Games & Tools
+
+Pascal's tables, Prospero's instruments, Brahma's console, and the rooms that carry on without you.
+
+- **Automation** (dice and detection), **Custom Tools**, **Agent Mode**, **Answer Confirmation**, **Brahma Console**, **Autonomous Rooms**, **Scheduled Autonomous Rooms**
+- Advanced: **General State**
+
+> See [Custom Tools](custom-tools.md), [Agent Mode](agent-mode.md), [Brahma Console](brahma-console.md) and [Autonomous Rooms](autonomous-rooms.md)
+
+### Moderation
+
+The Concierge's front desk --- who is asked when the usual providers decline, and how the result is shown.
+
+- **On Duty**, **The Uncensored Desk**, **When a Provider Refuses**, **Display**
+- Advanced: **Pre-Screening**
+
+> See [The Concierge](the-concierge.md)
 
 ### Appearance
 
 Where aesthetics meet functionality, and both are treated with the respect they deserve.
 
-- **Appearance** --- Theme selection, color mode (light/dark), and display options
-- **Avatar Settings** --- Configure how avatars are displayed in chats (mode and style)
-- **Tags** --- Create and manage tags for organizing your content, with custom colors and icons
+- **Appearance** (themes, colour mode), **Avatar Settings**, **Tags**
 
-> See [Appearance Settings](appearance-settings.md) and [Tags Customization](tags-customization.md) for full details
+> See [Appearance Settings](appearance-settings.md) and [Tags Customization](tags-customization.md)
 
-### Commonplace Book
+### Security
 
-The library wing --- quiet, orderly, and possessed of an uncanny ability to recall precisely the passage you need.
+Saquel's strongroom: the passphrase, the lock, and the lever beneath the glass.
 
-- **Embedding Profiles** --- Configure text embedding services for semantic memory search
-- **Maintenance** --- Fold repeated memories, consolidate related ones into digests, and archive the least-protected as each character passes its cap, with a dry run and a ledger (off by default)
+- **Encryption Passphrase**, **Auto-Lock**
+- Advanced: **Delete All Data**
 
-> See [Embedding Provider Profiles](embedding-profiles.md), [Memory Maintenance](memory-maintenance.md) and [System Tools](system-tools.md) for full details
+> See [Database Protection](database-protection.md) and [Deleting Your Data](system-delete-data.md)
 
-### Images
+### Data & Maintenance
 
-The gallery and the lighting both, all in one place.
+The engine room and the filing cabinets.
 
-- **Image Profiles** --- Configure image generation providers and models
-- **Story Backgrounds** --- Configure automatic atmospheric background images for chats and projects
+- **Plugins**, **Backup & Restore**, **Import / Export**, **LLM Logging**, **LLM Logs**, **Tasks Queue**, **The Almanack (System Report)**
 
-> See [Image Generation Profiles](image-generation-profiles.md) and [Story Backgrounds](story-backgrounds.md) for full details
-
-### Templates & Prompts
-
-The scriptwriting department, where you shape how characters speak and what instructions they follow.
-
-- **Roleplay Templates** --- Define conversation patterns, system prompts, and character behaviors
-- **Prompts** --- Create and manage reusable prompt templates across characters and conversations
-
-> See [Roleplay Templates Settings](roleplay-templates-settings.md) and [Prompts](prompts.md) for full details
-
-### Data & System
-
-The engine room, the filing cabinet, and the emergency exits. Everything that keeps the machinery running and the records intact.
-
-- **Plugins** --- Install, update, and configure plugins from the registry
-- **File Storage** --- Configure where Quilltap stores files and images
-- **Backup & Restore** --- Create and restore full system backups
-- **Import / Export** --- Transfer data in and out of Quilltap in native format
-- **LLM Logging** --- Toggle and configure detailed logging of AI interactions
-- **Tasks Queue** --- View and manage background jobs (memory extraction, imports, analysis)
-- **LLM Logs** --- Review detailed records of all AI model interactions
-- **Delete All Data** --- Permanently remove all data (the lever beneath the glass cover; break only in case of genuine emergency)
-
-> See [Plugins](plugins.md), [Data Directory](data-directory.md), [Backup & Restore](system-backup-restore.md), [Import & Export Data](system-import-export.md), [Managing Tasks](system-tasks-queue.md), [LLM Logs](system-llm-logs.md), and [Deleting Your Data](system-delete-data.md) for full details
+> See [Plugins](plugins.md), [Backup & Restore](system-backup-restore.md), [Import & Export Data](system-import-export.md), [Managing Tasks](system-tasks-queue.md), [LLM Logs](system-llm-logs.md) and [The Almanack](the-almanack.md)
 
 ## Quick Configuration Workflow
 
 ### Setting up Quilltap for the first time
 
-1. **AI Providers tab** --- Run the Setup Wizard, or manually add API Keys and create Connection Profiles
-2. **Chat tab** --- Configure default chat behaviors and preferences
-3. **Images tab** (optional) --- Set up image generation if desired
-4. **Commonplace Book tab** (optional) --- Configure embedding profiles for semantic memory and enable automatic memory maintenance
+1. **Connections** --- Run the Setup Wizard, or add a key and a connection profile from the **Providers** card
+2. **Composer & Display** --- Arrange the Salon to your liking
+3. **Images** (optional) --- Choose an artist for story backgrounds once you have an image profile
+4. **Context & Memory** (optional) --- Tune what the characters remember
 
 ### Installing new capabilities
 
-1. **Data & System tab** --- Browse and install plugins
-2. **AI Providers tab** --- Create any new Connection, Image, or Embedding profiles the plugin requires
+1. **Data & Maintenance → Plugins** --- Browse and install plugins
+2. **Connections → Providers** --- Add any key or profile the new provider requires
 
 ## Estate Flavor
 
-Each tab displays a small thumbnail and description from the Quilltap estate subsystem it represents. If you have an active theme installed, these personifications may have different names --- the Calliope of one theme might appear as "Visual Design" in another. The functionality remains identical regardless of what the inhabitants choose to call themselves.
+If you have an active theme installed, the household staff may answer to different names and wear different faces --- the Calliope of one theme might appear as "Visual Design" in another. Badges, lenses and search all follow the theme's names (search for the new name and you will find the same cards). The settings themselves are identical whatever the inhabitants choose to call themselves.
 
 ## Settings Persistence
 
@@ -136,16 +168,16 @@ All changes are saved automatically. You need not hunt for a "Save" button --- m
 - **On next operation:** Image generation profile, embedding profile changes
 
 "Immediately" is meant without asterisk, and includes conversations *already in
-progress in another tab*. Adjust a Chat preference here --- auto-scroll, the
+progress in another tab*. Adjust a Composer & Display preference here --- auto-scroll, the
 display of a model's thinking, token counts, the inspector button, story
 backgrounds --- and switch back to a chat you left open an hour ago: it will
 have adopted your new arrangement while its back was turned, without losing a
 word of a reply still arriving. There is no need to close the conversation and
 open it again, and never was meant to be.
 
-## Navigating from the Old Foundry Routes
+## Old Addresses Still Arrive
 
-If you have bookmarks or links to the old `/foundry` subsystem pages, they will automatically redirect to the appropriate Settings tab. No link left behind, as they say.
+Bookmarks from the days of tabs (ending `?tab=chat`, or `?tab=system&section=plugins`) still arrive --- each is shown to the group and card where that setting now lives, so `?tab=chat&section=taboo` lands, correctly, under **Characters & Prompts**. The old `/foundry/<persona>` pages open that persona's lens. No link left behind, as they say.
 
 ## In-Chat Settings Access
 
@@ -173,7 +205,8 @@ Characters with help tools enabled can navigate directly to this page:
 
 ### Can't find a setting?
 
-- Think about which category the setting belongs to: is it about how the AI talks (Chat), how things look (Appearance), or how data is stored (Data & System)?
+- Type a plain word for it into the search field (press **/**) --- "password", "dice", "backup" --- or the name of the member of staff you think minds it
+- Choose a member of staff from the row above the rail to see everything they look after
 - Some settings only appear after their prerequisites are configured (e.g., Image Profiles requires an API key first)
 - Check whether a plugin provides additional settings you may need
 

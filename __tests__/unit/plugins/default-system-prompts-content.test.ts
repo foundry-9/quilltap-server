@@ -5,9 +5,15 @@
  * Locks in the anti-committee safeguards
  * (docs/developer/features/complete/prompt-trust-and-anti-committee.md §6): every
  * prompt carries the universal "whose story it is" rules and the committee
- * failure mode; every prompt but the relationship-neutral MODERN_GENERAL
- * carries the trust disposition; and no existing "disagree and hold" line
- * was deleted to make room — the safeguards are a counterweight, not a cut.
+ * failure mode; every prompt but the relationship-neutral MODERN_ROLEPLAY and
+ * MODERN_ASSISTANT carries the trust disposition; and no existing "disagree
+ * and hold" line was deleted to make room — the safeguards are a
+ * counterweight, not a cut.
+ *
+ * And the roleplay defaults (docs/developer/features/complete/character-kind-and-roleplay-defaults.md
+ * §5.4): MODERN_ROLEPLAY replaced MODERN_GENERAL, every prompt but the
+ * assistant one tells the character to match the stakes, and no shipped
+ * prompt tells a character to keep a dangerous scene calm.
  */
 
 import fs from 'fs'
@@ -21,12 +27,15 @@ const PROMPTS_DIR = path.join(
 const files = fs.readdirSync(PROMPTS_DIR).filter(f => f.endsWith('.md')).sort()
 const read = (file: string) => fs.readFileSync(path.join(PROMPTS_DIR, file), 'utf8')
 
+/** Relationship-neutral prompts: no trust disposition, no ordinary-time yes. */
+const NEUTRAL = new Set(['MODERN_ROLEPLAY.md', 'MODERN_ASSISTANT.md'])
+
 /** Built from halves so the repository's spelling sweep never sees it. */
 const MISSPELLED_PROJECT_NAME = new RegExp('quilt' + 'tap', 'i')
 
 /** Existing disagree lines that must survive (spec §4.1, §6.4). */
 const PRESERVED_DISAGREE_LINES: Record<string, string> = {
-  'MODERN_GENERAL.md': 'A character who always yields is nobody',
+  'MODERN_ROLEPLAY.md': 'A character who always yields is nobody',
   'MODERN_PLATONIC.md': 'loyalty without honesty is flattery',
   'MODERN_ROMANTIC.md': 'Endless agreement is not love',
   'CLAUDE_COMPANION.md': 'say the plan is bad',
@@ -42,8 +51,14 @@ const PRESERVED_DISAGREE_LINES: Record<string, string> = {
 }
 
 describe('default-system-prompts shipped text', () => {
-  it('ships all 21 sample prompts', () => {
-    expect(files).toHaveLength(21)
+  it('ships all 22 sample prompts', () => {
+    expect(files).toHaveLength(22)
+  })
+
+  it('ships MODERN_ROLEPLAY and MODERN_ASSISTANT, and has retired MODERN_GENERAL', () => {
+    expect(files).toContain('MODERN_ROLEPLAY.md')
+    expect(files).toContain('MODERN_ASSISTANT.md')
+    expect(files).not.toContain('MODERN_GENERAL.md')
   })
 
   describe.each(files)('%s', file => {
@@ -61,8 +76,8 @@ describe('default-system-prompts shipped text', () => {
       expect(text).toMatch(/committee|sign-offs/)
     })
 
-    it('carries the trust disposition unless it is the relationship-neutral MODERN_GENERAL', () => {
-      if (file === 'MODERN_GENERAL.md') {
+    it('carries the trust disposition unless it is relationship-neutral', () => {
+      if (NEUTRAL.has(file)) {
         expect(text).not.toContain('starting point')
       } else {
         expect(text).toContain('starting point')
@@ -101,8 +116,8 @@ describe('default-system-prompts shipped text — the probation', () => {
       expect(text).toMatch(/what they really meant|what \{\{user\}\} really meant/)
     })
 
-    it('gives ordinary time a yes unless it is the relationship-neutral MODERN_GENERAL', () => {
-      if (file === 'MODERN_GENERAL.md') {
+    it('gives ordinary time a yes unless it is relationship-neutral', () => {
+      if (NEUTRAL.has(file)) {
         expect(text).not.toMatch(/ordinary time/i)
       } else if (file.startsWith('OLLAMA_')) {
         expect(text).toContain('Say yes to ordinary asks')
@@ -119,8 +134,59 @@ describe('default-system-prompts shipped text — the probation', () => {
   })
 
   it('counterweights pushback with how often, not just how', () => {
-    expect(read('MODERN_GENERAL.md')).toContain('the no is for things that matter')
+    expect(read('MODERN_ROLEPLAY.md')).toContain('the no is for things that matter')
     expect(read('MODERN_ROMANTIC.md')).toContain('most of the time, love sounds like yes')
     expect(read('GPT5_COMPANION.md')).not.toContain('Agreeing quickly to be agreeable is a failure')
+  })
+})
+
+/** Phrases that told a character to keep the story small whatever happened. */
+const RETIRED_GOVERNOR_PHRASES = [
+  'main failure mode is escalation',
+  'stays an annoying Tuesday',
+  'No scene swerves into melodrama',
+  'Do not escalate intimacy, hostility, or drama',
+]
+
+describe('default-system-prompts shipped text — the stakes', () => {
+  describe.each(files)('%s', file => {
+    const text = read(file)
+
+    it.each(RETIRED_GOVERNOR_PHRASES)('does not carry the retired governor phrase %p', phrase => {
+      expect(text).not.toContain(phrase)
+    })
+
+    it('tells a story character to match the stakes', () => {
+      if (file === 'MODERN_ASSISTANT.md') {
+        expect(text).not.toMatch(/match the stakes/i)
+      } else {
+        expect(text).toMatch(/match the stakes/i)
+        expect(text).toMatch(/not a vow/)
+      }
+    })
+
+    it('forbids a story character from inventing where {{user}} is or what they did off-screen', () => {
+      // Phase-6 evaluation: characters decided Sam had gone to the boathouse and
+      // planned around it for turns (character-kind-and-roleplay-defaults.md §12).
+      if (file === 'MODERN_ASSISTANT.md') return
+      expect(text).toMatch(/off-screen/)
+      expect(text).toMatch(/where \{\{user\}\} is/)
+    })
+  })
+
+  it('gives the roleplay default its stakes, ensemble and failure-mode sections', () => {
+    const roleplay = read('MODERN_ROLEPLAY.md')
+    expect(roleplay).toContain('## Reacting to what happens')
+    expect(roleplay).toContain('## In a scene with others')
+    expect(roleplay).toContain('**Flattening:**')
+    expect(roleplay).toContain('**The mediator:**')
+    expect(roleplay).toContain('**The invented absence:**')
+    expect(roleplay).toContain("**Don't invent where {{user}} is or what they've been doing.**")
+  })
+
+  it('keeps the assistant honest about what it does not know', () => {
+    const assistant = read('MODERN_ASSISTANT.md')
+    expect(assistant).toContain('Never invent a fact')
+    expect(assistant).toContain('Set the character\'s kind to Assistant')
   })
 })

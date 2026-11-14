@@ -15,6 +15,9 @@ import {
   resolveCycleOrder,
   loadRoomCharacters,
   isUsersTurn,
+  isAllLLMChat,
+  loneCharacterHasAnswered,
+  turnClosesCycle,
 } from '@/lib/chat/turn-manager'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -41,6 +44,7 @@ import { runReplyTriggers } from './trigger-phrase-sites'
 import { buildRouteTrail } from './route-trail'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { StorytellerTurnContext } from '@/lib/storyteller/types'
+import type { ToolEffect } from '@/lib/tools/effects'
 
 const logger = createServiceLogger('MessageFinalizer')
 
@@ -70,6 +74,12 @@ export interface FinalizeMessageResponseOptions {
    * classification wait for the round's end (`runStorytellerRoundHousekeeping`).
    */
   storyteller?: StorytellerTurnContext
+  /**
+   * The turn's effect ceiling (a storyteller bid, an autonomous room without
+   * destructive permission), so a Carina query this reply's markup starts
+   * runs under it. Unset = no ceiling.
+   */
+  effectCeiling?: ToolEffect
 }
 
 /**
@@ -95,6 +105,7 @@ export async function finalizeMessageResponse({
   compression,
   triggers,
   storyteller,
+  effectCeiling,
 }: FinalizeMessageResponseOptions): Promise<ProcessMessageResult> {
   const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature, reasoningContent, reasoningSegments } = streaming
   const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
@@ -280,6 +291,11 @@ export async function finalizeMessageResponse({
   // The call sheet for this turn: null unless something stepped aside. Composed
   // here, at the one place that knows the turn is over and who answered.
   const routeTrail = buildRouteTrail(streaming, { chatId, messageId: assistantMessageId })
+
+  // Does this line complete the cycle? Read the persisted cycle fresh, before
+  // the save advances (and on a wrap, resets) it. Turns mode stops on this; a
+  // storyteller turn never chains, so it needs no answer.
+  const closedCycle = storyteller ? false : await readTurnClosesCycle(repos, chatId, characterParticipant.id)
 
   await saveAssistantMessage(
     repos,
@@ -509,9 +525,101 @@ export async function finalizeMessageResponse({
       // Surface the answer live (before this turn's done event) so the Salon
       // renders the card immediately rather than at the post-turn refresh.
       onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
+      effectCeiling,
     })
   }
 
+  return closePersistedReply({
+    repos,
+    chatId,
+    userId,
+    chat,
+    character,
+    characterParticipant,
+    userParticipantId,
+    isMultiCharacter,
+    assistantMessageId,
+    closedCycle,
+    controller,
+    encoder,
+    connectionProfile,
+    effectiveProfile,
+    chatSettings,
+    participantCharacters,
+    storyteller,
+    done: {
+      usage,
+      cacheUsage,
+      attachmentResults,
+      toolsExecuted: toolMessages.length > 0,
+      routeTrail,
+      reasoningContent: reasoningContent || null,
+      reasoningSegments: rebasedReasoning,
+    },
+  })
+}
+
+/** What the `done` frame of a persisted reply carries beyond its ids. */
+interface PersistedReplyDone {
+  usage: StreamingState['usage']
+  cacheUsage: StreamingState['cacheUsage']
+  attachmentResults: StreamingState['attachmentResults']
+  toolsExecuted: boolean
+  routeTrail: ReturnType<typeof buildRouteTrail>
+  reasoningContent: string | null
+  reasoningSegments: ReasoningSegment[] | null | undefined
+}
+
+interface ClosePersistedReplyOptions {
+  repos: ReturnType<typeof getRepositories>
+  chatId: string
+  userId: string
+  chat: ChatMetadataBase
+  character: Character
+  characterParticipant: { id: string; status?: string }
+  userParticipantId: string | null
+  isMultiCharacter: boolean
+  assistantMessageId: string
+  closedCycle: boolean
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+  connectionProfile: ConnectionProfile
+  effectiveProfile: ConnectionProfile
+  chatSettings: TriggerContext['chatSettings']
+  participantCharacters: TriggerContext['participantCharacters']
+  storyteller?: StorytellerTurnContext
+  done: PersistedReplyDone
+}
+
+/**
+ * Everything after a character's reply is saved: the next-speaker read, the
+ * `done` frame, token accounting, and the housekeeping the reply triggers —
+ * memory extraction, the context-summary fold (with the auto-title check and
+ * the Lantern's scene cue) and the danger classification. Shared by a
+ * generated reply (`finalizeMessageResponse`) and a scripted opener
+ * (`finalizeScriptedOpener`), so the two leave the same state behind.
+ */
+async function closePersistedReply({
+  repos,
+  chatId,
+  userId,
+  chat,
+  character,
+  characterParticipant,
+  userParticipantId,
+  isMultiCharacter,
+  assistantMessageId,
+  closedCycle,
+  controller,
+  encoder,
+  connectionProfile,
+  effectiveProfile,
+  chatSettings,
+  participantCharacters,
+  storyteller,
+  done,
+}: ClosePersistedReplyOptions): Promise<ProcessMessageResult> {
+  const { usage } = done
   await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
 
   const turnInfo = await calculateNextSpeaker(
@@ -527,19 +635,19 @@ export async function finalizeMessageResponse({
     messageId: assistantMessageId,
     participantId: characterParticipant.id,
     usage,
-    cacheUsage,
-    attachmentResults,
-    toolsExecuted: toolMessages.length > 0,
+    cacheUsage: done.cacheUsage,
+    attachmentResults: done.attachmentResults,
+    toolsExecuted: done.toolsExecuted,
     turn: turnInfo,
     provider: effectiveProfile.provider,
     modelName: effectiveProfile.modelName,
     // Ride the done event so the client's optimistic message carries the trail
     // without waiting for the post-turn fetchChat().
-    routeTrail,
+    routeTrail: done.routeTrail,
     isSilentMessage: characterParticipant.status === 'silent' || undefined,
     // Reasoning ("thinking") for the optimistic client push — DISPLAY ONLY.
-    reasoningContent: reasoningContent || null,
-    reasoningSegments: rebasedReasoning,
+    reasoningContent: done.reasoningContent,
+    reasoningSegments: done.reasoningSegments,
   }))
 
   // Cost estimation + token tracking are intentionally fire-and-forget so a
@@ -629,6 +737,7 @@ export async function finalizeMessageResponse({
     messageId: assistantMessageId,
     userParticipantId,
     isPaused: chat.isPaused,
+    closedCycle,
     sceneTrackingContext: chatSettings ? {
       connectionProfile,
       memoryChatSettings: {
@@ -636,6 +745,80 @@ export async function finalizeMessageResponse({
       },
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,
+  }
+}
+
+/**
+ * A scripted first message (`character.firstMessage`, templated) posted as the
+ * opener's line. No model produced it, so there is nothing to clean, confirm
+ * or roll dice for; it is saved and then closed exactly as a generated reply
+ * is (`closePersistedReply`), so the speaker is recorded, the title check is
+ * scheduled and the Lantern gets its cue.
+ */
+export async function finalizeScriptedOpener(params: {
+  repos: ReturnType<typeof getRepositories>
+  chatId: string
+  userId: string
+  chat: ChatMetadataBase
+  character: Character
+  characterParticipant: { id: string; status?: string }
+  userParticipantId: string | null
+  isMultiCharacter: boolean
+  content: string
+  connectionProfile: ConnectionProfile
+  chatSettings: TriggerContext['chatSettings']
+  participantCharacters: TriggerContext['participantCharacters']
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+}): Promise<ProcessMessageResult> {
+  const { repos, chatId, character, characterParticipant } = params
+  const closedCycle = await readTurnClosesCycle(repos, chatId, characterParticipant.id)
+  const assistantMessageId = await saveAssistantMessage(
+    repos, chatId, character, characterParticipant, params.content,
+    null, null, undefined, [], [],
+  )
+  logger.info('Scripted opener posted', { chatId, characterId: character.id, messageId: assistantMessageId })
+  return closePersistedReply({
+    ...params,
+    assistantMessageId,
+    closedCycle,
+    effectiveProfile: params.connectionProfile,
+    done: {
+      usage: null,
+      cacheUsage: null,
+      attachmentResults: null,
+      toolsExecuted: false,
+      routeTrail: null,
+      reasoningContent: null,
+      reasoningSegments: null,
+    },
+  })
+}
+
+/**
+ * Whether a turn by `participantId` would complete the chat's current cycle,
+ * judged against the persisted cycle as it stands now (before the turn is
+ * recorded). A failed read answers false: a missed stop costs Turns mode one
+ * extra round, never a turn.
+ */
+export async function readTurnClosesCycle(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  participantId: string,
+): Promise<boolean> {
+  try {
+    const fresh = await repos.chats.findById(chatId)
+    if (!fresh) return false
+    const closes = turnClosesCycle(participantId, fresh.participants, fresh.spokenThisCycleParticipantIds)
+    logger.debug('Cycle-close check for turn', { chatId, participantId, closes })
+    return closes
+  } catch (error) {
+    logger.warn('Cycle-close check failed; treating the cycle as open', {
+      chatId,
+      participantId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
   }
 }
 
@@ -827,10 +1010,30 @@ export async function calculateNextSpeaker(
     chat.impersonatingParticipantIds
   )
 
+  // A lone character who has answered hands the floor back to the operator —
+  // the orchestrator stops the chain on the same rule — so the turn closes
+  // here, and the turn-close work (memory extraction) runs (#225). An
+  // autonomous room never pauses for a user.
+  const loneAnswered = loneCharacterHasAnswered({
+    reason: nextSpeakerResult.reason,
+    nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+    lastSpeakerId: turnState.lastSpeakerId,
+    isAllLLM: isAllLLMChat(chat.participants),
+    userParticipantId,
+    hasUserMessages: messageEvents.some(m => m.role === 'USER'),
+    neverPauseForUser: chat.chatType === 'autonomous',
+  })
+  if (loneAnswered) {
+    logger.debug('[MessageFinalizer] Lone character has answered; turn closes for the operator', {
+      chatId,
+      participantId: nextSpeakerResult.nextSpeakerId,
+    })
+  }
+
   return {
     nextSpeakerId: nextSpeakerResult.nextSpeakerId,
     reason: nextSpeakerResult.reason,
     cycleComplete: nextSpeakerResult.cycleComplete,
-    isUsersTurn: isUsersTurn(nextSpeakerResult),
+    isUsersTurn: isUsersTurn(nextSpeakerResult) || loneAnswered,
   }
 }

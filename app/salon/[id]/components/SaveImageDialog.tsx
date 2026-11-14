@@ -4,10 +4,11 @@
  * SaveImageDialog — operator-facing "save this attached image" picker.
  *
  * Opens from three doors: the per-message Save Image toolbar button, the
- * chat gallery's Save, and the wardrobe picture viewer's Save. For the two
- * Salon doors it fetches the chat's candidate photo albums (chat participants'
- * vaults, the project album, linked document stores, Quilltap General); the
- * wardrobe viewer belongs to no chat and is offered every document store. It
+ * chat gallery's Save, and the item picture viewer's Save (a Wardrobe item,
+ * an Inventory object or an Atlas entry). For the two Salon doors it fetches
+ * the chat's candidate photo albums (chat participants' vaults, the project
+ * album, linked document stores, Quilltap General); the item viewer belongs
+ * to no chat and is offered every document store. It
  * then POSTs the chosen album to whichever save-image action matches the door
  * it came from.
  *
@@ -16,8 +17,9 @@
  * half the gallery has no message at all (a Lantern backdrop posted with alerts
  * off, a participant's standing portrait), so the gallery posts to a
  * chat-scoped twin whose guard is *is this image in this chat's gallery*.
- * The wardrobe door posts to the item's images route, whose guard is *is this
- * one of the item's own pictures*. Everything the reader sees is identical.
+ * The item door posts to the item's own images route (the shared
+ * `createItemImagesRoute`), whose guard is *is this one of the item's own
+ * pictures*. Everything the reader sees is identical.
  *
  * Mirrors the LLM `keep_image` save path under the hood — see
  * `lib/photos/save-image-to-album.ts`.
@@ -28,6 +30,7 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { wardrobeItemImagesUrl } from '@/lib/wardrobe/item-images-client'
 import { inventoryImagesUrl } from '@/lib/inventory/container'
+import { atlasImagesUrl } from '@/lib/atlas/container'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 import type { MessageAttachment } from '../types'
 
@@ -53,11 +56,28 @@ export type SaveImageTarget =
   | { kind: 'chat'; chatId: string; fileId: string }
   | { kind: 'wardrobe'; itemId: string; container: WardrobeContainer; fileId: string }
   | { kind: 'inventory'; itemId: string; container: WardrobeContainer; fileId: string }
+  | { kind: 'atlas'; itemId: string; container: WardrobeContainer; fileId: string }
+
+/** True for a door opened from an item's picture viewer (no chat). */
+function isItemTarget(target: SaveImageTarget): target is Extract<SaveImageTarget, { itemId: string }> {
+  return target.kind === 'wardrobe' || target.kind === 'inventory' || target.kind === 'atlas'
+}
+
+/** An item door's images-route URL for `action`. */
+function itemImagesUrl(target: Extract<SaveImageTarget, { itemId: string }>, action: 'save-targets' | 'save-to-store'): string {
+  switch (target.kind) {
+    case 'wardrobe':
+      return wardrobeItemImagesUrl(target.itemId, target.container, action)
+    case 'inventory':
+      return inventoryImagesUrl(target.container, target.itemId, action)
+    case 'atlas':
+      return atlasImagesUrl(target.container, target.itemId, action)
+  }
+}
 
 /** Where the album list for a door is read from. */
 function albumsUrlFor(target: SaveImageTarget): string {
-  if (target.kind === 'wardrobe') return wardrobeItemImagesUrl(target.itemId, target.container, 'save-targets')
-  if (target.kind === 'inventory') return inventoryImagesUrl(target.container, target.itemId, 'save-targets')
+  if (isItemTarget(target)) return itemImagesUrl(target, 'save-targets')
   return `/api/v1/chats/${target.chatId}?action=photo-albums`
 }
 
@@ -69,9 +89,9 @@ function saveUrlFor(target: SaveImageTarget): string {
     case 'chat':
       return `/api/v1/chats/${target.chatId}?action=save-image`
     case 'wardrobe':
-      return wardrobeItemImagesUrl(target.itemId, target.container, 'save-to-store')
     case 'inventory':
-      return inventoryImagesUrl(target.container, target.itemId, 'save-to-store')
+    case 'atlas':
+      return itemImagesUrl(target, 'save-to-store')
   }
 }
 
@@ -301,7 +321,7 @@ export function SaveImageDialog({
           )}
           {!loadingAlbums && groupedAlbums && groupedAlbums.length === 0 && (
             <div className="text-sm opacity-70">
-              {target.kind === 'wardrobe' || target.kind === 'inventory'
+              {isItemTarget(target)
                 ? 'No document stores are available.'
                 : 'No photo albums are available for this chat.'}
             </div>

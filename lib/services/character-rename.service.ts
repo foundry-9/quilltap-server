@@ -29,6 +29,7 @@ import { logger } from '@/lib/logger';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
 import type { RequestContext } from '@/lib/api/middleware';
 import type { Character, CharacterScenario, CharacterSystemPrompt, PhysicalDescription } from '@/lib/schemas/character.types';
+import type { CharacterUpdate } from '@/lib/database/repositories/characters.repository';
 
 type Repos = RequestContext['repos'];
 
@@ -180,7 +181,11 @@ export async function runCharacterRename(
     total: 0,
   };
 
-  const characterUpdates: Partial<Character> = {};
+  const characterUpdates: CharacterUpdate = {};
+  // Prompts and scenarios are written one item at a time (D6), never as a
+  // whole array through update().
+  const scenarioUpdates: CharacterScenario[] = [];
+  const promptUpdates: CharacterSystemPrompt[] = [];
   const location = `Character: ${character.name}`;
 
   // ── 1. Scalar character fields ──────────────────────────────────────────
@@ -244,10 +249,13 @@ export async function runCharacterRename(
       if (touched) {
         next.updatedAt = new Date().toISOString();
         scenariosChanged = true;
+        scenarioUpdates.push(next);
       }
       return next;
     });
-    if (scenariosChanged) characterUpdates.scenarios = updatedScenarios;
+    if (scenariosChanged) {
+      logger.debug('[CharacterRename] Scenarios to rewrite', { characterId, count: updatedScenarios.filter((x, i) => x !== scenarios[i]).length });
+    }
   }
 
   // ── 4. System prompts (name / content) ──────────────────────────────────
@@ -276,19 +284,22 @@ export async function runCharacterRename(
       if (touched) {
         next.updatedAt = new Date().toISOString();
         promptsChanged = true;
+        promptUpdates.push(next);
       }
       return next;
     });
-    if (promptsChanged) characterUpdates.systemPrompts = updatedPrompts;
+    if (promptsChanged) {
+      logger.debug('[CharacterRename] Prompts to rewrite', { characterId, count: updatedPrompts.filter((x, i) => x !== systemPrompts[i]).length });
+    }
   }
 
   // ── 5. Physical description (single object + prompt variants) ───────────
   const physical = character.physicalDescription;
   if (physical) {
     const next: PhysicalDescription = { ...physical };
-    const pdLocation = `Description: ${physical.name}`;
+    const pdLocation = 'Physical description';
     const pdFields: (keyof PhysicalDescription)[] = [
-      'name', 'usageContext', 'headAndShouldersPrompt', 'shortPrompt',
+      'headAndShouldersPrompt', 'shortPrompt',
       'mediumPrompt', 'longPrompt', 'completePrompt', 'fullDescription',
     ];
     let touched = false;
@@ -391,13 +402,31 @@ export async function runCharacterRename(
       characterId,
       characterName: character.name,
       totalChanges: summary.total,
-      characterFieldsChanged: Object.keys(characterUpdates),
+      characterFieldsChanged: [
+        ...Object.keys(characterUpdates),
+        ...(scenarioUpdates.length > 0 ? ['scenarios'] : []),
+        ...(promptUpdates.length > 0 ? ['systemPrompts'] : []),
+      ],
       memoriesChanged: memoryUpdates.length,
       chatsChanged: chatUpdates.length,
     });
 
     if (Object.keys(characterUpdates).length > 0) {
       await repos.characters.update(characterId, characterUpdates);
+    }
+    for (const scenario of scenarioUpdates) {
+      await repos.characters.updateScenario(characterId, scenario.id, {
+        title: scenario.title,
+        content: scenario.content,
+        ...(scenario.description !== undefined && { description: scenario.description }),
+      });
+    }
+    // A prompt rewrite never moves the default: the flag is carried as it is.
+    for (const prompt of promptUpdates) {
+      await repos.characters.updateSystemPrompt(characterId, prompt.id, {
+        name: prompt.name,
+        content: prompt.content,
+      });
     }
 
     for (const { id, updates } of memoryUpdates) {

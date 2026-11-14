@@ -26,6 +26,17 @@ import {
  */
 export type StreamingToolCall = AgentStreamToolCall
 
+/**
+ * Where a tool batch landed in the run: how much of the cumulative reasoning
+ * chain had streamed when it was detected, and the index of its first call in
+ * `streamingToolCalls`. Lets the transcript interleave thinking with the SQL
+ * cards it led to instead of stacking all thinking above all cards.
+ */
+export interface StreamingToolBatchMark {
+  reasoningLength: number
+  toolIndex: number
+}
+
 interface StreamingState {
   isStreaming: boolean
   isExecutingTools: boolean
@@ -36,6 +47,8 @@ interface StreamingState {
   streamingReasoning: string
   /** Tool calls observed live this turn (chiefly run_sql), in emission order. */
   streamingToolCalls: StreamingToolCall[]
+  /** One mark per tool batch, in order (see StreamingToolBatchMark). */
+  streamingToolBatchMarks: StreamingToolBatchMark[]
   error: string | null
 }
 
@@ -51,6 +64,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
     streamingContent: '',
     streamingReasoning: '',
     streamingToolCalls: [],
+    streamingToolBatchMarks: [],
     error: null,
   })
   const abortRef = useRef<AbortController | null>(null)
@@ -58,6 +72,8 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
   // parse-agent-stream). A ref avoids stale-closure races as events arrive
   // faster than React can flush state.
   const toolStateRef = useRef<AgentToolCallState>(EMPTY_AGENT_TOOL_CALL_STATE)
+  // Latest cumulative reasoning, read when a tool batch arrives to mark it.
+  const reasoningRef = useRef('')
 
   const onMessageCompleteRef = useRef(onMessageComplete)
   useEffect(() => { onMessageCompleteRef.current = onMessageComplete }, [onMessageComplete])
@@ -71,6 +87,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
     abortRef.current = abortController
 
     toolStateRef.current = EMPTY_AGENT_TOOL_CALL_STATE
+    reasoningRef.current = ''
 
     setState({
       isStreaming: true,
@@ -78,6 +95,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
       streamingContent: '',
       streamingReasoning: '',
       streamingToolCalls: [],
+      streamingToolBatchMarks: [],
       error: null,
     })
 
@@ -127,6 +145,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
           // chain stays visible between turns. DISPLAY ONLY.
           if (typeof event.reasoning === 'string') {
             const reasoning = event.reasoning
+            reasoningRef.current = reasoning
             setState(prev => ({ ...prev, streamingReasoning: reasoning }))
           }
 
@@ -134,8 +153,19 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
           // operator sees the query before its rows land, then settle.
           const nextToolState = applyAgentStreamEvent(toolStateRef.current, event)
           if (nextToolState !== toolStateRef.current) {
+            const isNewBatch = typeof event.toolsDetected === 'number'
+            const mark: StreamingToolBatchMark = {
+              reasoningLength: reasoningRef.current.length,
+              toolIndex: nextToolState.batchBase,
+            }
             toolStateRef.current = nextToolState
-            setState(prev => ({ ...prev, streamingToolCalls: nextToolState.toolCalls }))
+            setState(prev => ({
+              ...prev,
+              streamingToolCalls: nextToolState.toolCalls,
+              streamingToolBatchMarks: isNewBatch
+                ? [...prev.streamingToolBatchMarks, mark]
+                : prev.streamingToolBatchMarks,
+            }))
           }
 
           // Tool execution status — clear stale streamed text, show "working"
@@ -154,7 +184,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
             const messageId = typeof event.messageId === 'string' ? event.messageId : null
             currentContent = ''
             toolStateRef.current = EMPTY_AGENT_TOOL_CALL_STATE
-            setState(prev => ({ ...prev, streamingContent: '', streamingReasoning: '', streamingToolCalls: [] }))
+            setState(prev => ({ ...prev, streamingContent: '', streamingReasoning: '', streamingToolCalls: [], streamingToolBatchMarks: [] }))
             if (messageId) {
               onMessageCompleteRef.current?.(messageId)
             }
@@ -163,20 +193,21 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
           // Error
           if (event.error) {
             const message = String(event.error)
-            setState(prev => ({ ...prev, error: message, isStreaming: false, streamingReasoning: '', streamingToolCalls: [] }))
+            setState(prev => ({ ...prev, error: message, isStreaming: false, streamingReasoning: '', streamingToolCalls: [], streamingToolBatchMarks: [] }))
             return
           }
         }
       }
 
       // Stream closed
-      setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '', streamingToolCalls: [] }))
+      setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '', streamingToolCalls: [], streamingToolBatchMarks: [] }))
     } catch (error) {
       if ((error as Error).name === 'AbortError') return
       setState(prev => ({
         ...prev,
         isStreaming: false,
         streamingToolCalls: [],
+        streamingToolBatchMarks: [],
         error: error instanceof Error ? error.message : 'Failed to send message',
       }))
     }
@@ -185,7 +216,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort()
     toolStateRef.current = EMPTY_AGENT_TOOL_CALL_STATE
-    setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '', streamingToolCalls: [] }))
+    setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '', streamingToolCalls: [], streamingToolBatchMarks: [] }))
   }, [])
 
   return {

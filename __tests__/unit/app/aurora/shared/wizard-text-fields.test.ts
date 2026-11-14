@@ -1,7 +1,12 @@
-import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '@/app/aurora/shared/wizard-text-fields'
+import {
+  buildWizardCurrentData,
+  generatedSystemPrompt,
+  getGeneratedCharacterTextEntries,
+  systemPromptsForCreate,
+} from '@/app/aurora/shared/wizard-text-fields'
 
 describe('aurora wizard text field helpers', () => {
-  it('collects all non-empty generated text fields including identity and manifesto', () => {
+  it('collects the generated character fields, leaving the system prompt out (#146)', () => {
     const entries = getGeneratedCharacterTextEntries({
       name: 'Friday',
       title: 'The investigator',
@@ -21,8 +26,18 @@ describe('aurora wizard text field helpers', () => {
       { field: 'manifesto', value: 'Truth before comfort.' },
       { field: 'personality', value: 'Methodical and curious' },
       { field: 'exampleDialogues', value: 'Friday: We follow the evidence.' },
-      { field: 'systemPrompt', value: 'Stay in character.' },
     ])
+  })
+
+  it('hands the generated system prompt over separately, trimmed, and nothing when blank', () => {
+    expect(generatedSystemPrompt({ systemPrompt: '  Stay in character.  ' })).toBe('Stay in character.')
+    expect(generatedSystemPrompt({ systemPrompt: '   ' })).toBeNull()
+    expect(generatedSystemPrompt({})).toBeNull()
+  })
+
+  it('folds a create-form system prompt into one named prompt (#146); the server owns its id and default', () => {
+    expect(systemPromptsForCreate(' You are Friday. ')).toEqual([{ name: 'Default', content: 'You are Friday.' }])
+    expect(systemPromptsForCreate('  ')).toEqual([])
   })
 
   it('builds wizard current data including identity and manifesto', () => {

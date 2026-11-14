@@ -1,6 +1,6 @@
 /**
  * The shared item picture viewer (`components/item-browser/ItemImageViewer`),
- * for both kinds: the picture and its filename, the save target handed to
+ * for every kind: the picture and its filename, the save target handed to
  * the store dialog, and the missing-picture Remove going through the kind's
  * own images route (bug 194) and refreshing the kind's queries.
  */
@@ -50,6 +50,11 @@ const CASES: Array<{ kind: ItemKind; deleteUrl: string; refreshKey: readonly unk
     kind: 'inventory',
     deleteUrl: '/api/v1/inventory/item-1/images?scope=character&id=char-1&action=delete-image',
     refreshKey: queryKeys.inventory.all,
+  },
+  {
+    kind: 'atlas',
+    deleteUrl: '/api/v1/atlas/item-1/images?scope=character&id=char-1&action=delete-image',
+    refreshKey: queryKeys.atlas.all,
   },
 ]
 

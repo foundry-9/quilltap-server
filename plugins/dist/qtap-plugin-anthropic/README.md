@@ -34,24 +34,12 @@ This plugin requires the following:
 
 ## Supported Models
 
-### Chat Completion Models
+The plugin carries no list of models. Anthropic gives every model a pinned ID that eventually retires, and has no name that always points to the newest release, so any list written here would go stale. Everything comes from Anthropic's live Models API instead:
 
-| Model | Context Window | Supports Vision | Supports Tools | Release Date |
-|-------|---|---|---|---|
-| claude-sonnet-4-5-20250929 | 200K | Yes | Yes | Sept 2025 |
-| claude-haiku-4-5-20251015 | 200K | Yes | Yes | Oct 2025 |
-| claude-opus-4-1-20250805 | 200K | Yes | Yes | Aug 2025 |
-| claude-sonnet-4-20250514 | 200K | Yes | Yes | May 2025 |
-| claude-opus-4-20250514 | 200K | Yes | Yes | May 2025 |
-| claude-3-opus-20240229 | 200K | Yes | Yes | Feb 2024 |
-| claude-3-haiku-20240307 | 200K | Yes | Yes | Mar 2024 |
-
-**Note**: The exact available models depend on your Anthropic account access and may change over time. Use the "Fetch Available Models" feature in Quilltap to see your accessible models.
-
-**Deprecation Notice**:
-- Claude 3.5 models were deprecated on October 22, 2025
-- Claude 3 Sonnet was retired on July 21, 2025
-- Claude 3 Opus will retire on January 5, 2026
+- **Model picker** — every active and deprecated model your key can use.
+- **Background ("cheap") model** — the newest active model in the Haiku line, looked up at run time and cached by Quilltap.
+- **Thinking** — whether a model takes a fixed thinking budget or adaptive thinking is read from the model's reported capabilities.
+- **Key check** — lists one model rather than calling a named one.
 
 ## File Attachment Support
 
@@ -64,14 +52,7 @@ The plugin supports image and PDF attachments for all Claude models:
 - image/webp
 - application/pdf
 
-### Supported Models
-- Claude Sonnet 4.5
-- Claude Haiku 4.5
-- Claude Opus 4.1
-- Claude Sonnet 4
-- Claude Opus 4
-- Claude 3 Opus
-- Claude 3 Haiku
+Every current Claude model accepts images and PDFs.
 
 Images and PDFs are automatically encoded to base64 and sent with your message for analysis.
 
@@ -79,7 +60,7 @@ Images and PDFs are automatically encoded to base64 and sent with your message f
 
 ### Chat Completion Parameters
 
-- **model**: The model to use (e.g., 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251015')
+- **model**: The model to use — any ID from the live model list
 - **maxTokens**: Maximum response length
 - **tools**: Function definitions for tool use
 - **stop**: Stop sequences
@@ -126,7 +107,7 @@ const response = await provider.sendMessage({
   messages: [
     { role: 'user', content: 'Hello, how are you?' }
   ],
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-5-5', // any ID from the live model list
 }, apiKey);
 ```
 
@@ -150,7 +131,7 @@ const response = await provider.sendMessage({
       ]
     }
   ],
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-5-5', // any ID from the live model list
 }, apiKey);
 ```
 
@@ -174,7 +155,7 @@ const response = await provider.sendMessage({
       ]
     }
   ],
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-5-5', // any ID from the live model list
 }, apiKey);
 ```
 
@@ -183,7 +164,7 @@ const response = await provider.sendMessage({
 ```typescript
 for await (const chunk of provider.streamMessage({
   messages: [{ role: 'user', content: 'Tell me a story' }],
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-5-5', // any ID from the live model list
 }, apiKey)) {
   console.log(chunk.content);
 }
@@ -203,7 +184,7 @@ const response = await provider.sendMessage({
       content: 'Explain quantum computing to a beginner'
     }
   ],
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-5-5', // any ID from the live model list
 }, apiKey);
 ```
 
@@ -228,7 +209,7 @@ const response = await provider.sendMessage({
 - Check Anthropic status page: https://status.anthropic.com
 - Verify network connection
 - Check rate limiting (429 errors)
-- Consider using a faster model like claude-haiku-4-5
+- Consider using a faster model from the Haiku line
 
 ## Support
 

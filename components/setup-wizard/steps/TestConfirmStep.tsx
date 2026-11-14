@@ -2,9 +2,13 @@
 
 import { useState, useCallback } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/keys'
+import { useInvalidateProfileLists } from '@/lib/hooks/use-profiles'
 import type { WizardState, WizardAction, TestStatus } from '../useProviderWizardState'
 import {
   testMessage,
+  testEmbedding,
   createConnectionProfile,
   createEmbeddingProfile,
   createImageProfile,
@@ -20,27 +24,33 @@ interface StepProps {
 function TestStatusIndicator({ status, error }: { status?: TestStatus; error?: string }) {
   switch (status) {
     case 'testing':
-      return <span className="qt-spinner-sm" />
+      return (
+        <span className="qt-spinner-sm" role="status">
+          <span className="sr-only">Testing</span>
+        </span>
+      )
     case 'success':
-      return <Icon name="check" className="w-5 h-5 qt-text-success" />
+      return <Icon name="check" className="w-5 h-5 qt-text-success" title="Test passed" />
     case 'error':
       return (
         <div className="flex items-center gap-2">
-          <Icon name="close" className="w-5 h-5 qt-text-destructive flex-shrink-0" />
+          <Icon name="close" className="w-5 h-5 qt-text-destructive flex-shrink-0" title="Test failed" />
           {error && <span className="qt-text-xs qt-text-destructive">{error}</span>}
         </div>
       )
     case 'pending':
     default:
       return (
-        <span className="w-3 h-3 rounded-full qt-bg-muted inline-block" />
+        <span className="w-3 h-3 rounded-full qt-bg-muted inline-block" aria-hidden="true" />
       )
   }
 }
 
 export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
-  const [testError, setTestError] = useState<string | null>(null)
+  const [testErrors, setTestErrors] = useState<Record<string, string>>({})
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const queryClient = useQueryClient()
+  const invalidateProfileLists = useInvalidateProfileLists()
 
   const chatProvider = state.availableProviders.find((p) => p.id === state.chatConfig.provider)
   const cheapProvider =
@@ -58,10 +68,14 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
   // Test All
   // ------------------------------------------------------------------
 
-  const handleTestAll = useCallback(async () => {
-    setTestError(null)
+  // Chat and embeddings are tested with a real call. Images are not: a test
+  // would draw, and bill, a picture, so the row says so instead.
+  const embeddingTestable = !!state.embeddingConfig && state.embeddingConfig.provider !== 'BUILTIN'
 
-    // Test chat configuration
+  const handleTestAll = useCallback(async () => {
+    setTestErrors({})
+    const errors: Record<string, string> = {}
+
     dispatch({ type: 'SET_TEST_RESULT', key: 'chat', status: 'testing' })
     try {
       const result = await testMessage({
@@ -70,19 +84,39 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
         baseUrl: state.baseUrls[state.chatConfig.provider],
         modelName: state.chatConfig.model,
       })
-      dispatch({
-        type: 'SET_TEST_RESULT',
-        key: 'chat',
-        status: result.success ? 'success' : 'error',
-      })
-      if (!result.success) {
-        setTestError(result.error || 'Chat test failed')
-      }
+      dispatch({ type: 'SET_TEST_RESULT', key: 'chat', status: result.success ? 'success' : 'error' })
+      if (!result.success) errors.chat = result.error || 'Chat test failed'
     } catch (err) {
       dispatch({ type: 'SET_TEST_RESULT', key: 'chat', status: 'error' })
-      setTestError(err instanceof Error ? err.message : 'Chat test failed')
+      errors.chat = err instanceof Error ? err.message : 'Chat test failed'
     }
-  }, [state.chatConfig, state.apiKeys, state.baseUrls, dispatch])
+
+    if (state.embeddingConfig && embeddingTestable) {
+      const emb = state.embeddingConfig
+      dispatch({ type: 'SET_TEST_RESULT', key: 'embedding', status: 'testing' })
+      try {
+        const result = await testEmbedding({
+          provider: emb.provider,
+          apiKeyId: state.apiKeys[emb.provider]?.apiKeyId,
+          baseUrl: state.baseUrls[emb.provider],
+          modelName: emb.model,
+          dimensions: emb.dimensions,
+        })
+        dispatch({ type: 'SET_TEST_RESULT', key: 'embedding', status: result.success ? 'success' : 'error' })
+        if (!result.success) errors.embedding = result.error || 'Embedding test failed'
+      } catch (err) {
+        dispatch({ type: 'SET_TEST_RESULT', key: 'embedding', status: 'error' })
+        errors.embedding = err instanceof Error ? err.message : 'Embedding test failed'
+      }
+    }
+
+    setTestErrors(errors)
+  }, [state.chatConfig, state.embeddingConfig, state.apiKeys, state.baseUrls, embeddingTestable, dispatch])
+
+  const testing = state.testResults.chat === 'testing' || state.testResults.embedding === 'testing'
+  const testedKeys = embeddingTestable ? ['chat', 'embedding'] : ['chat']
+  const allTestsPassed = testedKeys.every((k) => state.testResults[k] === 'success')
+  const passedSummary = embeddingTestable ? 'Chat and embeddings work' : 'Chat works'
 
   // ------------------------------------------------------------------
   // Save & Complete
@@ -150,7 +184,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
       // 5. Update chat settings with cheap LLM strategy
       await updateChatSettings({
         strategy: state.cheapConfig.strategy,
-        profileId: cheapProfileId,
+        userDefinedProfileId: cheapProfileId,
       })
 
       // 6. Dispatch created profile IDs
@@ -163,6 +197,10 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
         },
       })
 
+      // Every picker and settings view now has new rows to show.
+      void invalidateProfileLists('apiKeys', 'connectionProfiles', 'embeddingProfiles', 'imageProfiles')
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.chat })
+
       dispatch({ type: 'SET_SAVING', saving: false })
       setSaveSuccess(true)
     } catch (err) {
@@ -172,7 +210,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
       })
       dispatch({ type: 'SET_SAVING', saving: false })
     }
-  }, [state, chatProvider, embeddingProvider, imageProvider, dispatch])
+  }, [state, chatProvider, embeddingProvider, imageProvider, dispatch, invalidateProfileLists, queryClient])
 
   // ------------------------------------------------------------------
   // Render
@@ -184,7 +222,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
       <div className="space-y-3">
         <h3 className="qt-text-label">Configuration Summary</h3>
 
-        <div className="border border-[var(--qt-border-color)] rounded-lg divide-y divide-[var(--qt-border-color)]">
+        <div className="border qt-border-default rounded-lg divide-y qt-divide-default">
           {/* Chat */}
           <div className="flex items-center justify-between p-3">
             <div className="flex-1">
@@ -194,10 +232,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
                 {state.chatConfig.model}
               </p>
             </div>
-            <TestStatusIndicator
-              status={state.testResults.chat}
-              error={testError || undefined}
-            />
+            <TestStatusIndicator status={state.testResults.chat} error={testErrors.chat} />
           </div>
 
           {/* Cheap LLM */}
@@ -227,9 +262,10 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
                     {embeddingProvider?.displayName || state.embeddingConfig.provider} &mdash;{' '}
                     {state.embeddingConfig.model}
                     {state.embeddingConfig.dimensions && (
-                      <span className="qt-text-xs ml-1">
-                        ({state.embeddingConfig.dimensions}d)
-                      </span>
+                      <>
+                        {' '}
+                        <span className="qt-text-xs">({state.embeddingConfig.dimensions}d)</span>
+                      </>
                     )}
                   </>
                 ) : (
@@ -237,6 +273,9 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
                 )}
               </p>
             </div>
+            {embeddingTestable && (
+              <TestStatusIndicator status={state.testResults.embedding} error={testErrors.embedding} />
+            )}
           </div>
 
           {/* Images */}
@@ -253,6 +292,11 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
                   'Skipped'
                 )}
               </p>
+              {state.imageConfig && (
+                <p className="qt-text-xs qt-text-muted">
+                  Not tested here, as a test would commission (and bill you for) an actual picture.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -263,10 +307,10 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
         <button
           type="button"
           onClick={handleTestAll}
-          disabled={state.saving || state.testResults.chat === 'testing'}
+          disabled={state.saving || testing}
           className="qt-button-secondary"
         >
-          {state.testResults.chat === 'testing' ? (
+          {testing ? (
             <span className="flex items-center gap-2">
               <span className="qt-spinner-sm" />
               Testing...
@@ -275,8 +319,8 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
             'Test All'
           )}
         </button>
-        {state.testResults.chat === 'success' && (
-          <span className="qt-text-small qt-text-success">All tests passed</span>
+        {!testing && allTestsPassed && (
+          <span className="qt-text-small qt-text-success" role="status">{passedSummary}</span>
         )}
       </div>
 

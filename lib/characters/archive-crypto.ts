@@ -249,7 +249,8 @@ export function decryptArchive(data: Buffer, passphrase?: string): Buffer {
     const decipher = crypto.createDecipheriv(
       header.algorithm as 'aes-256-gcm',
       new Uint8Array(key),
-      new Uint8Array(iv)
+      new Uint8Array(iv),
+      { authTagLength: AUTH_TAG_LENGTH }
     );
     decipher.setAuthTag(new Uint8Array(authTag));
     return runChunked(decipher, ciphertext);
