@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live Spec G
+
+- Added Spec G (custom CSS section in the theme editor, a shared code editor with JSON and CSS highlighting, and importing a `.qtap-theme` file as a draft)
+
 #### Themes: fonts, images, icons, subsystems and manifest details in the theme editor (Calliope Live, Spec F Stages 0–1)
 
 - Theme engine `bundleFileUsage` (`lib/themes/engine/usage.ts`) is the one answer to "what uses which file" (fonts, licence files, icons, subsystems, preview image, tokens and styles files, token, primitive and custom CSS references); the draft detail returns every file with its kind, size, users and an `unused` flag, plus totals against the bundle limits and a `manifestRevision`

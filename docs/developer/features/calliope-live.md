@@ -36,6 +36,9 @@ not a settled design.
   — third slice of Phase 2: font and image upload, icon overrides,
   subsystems and the rest of the manifest (implemented 4.14-dev; user docs
   [help/theme-editor.md](../../../help/theme-editor.md)).
+- [calliope-live-spec-g-custom-css.md](calliope-live-spec-g-custom-css.md)
+  — fourth slice of Phase 2: the custom CSS section, JSON and CSS
+  highlighting, and opening a theme file as a draft (ready to run).
 
 **Scope:** `quilltap-server` (v4) only. Porting to v5 is a separate concern and
 does not shape decisions here.
