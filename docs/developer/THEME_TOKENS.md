@@ -330,7 +330,7 @@ Group id `button`, 28 tokens.
 | `--qt-button-font-weight` | font-weight | `500` |  |  | advanced | Button font weight |
 | `--qt-button-transition` | transition | `all 150ms cubic-bezier(0.4, 0, 0.2, 1)` |  |  | standard | Button transition |
 | `--qt-button-letter-spacing` | length | `normal` (optional; unset by default) |  |  | standard | Button letter spacing. Read by .qt-button; unset keeps what the element had (a <button> its browser default, a link-styled button what it inherits). |
-| `--qt-button-text-transform` | keyword | `none` (optional; unset by default) |  |  | standard | Button text transform. Read by .qt-button; unset keeps what the element had. |
+| `--qt-button-text-transform` | keyword | `none` (optional; unset by default) |  |  | standard | Button text transform. Read by .qt-button; unset keeps what the element had. One of: `none`, `capitalize`, `uppercase`, `lowercase`, `full-width`, `full-size-kana`. |
 | `--qt-button-primary-bg` | color | `var(--color-primary)` |  |  | standard | Button primary background |
 | `--qt-button-primary-fg` | color | `var(--color-primary-foreground)` |  |  | standard | Button primary text colour |
 | `--qt-button-primary-hover-bg` | color | `color-mix(in srgb, var(--color-primary) 88%, var(--theme-hover-shade))` |  |  | standard | Button primary hover background |
@@ -491,11 +491,11 @@ App-owned rules on the root: colour scheme, text selection, scrollbars, the focu
 
 | Token | Type | Default | Dark default | By choice | Visibility | What it is |
 | --- | --- | --- | --- | --- | --- | --- |
-| `--qt-color-scheme` | keyword | `normal` |  |  | standard | Colour scheme. color-scheme on the root (form controls, scrollbars, system colours). "normal" leaves the browser default; set "dark" or "light" per mode. |
+| `--qt-color-scheme` | keyword | `normal` |  |  | standard | Colour scheme. color-scheme on the root (form controls, scrollbars, system colours). "normal" leaves the browser default; set "dark" or "light" per mode. One of: `normal`, `light`, `dark`, `light dark`, `only light`, `only dark`. |
 | `--qt-body-font-weight` | font-weight | `400` (optional; unset by default) |  |  | standard | Body text weight. font-weight on the root, inherited by all text that sets none of its own (300 for a light face). Unset leaves the browser's normal weight. |
 | `--qt-selection-bg` | color | `hsl(225 55% 48% / 0.18)` |  |  | standard | Text selection background. The ::selection rule in _base.css. A theme's own unlayered ::selection rule still wins. |
 | `--qt-selection-fg` | color | `var(--color-foreground)` |  |  | standard | Text selection text colour |
-| `--qt-scrollbar-width` | keyword | `thin` |  |  | advanced | Scrollbar width. scrollbar-width on the root: auto, thin or none. |
+| `--qt-scrollbar-width` | keyword | `thin` |  |  | advanced | Scrollbar width. scrollbar-width on the root: auto, thin or none. One of: `auto`, `thin`, `none`. |
 | `--qt-scrollbar-thumb` | color | `auto` (optional; unset by default) |  |  | standard | Scrollbar thumb. Read as scrollbar-color on the root together with the track; unset leaves the browser's scrollbar. Set it and the track together. |
 | `--qt-scrollbar-track` | color | `transparent` (optional; unset by default) |  |  | standard | Scrollbar track. Read as scrollbar-color on the root together with the thumb. |
 | `--qt-scrollbar-thumb-hover` | color | `var(--qt-scrollbar-thumb)` (optional; unset by default) |  |  | advanced | Scrollbar thumb (hovered). For browsers that only style scrollbars through ::-webkit-scrollbar (Safari). Applies only while <html> carries data-qt-scrollbar, which the theme provider sets for a theme that asks for it. |
@@ -506,8 +506,8 @@ App-owned rules on the root: colour scheme, text selection, scrollbars, the focu
 | `--qt-page-background-image` | image | `none` |  |  | standard | Page background image. An image (or a list with gradients) painted behind the whole app. While it is set the theme provider marks <html> with data-qt-page-background, and the app makes its page surfaces transparent over it — except while a story background is showing, which takes precedence. Per mode: set a dark value for dark mode. |
 | `--qt-page-background-size` | raw | `cover` |  |  | advanced | Page background size |
 | `--qt-page-background-position` | raw | `center center` |  |  | advanced | Page background position |
-| `--qt-page-background-attachment` | keyword | `fixed` |  |  | advanced | Page background attachment |
-| `--qt-page-background-repeat` | keyword | `no-repeat` |  |  | advanced | Page background repeat |
+| `--qt-page-background-attachment` | keyword | `fixed` |  |  | advanced | Page background attachment One of: `scroll`, `fixed`, `local`. |
+| `--qt-page-background-repeat` | keyword | `no-repeat` |  |  | advanced | Page background repeat One of: `repeat`, `no-repeat`, `repeat-x`, `repeat-y`, `space`, `round`. |
 | `--qt-page-background-texture` | image | `none` |  |  | advanced | Page background texture. A tiling image laid over the page background at --qt-page-background-texture-opacity (a weave, paper grain). Shown only while the page background is, so a story background hides it too. |
 | `--qt-page-background-texture-opacity` | opacity | `0.05` |  |  | advanced | Page background texture opacity |
 
@@ -531,7 +531,7 @@ Group id `typography`, 6 tokens.
 | `--qt-text-secondary-fg` | color | `var(--color-muted-foreground)` |  |  | advanced | Text secondary text colour |
 | `--qt-heading-font-weight` | font-weight | `600` (optional; unset by default) |  |  | standard | Heading weight. Read by the .qt-heading-* classes; unset, each level keeps its own weight (bold for .qt-heading-1, semibold for the rest). |
 | `--qt-heading-letter-spacing` | length | `normal` (optional; unset by default) |  |  | standard | Heading letter spacing. Read by the .qt-heading-* classes; unset, each level keeps its own spacing (tight for -1, -2 and -lg, normal for the rest). |
-| `--qt-heading-text-transform` | keyword | `none` (optional; unset by default) |  |  | standard | Heading text transform. Read by the .qt-heading-* classes; unset, each level keeps its own inherited transform. |
+| `--qt-heading-text-transform` | keyword | `none` (optional; unset by default) |  |  | standard | Heading text transform. Read by the .qt-heading-* classes; unset, each level keeps its own inherited transform. One of: `none`, `capitalize`, `uppercase`, `lowercase`, `full-width`, `full-size-kana`. |
 | `--qt-heading-color` | color | `inherit` (optional; unset by default) |  |  | standard | Heading colour. Read by the .qt-heading-* classes; unset, each level keeps its own inherited colour. |
 
 ## Sidebar
@@ -912,8 +912,8 @@ Group id `link`, 4 tokens.
 | --- | --- | --- | --- | --- | --- | --- |
 | `--qt-link-color` | color | `var(--color-primary)` |  |  | standard | Link color |
 | `--qt-link-hover-color` | color | `color-mix(in srgb, var(--color-primary) 80%, var(--theme-hover-shade))` |  |  | standard | Link hover color |
-| `--qt-link-decoration` | keyword | `none` |  |  | standard | Link decoration |
-| `--qt-link-decoration-hover` | keyword | `underline` |  |  | advanced | Link decoration hover |
+| `--qt-link-decoration` | keyword | `none` |  |  | standard | Link decoration One of: `none`, `underline`, `overline`, `line-through`. |
+| `--qt-link-decoration-hover` | keyword | `underline` |  |  | advanced | Link decoration hover One of: `none`, `underline`, `overline`, `line-through`. |
 
 ## Footer
 

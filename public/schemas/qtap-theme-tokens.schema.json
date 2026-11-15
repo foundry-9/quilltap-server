@@ -3902,7 +3902,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Button text transform — keyword, group button — default: none"
+          "description": "Button text transform — keyword, group button — default: none — one of: none, capitalize, uppercase, lowercase, full-width, full-size-kana"
         },
         "--qt-button-transition": {
           "anyOf": [
@@ -6034,7 +6034,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Colour scheme — keyword, group page — default: normal"
+          "description": "Colour scheme — keyword, group page — default: normal — one of: normal, light, dark, light dark, only light, only dark"
         },
         "--qt-composer-narration-bg": {
           "anyOf": [
@@ -7828,7 +7828,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Heading text transform — keyword, group typography — default: none"
+          "description": "Heading text transform — keyword, group typography — default: none — one of: none, capitalize, uppercase, lowercase, full-width, full-size-kana"
         },
         "--qt-highlight-bg": {
           "anyOf": [
@@ -8504,7 +8504,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Link decoration — keyword, group link — default: none"
+          "description": "Link decoration — keyword, group link — default: none — one of: none, underline, overline, line-through"
         },
         "--qt-link-decoration-hover": {
           "anyOf": [
@@ -8530,7 +8530,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Link decoration hover — keyword, group link — default: underline"
+          "description": "Link decoration hover — keyword, group link — default: underline — one of: none, underline, overline, line-through"
         },
         "--qt-link-hover-color": {
           "anyOf": [
@@ -9076,7 +9076,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Page background attachment — keyword, group page — default: fixed"
+          "description": "Page background attachment — keyword, group page — default: fixed — one of: scroll, fixed, local"
         },
         "--qt-page-background-image": {
           "anyOf": [
@@ -9154,7 +9154,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Page background repeat — keyword, group page — default: no-repeat"
+          "description": "Page background repeat — keyword, group page — default: no-repeat — one of: repeat, no-repeat, repeat-x, repeat-y, space, round"
         },
         "--qt-page-background-size": {
           "anyOf": [
@@ -11650,7 +11650,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Scrollbar width — keyword, group page — default: thin"
+          "description": "Scrollbar width — keyword, group page — default: thin — one of: auto, thin, none"
         },
         "--qt-select-arrow": {
           "anyOf": [

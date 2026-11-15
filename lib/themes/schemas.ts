@@ -77,6 +77,7 @@ export function renderThemeTokensSchema(): string {
   for (const token of [...THEME_TOKENS].sort((a, b) => a.name.localeCompare(b.name))) {
     const parts = [token.label, `${token.type}, group ${token.group}`, `default: ${token.default}`];
     if (token.defaultDark !== undefined) parts.push(`dark default: ${token.defaultDark}`);
+    if (token.options) parts.push(`one of: ${token.options.join(', ')}`);
     tokenProperties[token.name] = { ...valueSchema, description: parts.join(' — ') };
   }
   const { propertyNames: _names, additionalProperties: _extra, ...tokenRest } = tokens;

@@ -55,7 +55,7 @@ export function ThemeEditorView({ payload }: ThemeEditorViewProps) {
   const mode = selected ? editMode ?? globalMode : globalMode
 
   return (
-    <div data-theme="default" className={`${mode} h-full overflow-y-auto qt-bg-default qt-text`} data-testid="theme-editor-panel">
+    <div data-theme="default" className={`${mode} h-full overflow-y-auto qt-bg-default qt-text`} data-testid="theme-editor-panel" data-editor-scroll>
       {selected ? (
         <OpenDraft key={selected} id={selected} mode={mode} onModeChange={setEditMode} onBack={() => setSelected(null)} />
       ) : (

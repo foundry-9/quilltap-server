@@ -28,6 +28,9 @@ not a settled design.
   — rest of Phase 1 and first slice of Phase 2: contrast checks, drafts and
   a live preview of colour tokens (implemented 4.14-dev; user docs
   [help/theme-editor.md](../../../help/theme-editor.md)).
+- [calliope-live-spec-e-typed-controls.md](calliope-live-spec-e-typed-controls.md)
+  — second slice of Phase 2: a control for every token type, primitives,
+  density, search and undo (ready to run).
 
 **Scope:** `quilltap-server` (v4) only. Porting to v5 is a separate concern and
 does not shape decisions here.

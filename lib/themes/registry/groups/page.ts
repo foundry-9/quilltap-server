@@ -17,6 +17,7 @@ export const PAGE_TOKENS: readonly TokenDef[] = [
     description: "color-scheme on the root (form controls, scrollbars, system colours). \"normal\" leaves the browser default; set \"dark\" or \"light\" per mode.",
     default: "normal",
     visibility: 'standard',
+    options: ['normal', 'light', 'dark', 'light dark', 'only light', 'only dark'],
   },
   {
     name: "--qt-body-font-weight",
@@ -57,6 +58,7 @@ export const PAGE_TOKENS: readonly TokenDef[] = [
     description: "scrollbar-width on the root: auto, thin or none.",
     default: "thin",
     visibility: 'advanced',
+    options: ['auto', 'thin', 'none'],
   },
   {
     name: "--qt-scrollbar-thumb",
@@ -167,6 +169,7 @@ export const PAGE_TOKENS: readonly TokenDef[] = [
     label: "Page background attachment",
     default: "fixed",
     visibility: 'advanced',
+    options: ['scroll', 'fixed', 'local'],
   },
   {
     name: "--qt-page-background-repeat",
@@ -176,6 +179,7 @@ export const PAGE_TOKENS: readonly TokenDef[] = [
     label: "Page background repeat",
     default: "no-repeat",
     visibility: 'advanced',
+    options: ['repeat', 'no-repeat', 'repeat-x', 'repeat-y', 'space', 'round'],
   },
   {
     name: "--qt-page-background-texture",

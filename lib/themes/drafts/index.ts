@@ -23,6 +23,7 @@ export {
   DraftNotInstallableError,
   DraftSourceNotFoundError,
   type DraftDetail,
+  type DraftImageFile,
   type DraftIssue,
   type DraftSummary,
   type DraftServedSet,

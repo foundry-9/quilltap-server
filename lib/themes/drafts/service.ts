@@ -27,7 +27,7 @@ import { docStoreUriFor } from '@/lib/doc-edit/uri-producers';
 import { DocumentConflictError } from '@/lib/documents/core/errors';
 import { HOOK_CATALOGUE } from '../hooks';
 import { ThemeTokensDocumentSchema, type ThemeTokensDocument } from '../engine';
-import { normaliseBundlePath } from '../engine/css-text';
+import { bundleAssetUrl, imageMimeType, normaliseBundlePath } from '../engine/css-text';
 import { listBundleFiles, loadThemeFromSource, ThemeBundleError, type ThemeBundleSource } from '../theme-bundle';
 import { themeRegistry } from '../theme-registry';
 import { packThemeDirectory } from '../bundle-archive';
@@ -131,6 +131,18 @@ export interface DraftDetail {
   updatedAt: string;
   /** The manifest version asset URLs carry, when the manifest names one. */
   version: string | null;
+  /** Every image file in the draft (what an image token may name, Spec E decision 10). */
+  images: DraftImageFile[];
+}
+
+/** One image file in a draft. */
+export interface DraftImageFile {
+  /** Path inside the draft (`textures/paper.webp`). */
+  path: string;
+  /** Its media type (`image/webp`). */
+  type: string;
+  /** Where the draft serves it at its version, or null when the draft is not valid enough to serve. */
+  url: string | null;
 }
 
 /** One subsystem override as the preview applies it. */
@@ -241,6 +253,7 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
     else error(`${tokensPath}: cannot be read as JSON (${(e as Error).message})`);
   }
 
+  const imagePaths = files.map((f) => f.path).filter((p) => imageMimeType(p) !== null).sort();
   let compiled = { fontFaces: '', icons: '', custom: '' };
   let served: DraftServedSet | null = null;
   if (manifest && tokens && issues.length === 0) {
@@ -250,7 +263,9 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
       for (const w of loaded.warnings) issues.push({ severity: 'warning', message: w });
       served = {
         version: loaded.document.manifest.version,
-        assets: new Set(loaded.compiled.assets),
+        // Every image in the draft, not only those its CSS names today, so the
+        // editor can show a thumbnail and preview an image token before saving.
+        assets: new Set([...loaded.compiled.assets, ...imagePaths]),
         fonts: new Set((loaded.document.manifest.fonts ?? []).map((f) => normaliseBundlePath(f.src))),
       };
     } catch (e) {
@@ -260,9 +275,15 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
   }
 
   const uri = await docStoreUriFor({ mountPointId: store.mountPointId, mountPointName: store.name, relativePath: draftFolderPath(id) });
+  const images: DraftImageFile[] = imagePaths.map((p) => ({
+    path: p,
+    type: imageMimeType(p) as string,
+    url: served ? bundleAssetUrl(id, served.version, p) : null,
+  }));
   logger.debug('Read theme draft', {
     draftId: id,
     files: files.length,
+    images: images.length,
     errors: issues.filter((i) => i.severity === 'error').length,
     warnings: issues.filter((i) => i.severity === 'warning').length,
   });
@@ -278,6 +299,7 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
       issues,
       updatedAt: newest(files),
       version: typeof manifest?.version === 'string' ? manifest.version : null,
+      images,
     },
     served,
   };

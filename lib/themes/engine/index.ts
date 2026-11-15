@@ -18,3 +18,6 @@ export { validateThemeDocument, tailwindTokenNames, tailwindAlias, nearestName, 
 export { compileTheme, compiledThemeCss, defaultThemePreview, deriveThemeFeatures, type CompiledTheme, type CompiledThemeFeatures, type PreviewSwatch, type ThemePreview } from './compile';
 export { resolveLiteral } from './literal';
 export { checkContrast, contrastWarnings, type ContrastFinding, type ContrastMode } from './contrast';
+export { typeProblem, CSS_WIDE_KEYWORDS, LENGTH_KEYWORDS, LENGTH_UNITS } from './type-check';
+export * from './values';
+export * from './primitives';

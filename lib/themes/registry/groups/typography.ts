@@ -58,6 +58,7 @@ export const TYPOGRAPHY_TOKENS: readonly TokenDef[] = [
     default: "none",
     optional: true,
     visibility: 'standard',
+    options: ['none', 'capitalize', 'uppercase', 'lowercase', 'full-width', 'full-size-kana'],
   },
   {
     name: "--qt-heading-color",

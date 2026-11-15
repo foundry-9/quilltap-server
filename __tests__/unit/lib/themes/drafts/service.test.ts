@@ -258,6 +258,22 @@ describe('serving a draft', () => {
     expect(res?.status).toBe(200);
   });
 
+  it('lists every image file in the draft, and serves one its CSS does not name', async () => {
+    fake.put('Themes/served/textures/unused.png', Buffer.from('not really a png'));
+    const draft = await readDraft('served');
+    expect(draft.images.map((i) => i.path)).toContain('textures/unused.png');
+    expect(draft.images.find((i) => i.path === 'textures/unused.png')).toEqual({
+      path: 'textures/unused.png',
+      type: 'image/png',
+      url: '/api/themes/assets/bundle:served/textures/unused.png?v=0.2.0',
+    });
+    expect(draft.images.some((i) => i.path.endsWith('.txt') || i.path.endsWith('.woff2'))).toBe(false);
+    const res = await serveDraftThemeFile({
+      themeId: 'served', file: 'textures/unused.png', kind: 'asset', version: '0.2.0', mimeTypes: { ...MIME, '.png': 'image/png' },
+    });
+    expect(res?.status).toBe(200);
+  });
+
   it('serves nothing outside the served set, at another version, or for a font asked as an asset', async () => {
     const ask = (file: string, kind: 'asset' | 'font', version: string | null) =>
       serveDraftThemeFile({ themeId: 'served', file, kind, version, mimeTypes: MIME });

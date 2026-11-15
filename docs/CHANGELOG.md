@@ -4,6 +4,18 @@
 
 ### 4.14-dev
 
+#### Themes: theme editor sections, search, undo and the density choice (Calliope Live, Spec E Stages 0–1)
+
+- Theme engine value parsers (`lib/themes/engine/values/`): length and length lists (radius corners), blur, shadow, font stack, transition, duration, opacity, z-index, font weight and image, each with a formatter that round-trips what it accepts; anything else parses to null and is left as written
+- The token type check moved to `lib/themes/engine/type-check.ts`, shared by validation and the editor; keyword tokens now carry `options` (text transform, link decoration, color scheme, scrollbar width, background attachment and repeat) and validation refuses any other word
+- Primitive edits in `lib/themes/engine/primitives.ts`: add, set value and dark value, change type, rename (rewrites references) and remove (writes the value into its users)
+- `GET /api/v1/theme-drafts/[id]` returns the draft's image files with their asset URLs; the draft serves every image it holds
+- Theme editor: every settable token (666) laid out by level (Essentials, Components, Advanced) and registry group, with a section list, search across levels, "Changed only", the density choice, and undo/redo for the session (buttons and Ctrl/Cmd+Z). Rows follow or detach from primitives, set a dark value apart, and refuse a value that fails the type check. Rows read from an editor store and mount near the viewport, so an edit re-renders only its row
+
+#### Docs: Calliope Live Spec E
+
+- Added Spec E (typed controls for every theme token, editable primitives, the density choice, search and undo in the theme editor)
+
 #### Themes: theme editor, drafts and live preview (Calliope Live, Spec D Stages 1–3)
 
 - Theme drafts: a draft is the folder `Themes/<id>/` in Quilltap General holding an unpacked version 2 bundle; `lib/themes/drafts/` is the only code that knows the location. Drafts are created blank or as a copy of any installed or bundled theme, validated by the installed-bundle loader, and saved with a revision check (409 on a stale revision)

@@ -63,3 +63,20 @@ export function hasImageExtension(p: string): boolean {
   const lower = p.toLowerCase();
   return IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
+
+const IMAGE_MIME_TYPES: Readonly<Record<(typeof IMAGE_EXTENSIONS)[number], string>> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+};
+
+/** The media type of an image a theme may name, or null when `p` is not one. */
+export function imageMimeType(p: string): string | null {
+  const lower = p.toLowerCase();
+  const ext = IMAGE_EXTENSIONS.find((e) => lower.endsWith(e));
+  return ext ? IMAGE_MIME_TYPES[ext] : null;
+}

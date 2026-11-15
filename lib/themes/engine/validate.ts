@@ -14,7 +14,7 @@
  * - a value may not contain `;`, `{`, `}`, `!` or `</`; a `var()` names a
  *   primitive of this document, a registry token or a Tailwind token, or
  *   carries a fallback; literal values are checked against the token type
- *   where that is cheap and certain; `url()` follows ./urls.ts;
+ *   where that is cheap and certain (./type-check.ts); `url()` follows ./urls.ts;
  * - no reference cycles, in either mode;
  * - the custom CSS scopes cleanly (./scope.ts).
  *
@@ -23,7 +23,6 @@
  * @module themes/engine/validate
  */
 
-import { parseColor } from '../color';
 import type { TokenType } from '../registry';
 import { tailwindAlias, tailwindTokenNames as tailwindNamesOf } from '../registry/tailwind';
 import {
@@ -39,6 +38,7 @@ import { hasImageExtension } from './css-text';
 import { resolveTheme, type RegistryView } from './resolve';
 import { scopeThemeCss } from './scope';
 import { rewriteUrls } from './urls';
+import { typeProblem } from './type-check';
 
 export interface ValidationContext {
   registry: RegistryView;
@@ -100,37 +100,6 @@ export function nearestName(name: string, candidates: Iterable<string>): string 
   return best !== undefined && bestDistance <= Math.max(3, Math.floor(name.length / 4)) ? best : undefined;
 }
 
-const KEYWORDS = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer']);
-const COLOR_KEYWORDS = new Set(['currentcolor', 'transparent', 'canvas', 'canvastext', 'linktext', 'buttonface', 'buttontext', 'highlight', 'highlighttext', 'graytext', 'field', 'fieldtext', 'mark', 'marktext', 'accentcolor', 'accentcolortext']);
-const LENGTH_KEYWORDS = new Set(['auto', 'none', 'normal', 'fit-content', 'min-content', 'max-content', 'thin', 'medium', 'thick']);
-const LENGTH = /^-?(\d+\.?\d*|\.\d+)(px|rem|em|%|vh|vw|vmin|vmax|svh|lvh|dvh|svw|lvw|dvw|ch|ex|cap|ic|lh|rlh|pt|pc|cm|mm|q|in|cqw|cqh|cqi|cqb|cqmin|cqmax)$/i;
-
-/** Null when `value` is acceptable for `type`, else why not. Values with a function are not second-guessed. */
-function typeProblem(type: TokenType, value: string): string | null {
-  const v = value.trim();
-  if (v.includes('(') || KEYWORDS.has(v.toLowerCase())) return null;
-  switch (type) {
-    case 'color':
-      return parseColor(v) || COLOR_KEYWORDS.has(v.toLowerCase()) ? null : `"${v}" is not a colour`;
-    case 'length':
-    case 'radius': {
-      const words = v.split(/\s+|\s*\/\s*/).filter(Boolean);
-      const bad = words.find((w) => w !== '0' && !LENGTH.test(w) && !LENGTH_KEYWORDS.has(w.toLowerCase()));
-      return bad ? `"${v}" is not a length` : null;
-    }
-    case 'duration':
-      return /^(\d+\.?\d*|\.\d+)(ms|s)$/i.test(v) ? null : `"${v}" is not a duration`;
-    case 'font-weight':
-      return /^(normal|bold|bolder|lighter|[1-9]\d{0,2}|1000)$/i.test(v) ? null : `"${v}" is not a font weight`;
-    case 'opacity':
-      return /^(\d+\.?\d*|\.\d+)%?$/.test(v) ? null : `"${v}" is not an opacity`;
-    case 'number':
-      return /^-?(\d+\.?\d*|\.\d+)$/.test(v) ? null : `"${v}" is not a number`;
-    default:
-      return null;
-  }
-}
-
 export function validateThemeDocument(input: ValidationInput, ctx: ValidationContext): ThemeDocumentValidation {
   const errors: string[] = [];
   const manifestResult = ThemeManifestSchema.safeParse(input.manifest);
@@ -189,7 +158,7 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
   const primitiveNames = new Set(Object.keys(tokens.primitives).map(primitiveVar));
   const urlContext = { themeId: manifest.id, version: manifest.version, files };
 
-  const checkValue = (where: string, value: string, type: TokenType | (typeof PRIMITIVE_TYPES)[number]) => {
+  const checkValue = (where: string, value: string, type: TokenType | (typeof PRIMITIVE_TYPES)[number], options?: readonly string[]) => {
     if (/[;{}!]|<\//.test(value)) errors.push(`tokens.json: ${where}: a value may not contain ";", "{", "}", "!" or "</"`);
     for (const m of value.matchAll(/var\(\s*(--[\w-]+)\s*(,)?/g)) {
       const ref = m[1];
@@ -198,7 +167,7 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
       errors.push(`tokens.json: ${where}: var(${ref}) names no primitive or registry token and has no fallback${near ? ` (did you mean ${near}?)` : ''}`);
     }
     for (const e of rewriteUrls(value, urlContext).errors) errors.push(`tokens.json: ${where}: ${e}`);
-    const problem = typeProblem(type as TokenType, value);
+    const problem = typeProblem(type as TokenType, value, options);
     if (problem) errors.push(`tokens.json: ${where}: ${problem}`);
   };
 
@@ -215,8 +184,8 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
       continue;
     }
     const { value, dark } = tokenModes(entry);
-    checkValue(`tokens.${name}`, value, token.type);
-    if (dark !== undefined) checkValue(`tokens.${name}.dark`, dark, token.type);
+    checkValue(`tokens.${name}`, value, token.type, token.options);
+    if (dark !== undefined) checkValue(`tokens.${name}.dark`, dark, token.type, token.options);
   }
   for (const [name, option] of Object.entries(tokens.choices)) {
     const choice = registry.choices.find((c) => c.name === name);

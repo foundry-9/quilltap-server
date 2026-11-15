@@ -1,7 +1,7 @@
 /**
  * One theme draft (Calliope Live, Spec D)
  *
- * GET    /api/v1/theme-drafts/[id]                - The draft: tokens, revision, compiled parts, issues
+ * GET    /api/v1/theme-drafts/[id]                - The draft: tokens, revision, compiled parts, image files, issues
  * PUT    /api/v1/theme-drafts/[id]                - Save `{ revision, tokens?, name?, description? }`; 409 when `revision` is stale
  * DELETE /api/v1/theme-drafts/[id]                - Delete the draft folder (an installed copy stays)
  * POST   /api/v1/theme-drafts/[id]?action=install - Install the draft as a theme (422 when it has errors)

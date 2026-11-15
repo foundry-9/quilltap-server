@@ -76,6 +76,12 @@ export interface TokenDef {
    */
   byChoice?: Readonly<Record<string, Readonly<Record<string, string>>>>;
   visibility: TokenVisibility;
+  /**
+   * For a `keyword` token, the words it may be (besides a `var()` reference
+   * or a CSS-wide keyword). Validation refuses any other, and the editor
+   * offers these as a select.
+   */
+  options?: readonly string[];
 }
 
 /**

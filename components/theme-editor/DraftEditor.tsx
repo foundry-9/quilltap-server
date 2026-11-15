@@ -10,10 +10,16 @@
  * the back button, a draft switch or the tab closing — flushes what is
  * unsaved and clears the preview.
  *
+ * The tokens are laid out by level and registry group (Spec E decision 1):
+ * a list of sections to jump to, a search and a "changed only" filter that
+ * look across every level, the choices at the top, and undo and redo for
+ * the session. Rows read their own views from an editor store and mount
+ * only near the viewport, so a draft of 666 tokens stays quick to edit.
+ *
  * @module components/theme-editor/DraftEditor
  */
 
-import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { useTheme } from '@/components/providers/theme-provider'
@@ -21,9 +27,31 @@ import { useDraft } from '@/lib/hooks/use-draft'
 import { ApiFetchError, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
-import type { ThemeTokensDocument } from '@/lib/themes/engine/client'
-import { ColorTokenRow } from './ColorTokenRow'
-import { EDITOR_SECTIONS, analyse, buildPreview, primitiveRows, type EditorMode } from './model'
+import { THEME_CHOICES, type ThemeTokensDocument, type TokenDef } from '@/lib/themes/engine/client'
+import { jsonEqual } from '@/lib/hooks/use-draft'
+import { createEditorStore, type EditorStore } from './editor-store'
+import { LazyRow } from './LazyRow'
+import { TokenRow, type EditFn } from './TokenRow'
+import {
+  EDITOR_GROUPS,
+  EMPTY_HISTORY,
+  analyse,
+  buildPreview,
+  filterPrimitiveRows,
+  isFiltering,
+  primitiveRows,
+  recordEdit,
+  redoStep,
+  sectionViews,
+  setChoice,
+  undoStep,
+  type EditHistory,
+  type EditorFilter,
+  type EditorLevel,
+  type EditorMode,
+  type EditorSnapshot,
+  type SectionView,
+} from './model'
 import {
   fetchThemeDraft,
   installThemeDraft,
@@ -132,6 +160,197 @@ function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => 
   return { queue, flush, saving }
 }
 
+/**
+ * The editing state around the draft's tokens: the store rows read, the one
+ * `edit` every row calls, and undo and redo. An edit is a function from the
+ * snapshot to a tokens document; it is recorded in the history (successive
+ * edits of one key, a colour drag, as one step) and becomes the draft.
+ */
+function useEditing(tokens: ThemeTokensDocument, setTokens: (next: ThemeTokensDocument) => void, mode: EditorMode) {
+  const { resolved, findings } = useMemo(() => analyse(tokens), [tokens])
+  const snapshot = useMemo<EditorSnapshot>(() => ({ tokens, resolved, findings, mode }), [tokens, resolved, findings, mode])
+  const [store] = useState<EditorStore>(() => createEditorStore(snapshot))
+  const [history, setHistory] = useState<EditHistory>(EMPTY_HISTORY)
+
+  // What the latest edit produced, ahead of the render that shows it (a colour drag outruns renders).
+  const current = useRef<{ tokens: ThemeTokensDocument; history: EditHistory }>({ tokens, history })
+  useLayoutEffect(() => {
+    current.current = { tokens, history }
+    store.set(snapshot)
+  }, [tokens, history, snapshot, store])
+
+  const apply = useCallback(
+    (next: ThemeTokensDocument, nextHistory: EditHistory) => {
+      current.current = { tokens: next, history: nextHistory }
+      setHistory(nextHistory)
+      setTokens(next)
+    },
+    [setTokens],
+  )
+
+  const edit = useCallback<EditFn>(
+    (key, change) => {
+      const before = current.current.tokens
+      const shown = store.get()
+      const base = shown.tokens === before ? shown : { ...shown, tokens: before, ...analyse(before) }
+      const after = change(base)
+      if (after === before || jsonEqual(after, before)) return
+      apply(after, recordEdit(current.current.history, before, key, Date.now()))
+    },
+    [store, apply],
+  )
+
+  const undo = useCallback(() => {
+    const step = undoStep(current.current.history, current.current.tokens)
+    if (step) apply(step.doc, step.history)
+  }, [apply])
+  const redo = useCallback(() => {
+    const step = redoStep(current.current.history, current.current.tokens)
+    if (step) apply(step.doc, step.history)
+  }, [apply])
+  const forget = useCallback(() => {
+    current.current = { ...current.current, history: EMPTY_HISTORY }
+    setHistory(EMPTY_HISTORY)
+  }, [])
+
+  return {
+    store,
+    resolved,
+    findings,
+    edit,
+    undo,
+    redo,
+    forget,
+    canUndo: history.past.length > 0,
+    canRedo: history.future.length > 0,
+  }
+}
+
+/** Whether a key press belongs to a field with its own undo (text being typed). */
+function hasOwnUndo(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable || target instanceof HTMLTextAreaElement) return true
+  if (!(target instanceof HTMLInputElement)) return false
+  return !['button', 'checkbox', 'color', 'radio', 'range', 'reset', 'submit', 'file', 'image'].includes(target.type)
+}
+
+/** The section open when a draft is first shown: the first with essentials. */
+const FIRST_SECTION = EDITOR_GROUPS.find((g) => g.essential.length > 0)?.id
+
+const sectionDomId = (prefix: string, id: string) => `${prefix}-section-${id}`
+
+/** The estimated height of a row before it is first drawn. */
+const rowEstimate = (token: TokenDef) => (token.type === 'color' ? 190 : 150)
+
+/**
+ * A section's rows. Memoised: unfiltered, `tokens` is the registry group's own
+ * array and `store` and `edit` never change, so an edit re-renders no list —
+ * only the rows whose view changed, through the store.
+ */
+const RowList = memo(function RowList({ tokens, store, edit, label }: { tokens: readonly TokenDef[]; store: EditorStore; edit: EditFn; label: string }) {
+  return (
+    <ul className="px-4 pb-2" aria-label={label}>
+      {tokens.map((token) => (
+        <LazyRow key={token.name} estimate={rowEstimate(token)}>
+          <TokenRow token={token} store={store} edit={edit} />
+        </LazyRow>
+      ))}
+    </ul>
+  )
+})
+
+interface SectionCardProps {
+  section: SectionView
+  domId: string
+  open: boolean
+  advancedOpen: boolean
+  onToggle: (open: boolean) => void
+  onToggleAdvanced: (open: boolean) => void
+  store: EditorStore
+  edit: EditFn
+}
+
+/** One registry group: its rows, then its advanced rows behind a disclosure. Nothing is mounted while closed. */
+function SectionCard({ section, domId, open, advancedOpen, onToggle, onToggleAdvanced, store, edit }: SectionCardProps) {
+  const isOpen = section.forced || open
+  const isAdvancedOpen = section.forced || advancedOpen
+  const count = section.rows.length + section.advanced.length
+  return (
+    <details
+      id={domId}
+      className="qt-card scroll-mt-4"
+      open={isOpen}
+      onToggle={(e) => {
+        if (!section.forced && e.currentTarget.open !== open) onToggle(e.currentTarget.open)
+      }}
+    >
+      <summary className="p-4 cursor-pointer">
+        <span className="qt-heading-4">{section.label}</span>
+        <span className="qt-text-xs qt-text-muted ml-2">
+          {count} {count === 1 ? 'token' : 'tokens'}
+          {section.changed > 0 && `, ${section.changed} set by this theme`}
+        </span>
+        {section.description && <p className="qt-text-xs qt-text-secondary mt-1">{section.description}</p>}
+      </summary>
+      {isOpen && (
+        <>
+          {section.rows.length > 0 && <RowList tokens={section.rows} store={store} edit={edit} label={section.label} />}
+          {section.advanced.length > 0 && (
+            <details
+              className="mx-4 mb-4 border-t qt-border-default"
+              open={isAdvancedOpen}
+              onToggle={(e) => {
+                if (!section.forced && e.currentTarget.open !== advancedOpen) onToggleAdvanced(e.currentTarget.open)
+              }}
+            >
+              <summary className="py-3 cursor-pointer qt-text-small font-medium">
+                Advanced <span className="qt-text-xs qt-text-muted">({section.advanced.length} rarely set)</span>
+              </summary>
+              {isAdvancedOpen && (
+                <RowList tokens={section.advanced} store={store} edit={edit} label={`${section.label}, advanced`} />
+              )}
+            </details>
+          )}
+        </>
+      )}
+    </details>
+  )
+}
+
+/** The registry's choices, each a group of radio buttons. */
+function ChoicesCard({ tokens, edit }: { tokens: ThemeTokensDocument; edit: EditFn }) {
+  const baseId = useId()
+  return (
+    <section className="qt-card p-4 space-y-3" aria-labelledby={`${baseId}-heading`}>
+      <h3 id={`${baseId}-heading`} className="qt-heading-4">Choices</h3>
+      {THEME_CHOICES.map((choice) => {
+        const value = tokens.choices[choice.name] ?? choice.default
+        return (
+          <fieldset key={choice.name} aria-describedby={`${baseId}-${choice.name}-help`}>
+            <legend className="font-medium qt-text">{choice.label}</legend>
+            <p id={`${baseId}-${choice.name}-help`} className="qt-text-xs qt-text-secondary">{choice.description}</p>
+            <div className="flex gap-4 flex-wrap mt-1">
+              {choice.options.map((option) => (
+                <label key={option} className="qt-text-small flex items-center gap-1">
+                  <input
+                    type="radio"
+                    name={`${baseId}-${choice.name}`}
+                    value={option}
+                    checked={value === option}
+                    onChange={() => edit(`choice:${choice.name}`, (s) => setChoice(s.tokens, choice.name, option))}
+                  />
+                  {option}
+                  {option === choice.default && <span className="qt-text-xs qt-text-muted">(the house default)</span>}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )
+      })}
+    </section>
+  )
+}
+
 interface DraftEditorProps {
   detail: DraftDetail
   /** The mode edited and shown in this tab (the panel wears it too). */
@@ -159,16 +378,29 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
 
   // The JSON last queued or adopted, so an adopted server value is never sent back.
   const lastTokensJson = useRef(JSON.stringify(serverTokens))
+  const editing = useEditing(tokens, setTokens, mode)
+  const { store, edit, forget } = editing
+
+  const sectionsId = useId()
+  const searchId = useId()
+  const [level, setLevel] = useState<EditorLevel>('essentials')
+  const [query, setQuery] = useState('')
+  const [changedOnly, setChangedOnly] = useState(false)
+  const [openSections, setOpenSections] = useState<ReadonlySet<string>>(() => new Set(FIRST_SECTION ? [FIRST_SECTION] : []))
+  const [openAdvanced, setOpenAdvanced] = useState<ReadonlySet<string>>(() => new Set())
+  const deferredQuery = useDeferredValue(query)
+  const filter = useMemo<EditorFilter>(() => ({ query: deferredQuery, changedOnly }), [deferredQuery, changedOnly])
 
   const onConflict = useCallback(
     (fresh: DraftDetail) => {
       const freshTokens = fresh.tokens ?? EMPTY_TOKENS
       lastTokensJson.current = JSON.stringify(freshTokens)
       setTokens(freshTokens)
+      forget()
       setName(typeof fresh.manifest?.name === 'string' ? fresh.manifest.name : fresh.id)
       setDescription(typeof fresh.manifest?.description === 'string' ? fresh.manifest.description : '')
     },
-    [setTokens, setName, setDescription],
+    [setTokens, setName, setDescription, forget],
   )
   const saver = useDraftSaver(detail, onConflict)
   const { queue } = saver
@@ -183,8 +415,8 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
     queue({ tokens })
   }, [tokens, detail.tokens, queue])
 
-  // The analysis follows the tokens; the preview a deferred copy of them.
-  const { resolved, findings } = useMemo(() => analyse(tokens), [tokens])
+  // The analysis follows the tokens (useEditing); the preview a deferred copy of them.
+  const { findings } = editing
   const deferredTokens = useDeferredValue(tokens)
   const preview = useMemo(
     () =>
@@ -214,7 +446,45 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
   const errors = detail.issues.filter((i) => i.severity === 'error')
   const warnings = detail.issues.filter((i) => i.severity === 'warning')
   const contrastFails = findings.filter((f) => f.status === 'fail' && f.mode === mode).length
-  const primitives = primitiveRows(tokens)
+  const primitives = filterPrimitiveRows(primitiveRows(tokens), filter)
+  const filtering = isFiltering(filter)
+  const sections = useMemo(() => sectionViews(level, filter, tokens), [level, filter, tokens])
+  const isSectionOpen = (id: string) => openSections.has(id)
+  const toggle = (set: ReadonlySet<string>, id: string, open: boolean) => {
+    const next = new Set(set)
+    if (open) next.add(id)
+    else next.delete(id)
+    return next
+  }
+  const setSectionOpen = (id: string, open: boolean) => setOpenSections((prev) => toggle(prev, id, open))
+  const openAll = () => {
+    setOpenSections(new Set(sections.map((sec) => sec.id)))
+    setOpenAdvanced(new Set(sections.map((sec) => sec.id)))
+  }
+  const closeAll = () => {
+    setOpenSections(new Set())
+    setOpenAdvanced(new Set())
+  }
+  const goToSection = (id: string) => {
+    if (!isSectionOpen(id)) setSectionOpen(id, true)
+    requestAnimationFrame(() => {
+      const el = document.getElementById(sectionDomId(sectionsId, id))
+      el?.scrollIntoView({ block: 'start' })
+      el?.querySelector('summary')?.focus()
+    })
+  }
+
+  const onEditorKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey || hasOwnUndo(e.target)) return
+    const key = e.key.toLowerCase()
+    if (key === 'z' && !e.shiftKey) {
+      e.preventDefault()
+      editing.undo()
+    } else if ((key === 'z' && e.shiftKey) || (key === 'y' && !e.shiftKey)) {
+      e.preventDefault()
+      editing.redo()
+    }
+  }
   const convertedCount = installed ? Object.keys(installed.conversion.converted).length : 0
 
   const commitName = () => {
@@ -399,62 +669,164 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
         </div>
       )}
 
-      {EDITOR_SECTIONS.map((section, index) => (
-        <details key={section.id} className="qt-card" open={index === 0}>
-          <summary className="p-4 cursor-pointer">
-            <span className="qt-heading-4">{section.label}</span>
-            <span className="qt-text-xs qt-text-muted ml-2">{section.tokens.length} colours</span>
-            {section.description && <p className="qt-text-xs qt-text-secondary mt-1">{section.description}</p>}
-          </summary>
-          <ul className="px-4 pb-2">
-            {section.tokens.map((token) => (
-              <ColorTokenRow
-                key={token.name}
-                token={token}
-                tokens={tokens}
-                resolved={resolved}
-                findings={findings}
-                mode={mode}
-                onChange={setTokens}
-              />
-            ))}
-          </ul>
-        </details>
-      ))}
+      <div
+        className="qt-card p-3 flex items-center gap-3 flex-wrap sticky top-0 z-10"
+        role="toolbar"
+        aria-label="Finding and undoing"
+      >
+        <div role="group" aria-label="Level" className="flex">
+          {(
+            [
+              ['essentials', 'Essentials'],
+              ['components', 'Components'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={level === value}
+              disabled={filtering}
+              className={`qt-button qt-button-sm ${level === value ? 'qt-button-primary' : 'qt-button-secondary'}`}
+              onClick={() => setLevel(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <label htmlFor={searchId} className="sr-only">Search the tokens</label>
+          <input
+            id={searchId}
+            type="search"
+            className="qt-input qt-text-small min-w-0 flex-1"
+            placeholder="Search by name, label or description"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <label className="qt-text-small flex items-center gap-1">
+          <input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} />
+          Changed only
+        </label>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="qt-button qt-button-ghost qt-button-sm"
+            onClick={editing.undo}
+            disabled={!editing.canUndo}
+            aria-keyshortcuts="Control+Z Meta+Z"
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="qt-button qt-button-ghost qt-button-sm"
+            onClick={editing.redo}
+            disabled={!editing.canRedo}
+            aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
+          >
+            Redo
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={openAll} disabled={filtering}>
+            Open all
+          </button>
+          <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={closeAll} disabled={filtering}>
+            Close all
+          </button>
+        </div>
+      </div>
+      <p className="sr-only" aria-live="polite">
+        {filtering
+          ? `${sections.reduce((n, sec) => n + sec.rows.length + sec.advanced.length, 0)} tokens in ${sections.length} sections answer.`
+          : ''}
+      </p>
 
-      <details className="qt-card">
-        <summary className="p-4 cursor-pointer">
-          <span className="qt-heading-4">Primitives</span>
-          <span className="qt-text-xs qt-text-muted ml-2">{primitives.length} defined, read only</span>
-          <p className="qt-text-xs qt-text-secondary mt-1">
-            The theme&rsquo;s own named values. A token that follows one shows it above; editing that token writes a colour of its own in its place.
-          </p>
-        </summary>
-        {primitives.length === 0 ? (
-          <p className="px-4 pb-4 qt-text-small qt-text-muted">This theme defines none.</p>
-        ) : (
-          <table className="w-full qt-text-xs mx-4 mb-4">
-            <thead>
-              <tr className="text-left qt-text-secondary">
-                <th scope="col" className="py-1 pr-3">Variable</th>
-                <th scope="col" className="py-1 pr-3">Type</th>
-                <th scope="col" className="py-1 pr-3">Value</th>
-                <th scope="col" className="py-1 pr-3">Dark</th>
-              </tr>
-            </thead>
-            <tbody>
-              {primitives.map((p) => (
-                <tr key={p.name} className="border-t qt-border-default">
-                  <td className="py-1 pr-3 font-mono">{p.variable}</td>
-                  <td className="py-1 pr-3">{p.type}</td>
-                  <td className="py-1 pr-3 font-mono break-all">{p.value}</td>
-                  <td className="py-1 pr-3 font-mono break-all">{p.dark ?? '—'}</td>
-                </tr>
+      <ChoicesCard tokens={tokens} edit={edit} />
+
+      <div className="grid gap-4 md:grid-cols-[13rem_minmax(0,1fr)] items-start">
+        <nav aria-label="Sections" className="qt-card p-2 md:sticky md:top-20 md:max-h-[calc(100vh-8rem)] md:overflow-y-auto">
+          {sections.length === 0 ? (
+            <p className="qt-text-xs qt-text-muted p-2">No section answers.</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {sections.map((section) => (
+                <li key={section.id}>
+                  <button
+                    type="button"
+                    className="qt-button qt-button-ghost qt-button-sm w-full justify-between text-left"
+                    onClick={() => goToSection(section.id)}
+                  >
+                    <span className="truncate">{section.label}</span>
+                    {section.changed > 0 && (
+                      <span className="qt-badge-secondary ml-2" aria-label={`${section.changed} set by this theme`}>
+                        {section.changed}
+                      </span>
+                    )}
+                  </button>
+                </li>
               ))}
-            </tbody>
-          </table>
-        )}
-      </details>
+            </ul>
+          )}
+        </nav>
+
+        <div className="space-y-4 min-w-0" onKeyDown={onEditorKeyDown}>
+          {filtering && sections.length === 0 && (
+            <p className="qt-card p-4 qt-text-small qt-text-muted">
+              {changedOnly && !query.trim()
+                ? 'This theme has changed nothing yet; every token stands at the house default.'
+                : 'Nothing in the registry answers to that description.'}
+            </p>
+          )}
+          {sections.map((section) => (
+            <SectionCard
+              key={section.id}
+              section={section}
+              domId={sectionDomId(sectionsId, section.id)}
+              open={isSectionOpen(section.id)}
+              advancedOpen={openAdvanced.has(section.id)}
+              onToggle={(open) => setSectionOpen(section.id, open)}
+              onToggleAdvanced={(open) => setOpenAdvanced((prev) => toggle(prev, section.id, open))}
+              store={store}
+              edit={edit}
+            />
+          ))}
+          <details className="qt-card" open={filtering && primitives.length > 0 ? true : undefined}>
+            <summary className="p-4 cursor-pointer">
+              <span className="qt-heading-4">Primitives</span>
+              <span className="qt-text-xs qt-text-muted ml-2">{primitives.length} {filtering ? 'answering' : 'defined'}, read only</span>
+              <p className="qt-text-xs qt-text-secondary mt-1">
+                The theme&rsquo;s own named values. A token that follows one shows it above; editing that token writes a colour of its own in its place.
+              </p>
+            </summary>
+            {primitives.length === 0 ? (
+              <p className="px-4 pb-4 qt-text-small qt-text-muted">This theme defines none.</p>
+            ) : (
+              <table className="w-full qt-text-xs mx-4 mb-4">
+                <thead>
+                  <tr className="text-left qt-text-secondary">
+                    <th scope="col" className="py-1 pr-3">Variable</th>
+                    <th scope="col" className="py-1 pr-3">Type</th>
+                    <th scope="col" className="py-1 pr-3">Value</th>
+                    <th scope="col" className="py-1 pr-3">Dark</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {primitives.map((p) => (
+                    <tr key={p.name} className="border-t qt-border-default">
+                      <td className="py-1 pr-3 font-mono">{p.variable}</td>
+                      <td className="py-1 pr-3">{p.type}</td>
+                      <td className="py-1 pr-3 font-mono break-all">{p.value}</td>
+                      <td className="py-1 pr-3 font-mono break-all">{p.dark ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </details>
+        </div>
+      </div>
     </div>
   )
 }

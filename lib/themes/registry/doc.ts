@@ -23,7 +23,8 @@ function code(text: string): string {
 }
 
 function renderRow(token: TokenDef): string {
-  const what = token.description ? `${token.label}. ${token.description}` : token.label;
+  const described = token.description ? `${token.label}. ${token.description}` : token.label;
+  const what = token.options ? `${described} One of: ${token.options.map(code).join(', ')}.` : described;
   const def = token.optional ? `${code(token.default)} (optional; unset by default)` : code(token.default);
   const choice = Object.entries(token.byChoice ?? {})
     .flatMap(([name, options]) => Object.entries(options).map(([option, value]) => `${name}=${option}: ${code(value)}`))

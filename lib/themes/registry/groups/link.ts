@@ -34,6 +34,7 @@ export const LINK_TOKENS: readonly TokenDef[] = [
     label: "Link decoration",
     default: "none",
     visibility: 'standard',
+    options: ['none', 'underline', 'overline', 'line-through'],
   },
   {
     name: "--qt-link-decoration-hover",
@@ -43,5 +44,6 @@ export const LINK_TOKENS: readonly TokenDef[] = [
     label: "Link decoration hover",
     default: "underline",
     visibility: 'advanced',
+    options: ['none', 'underline', 'overline', 'line-through'],
   },
 ];
