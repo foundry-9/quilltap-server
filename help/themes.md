@@ -315,7 +315,7 @@ The simplest way to install a custom theme:
 
 ### Creating Your Own Theme
 
-Themes are made in the `.qtap-theme` bundle format:
+The gentlest way in is [Calliope's Atelier](theme-editor.md) (**Settings → Appearance → Design a theme**): start from a blank canvas or a copy of any theme you have, choose its colours while the whole of Quilltap wears the result, and install it with a press of a button. For everything the Atelier does not yet edit, or if you prefer a text editor, themes are made by hand in the `.qtap-theme` bundle format:
 
 ```bash
 npx create-quilltap-theme my-theme

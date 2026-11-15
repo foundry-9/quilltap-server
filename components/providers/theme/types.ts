@@ -81,6 +81,30 @@ export interface ThemeContextValue {
 
   /** Refresh available themes list */
   refreshThemes: () => Promise<void>;
+
+  /**
+   * The theme being previewed in place of the worn one (the theme editor's
+   * live preview), or null. `activeThemeId` and the stored preference are
+   * untouched while it is set.
+   */
+  preview: { themeId: string } | null;
+
+  /**
+   * Show `value` in place of the worn theme, or (null) restore the worn theme
+   * without a fetch. The only way a preview reaches the DOM: it goes through
+   * the same `<style>` element and `<html>` attributes as the worn theme.
+   */
+  setPreview: (value: ThemePreview | null) => void;
+}
+
+/** A theme shown in place of the worn one: what the provider would load for it. */
+export interface ThemePreview {
+  themeId: string;
+  /** Compiled CSS in injector order: font faces, tokens, icons, custom. */
+  css: string;
+  features: ThemeFeatureFlags;
+  choices: Record<string, string>;
+  subsystems: Record<string, SubsystemOverride> | null;
 }
 
 /**

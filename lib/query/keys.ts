@@ -355,8 +355,15 @@ export const queryKeys = {
     all: ['api-keys'] as const,
   },
   themes: {
+    all: ['themes'] as const,
     registrySources: ['themes', 'registry-sources'] as const,
     registry: ['themes', 'registry'] as const,
+  },
+  /** Theme drafts (`Themes/<id>/` in Quilltap General), the Calliope editor's work. */
+  themeDrafts: {
+    all: ['theme-drafts'] as const,
+    list: ['theme-drafts', 'list'] as const,
+    detail: (id: string) => ['theme-drafts', 'detail', id] as const,
   },
   mountPoints: {
     all: ['mount-points'] as const,

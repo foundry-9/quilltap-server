@@ -10,10 +10,12 @@
  * @module lib/documents/core/read
  */
 
+import fs from 'node:fs/promises';
 import { logger } from '@/lib/logger';
 import { readFileWithMtime, statResolvedFile, type ResolvedPath } from '@/lib/doc-edit';
 import {
   readDatabaseBlobForDocument,
+  readDatabaseBlobBytes,
   databaseDocumentExists,
   databaseFolderExists,
 } from '@/lib/mount-index/database-store';
@@ -61,6 +63,44 @@ export async function readDocument(resolved: ResolvedPath): Promise<DocumentRead
       ...(blob.storedMimeType ? { storedMimeType: blob.storedMimeType } : {}),
     };
   }
+}
+
+/** What {@link readDocumentBytes} found. */
+export interface DocumentBytes {
+  data: Buffer;
+  mtime: number;
+  size: number;
+  /** The blob's stored MIME type, when the bytes came from an uploaded blob. */
+  storedMimeType?: string;
+  source: 'document' | 'blob';
+}
+
+/**
+ * Read the bytes at a path, for files that are not text (fonts, images): in
+ * a database store, the document there as UTF-8, else the uploaded blob's
+ * own bytes; on disk, the file. Throws an `ENOENT`-coded error when nothing
+ * is there.
+ */
+export async function readDocumentBytes(resolved: ResolvedPath): Promise<DocumentBytes> {
+  if (resolved.mountType === 'database') {
+    if (!resolved.mountPointId) {
+      throw new Error('Database-backed ResolvedPath is missing mountPointId');
+    }
+    const blob = await readDatabaseBlobBytes(resolved.mountPointId, resolved.relativePath);
+    if (blob) {
+      return { data: blob.data, mtime: blob.mtime, size: blob.size, storedMimeType: blob.storedMimeType, source: 'blob' };
+    }
+    const doc = await readFileWithMtime(resolved);
+    const data = Buffer.from(doc.content, 'utf-8');
+    logger.debug('readDocumentBytes: read a document as bytes', {
+      mountPointId: resolved.mountPointId,
+      relativePath: resolved.relativePath,
+      size: data.length,
+    });
+    return { data, mtime: doc.mtime, size: data.length, source: 'document' };
+  }
+  const [data, stats] = await Promise.all([fs.readFile(resolved.absolutePath), fs.stat(resolved.absolutePath)]);
+  return { data, mtime: stats.mtimeMs, size: data.length, source: 'document' };
 }
 
 /**

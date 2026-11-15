@@ -5,6 +5,10 @@
  * Path format: /api/themes/fonts/bundle:{themeId}/fonts/MyFont.woff2
  *
  * Security: only a font the bundle declares is served, resolved inside the bundle.
+ *
+ * A theme draft's fonts share these URLs: when no installed theme of the
+ * requested `?v=` answers, a draft of that id and version may
+ * (`lib/themes/drafts/serve.ts`).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,6 +19,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { resolveInside, PathOutsideBaseError } from '@/lib/paths/resolve-inside';
 import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
+import { registryAnswers, serveDraftThemeFile } from '@/lib/themes/drafts/serve';
 
 // MIME types for font files
 const FONT_MIME_TYPES: Record<string, string> = {
@@ -79,6 +84,17 @@ export async function GET(
     // Find the theme by plugin name
     const allThemes = themeRegistry.getAll();
     const theme = allThemes.find(t => t.pluginName === pluginName);
+    const requestedVersion = request.nextUrl.searchParams.get('v');
+    if (!registryAnswers(theme?.version, requestedVersion)) {
+      const draft = await serveDraftThemeFile({
+        themeId: pluginName.slice('bundle:'.length),
+        file: relativeFontPath,
+        kind: 'font',
+        version: requestedVersion,
+        mimeTypes: FONT_MIME_TYPES,
+      });
+      if (draft) return draft;
+    }
 
     if (!theme) {
       logger.warn('Theme not found for plugin', {

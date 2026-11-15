@@ -155,6 +155,7 @@ export const CATEGORY_TOKENS: readonly TokenDef[] = [
     group: 'category',
     label: "Projects — text",
     default: "hsl(185 55% 30%)",
+    defaultDark: "hsl(185 55% 68%)",
     visibility: 'standard',
   },
   {

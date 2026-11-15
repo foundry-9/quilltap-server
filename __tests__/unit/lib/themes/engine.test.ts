@@ -153,17 +153,26 @@ describe('custom CSS (3.3)', () => {
   const ctx = () => ({ id: 'v2-sample', version: '1.0.0', files });
 
   it.each([
-    [':root', '[data-theme="v2-sample"]'],
-    [':root .a', '[data-theme="v2-sample"] .a'],
-    ['html.x .a', '[data-theme="v2-sample"].x .a'],
-    ['.dark .a', '[data-theme="v2-sample"].dark .a'],
-    ['.light', '[data-theme="v2-sample"].light'],
-    ['.darker .a', '[data-theme="v2-sample"] .darker .a'],
-    ['body .a', '[data-theme="v2-sample"] body .a'],
-    ['.a::before', '[data-theme="v2-sample"] .a::before'],
-    ['*', '[data-theme="v2-sample"] *'],
+    [':root', ':scope'],
+    [':root .a', ':scope .a'],
+    ['html.x .a', ':scope.x .a'],
+    ['.dark .a', ':scope.dark .a'],
+    ['.light', ':scope.light'],
+    ['.darker .a', ':scope .darker .a'],
+    ['body .a', ':scope body .a'],
+    ['.a::before', ':scope .a::before'],
+    ['*', ':scope *'],
   ])('scopes %s', (selector, expected) => {
-    expect(scopeSelector(selector, 'v2-sample')).toBe(expected);
+    expect(scopeSelector(selector)).toBe(expected);
+  });
+
+  it('puts consecutive rules in one boundary block that stops at any other theme', () => {
+    const r = scopeThemeCss('.a { color: red; } .b { color: blue; } @media (min-width: 1px) { .c { color: green; } }', ctx());
+    expect(r.errors).toEqual([]);
+    const flat = r.css.replace(/\s+/g, ' ');
+    expect(flat.match(/@scope /g)).toHaveLength(2);
+    expect(flat).toContain('@scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) { :scope .a { color: red; } :scope .b { color: blue; } }');
+    expect(flat).toContain('@media (min-width: 1px) { @scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) { :scope .c { color: green; } } }');
   });
 
   it.each([
@@ -200,9 +209,9 @@ describe('custom CSS (3.3)', () => {
     expect(r.css).toContain('@keyframes v2-sample-pulse');
     expect(r.css).toContain('animation: v2-sample-pulse 1s, other 2s');
     const flat = r.css.replace(/\s+/g, ' ');
-    expect(flat).toContain('@supports (display: grid) { [data-theme="v2-sample"] .b');
-    expect(flat).toContain('@container (width > 1px) { [data-theme="v2-sample"] .c');
-    expect(flat).toContain('@layer theme-extras { [data-theme="v2-sample"] .d');
+    expect(flat).toContain('@supports (display: grid) { @scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) { :scope .b');
+    expect(flat).toContain('@container (width > 1px) { @scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) { :scope .c');
+    expect(flat).toContain('@layer theme-extras { @scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) { :scope .d');
   });
 
   it('re-serialises without comments', () => {
@@ -252,7 +261,9 @@ describe('compiled CSS (3.2, 3.3)', () => {
   it('writes font faces and icons with escaped, versioned asset URLs', () => {
     const c = compiled();
     expect(c.css.fontFaces).toMatchSnapshot();
-    expect(c.css.icons).toBe('[data-theme="v2-sample"] [data-icon="sun"] { --_qt-icon-mask: url("/api/themes/assets/bundle:v2-sample/icons/sun.svg?v=1.0.0"); --_qt-icon-bg: none; background-color: currentColor; }');
+    expect(c.css.icons).toBe(
+      '@scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) {\n:scope [data-icon="sun"] { --_qt-icon-mask: url("/api/themes/assets/bundle:v2-sample/icons/sun.svg?v=1.0.0"); --_qt-icon-bg: none; background-color: currentColor; }\n}'
+    );
   });
 
   it('derives choices, features and the picker swatches', () => {

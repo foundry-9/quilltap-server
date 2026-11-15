@@ -18,6 +18,8 @@
  * - no reference cycles, in either mode;
  * - the custom CSS scopes cleanly (./scope.ts).
  *
+ * Contrast findings (./contrast.ts) come back as warnings, not errors.
+ *
  * @module themes/engine/validate
  */
 
@@ -32,6 +34,7 @@ import {
   tokenModes,
   type ThemeDocument,
 } from './document';
+import { checkContrast, contrastWarnings } from './contrast';
 import { hasImageExtension } from './css-text';
 import { resolveTheme, type RegistryView } from './resolve';
 import { scopeThemeCss } from './scope';
@@ -54,9 +57,13 @@ export interface ValidationInput {
   css?: string;
 }
 
+/**
+ * `warnings` are what does not stop the theme loading: today, the contrast
+ * findings (./contrast.ts) — a failed or unchecked pair, one line each.
+ */
 export type ThemeDocumentValidation =
-  | { valid: true; document: ThemeDocument; scopedCss: string; errors: [] }
-  | { valid: false; errors: string[] };
+  | { valid: true; document: ThemeDocument; scopedCss: string; errors: []; warnings: string[] }
+  | { valid: false; errors: string[]; warnings: string[] };
 
 /** Tailwind's names (theme-tokens.css), read off the registry the engine is given. */
 export function tailwindTokenNames(registry: RegistryView): Set<string> {
@@ -134,7 +141,7 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
   if (!tokensResult.success) {
     for (const issue of tokensResult.error.issues) errors.push(`tokens.json: ${issue.path.join('.') || '(root)'}: ${issue.message}`);
   }
-  if (!manifestResult.success || !tokensResult.success) return { valid: false, errors };
+  if (!manifestResult.success || !tokensResult.success) return { valid: false, errors, warnings: [] };
 
   const manifest = manifestResult.data;
   const tokens = tokensResult.data;
@@ -257,6 +264,9 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
     scopedCss = scoped.css;
   }
 
-  if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, document: { manifest, tokens, css: input.css }, scopedCss, errors: [] };
+  // ---- contrast (warnings only), once the tokens resolve cleanly
+  const warnings = errors.length === 0 ? contrastWarnings(checkContrast(resolveTheme(tokens, registry))) : [];
+
+  if (errors.length > 0) return { valid: false, errors, warnings };
+  return { valid: true, document: { manifest, tokens, css: input.css }, scopedCss, errors: [], warnings };
 }

@@ -13,6 +13,9 @@
  * - System preference detection
  * - Persistent preferences via API
  * - A one-time notice when the preferred theme can no longer be worn
+ * - A preview slot (`setPreview`): a theme shown in place of the worn one,
+ *   through the same `<style>` element and `<html>` attributes, leaving the
+ *   worn theme and the stored preference alone
  *
  * @module providers/theme/ThemeProvider
  */
@@ -27,7 +30,7 @@ import {
 } from 'react';
 import { useSession } from '@/components/providers/session-provider';
 import { ThemeStyleInjector } from '@/components/providers/theme-style-injector';
-import type { ThemeContextValue, ThemeProviderProps, ThemeSummary, SubsystemOverride } from './types';
+import type { ThemeContextValue, ThemeProviderProps, ThemeSummary, SubsystemOverride, ThemePreview } from './types';
 import type { ColorMode } from '@/lib/themes/types';
 import type { RefusedTheme } from '@/lib/themes/refused';
 import { showWarningToast } from '@/lib/toast';
@@ -109,18 +112,29 @@ export function ThemeProvider({
   const [refusedThemes, setRefusedThemes] = useState<RefusedTheme[]>([]);
   // The active theme: compiled CSS, the app-owned features it switches on, its choices.
   const [compiledCss, setCompiledCss] = useState<string | null>(null);
-  // Bumped whenever the injected CSS changes, so renderers that bake theme
-  // colours into their output (diagrams) can key their caches on it.
-  const [themeRevision, setThemeRevision] = useState(0);
-  const lastCssRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (lastCssRef.current === compiledCss) return;
-    lastCssRef.current = compiledCss;
-    setThemeRevision((n) => n + 1);
-  }, [compiledCss]);
   const [themeFeatures, setThemeFeatures] = useState<ThemeDomFeatures>({});
   const [themeChoices, setThemeChoices] = useState<Record<string, string>>({});
   const [subsystems, setSubsystems] = useState<Record<string, SubsystemOverride> | null>(null);
+  // A theme shown in place of the worn one (the theme editor). The worn
+  // theme's state above is kept, so clearing the preview needs no fetch.
+  const [previewState, setPreviewState] = useState<ThemePreview | null>(null);
+  const shownThemeId = previewState ? previewState.themeId : activeThemeId;
+  const shownCss = previewState ? previewState.css || null : compiledCss;
+  const shownFeatures = previewState ? previewState.features : themeFeatures;
+  const shownChoices = previewState ? previewState.choices : themeChoices;
+  const shownSubsystems = previewState ? previewState.subsystems : subsystems;
+  // Bumped whenever the injected CSS changes and on every preview change, so
+  // renderers that bake theme colours into their output (diagrams) can key
+  // their caches on it.
+  const [themeRevision, setThemeRevision] = useState(0);
+  const lastCssRef = useRef<string | null>(null);
+  const lastPreviewRef = useRef<ThemePreview | null>(null);
+  useEffect(() => {
+    if (lastCssRef.current === shownCss && lastPreviewRef.current === previewState) return;
+    lastCssRef.current = shownCss;
+    lastPreviewRef.current = previewState;
+    setThemeRevision((n) => n + 1);
+  }, [shownCss, previewState]);
   const [showNavThemeSelector, setShowNavThemeSelectorState] = useState<boolean>(
     initialPreference?.showNavThemeSelector ?? false
   );
@@ -157,8 +171,8 @@ export function ThemeProvider({
   // ============================================================================
 
   useEffect(() => {
-    applyThemeToDom(resolvedColorMode, activeThemeId, themeFeatures, themeChoices);
-  }, [resolvedColorMode, activeThemeId, themeFeatures, themeChoices]);
+    applyThemeToDom(resolvedColorMode, shownThemeId, shownFeatures, shownChoices);
+  }, [resolvedColorMode, shownThemeId, shownFeatures, shownChoices]);
 
   // ============================================================================
   // LOAD INITIAL DATA
@@ -297,6 +311,11 @@ export function ThemeProvider({
     [status]
   );
 
+  const setPreview = useCallback((value: ThemePreview | null) => {
+    setPreviewState(value);
+  }, []);
+  const preview = useMemo(() => (previewState ? { themeId: previewState.themeId } : null), [previewState]);
+
   // ============================================================================
   // CONTEXT VALUE
   // ============================================================================
@@ -313,11 +332,13 @@ export function ThemeProvider({
       isLoading,
       error,
       showNavThemeSelector,
-      subsystems,
+      subsystems: shownSubsystems,
       setTheme,
       setColorMode,
       setShowNavThemeSelector,
       refreshThemes,
+      preview,
+      setPreview,
     }),
     [
       activeThemeId,
@@ -330,11 +351,13 @@ export function ThemeProvider({
       isLoading,
       error,
       showNavThemeSelector,
-      subsystems,
+      shownSubsystems,
       setTheme,
       setColorMode,
       setShowNavThemeSelector,
       refreshThemes,
+      preview,
+      setPreview,
     ]
   );
 
@@ -342,8 +365,8 @@ export function ThemeProvider({
     <ThemeContext.Provider value={value}>
       <ThemeStyleInjector
         mode={resolvedColorMode}
-        themeId={activeThemeId}
-        compiledCss={compiledCss}
+        themeId={shownThemeId}
+        compiledCss={shownCss}
       />
       {children}
     </ThemeContext.Provider>

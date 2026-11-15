@@ -130,7 +130,7 @@ describe('loader round trip', () => {
     const theme = themeRegistry.get('v2-sample');
     expect(theme?.source).toBe('bundle');
     expect(theme?.compiled?.choices).toEqual({ density: 'comfortable' });
-    expect(themeRegistry.getCSS('v2-sample')).toContain('[data-theme="v2-sample"].dark .qt-card');
+    expect(themeRegistry.getCSS('v2-sample')).toContain(':scope.dark .qt-card');
     expect(themeRegistry.getFonts('v2-sample').map((f) => f.src)).toEqual(['fonts/RethinkSans-latin-ext.woff2']);
     expect(theme?.subsystems?.salon?.backgroundImage).toBe('/api/themes/assets/bundle:v2-sample/textures/paper.webp');
 

@@ -32,7 +32,7 @@ import path from 'node:path';
 import postcss, { type Rule } from 'postcss';
 import { deltaEOK, parseColor, renderAlike, type Rgba } from '../lib/themes/color';
 import { THEME_TOKENS, getThemeToken, type TokenDef } from '../lib/themes/registry';
-import { substituteVars } from '../lib/themes/snapshot/cascade';
+import { substituteVars } from '../lib/themes/snapshot/var-substitute';
 
 const ROOT = path.resolve(__dirname, '..');
 const THEMES = ['art-deco', 'earl-grey', 'great-estate', 'madmans-box', 'old-school', 'rains'] as const;

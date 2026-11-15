@@ -87,15 +87,8 @@ async function handleGetThemes() {
  * worn without a restart.
  */
 async function hotLoadInstalledTheme(themeId: string | undefined): Promise<void> {
-  if (!themeId) return;
-  const { themeRegistry } = await getThemeRegistry();
-  const { loadInstalledBundles } = await getBundleLoader();
-  const bundles = await loadInstalledBundles();
-  const newBundle = bundles.loaded.find(b => b.manifest.id === themeId);
-  if (newBundle) {
-    themeRegistry.registerBundleTheme(newBundle);
-  }
-  logger.debug('Hot-loaded installed theme', { context: 'themes-api', themeId, registered: !!newBundle });
+  const { hotLoadInstalledTheme: hotLoad } = await import('@/lib/themes/hot-load');
+  await hotLoad(themeId);
 }
 
 /** The 400 for a failed install: an earlier theme's refusal speaks for itself. */

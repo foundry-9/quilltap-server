@@ -11,6 +11,12 @@
  * Deliberate simplifications, stated so a reader can trust the output:
  * - Only declarations on rules that match the root element count; a selector
  *   with a combinator never does (see selector-match.ts).
+ * - `@scope` is read when its root selector matches the root element (a
+ *   theme's descendant rules sit in one, ../engine/boundary.ts): inside it a
+ *   selector with `:scope` is read with `:scope` as `:root` (same
+ *   specificity), and one without is descendant-only and never matches. The
+ *   scoping limit is not modelled; it never excludes the root itself. An
+ *   `@scope` whose root does not match, or that has no root, is skipped.
  * - `@media`, `@container` and the other conditional group rules are
  *   skipped whole: the snapshot is of one unconditional state (colour mode in
  *   Quilltap is class-based, not `prefers-color-scheme`). `@supports` is
@@ -31,6 +37,9 @@
 
 import postcss, { type AtRule, type ChildNode, type Container, type Declaration, type Rule } from 'postcss';
 import { compareSpecificity, matchRootSelector, splitSelectorList, type RootElementState, type Specificity } from './selector-match';
+import { findVarCall, InvalidValue, normaliseValue } from './var-substitute';
+
+export { normaliseValue, substituteVars } from './var-substitute';
 
 export interface CascadeSheet {
   /** Where the CSS came from (for error messages). */
@@ -64,7 +73,27 @@ interface Candidate {
   origin: string;
 }
 
-const CONDITIONAL_AT_RULES = new Set(['media', 'container', 'document', 'scope', 'starting-style']);
+const CONDITIONAL_AT_RULES = new Set(['media', 'container', 'document', 'starting-style']);
+
+/** The root selector of an `@scope` prelude (`(<root>) [to (<limit>)]`), or null when it has none. */
+function scopeRootSelector(params: string): string | null {
+  const p = params.trim();
+  if (!p.startsWith('(')) return null;
+  let depth = 0;
+  for (let i = 0; i < p.length; i++) {
+    if (p[i] === '(') depth++;
+    else if (p[i] === ')' && --depth === 0) return p.slice(1, i).trim() || null;
+  }
+  return null;
+}
+
+/** A top-level selector list inside a matching `@scope`, as it reads on the root element. */
+function unscopeSelector(list: string): string | null {
+  const kept = splitSelectorList(list)
+    .filter((s) => s.includes(':scope'))
+    .map((s) => s.replace(/:scope(?![\w-])/g, ':root'));
+  return kept.length > 0 ? kept.join(', ') : null;
+}
 
 /**
  * `@supports` conditions the snapshot knows the answer to, for a current
@@ -88,71 +117,6 @@ function supportsVerdict(params: string): boolean | undefined {
   return undefined;
 }
 const CSS_WIDE_KEYWORDS = new Set(['initial', 'inherit', 'unset', 'revert', 'revert-layer']);
-
-class InvalidValue extends Error {}
-
-/** Normalise whitespace and drop comments, as the snapshot stores values. */
-export function normaliseValue(value: string): string {
-  return value.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').trim();
-}
-
-interface VarCall {
-  start: number;
-  end: number;
-  name: string;
-  fallback: string | null;
-}
-
-/**
- * The next `var(…)` at or after `from`, outside quoted strings: its span, the
- * referenced name and the fallback (everything after the first top-level
- * comma, or null when there is no comma).
- */
-function findVarCall(value: string, from: number): VarCall | null {
-  let quote: string | null = null;
-  for (let i = from; i < value.length; i++) {
-    const ch = value[i];
-    if (ch === '\\') {
-      i++;
-      continue;
-    }
-    if (quote) {
-      if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch;
-      continue;
-    }
-    if (!/^var\(/i.test(value.slice(i, i + 4)) || /[\w-]/.test(value[i - 1] ?? '')) continue;
-    let depth = 0;
-    let comma = -1;
-    let inner: string | null = null;
-    for (let j = i + 3; j < value.length; j++) {
-      const c = value[j];
-      if (c === '\\') {
-        j++;
-        continue;
-      }
-      if (inner) {
-        if (c === inner) inner = null;
-        continue;
-      }
-      if (c === '"' || c === "'") inner = c;
-      else if (c === '(') depth++;
-      else if (c === ')') {
-        depth--;
-        if (depth === 0) {
-          const name = value.slice(i + 4, comma >= 0 ? comma : j).trim();
-          const fallback = comma >= 0 ? value.slice(comma + 1, j) : null;
-          return { start: i, end: j + 1, name, fallback };
-        }
-      } else if (c === ',' && depth === 1 && comma < 0) comma = j;
-    }
-    throw new InvalidValue(`unbalanced var( in: ${value}`);
-  }
-  return null;
-}
 
 /** Resolve `&` against the parent selector list (CSS nesting). */
 function nestSelector(child: string, parent: string | null): string {
@@ -187,7 +151,8 @@ export function resolveRootVariables(sheets: CascadeSheet[], root: RootElementSt
     match: { matches: boolean; specificity: Specificity };
   }
 
-  const walk = (container: Container, layer: LayerNode, context: RuleContext | null, origin: string) => {
+  /** `inScope`: inside an `@scope` whose root is the root element. */
+  const walk = (container: Container, layer: LayerNode, context: RuleContext | null, origin: string, inScope = false) => {
     container.each((node: ChildNode) => {
       if (node.type === 'decl') {
         const decl = node as Declaration;
@@ -213,7 +178,7 @@ export function resolveRootVariables(sheets: CascadeSheet[], root: RootElementSt
             return;
           }
           const target = at.params.trim() ? layerPath(layer, at.params.trim()) : childLayer(layer, `\0anon${anonymous++}`);
-          walk(at, target, context, origin);
+          walk(at, target, context, origin, inScope);
           return;
         }
         if (name === 'property') {
@@ -230,7 +195,19 @@ export function resolveRootVariables(sheets: CascadeSheet[], root: RootElementSt
             errors.add(`${origin}: unknown @supports condition, skipped: ${normaliseValue(at.params)}`);
             return;
           }
-          if (verdict) walk(at, layer, context, origin);
+          if (verdict) walk(at, layer, context, origin, inScope);
+          return;
+        }
+        if (name === 'scope') {
+          const scopeRoot = scopeRootSelector(at.params);
+          if (context !== null || scopeRoot === null) return;
+          let rootMatches = false;
+          try {
+            rootMatches = matchRootSelector(scopeRoot, root).matches;
+          } catch (error) {
+            errors.add(`${origin}: ${(error as Error).message}`);
+          }
+          if (rootMatches) walk(at, layer, null, origin, true);
           return;
         }
         if (CONDITIONAL_AT_RULES.has(name)) return;
@@ -240,7 +217,9 @@ export function resolveRootVariables(sheets: CascadeSheet[], root: RootElementSt
       }
       if (node.type === 'rule') {
         const rule = node as Rule;
-        const selector = nestSelector(rule.selector, context?.selector ?? null);
+        const own = inScope && context === null ? unscopeSelector(rule.selector) : rule.selector;
+        if (own === null) return; // descendant-only inside @scope
+        const selector = nestSelector(own, context?.selector ?? null);
         let match: RuleContext['match'];
         try {
           match = matchRootSelector(selector, root);
@@ -248,7 +227,7 @@ export function resolveRootVariables(sheets: CascadeSheet[], root: RootElementSt
           errors.add(`${origin}: ${(error as Error).message}`);
           match = { matches: false, specificity: [0, 0, 0] };
         }
-        walk(rule, layer, { selector, match }, origin);
+        walk(rule, layer, { selector, match }, origin, inScope);
       }
     });
   };
@@ -386,39 +365,4 @@ export function resolveRootVariables(sheets: CascadeSheet[], root: RootElementSt
   const declaredValues: Record<string, string> = {};
   for (const [name, c] of declared) declaredValues[name] = c.value;
   return { values, errors: [...errors].sort(), winningLayer, declared: declaredValues };
-}
-
-/**
- * Substitute every `var()` in `value` from `lookup` (recursively, honouring
- * fallbacks). Returns null when a reference has no value and no fallback.
- * Used by the Spec A fit report to evaluate registry formulas against a
- * theme's own values.
- */
-export function substituteVars(value: string, lookup: (name: string) => string | undefined, depth = 0): string | null {
-  if (depth > 32) return null;
-  let out = '';
-  let i = 0;
-  try {
-    while (i < value.length) {
-      const call = findVarCall(value, i);
-      if (!call) {
-        out += value.slice(i);
-        break;
-      }
-      const found = lookup(call.name);
-      const replacement =
-        found !== undefined
-          ? substituteVars(found, lookup, depth + 1)
-          : call.fallback !== null
-            ? substituteVars(call.fallback, lookup, depth + 1)
-            : null;
-      if (replacement === null) return null;
-      out += value.slice(i, call.start) + replacement;
-      i = call.end;
-    }
-  } catch (error) {
-    if (error instanceof InvalidValue) return null;
-    throw error;
-  }
-  return normaliseValue(out);
 }

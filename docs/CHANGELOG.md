@@ -4,6 +4,29 @@
 
 ### 4.14-dev
 
+#### Themes: theme editor, drafts and live preview (Calliope Live, Spec D Stages 1–3)
+
+- Theme drafts: a draft is the folder `Themes/<id>/` in Quilltap General holding an unpacked version 2 bundle; `lib/themes/drafts/` is the only code that knows the location. Drafts are created blank or as a copy of any installed or bundled theme, validated by the installed-bundle loader, and saved with a revision check (409 on a stale revision)
+- New routes `GET`/`POST /api/v1/theme-drafts`, `GET`/`PUT`/`DELETE /api/v1/theme-drafts/[id]` and `POST /api/v1/theme-drafts/[id]?action=install`. The theme asset and font routes also serve a draft's files at the draft's exact version, uncached
+- Installing a draft packs it and runs the ordinary bundle install, converts PNG, JPEG and GIF to WebP in the installed copy (the draft keeps its originals), registers the theme without a restart, and bumps the draft's patch version
+- Theme editor tab (Calliope's Atelier, `/calliope`, "Design a theme" on the Appearance card): draft list, new/delete dialogs, colour token editing in light and dark with per-token contrast, name and description, autosave, install
+- Live preview: the theme provider has a preview slot (`setPreview`) that shows a theme in place of the worn one without changing the stored preference; the Atelier compiles the unsaved tokens in the browser through `lib/themes/engine/client.ts`
+- Fixed: a theme's custom CSS and icon overrides reached into nested elements wearing another theme (the Atelier panel, Appearance preview cards). Every descendant rule is now compiled inside `@scope ([data-theme="<id>"]) to ([data-theme]:not([data-theme="<id>"]))`, with the same specificity. The snapshot cascade reads `@scope`
+- New `themes` realtime topic, published when a theme is installed; it refreshes theme and draft queries
+- `.qtap` exports leave theme drafts out (`docStoreExportExclusion` in `lib/export/excluded-files.ts`: the `Themes` folder of Quilltap General and everything under it). Backups still carry them
+- Docs: new `help/theme-editor.md`; drafts and contrast sections in `THEME_DEVELOPMENT.md`; Theme Drafts in `API.md`; Spec D moved to `features/complete/`
+
+#### Themes: contrast checks (Calliope Live, Spec D Stage 0)
+
+- Theme engine has a browser-safe entry point (`lib/themes/engine/client.ts`); a test walks its imports and fails on Node built-ins, PostCSS or the logger
+- WCAG contrast check: `CONTRAST_PAIRS` (`lib/themes/registry/contrast.ts`, 57 foreground/background pairs, 4.5:1 for text and 3:1 for focus rings) measured by `checkContrast` in light and dark. Failures are validation warnings in `quilltap themes validate` and theme loading
+- `scripts/check-theme-contrast.ts --check` runs in `npm run lint` against the default theme and the bundled themes, with an exception list at `themes/bundled/contrast-exceptions.json` (empty)
+- Fixed 54 contrast failures by changing lightness only: default theme silent and wardrobe labels (light), template chips 1, 2 and 4, project badge text (dark); Art Deco, Madman's Box wardrobe badges; silent and wardrobe labels in Art Deco, Earl Grey, Great Estate, Old School and Rains; message, project, npm and tag badges in several themes; Madman's Box chip 3; Rains character, user-character, chat, tag and project badges and link colour (dark)
+
+#### Docs: Calliope Live Spec D
+
+- Added Spec D (contrast checks in the theme engine, theme drafts, and an editor tab with a live preview of colour tokens)
+
 #### Themes: tools and published format (Calliope Live, Spec C Stage 4)
 
 - Published JSON Schemas for both bundle documents, generated from the engine's Zod documents (`npm run generate:theme-schemas`): `public/schemas/qtap-theme.schema.json` (version 2 manifest) and the new `qtap-theme-tokens.schema.json`, which lists every registry token and choice. Bundles name them in `$schema`

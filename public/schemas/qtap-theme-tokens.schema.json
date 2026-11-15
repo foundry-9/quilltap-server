@@ -14224,7 +14224,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Projects — text — color, group category — default: hsl(185 55% 30%)"
+          "description": "Projects — text — color, group category — default: hsl(185 55% 30%) — dark default: hsl(185 55% 68%)"
         },
         "--theme-category-related": {
           "anyOf": [
@@ -14926,7 +14926,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Silent (inner) message label — color, group chat-surfaces — default: #5d7e6e — dark default: #8ab8a4"
+          "description": "Silent (inner) message label — color, group chat-surfaces — default: #445c51 — dark default: #8ab8a4"
         },
         "--theme-chat-system": {
           "anyOf": [
@@ -15082,7 +15082,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Wardrobe notice label — color, group chat-surfaces — default: #9a7d2e — dark default: #d4b65c"
+          "description": "Wardrobe notice label — color, group chat-surfaces — default: #69551f — dark default: #d4b65c"
         },
         "--theme-chat-whisper": {
           "anyOf": [
@@ -16330,7 +16330,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Template chip 1 — color, group roleplay-text — default: hsl(217 91% 53%) — dark default: hsl(217 91% 60%)"
+          "description": "Template chip 1 — color, group roleplay-text — default: hsl(217 91% 53%) — dark default: hsl(217 91% 52.5%)"
         },
         "--theme-roleplay-chip-1-foreground": {
           "anyOf": [
@@ -16382,7 +16382,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Template chip 2 — color, group roleplay-text — default: hsl(270 65% 55%) — dark default: hsl(270 70% 64%)"
+          "description": "Template chip 2 — color, group roleplay-text — default: hsl(270 65% 55%) — dark default: hsl(270 70% 59.5%)"
         },
         "--theme-roleplay-chip-2-foreground": {
           "anyOf": [
@@ -16486,7 +16486,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Template chip 4 — color, group roleplay-text — default: hsl(168 78% 36%) — dark default: hsl(168 70% 44%)"
+          "description": "Template chip 4 — color, group roleplay-text — default: hsl(168 78% 29%) — dark default: hsl(168 70% 30%)"
         },
         "--theme-roleplay-chip-4-foreground": {
           "anyOf": [

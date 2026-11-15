@@ -48,8 +48,8 @@ export interface LoadedThemeDocument {
   compiled: CompiledTheme;
   /**
    * What the theme may want to fix but that does not stop it loading: custom
-   * CSS that targets selectors off the hook catalogue, or hooks removed since
-   * its `hooksVersion`. Also logged; `quilltap themes validate` prints them.
+   * CSS that targets selectors off the hook catalogue, hooks removed since
+   * its `hooksVersion`, and contrast findings. Also logged; `quilltap themes validate` prints them.
    */
   warnings: string[];
 }
@@ -79,11 +79,40 @@ export function validationContextFor(files: ReadonlySet<string>): ValidationCont
   };
 }
 
-async function readJson(dir: string, rel: string, label: string, errors: string[]): Promise<unknown> {
+/**
+ * Where a bundle's files come from: a directory on disk (an installed or
+ * bundled theme) or a document store (a theme draft, `lib/themes/drafts/`).
+ * The loader reads through it and never touches files itself.
+ */
+export interface ThemeBundleSource {
+  /** Names the bundle in errors and logs (a directory, or a store address). */
+  label: string;
+  /** Bundle-relative paths of every file, "/"-separated. */
+  files: ReadonlySet<string>;
+  /** Read one listed file as UTF-8 text. */
+  readText(rel: string): Promise<string>;
+  /** Throw when a file the manifest names could not later be served safely. */
+  checkReferenced?(rel: string): Promise<void>;
+}
+
+/** A bundle directory as a {@link ThemeBundleSource}. */
+export async function directoryBundleSource(dir: string): Promise<ThemeBundleSource> {
+  const files = await listBundleFiles(dir);
+  return {
+    label: dir,
+    files,
+    readText: async (rel) => fs.readFile(await resolveInside(dir, rel, { realpath: true }), 'utf-8'),
+    checkReferenced: async (rel) => {
+      await resolveInside(dir, rel, { realpath: true });
+    },
+  };
+}
+
+async function readJson(source: ThemeBundleSource, rel: string, errors: string[]): Promise<unknown> {
   try {
-    return JSON.parse(await fs.readFile(await resolveInside(dir, rel, { realpath: true }), 'utf-8'));
+    return JSON.parse(await source.readText(rel));
   } catch (error) {
-    errors.push(`${label}: cannot be read as JSON (${(error as Error).message})`);
+    errors.push(`${rel}: cannot be read as JSON (${(error as Error).message})`);
     return undefined;
   }
 }
@@ -94,27 +123,35 @@ async function readJson(dir: string, rel: string, label: string, errors: string[
  * every problem.
  */
 export async function loadThemeFromDir(dir: string, manifestJson: unknown): Promise<LoadedThemeDocument> {
+  return loadThemeFromSource(await directoryBundleSource(dir), manifestJson);
+}
+
+/**
+ * Validate and compile a bundle read through `source`. Throws
+ * ThemeBundleError (carrying `source.label`) listing every problem.
+ */
+export async function loadThemeFromSource(source: ThemeBundleSource, manifestJson: unknown): Promise<LoadedThemeDocument> {
   const errors: string[] = [];
-  const files = await listBundleFiles(dir);
+  const { files } = source;
   const manifest = (manifestJson ?? {}) as { tokensPath?: unknown; stylesPath?: unknown };
   const tokensPath = typeof manifest.tokensPath === 'string' ? manifest.tokensPath : 'tokens.json';
-  const tokens = files.has(tokensPath) ? await readJson(dir, tokensPath, tokensPath, errors) : undefined;
+  const tokens = files.has(tokensPath) ? await readJson(source, tokensPath, errors) : undefined;
   if (!files.has(tokensPath)) errors.push(`theme.json: tokensPath: file "${tokensPath}" is not in the bundle`);
 
   let css: string | undefined;
   if (typeof manifest.stylesPath === 'string' && files.has(manifest.stylesPath)) {
     try {
-      css = await fs.readFile(await resolveInside(dir, manifest.stylesPath, { realpath: true }), 'utf-8');
+      css = await source.readText(manifest.stylesPath);
     } catch (error) {
       errors.push(`${manifest.stylesPath}: cannot be read (${(error as Error).message})`);
     }
   }
-  if (errors.length > 0) throw new ThemeBundleError(dir, errors);
+  if (errors.length > 0) throw new ThemeBundleError(source.label, errors);
 
   const result = validateThemeDocument({ manifest: manifestJson, tokens, css }, validationContextFor(files));
   if (!result.valid) {
-    bundleLogger.warn('Theme bundle failed validation', { dir, errorCount: result.errors.length, errors: result.errors.slice(0, 20) });
-    throw new ThemeBundleError(dir, result.errors);
+    bundleLogger.warn('Theme bundle failed validation', { source: source.label, errorCount: result.errors.length, errors: result.errors.slice(0, 20) });
+    throw new ThemeBundleError(source.label, result.errors);
   }
 
   // Files the manifest names are read later by the asset and font routes;
@@ -124,9 +161,12 @@ export async function loadThemeFromDir(dir: string, manifestJson: unknown): Prom
     ...(result.document.manifest.fonts ?? []).flatMap((f) => [f.src, f.licenseFile]),
     ...Object.values(result.document.manifest.icons ?? {}),
   ].filter((p): p is string => typeof p === 'string');
-  for (const p of referenced) await resolveInside(dir, p, { realpath: true });
+  if (source.checkReferenced) for (const p of referenced) await source.checkReferenced(p);
 
-  const warnings: string[] = [];
+  const warnings: string[] = [...result.warnings];
+  if (result.warnings.length > 0) {
+    bundleLogger.debug('Theme has contrast findings', { themeId: result.document.manifest.id, count: result.warnings.length });
+  }
   const stylesPath = result.document.manifest.stylesPath ?? 'styles.css';
   const { hooksVersion } = result.document.manifest;
   if (css !== undefined && hooksVersion !== undefined && hooksVersion < HOOK_CATALOGUE.version) {

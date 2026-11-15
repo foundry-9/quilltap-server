@@ -62,7 +62,7 @@ export function renderThemeHooksDoc(catalogue: HookCatalogue): string {
     '- **State is the ARIA attribute when one says it** (`aria-current`, `aria-selected`, `aria-expanded`, `aria-pressed`, `aria-busy`); otherwise a modifier class (`qt-tab-active`, `qt-chat-message-silent`).',
   )
   lines.push(
-    `- **The root element** (\`<html>\`) carries ${ROOT_HOOKS.attributes.map((a) => code(a)).join(' and ')} and ${ROOT_HOOKS.classes.map((c) => code(`.${c}`)).join(' / ')}. Custom CSS is written without the theme id: Quilltap scopes every rule to \`[data-theme="<id>"]\` when it loads the theme.`,
+    `- **The root element** (\`<html>\`) carries ${ROOT_HOOKS.attributes.map((a) => code(a)).join(' and ')} and ${ROOT_HOOKS.classes.map((c) => code(`.${c}`)).join(' / ')}. Custom CSS is written without the theme id: Quilltap scopes every rule to \`[data-theme="<id>"]\` when it loads the theme, stopping at any nested element that wears another theme.`,
   )
   lines.push(
     '- **Not hooks:** bare elements (`h1`, `button`), non-`qt` classes (Tailwind utilities), class-substring selectors (`[class*="card"]`), and inline-style matches. They work today and break silently.',

@@ -39,6 +39,8 @@ jest.mock('@/lib/plugins/registry', () => ({ getPlugin: jest.fn() }));
 
 jest.mock('@/lib/instance-settings', () => ({
   listPortableInstanceSettings: jest.fn(),
+  // No store is Quilltap General here, so no theme drafts are left out.
+  getGeneralMountPointId: jest.fn(async () => null),
 }));
 
 import { createNdjsonStream } from '@/lib/export/ndjson-writer';

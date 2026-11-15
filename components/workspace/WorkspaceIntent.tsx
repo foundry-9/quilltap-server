@@ -83,6 +83,10 @@ export function WorkspaceIntent() {
         const create = searchParams.get('new') === '1' || undefined
         payload = mountPointId || path || create ? { mountPointId, path, create } : undefined
       }
+      else if (kind === 'theme-editor') {
+        const draftId = searchParams.get('draft') || undefined
+        payload = draftId ? { draftId } : undefined
+      }
       else if (kind === 'wardrobe') payload = characterId ? { characterId } : undefined
       else if (kind === 'inventory') payload = characterId ? { characterId } : undefined
       else if (kind === 'atlas') {

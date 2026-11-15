@@ -166,7 +166,7 @@ One colour per category of thing a badge labels, with the text colour that reads
 | `--theme-category-message` | color | `hsl(45 70% 48%)` | `hsl(45 70% 50%)` |  | standard | Messages |
 | `--theme-category-message-foreground` | color | `hsl(45 70% 29.5%)` | `hsl(45 70% 68%)` |  | standard | Messages — text |
 | `--theme-category-project` | color | `hsl(185 55% 38%)` |  |  | standard | Projects |
-| `--theme-category-project-foreground` | color | `hsl(185 55% 30%)` |  |  | standard | Projects — text |
+| `--theme-category-project-foreground` | color | `hsl(185 55% 30%)` | `hsl(185 55% 68%)` |  | standard | Projects — text |
 | `--theme-category-related` | color | `hsl(270 45% 55%)` | `hsl(270 45% 58%)` |  | standard | Related items |
 | `--theme-category-related-foreground` | color | `hsl(270 45% 42%)` | `hsl(270 45% 72%)` |  | standard | Related items — text |
 | `--theme-category-source-npm` | color | `hsl(0 60% 50%)` | `hsl(0 60% 55%)` |  | standard | npm plugin source |
@@ -222,9 +222,9 @@ The Salon's message surfaces. The user bubble is --theme-chat-user (Colours); th
 | `--theme-chat-whisper` | color | `#9b8ec4` | `#6b5b95` |  | standard | Whisper accent. Mixed 40% into the assistant surface for the whisper bubble, and its border. |
 | `--theme-chat-whisper-foreground` | color | `#5c447e` | `#b5a9d1` |  | standard | Whisper label |
 | `--theme-chat-silent` | color | `#7a9e8e` | `#4a7a6a` |  | standard | Silent (inner) message accent. Mixed 35% into the assistant surface for the silent bubble, and its border. |
-| `--theme-chat-silent-foreground` | color | `#5d7e6e` | `#8ab8a4` |  | standard | Silent (inner) message label |
+| `--theme-chat-silent-foreground` | color | `#445c51` | `#8ab8a4` |  | standard | Silent (inner) message label |
 | `--theme-chat-wardrobe` | color | `#c4a24e` | `#8a6d1b` |  | standard | Wardrobe notice accent. Mixed 40% into the assistant surface for the wardrobe bubble, and its border. |
-| `--theme-chat-wardrobe-foreground` | color | `#9a7d2e` | `#d4b65c` |  | standard | Wardrobe notice label |
+| `--theme-chat-wardrobe-foreground` | color | `#69551f` | `#d4b65c` |  | standard | Wardrobe notice label |
 
 ## Roleplay text
 
@@ -242,13 +242,13 @@ How a roleplay template's annotations look: dialogue, narration, inner monologue
 | `--theme-roleplay-inner-monologue-foreground` | color | `hsl(270 50% 72%)` |  |  | standard | Inner monologue text |
 | `--theme-roleplay-ooc` | color | `hsl(0 0% 6%)` |  |  | standard | Out-of-character aside surface |
 | `--theme-roleplay-ooc-foreground` | color | `hsl(152 60% 58%)` |  |  | standard | Out-of-character aside text |
-| `--theme-roleplay-chip-1` | color | `hsl(217 91% 53%)` | `hsl(217 91% 60%)` |  | standard | Template chip 1 |
+| `--theme-roleplay-chip-1` | color | `hsl(217 91% 53%)` | `hsl(217 91% 52.5%)` |  | standard | Template chip 1 |
 | `--theme-roleplay-chip-1-foreground` | color | `hsl(0 0% 100%)` |  |  | standard | Template chip 1 text |
-| `--theme-roleplay-chip-2` | color | `hsl(270 65% 55%)` | `hsl(270 70% 64%)` |  | standard | Template chip 2 |
+| `--theme-roleplay-chip-2` | color | `hsl(270 65% 55%)` | `hsl(270 70% 59.5%)` |  | standard | Template chip 2 |
 | `--theme-roleplay-chip-2-foreground` | color | `hsl(0 0% 100%)` |  |  | standard | Template chip 2 text |
 | `--theme-roleplay-chip-3` | color | `hsl(38 92% 50%)` | `hsl(38 95% 56%)` |  | standard | Template chip 3 |
 | `--theme-roleplay-chip-3-foreground` | color | `hsl(30 45% 12%)` |  |  | standard | Template chip 3 text |
-| `--theme-roleplay-chip-4` | color | `hsl(168 78% 36%)` | `hsl(168 70% 44%)` |  | standard | Template chip 4 |
+| `--theme-roleplay-chip-4` | color | `hsl(168 78% 29%)` | `hsl(168 70% 30%)` |  | standard | Template chip 4 |
 | `--theme-roleplay-chip-4-foreground` | color | `hsl(0 0% 100%)` |  |  | standard | Template chip 4 text |
 
 ## Terminal palette

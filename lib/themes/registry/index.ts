@@ -20,6 +20,7 @@ export type { TokenDef, TokenGroupDef, TokenSheet, TokenTier, TokenType, TokenVi
 export { TOKEN_GROUPS } from './groups';
 export { THEME_CHOICES, getThemeChoice, type ChoiceDef } from './choices';
 export { tailwindAlias, tailwindTokenMap, tailwindTokenNames } from './tailwind';
+export { CONTRAST_PAIRS, CONTRAST_THRESHOLDS, type ContrastKind, type ContrastPair } from './contrast';
 export {
   GENERATED_THEME_SHEETS,
   renderThemeDefaultsCss,

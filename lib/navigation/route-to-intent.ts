@@ -113,6 +113,10 @@ export function parseHrefToIntent(href: string): TabIntent | null {
         payload: mountPointId || path || create ? { mountPointId, path, create } : undefined,
       }
     }
+    case '/calliope': {
+      const draftId = new URLSearchParams(query).get('draft') ?? undefined
+      return { kind: 'theme-editor', payload: draftId ? { draftId } : undefined }
+    }
     case '/settings': {
       const sp = new URLSearchParams(query)
       return {

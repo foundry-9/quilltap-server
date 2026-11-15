@@ -32,7 +32,7 @@ import type { MessageEvent, Memory } from '@/lib/schemas/types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import { isTextDocumentFileType } from '@/lib/schemas/mount-index.types';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import { isFileExcludedFromExport } from './excluded-files';
+import { docStoreExportExclusion, isFileExcludedFromExport } from './excluded-files';
 import { redactPluginConfigSecrets } from '@/lib/plugins/config-secrets';
 import { listPortableInstanceSettings } from '@/lib/instance-settings';
 import { isWardrobeItemDocumentPath, wardrobeItemIdForDocument } from '@/lib/wardrobe/vault-parsers';
@@ -713,12 +713,20 @@ async function* streamOneStore(
     };
     bump(counts, 'documentStores');
 
+    // Theme drafts in Quilltap General stay home (lib/export/excluded-files.ts).
+    const isExcluded = await docStoreExportExclusion(mp.id);
+    let excluded = 0;
+
     if (mp.mountType === 'database') {
       // Emit folder rows before documents so import can resolve folderId FKs
       const folders = await repos.docMountFolders.findByMountPointId(mp.id);
       // Sort by path length to ensure parents before children
       const sortedFolders = folders.sort((a, b) => a.path.length - b.path.length);
       for (const folder of sortedFolders) {
+        if (isExcluded(folder.path)) {
+          excluded++;
+          continue;
+        }
         yield {
           kind: 'doc_mount_folder',
           data: {
@@ -737,6 +745,10 @@ async function* streamOneStore(
         // doc_mount_documents row only ever holds text content — skip
         // links that point at blob-type content (they're exported as blobs).
         if (!isTextDocumentFileType(d.fileType)) {
+          continue;
+        }
+        if (isExcluded(d.relativePath)) {
+          excluded++;
           continue;
         }
         yield {
@@ -765,6 +777,10 @@ async function* streamOneStore(
 
     const blobMetas = await repos.docMountBlobs.listByMountPoint(mp.id);
     for (const meta of blobMetas) {
+      if (isExcluded(meta.relativePath)) {
+        excluded++;
+        continue;
+      }
       const data = await repos.docMountBlobs.readData(meta.id);
       if (!data) continue;
 
@@ -802,6 +818,10 @@ async function* streamOneStore(
           ...chunk,
         };
       }
+    }
+
+    if (excluded > 0) {
+      logger.debug('Left theme drafts out of the export', { mountPointId: mp.id, records: excluded });
     }
 
     if (!opts?.skipProjectLinks) {

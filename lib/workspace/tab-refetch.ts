@@ -87,6 +87,8 @@ export function tabActivationQueryKeys(tab: WorkspaceTab): QueryKeyPrefix[] {
       return [queryKeys.characters.all, queryKeys.imageProfiles.all]
     case 'custom-tools':
       return [queryKeys.customTools.all]
+    case 'theme-editor':
+      return [queryKeys.themeDrafts.all]
     case 'profile':
       return [queryKeys.userProfile.detail]
     case 'settings':

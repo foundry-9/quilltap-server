@@ -10,8 +10,11 @@
 
 export * from './document';
 export { cssString, isSafeBundlePath, bundleAssetUrl, bundleFontUrl } from './css-text';
-export { rewriteUrls, type UrlContext } from './urls';
+export { rewriteUrls, mapUrlTargets, type UrlContext } from './urls';
 export { resolveTheme, emitThemeCss, choicesInForce, type RegistryView, type ResolvedTheme, type ResolvedValue, type ValueSource } from './resolve';
 export { scopeThemeCss, scopeSelector, type ScopeResult } from './scope';
+export { themeScopePrelude, wrapInThemeScope } from './boundary';
 export { validateThemeDocument, tailwindTokenNames, tailwindAlias, nearestName, type ValidationContext, type ThemeDocumentValidation } from './validate';
-export { compileTheme, compiledThemeCss, defaultThemePreview, type CompiledTheme, type CompiledThemeFeatures, type PreviewSwatch, type ThemePreview } from './compile';
+export { compileTheme, compiledThemeCss, defaultThemePreview, deriveThemeFeatures, type CompiledTheme, type CompiledThemeFeatures, type PreviewSwatch, type ThemePreview } from './compile';
+export { resolveLiteral } from './literal';
+export { checkContrast, contrastWarnings, type ContrastFinding, type ContrastMode } from './contrast';

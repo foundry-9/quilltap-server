@@ -11,11 +11,11 @@
  * @module themes/engine/compile
  */
 
-import { substituteVars } from '../snapshot/cascade';
+import { wrapInThemeScope } from './boundary';
 import { bundleAssetUrl, bundleFontUrl, cssString, normaliseBundlePath } from './css-text';
 import type { ThemeDocument, ThemeTokensDocument } from './document';
-import { emitThemeCss, resolveTheme, type RegistryView, type ResolvedValue } from './resolve';
-import { tailwindAlias } from './validate';
+import { resolveLiteral } from './literal';
+import { emitThemeCss, resolveTheme, type RegistryView, type ResolvedTheme, type ResolvedValue } from './resolve';
 
 /** App-owned behaviour a theme switches on (see THEME_FEATURE_ATTRIBUTES). */
 export interface CompiledThemeFeatures {
@@ -87,28 +87,23 @@ function fontFaces(doc: ThemeDocument): string {
 /**
  * One `[data-icon]` rule per override: `.svg` is masked (tinted), `.webp`
  * painted as an image. Scoped to the theme, so a preview of an inactive theme
- * does not repaint the app's icons.
+ * does not repaint the app's icons, and stopped at any nested element wearing
+ * another theme (./boundary.ts).
  */
 function iconOverrides(doc: ThemeDocument): string {
   const { id, version } = doc.manifest;
-  return Object.entries(doc.manifest.icons ?? {})
-    .map(([name, p]) => {
-      const url = `url(${cssString(bundleAssetUrl(id, version, p))})`;
-      return p.toLowerCase().endsWith('.svg')
-        ? `[data-theme="${id}"] [data-icon="${name}"] { --_qt-icon-mask: ${url}; --_qt-icon-bg: none; background-color: currentColor; }`
-        : `[data-theme="${id}"] [data-icon="${name}"] { --_qt-icon-mask: none; --_qt-icon-bg: ${url}; background-color: transparent; }`;
-    })
-    .join('\n');
+  const rules = Object.entries(doc.manifest.icons ?? {}).map(([name, p]) => {
+    const url = `url(${cssString(bundleAssetUrl(id, version, p))})`;
+    return p.toLowerCase().endsWith('.svg')
+      ? `:scope [data-icon="${name}"] { --_qt-icon-mask: ${url}; --_qt-icon-bg: none; background-color: currentColor; }`
+      : `:scope [data-icon="${name}"] { --_qt-icon-mask: none; --_qt-icon-bg: ${url}; background-color: transparent; }`;
+  });
+  return rules.length > 0 ? wrapInThemeScope(id, rules.join('\n')) : '';
 }
 
-/** Resolve a name to a literal through the theme's values, the registry and Tailwind's map. */
+/** A name as a literal, or "" when it does not resolve (the picker shows nothing). */
 function literal(values: Record<string, ResolvedValue>, name: string): string {
-  const lookup = (n: string): string | undefined => {
-    if (values[n]) return values[n].value;
-    const alias = tailwindAlias(n);
-    return alias ? `var(${alias})` : undefined;
-  };
-  return substituteVars(`var(${name})`, lookup) ?? '';
+  return resolveLiteral(values, name) ?? '';
 }
 
 function previewFrom(resolved: ReturnType<typeof resolveTheme>): ThemePreview {
@@ -154,12 +149,26 @@ function servedAssets(doc: ThemeDocument, cssParts: string[]): string[] {
   return [...assets].sort();
 }
 
-export function compileTheme(doc: ThemeDocument, scopedCss: string, registry: RegistryView): CompiledTheme {
-  const resolved = resolveTheme(doc.tokens, registry);
+/**
+ * The app-owned switches a theme turns on, from its resolved values and its
+ * own tokens. Shared by the server compile and the browser-side preview, so
+ * both derive them with the same code.
+ */
+export function deriveThemeFeatures(resolved: ResolvedTheme, tokens: ThemeTokensDocument): CompiledThemeFeatures {
   const imageSet = (values: Record<string, ResolvedValue>) => {
     const v = values['--qt-page-background-image']?.value.trim();
     return v !== undefined && v !== 'none';
   };
+  return {
+    pageBackground: imageSet(resolved.light) || imageSet(resolved.dark),
+    // The app's focus ring is part of the theme contract.
+    focusRing: true,
+    scrollbar: tokens.tokens['--qt-scrollbar-thumb'] !== undefined,
+  };
+}
+
+export function compileTheme(doc: ThemeDocument, scopedCss: string, registry: RegistryView): CompiledTheme {
+  const resolved = resolveTheme(doc.tokens, registry);
   const css = {
     fontFaces: fontFaces(doc),
     tokens: emitThemeCss(doc.tokens, { id: doc.manifest.id, version: doc.manifest.version }),
@@ -169,12 +178,7 @@ export function compileTheme(doc: ThemeDocument, scopedCss: string, registry: Re
   return {
     css,
     choices: resolved.choices,
-    features: {
-      pageBackground: imageSet(resolved.light) || imageSet(resolved.dark),
-      // The app's focus ring is part of the theme contract.
-      focusRing: true,
-      scrollbar: doc.tokens.tokens['--qt-scrollbar-thumb'] !== undefined,
-    },
+    features: deriveThemeFeatures(resolved, doc.tokens),
     ...previewFrom(resolved),
     assets: servedAssets(doc, [css.tokens, css.icons, css.custom]),
   };

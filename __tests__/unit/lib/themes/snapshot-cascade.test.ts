@@ -106,6 +106,19 @@ describe('resolveRootVariables', () => {
     expect(r.values).toEqual({ '--b': '2' });
   });
 
+  it('reads an @scope rooted at the root element, with :scope as the root', () => {
+    const r = resolve(
+      '@scope ([data-theme="deco"]) to ([data-theme]:not([data-theme="deco"])) { :scope { --a: 1; } :scope.dark { --b: 2; } :scope .qt-card { --c: 3; } .x { --d: 4; } }'
+    );
+    expect(r.values).toEqual({ '--a': '1', '--b': '2' });
+  });
+
+  it('skips an @scope rooted elsewhere, and keeps :scope at pseudo-class specificity', () => {
+    expect(resolve('@scope ([data-theme="other"]) { :scope { --a: 1; } }').values).toEqual({});
+    const r = resolve('@scope ([data-theme="deco"]) { :scope.dark { --a: scoped; } } [data-theme] { --a: later-but-weaker; }');
+    expect(r.values).toEqual({ '--a': 'scoped' });
+  });
+
   it('uses @property initial values when nothing declares the property', () => {
     const r = resolve('@property --a { syntax: "*"; inherits: false; initial-value: 0px; } :root { --b: var(--a); }');
     expect(r.values).toEqual({ '--a': '0px', '--b': '0px' });

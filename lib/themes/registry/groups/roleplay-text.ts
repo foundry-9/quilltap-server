@@ -87,7 +87,7 @@ export const ROLEPLAY_TEXT_TOKENS: readonly TokenDef[] = [
     group: 'roleplay-text',
     label: "Template chip 1",
     default: "hsl(217 91% 53%)",
-    defaultDark: "hsl(217 91% 60%)",
+    defaultDark: "hsl(217 91% 52.5%)",
     visibility: 'standard',
   },
   {
@@ -106,7 +106,7 @@ export const ROLEPLAY_TEXT_TOKENS: readonly TokenDef[] = [
     group: 'roleplay-text',
     label: "Template chip 2",
     default: "hsl(270 65% 55%)",
-    defaultDark: "hsl(270 70% 64%)",
+    defaultDark: "hsl(270 70% 59.5%)",
     visibility: 'standard',
   },
   {
@@ -143,8 +143,8 @@ export const ROLEPLAY_TEXT_TOKENS: readonly TokenDef[] = [
     type: 'color',
     group: 'roleplay-text',
     label: "Template chip 4",
-    default: "hsl(168 78% 36%)",
-    defaultDark: "hsl(168 70% 44%)",
+    default: "hsl(168 78% 29%)",
+    defaultDark: "hsl(168 70% 30%)",
     visibility: 'standard',
   },
   {

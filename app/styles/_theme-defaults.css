@@ -315,11 +315,11 @@
 
   /* Mixed 35% into the assistant surface for the silent bubble, and its border. */
   --theme-chat-silent: #7a9e8e;
-  --theme-chat-silent-foreground: #5d7e6e;
+  --theme-chat-silent-foreground: #445c51;
 
   /* Mixed 40% into the assistant surface for the wardrobe bubble, and its border. */
   --theme-chat-wardrobe: #c4a24e;
-  --theme-chat-wardrobe-foreground: #9a7d2e;
+  --theme-chat-wardrobe-foreground: #69551f;
 
   /* ==========================================================================
      ROLEPLAY TEXT
@@ -343,7 +343,7 @@
   --theme-roleplay-chip-2-foreground: hsl(0 0% 100%);
   --theme-roleplay-chip-3: hsl(38 92% 50%);
   --theme-roleplay-chip-3-foreground: hsl(30 45% 12%);
-  --theme-roleplay-chip-4: hsl(168 78% 36%);
+  --theme-roleplay-chip-4: hsl(168 78% 29%);
   --theme-roleplay-chip-4-foreground: hsl(0 0% 100%);
 
   /* ==========================================================================
@@ -465,6 +465,7 @@
   --theme-category-memory-foreground: hsl(330 55% 68%);
   --theme-category-message: hsl(45 70% 50%);
   --theme-category-message-foreground: hsl(45 70% 68%);
+  --theme-category-project-foreground: hsl(185 55% 68%);
   --theme-category-related: hsl(270 45% 58%);
   --theme-category-related-foreground: hsl(270 45% 72%);
   --theme-category-source-npm: hsl(0 60% 55%);
@@ -507,10 +508,10 @@
   --theme-chat-wardrobe-foreground: #d4b65c;
 
   /* ---- Roleplay text ---- */
-  --theme-roleplay-chip-1: hsl(217 91% 60%);
-  --theme-roleplay-chip-2: hsl(270 70% 64%);
+  --theme-roleplay-chip-1: hsl(217 91% 52.5%);
+  --theme-roleplay-chip-2: hsl(270 70% 59.5%);
   --theme-roleplay-chip-3: hsl(38 95% 56%);
-  --theme-roleplay-chip-4: hsl(168 70% 44%);
+  --theme-roleplay-chip-4: hsl(168 70% 30%);
 }
 
 /* ============================================================================

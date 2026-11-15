@@ -20,6 +20,8 @@ quilltap themes install my-theme.qtap-theme
 
 Or upload the `.qtap-theme` file in **Settings → Appearance → Install Theme**. `quilltap themes export <id>` packs an installed theme back into a bundle.
 
+Or design one in **Calliope's Atelier** (**Settings → Appearance → Design a theme**, `/calliope`): see [Drafts and the Atelier](#drafts-and-the-atelier).
+
 ## Bundle layout
 
 ```
@@ -130,7 +132,7 @@ Some styling is the app's, switched on by the theme rather than written by it (`
 
 ## Custom CSS (`styles.css`)
 
-For what no token covers. Write it **without the theme id**: the app scopes every rule to `[data-theme="<id>"]` when it loads the theme.
+For what no token covers. Write it **without the theme id**: the app scopes every rule to the element that wears your theme (`[data-theme="<id>"]`, normally `<html>`) when it loads the theme.
 
 ```css
 .qt-section-title {
@@ -147,7 +149,8 @@ For what no token covers. Write it **without the theme id**: the app scopes ever
 
 What the loader does and refuses:
 
-- A leading `:root` or `html` becomes the scope prefix; `.dark` and `.light` attach to it, so `.dark .qt-card` means "this theme, in dark mode".
+- Every rule is placed in `@scope ([data-theme="<id>"]) to ([data-theme]:not([data-theme="<id>"]))`, with `:scope` standing for the themed element. The rule reaches everything below that element **except** what sits inside a nested element wearing another theme: the Atelier's editing panel, which keeps the house default while the rest of Quilltap previews your draft, and the theme preview cards on the Appearance card. Icon overrides are scoped the same way. `:scope` counts as one pseudo-class, exactly as the `[data-theme]` attribute did, so specificity is what it would be with the id written out.
+- A leading `:root` or `html` becomes `:scope` itself; `.dark` and `.light` attach to it, so `.dark .qt-card` means "this theme, in dark mode".
 - `@keyframes` names are prefixed with the theme id, and `animation` references to them follow.
 - `@media`, `@supports`, `@container` and `@layer` are kept. `@font-face`, `@import`, `@charset`, `@namespace` and every other at-rule are refused. Fonts go in the manifest.
 - `url()` must be a path to an image in the bundle (rewritten to the theme's asset route) or a `data:image/…` URI. Remote, rooted and protocol-relative URLs are refused, in CSS and in tokens alike.
@@ -235,6 +238,17 @@ A theme may rename, re-describe or re-illustrate the app's personified subsystem
 
 Keys are subsystem ids: `foundry`, `aurora`, `forge`, `salon`, `commonplace-book`, `prospero`, `concierge`, `calliope`, `lantern`, `pascal`, `saquel`, `brahma`, `scriptorium` (`lib/foundry/subsystem-defaults.ts`). Each entry may set `name`, `description`, `thumbnail` and `backgroundImage`; an image is a bundle path or `"none"`. The hub cards are hooks (`.qt-foundry-card`, `.qt-foundry-card-image`, `.qt-foundry-card-content`) for custom CSS.
 
+## Drafts and the Atelier
+
+Calliope's Atelier is the in-app theme editor. What it edits is a **draft**: the folder `Themes/<id>/` in the Quilltap General document store, holding an unpacked version 2 bundle (the same files as above) and nothing else — no side file, no database row.
+
+- **Creating.** A draft starts blank (an empty `tokens.json`: the default theme) or as a copy of every file of an installed or bundled theme, under a new id derived from the draft's name, at version `0.1.0`. The copy keeps no link to its source.
+- **Editing.** The Atelier edits colour tokens in both modes, name and description; everything else (fonts, lengths, icons, custom CSS, subsystems) is edited in the files, through the Scriptorium, Document Mode or a character's `doc_*` tools. A draft is judged by the same loader as an installed bundle, so the Atelier shows exactly the errors and warnings an install would. A file that does not parse is an issue on the draft; the draft still lists and opens. Saves carry the revision (content hash of `tokens.json`) they were read at, and a stale one is refused rather than overwritten.
+- **Previewing.** While a draft is open, the whole app wears it in place of the chosen theme, compiled in the browser from the unsaved tokens; the Atelier's own panel wears the house default (see the `@scope` boundary under [Custom CSS](#custom-css-stylescss)). A draft's images and fonts are served by the asset and font routes at the draft's exact version, uncached.
+- **Images.** A draft keeps its originals byte for byte (blob normalisation skips `Themes/`). On install, PNG, JPEG and GIF become WebP (quality 85), lossless WebP is re-encoded, SVG and animated images are left alone, and every reference — manifest, tokens, custom CSS — is rewritten to the new name. Draft files are not chunked or embedded.
+- **Installing.** Install refuses a draft with validation errors, and a draft whose id is a bundled theme's. Otherwise the draft is packed and goes through the ordinary bundle install, every check included, replacing an earlier install of the same id; it is registered without a restart. Afterwards the draft's patch version is bumped, so the installed theme and the draft never share asset URLs. Deleting a draft leaves its installed theme in place.
+- **Export and backup.** Drafts are left out of `.qtap` exports (`docStoreExportExclusion`, `lib/export/excluded-files.ts`: the `Themes` folder of General and everything under it); a finished theme travels as a `.qtap-theme`. Backups carry drafts like any other document.
+
 ## Validating
 
 ```bash
@@ -244,9 +258,18 @@ quilltap themes validate my-theme.qtap-theme   # or a packed bundle
 
 The CLI carries the app's own engine (`packages/quilltap/lib/theme-engine.generated.js`, built from `lib/themes/` by `npm run build:cli-theme-engine`), so it reports exactly what an install would refuse, and the same warnings: unknown tokens with suggestions, values of the wrong type, unresolved `var()`s in tokens, refused at-rules and URLs, selectors that miss the hook catalogue, removed hooks, missing font licences, unknown icon and subsystem names. A clean run has no errors and no warnings. All the bundled themes in `themes/bundled/` validate cleanly and are good worked examples.
 
+### Contrast
+
+Every theme is measured against the registry's contrast pairs (`lib/themes/registry/contrast.ts`): a foreground token, the background it is drawn on, and a kind — `text` must reach 4.5:1 and `non-text` (focus rings) 3:1, WCAG 2.2 AA, in light and in dark. A translucent foreground is composited over its background, a translucent background over the page. A value that is not one colour the engine can evaluate (a gradient, an image, an unsupported colour function) is reported as unchecked, never as a pass.
+
+A failure is a **warning**: a theme that fails a pair still loads, saves and installs. `quilltap themes validate` prints the failures, the Atelier shows each token's pairs beside it, and `npm run lint` runs `scripts/check-theme-contrast.ts --check` against the default theme and the bundled themes, which must pass every pair except those on `themes/bundled/contrast-exceptions.json` (empty, and kept that way). `--all` prints every pair.
+
 ## How a theme is loaded (for app developers)
 
 - `lib/themes/engine/` is pure (Zod and PostCSS): `document.ts` (the two documents), `validate.ts`, `scope.ts` (custom CSS scoping and refusals), `urls.ts`, `compile.ts` (the CSS the client injects, including the app-owned feature switches) and `resolve.ts`.
 - `lib/themes/theme-bundle.ts` reads a bundle's files for the engine; `lib/themes/bundle-archive.ts` validates, extracts and packs archives for both the app and the CLI, under the app's path rules.
 - `lib/themes/theme-registry.ts` holds loaded themes and the refused list (`lib/themes/refused.ts`).
+- `lib/themes/engine/client.ts` is the engine's browser entry: resolve, compile tokens, contrast and colour parsing, with no Node built-ins, no PostCSS and no logger. Client code imports the engine only through it; a test walks its imports. Scoping custom CSS (PostCSS) stays on the server, which is why a draft arrives with its non-token parts already compiled.
+- The theme provider's **preview slot** (`setPreview`, `components/providers/theme/`) is the one way a preview reaches the DOM: a theme shown in place of the worn one, leaving the worn theme and the stored preference untouched. The Atelier is its caller; nothing injects theme CSS beside it.
+- `lib/themes/drafts/` is the only code that knows a draft is `Themes/<id>/` in Quilltap General. Text files are written through the document core (`writeDocument`), others through `storeMountFile`; a whole draft is deleted with the folder. `lib/themes/hot-load.ts` registers an installed bundle without a restart; `lib/themes/convert-images.ts` is the install-time WebP pass. Routes: [API.md, Theme Drafts](./API.md#theme-drafts).
 - The token registry (`lib/themes/registry/`) generates `app/styles/_theme-defaults.css`, `app/styles/qt-components/_variables.css` (`npm run generate:theme-variables`) and [THEME_TOKENS.md](./THEME_TOKENS.md) (`npm run generate:theme-tokens-doc`); the hook catalogue generates [THEME_HOOKS.md](./THEME_HOOKS.md) (`npm run generate:theme-hooks-doc`). `npm run lint` fails while any generated file is stale.

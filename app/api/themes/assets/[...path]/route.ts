@@ -8,6 +8,10 @@
  * served: the preview image, icon overrides, subsystem images, font licence
  * files and each `url()` in the compiled CSS. Anything else in the bundle
  * directory is a 404, and the file must still resolve inside the bundle.
+ *
+ * A theme draft's assets share these URLs: when no installed theme of the
+ * requested `?v=` answers, a draft of that id and version may
+ * (`lib/themes/drafts/serve.ts`).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,6 +23,7 @@ import * as path from 'path';
 import { resolveInside, PathOutsideBaseError } from '@/lib/paths/resolve-inside';
 import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
 import { normaliseBundlePath } from '@/lib/themes/engine/css-text';
+import { registryAnswers, serveDraftThemeFile } from '@/lib/themes/drafts/serve';
 
 // MIME types for the files a theme may have served
 const ASSET_MIME_TYPES: Record<string, string> = {
@@ -84,7 +89,20 @@ export async function GET(
       await initializePlugins();
     }
 
-    const theme = themeRegistry.getAll().find(t => t.pluginName === pluginName);
+    const installed = themeRegistry.getAll().find(t => t.pluginName === pluginName);
+    const requestedVersion = request.nextUrl.searchParams.get('v');
+    if (!registryAnswers(installed?.version, requestedVersion)) {
+      const draft = await serveDraftThemeFile({
+        themeId: pluginName.slice('bundle:'.length),
+        file: assetPathSegments.join('/'),
+        kind: 'asset',
+        version: requestedVersion,
+        mimeTypes: ASSET_MIME_TYPES,
+      });
+      if (draft) return draft;
+    }
+
+    const theme = installed;
     if (!theme || theme.source !== 'bundle' || !theme.bundlePath) {
       logger.warn('Theme not found for asset', { context: 'GET /api/themes/assets', pluginName });
       return notFound();

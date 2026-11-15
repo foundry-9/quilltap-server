@@ -81,6 +81,11 @@ export const REALTIME_TOPICS = [
    * chat's pending holds.
    */
   'customToolInterventions',
+  /**
+   * The installed theme list changed (an install, including a theme draft's).
+   * A draft install also bumps the draft's version, so the drafts re-read too.
+   */
+  'themes',
 ] as const;
 
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number];

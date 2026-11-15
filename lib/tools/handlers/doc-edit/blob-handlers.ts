@@ -7,7 +7,8 @@
 
 import path from 'path';
 import { getAccessibleMountPoints, resolveMountPointRef, parseQtapUri } from '@/lib/doc-edit';
-import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
+import { normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
+import { transcodeBlobForStore } from '@/lib/mount-index/normalize-blob-image';
 import { ownVaultCoreRefusal } from '@/lib/characters/vault/core-guard';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
@@ -152,7 +153,7 @@ export async function handleWriteBlob(
     return { success: false, error: 'Empty blob payload' };
   }
 
-  const transcoded = await transcodeToWebP(rawBytes, input.mime_type);
+  const transcoded = await transcodeBlobForStore({ mountPointId: mp.id, relativePath: target.path, data: rawBytes, mimeType: input.mime_type });
   const finalPath = normaliseBlobRelativePath(target.path, transcoded.storedMimeType);
   const refusal = ownVaultBlobRefusal(mp, finalPath, context);
   if (refusal) return refusal;

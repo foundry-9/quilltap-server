@@ -17,7 +17,7 @@
  */
 
 export { DocumentConflictError, DocumentMissingError, DocumentReadOnlyError } from './errors';
-export { readDocument, statDocument, documentExists, type DocumentRead } from './read';
+export { readDocument, readDocumentBytes, statDocument, documentExists, type DocumentRead, type DocumentBytes } from './read';
 export { writeDocument, afterDocumentWrite, ensureDocument } from './write';
 export {
   renameDocument,

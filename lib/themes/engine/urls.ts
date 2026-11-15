@@ -120,3 +120,35 @@ export function rewriteUrls(value: string, ctx: UrlContext): UrlRewrite {
   }
   return { value: out, errors };
 }
+
+/**
+ * Replace the target of each plain `url()` in `value` for which `map` returns
+ * a new target; every other `url()`, and everything around them, is left as
+ * written. For tools that rename files inside a bundle (the theme-draft
+ * install's image conversion) and must follow the rename into CSS and token
+ * values. Validation is {@link rewriteUrls}'s job, not this one's.
+ */
+export function mapUrlTargets(value: string, map: (target: string) => string | null): string {
+  let out = '';
+  let i = 0;
+  const lower = value.toLowerCase();
+  while (i < value.length) {
+    const at = lower.indexOf('url(', i);
+    if (at < 0) {
+      out += value.slice(i);
+      break;
+    }
+    if (/[\w-]/.test(value[at - 1] ?? '')) {
+      out += value.slice(i, at + 4);
+      i = at + 4;
+      continue;
+    }
+    const close = closeParen(value, at + 3);
+    if (close < 0) return value;
+    const target = unquote(value.slice(at + 4, close));
+    const next = target === null ? null : map(target);
+    out += next === null ? value.slice(i, close + 1) : `${value.slice(i, at)}url(${cssString(next)})`;
+    i = close + 1;
+  }
+  return out;
+}

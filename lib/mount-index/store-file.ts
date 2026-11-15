@@ -34,7 +34,8 @@ import type { DocMountFile, DocMountPoint } from '@/lib/schemas/mount-index.type
 import { FileOpError } from './file-op-error';
 import { normaliseRelativePath, detectNativeText, mimeForExtension, detectBlobFileType, isExtractableBlobPath } from './path-utils';
 import { destExists, deleteAtDest, writeFsFileBytes, resolveFsAbsolute } from './file-ops';
-import { transcodeToWebP, normaliseBlobRelativePath } from './blob-transcode';
+import { normaliseBlobRelativePath } from './blob-transcode';
+import { transcodeBlobForStore } from './normalize-blob-image';
 import { convertBufferToPlainText } from './converters';
 import { ensureFolderPath } from './folder-paths';
 import { emitDocumentWritten } from './db-store-events';
@@ -366,7 +367,7 @@ export async function storeMountFile(input: StoreFileInput): Promise<StoreFileRe
   // ---------------------------------------------------------------------------
   const originalMimeType = input.originalMimeType || mimeForExtension(rel);
   const transcoded = transcodeImages
-    ? await transcodeToWebP(input.data, originalMimeType)
+    ? await transcodeBlobForStore({ mountPointId: mp.id, relativePath: rel, data: input.data, mimeType: originalMimeType })
     : {
         data: input.data,
         storedMimeType: originalMimeType,

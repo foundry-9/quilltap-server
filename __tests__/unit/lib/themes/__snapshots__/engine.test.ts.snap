@@ -36,22 +36,25 @@ exports[`compiled CSS (3.2, 3.3) emits only what the theme sets 1`] = `
 `;
 
 exports[`compiled CSS (3.2, 3.3) scopes the custom CSS 1`] = `
-"[data-theme="v2-sample"] {
+"@scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) {
+
+:scope {
   --sample-glow: 0 0 6px var(--p-gold);
 }
 
-[data-theme="v2-sample"].dark .qt-card {
+:scope.dark .qt-card {
   border-color: var(--p-gold);
 }
 
-[data-theme="v2-sample"] body {
+:scope body {
   letter-spacing: 0.01em;
 }
 
-[data-theme="v2-sample"] .qt-homepage-section::before {
+:scope .qt-homepage-section::before {
   content: "";
   background-image: url("/api/themes/assets/bundle:v2-sample/textures/paper.webp?v=1.0.0");
   opacity: 0.2;
+}
 }
 
 @keyframes v2-sample-glow {
@@ -59,14 +62,19 @@ exports[`compiled CSS (3.2, 3.3) scopes the custom CSS 1`] = `
   to { box-shadow: var(--sample-glow); }
 }
 
-[data-theme="v2-sample"] .qt-button-primary:hover {
+@scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) {
+
+:scope .qt-button-primary:hover {
   animation: v2-sample-glow 1.2s ease-in-out infinite alternate;
+}
 }
 
 @media (max-width: 640px) {
-  [data-theme="v2-sample"] .qt-card {
+  @scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) {
+  :scope .qt-card {
     padding: 0.75rem;
   }
+}
 }
 "
 `;

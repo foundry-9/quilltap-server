@@ -42,6 +42,10 @@ In the Theme Selection section, you'll see:
 - **Dark mode badge** — Whether the theme supports dark mode
 - **Active indicator** — A checkmark on the current theme
 
+### Designing a Theme of Your Own
+
+The **Design a theme** button at the head of the Theme section opens [Calliope's Atelier](theme-editor.md), where you may begin a theme from a blank canvas or a copy of one in your wardrobe, see the whole of Quilltap wear it while you choose its colours, and install it when it suits.
+
 ### Selecting a Theme
 
 1. Browse the available themes
@@ -372,6 +376,7 @@ For more information, see:
 
 - [Themes](themes.md) — Complete guide to themes and color modes
 - [Theme Quick-Switcher](theme-quick-switcher.md) — Sidebar quick-switcher details
+- [Calliope's Atelier](theme-editor.md) — Designing a theme with a live preview
 - [Sidebar](sidebar.md) — Information about the left sidebar
 - [Width Toggle](width-toggle.md) — Content width toggle button
 

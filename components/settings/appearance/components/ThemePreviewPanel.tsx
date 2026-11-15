@@ -30,7 +30,9 @@ export interface ThemePreviewPanelProps {
  * itself carries `data-theme`, the mode class and the theme's choices: the
  * generated registry defaults (re-declared on every `[data-theme]` element)
  * and the theme's own rules both apply inside it, and nothing outside it is
- * touched. The default theme injects nothing and shows the defaults alone.
+ * touched. The worn theme's descendant rules stop at the container
+ * (lib/themes/engine/boundary.ts). The default theme injects nothing and
+ * shows the defaults alone.
  */
 export function ThemePreviewPanel({ compiledCss, themeId, mode, choices, label }: ThemePreviewPanelProps) {
   const choiceAttributes = useMemo(

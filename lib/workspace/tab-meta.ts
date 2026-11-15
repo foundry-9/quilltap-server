@@ -49,6 +49,7 @@ export const DEFAULT_TAB_META: Record<TabKind, TabMeta> = {
   character: { title: 'Character', icon: 'characters' },
   'settings-wizard': { title: 'Provider Setup', icon: 'wand' },
   'custom-tools': { title: "Pascal's Workbench", icon: 'wrench' },
+  'theme-editor': { title: "Calliope's Atelier", icon: 'themes' },
 }
 
 /**

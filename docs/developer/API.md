@@ -98,6 +98,7 @@ API reference for Quilltap v4.3 and later.
   - [LLM Logs](#llm-logs)
   - [Theme Assets & Fonts](#theme-assets--fonts)
   - [Themes (v1)](#themes-v1)
+  - [Theme Drafts](#theme-drafts)
   - [Search](#search)
   - [Search & Replace](#search--replace)
   - [Background Jobs](#background-jobs)
@@ -6538,7 +6539,7 @@ Delete a log entry by ID.
 
 ### Theme Assets & Fonts
 
-Static asset routes for installed theme bundles. These sit outside `/api/v1/` because they are unauthenticated asset endpoints. Both take `bundle:<themeId>/<path>` and serve only from a registered bundle; anything else is a 404.
+Static asset routes for installed theme bundles. These sit outside `/api/v1/` because they are unauthenticated asset endpoints. Both take `bundle:<themeId>/<path>` and serve from a registered bundle first; failing that, from a [theme draft](#theme-drafts) with that id when the request's `?v=` equals the draft's manifest version, sent `Cache-Control: no-cache` (`lib/themes/drafts/serve.ts`). Anything else is a 404.
 
 #### `GET /api/themes/assets/[...path]`
 
@@ -6757,6 +6758,38 @@ Export the theme as a downloadable `.qtap-theme` bundle, as installed (`formatVe
 #### `DELETE /api/v1/themes/[themeId]`
 
 Uninstall a bundle theme, or a refused version 1 bundle. A plugin's refused theme cannot be uninstalled here (`400`); disable or remove the plugin instead.
+
+---
+
+### Theme Drafts
+
+Calliope's Atelier (the theme editor, Calliope Live Spec D). A draft is the folder `Themes/<id>/` in Quilltap General holding an unpacked version 2 bundle — no database row; dates come from the store. `lib/themes/drafts/` is the only code that knows the location. Any document edit may change a draft's files, so a file that does not parse is an issue on the draft, not an error from the route. Validation is the installed-bundle loader's (`loadThemeFromSource`). An install publishes the `themes` realtime topic (which also refreshes draft queries); draft saves publish nothing — two editors of one draft are reconciled by the revision check.
+
+Errors: `404` unknown draft; `409` stale `revision` (`{ currentRevision }`) or an unreadable `theme.json` on a manifest write; `422` an install refused (`{ errors: string[] }`); `503` Quilltap General unavailable.
+
+#### `GET /api/v1/theme-drafts`
+
+`{ drafts: DraftSummary[] }` — `{ id, name, updatedAt, errorCount, warningCount }` each.
+
+#### `POST /api/v1/theme-drafts`
+
+Create a draft. Body (strict): `{ name: string (1–100), from?: string }`. Without `from`, an empty tokens document (the default theme); with it, a copy of every file of the registered theme `from` under a new id (derived from `name`, de-duplicated) at version `0.1.0`. An unknown `from` is `400`. Returns `201` `{ draft: DraftDetail }`.
+
+#### `GET /api/v1/theme-drafts/[id]`
+
+`{ draft: DraftDetail }`: `id`, `manifest` (parsed, or `null`), `tokens` (or `null` when missing or unparseable), `revision` (content hash of `tokens.json`, or `missing`), `uri` (the folder's `qtap://` address), `compiled` (`{ fontFaces, icons, custom }` — the parts the editor cannot change yet, compiled server-side; empty when invalid), `subsystems` (manifest overrides with image paths turned into draft asset URLs), `issues` (`{ severity, message }[]`), `updatedAt`, `version`.
+
+#### `PUT /api/v1/theme-drafts/[id]`
+
+Save. Body (strict): `{ revision: string, tokens?: ThemeTokensDocument, name?: string (1–100), description?: string (≤ 500) }`; at least one of the optional fields. `tokens` is written only when `revision` matches the stored file, else `409`. Returns `{ draft: DraftDetail }`.
+
+#### `DELETE /api/v1/theme-drafts/[id]`
+
+Delete the draft folder. A theme installed from it stays installed.
+
+#### `POST /api/v1/theme-drafts/[id]?action=install`
+
+Install the draft: `422` while it has validation errors, or when its id belongs to a bundled theme. Otherwise its files are copied to a temporary directory, raster images converted to WebP there (`lib/themes/convert-images.ts`; the draft keeps its originals), packed, and installed through the ordinary bundle install, replacing an earlier install; the theme is registered without a restart (`lib/themes/hot-load.ts`). Then the draft's patch version is bumped, so draft and install never share asset URLs. Returns `{ result: { themeId, version, draftVersion, conversion: { converted, reencoded, skippedAnimated } } }`.
 
 ---
 

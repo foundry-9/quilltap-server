@@ -9,7 +9,7 @@ The structural hooks a theme's custom CSS may rely on — catalogue version **1*
 - **Element identity is a `qt-*` class.** One class names one kind of element.
 - **Which one of a set is a data attribute named for the set** — `data-section`, `data-nav`, `data-role`, `data-staff`, `data-tab-kind`, `data-tool`, `data-group`, `data-card`, `data-pane`. Values are stable ids, never display text and never instance ids: no character, chat or message id is exposed for styling.
 - **State is the ARIA attribute when one says it** (`aria-current`, `aria-selected`, `aria-expanded`, `aria-pressed`, `aria-busy`); otherwise a modifier class (`qt-tab-active`, `qt-chat-message-silent`).
-- **The root element** (`<html>`) carries `data-theme` and `data-color-mode` and `.light` / `.dark`. Custom CSS is written without the theme id: Quilltap scopes every rule to `[data-theme="<id>"]` when it loads the theme.
+- **The root element** (`<html>`) carries `data-theme` and `data-color-mode` and `.light` / `.dark`. Custom CSS is written without the theme id: Quilltap scopes every rule to `[data-theme="<id>"]` when it loads the theme, stopping at any nested element that wears another theme.
 - **Not hooks:** bare elements (`h1`, `button`), non-`qt` classes (Tailwind utilities), class-substring selectors (`[class*="card"]`), and inline-style matches. They work today and break silently.
 
 ## Versioning
@@ -43,7 +43,7 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-tab-icon` | Tab icon | `.qt-tab` |  |  |
 | `.qt-tab-label` | Tab title | `.qt-tab-select` |  |  |
 | `.qt-tab-close` | Tab close button | `.qt-tab` |  |  |
-| `.qt-tab-pane` | Tab content. One tab's view. Hidden tabs stay mounted (and carry `hidden`), so scope to the visible one with `:not(.hidden)`. | `.qt-workspace` | `data-pane`: `left`, `right`<br>`data-tab-kind`: `home`, `salon`, `salon-list`, `terminal`, `document`, `aurora`, `prospero`, `scriptorium`, `settings`, `files`, `photos`, `scenarios`, `brahma`, `wardrobe`, `inventory`, `atlas`, `profile`, `about`, `generate-image`, `document-standalone`, `character-new`, `character`, `settings-wizard`, `custom-tools` |  |
+| `.qt-tab-pane` | Tab content. One tab's view. Hidden tabs stay mounted (and carry `hidden`), so scope to the visible one with `:not(.hidden)`. | `.qt-workspace` | `data-pane`: `left`, `right`<br>`data-tab-kind`: `home`, `salon`, `salon-list`, `terminal`, `document`, `aurora`, `prospero`, `scriptorium`, `settings`, `files`, `photos`, `scenarios`, `brahma`, `wardrobe`, `inventory`, `atlas`, `profile`, `about`, `generate-image`, `document-standalone`, `character-new`, `character`, `settings-wizard`, `custom-tools`, `theme-editor` |  |
 | `.qt-workspace-divider` | Split divider. The draggable bar between split panes. | `.qt-workspace` |  |  |
 | `.qt-workspace-divider-grip` | Split divider grip | `.qt-workspace-divider` |  |  |
 | `.qt-workspace-empty` | Empty pane | `.qt-workspace` |  |  |
@@ -233,7 +233,7 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-avatar-name` | Avatar name | `.qt-avatar-labels` |  |  |
 | `.qt-avatar-title` | Avatar title | `.qt-avatar-labels` |  |  |
 | `.qt-tab-group` | In-page tab group. Entity-page tabs (a character, a project) and small view switchers. |  |  |  |
-| `.qt-tab` | Tab. Shared by the workspace tab strip (`.qt-tab-strip .qt-tab`) and the in-page tabs (`.qt-tab-group .qt-tab`): scope by the parent. Only workspace tabs carry `data-tab-kind`. | `.qt-tab-strip`, `.qt-tab-group` | `data-tab-kind`: `home`, `salon`, `salon-list`, `terminal`, `document`, `aurora`, `prospero`, `scriptorium`, `settings`, `files`, `photos`, `scenarios`, `brahma`, `wardrobe`, `inventory`, `atlas`, `profile`, `about`, `generate-image`, `document-standalone`, `character-new`, `character`, `settings-wizard`, `custom-tools` | `.qt-tab-active` — The selected tab<br>`.qt-tab-dragging` — Being dragged (workspace) |
+| `.qt-tab` | Tab. Shared by the workspace tab strip (`.qt-tab-strip .qt-tab`) and the in-page tabs (`.qt-tab-group .qt-tab`): scope by the parent. Only workspace tabs carry `data-tab-kind`. | `.qt-tab-strip`, `.qt-tab-group` | `data-tab-kind`: `home`, `salon`, `salon-list`, `terminal`, `document`, `aurora`, `prospero`, `scriptorium`, `settings`, `files`, `photos`, `scenarios`, `brahma`, `wardrobe`, `inventory`, `atlas`, `profile`, `about`, `generate-image`, `document-standalone`, `character-new`, `character`, `settings-wizard`, `custom-tools`, `theme-editor` | `.qt-tab-active` — The selected tab<br>`.qt-tab-dragging` — Being dragged (workspace) |
 
 ## Removed hooks
 

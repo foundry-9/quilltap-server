@@ -6,7 +6,8 @@
  * named colours, `transparent`, and `color-mix(in srgb, …)` — into sRGB with
  * alpha, and compares colours in OKLab. Used by the theme snapshot to decide
  * whether two resolved values render alike, and by the Spec A fit report to
- * measure how close a derivation comes to a theme's literal.
+ * measure how close a derivation comes to a theme's literal, and by the
+ * contrast check (engine/contrast.ts) for WCAG luminance and ratios.
  *
  * Anything else (`currentColor`, other mixing spaces, relative colour syntax,
  * `var()` left unresolved) is "not a colour I can evaluate": `parseColor`
@@ -264,6 +265,34 @@ export function deltaEOK(a: Rgba, b: Rgba, backdrop: Rgba = { r: 1, g: 1, b: 1, 
   const [l1, a1, b1] = toOklab(over(a));
   const [l2, a2, b2] = toOklab(over(b));
   return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
+}
+
+/** `top` composited over `bottom` (source-over), returned opaque when `bottom` is. */
+export function compositeOver(top: Rgba, bottom: Rgba): Rgba {
+  const a = top.a + bottom.a * (1 - top.a);
+  if (a === 0) return { r: 0, g: 0, b: 0, a: 0 };
+  const ch = (k: 'r' | 'g' | 'b') => (top[k] * top.a + bottom[k] * bottom.a * (1 - top.a)) / a;
+  return { r: ch('r'), g: ch('g'), b: ch('b'), a };
+}
+
+/** WCAG 2.x relative luminance of an opaque sRGB colour (alpha ignored). */
+export function relativeLuminance(c: Rgba): number {
+  const lin = (u: number) => (u <= 0.04045 ? u / 12.92 : ((u + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
+}
+
+/**
+ * WCAG 2.x contrast ratio (1..21) of `foreground` on `background`. A
+ * translucent foreground is composited over the background first; a
+ * translucent background over `backdrop` (the page colour of the mode,
+ * white by default).
+ */
+export function contrastRatio(foreground: Rgba, background: Rgba, backdrop: Rgba = { r: 1, g: 1, b: 1, a: 1 }): number {
+  const bg = compositeOver(background, { ...backdrop, a: 1 });
+  const fg = compositeOver(foreground, bg);
+  const l1 = relativeLuminance(fg);
+  const l2 = relativeLuminance(bg);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 }
 
 /** True when the two colours are the same 8-bit RGBA (each channel within half a step). */

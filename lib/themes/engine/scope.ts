@@ -3,10 +3,13 @@
  *
  * Authors write ordinary selectors with no theme id. This parses the CSS with
  * PostCSS, rejects what a theme may not do, and re-serialises the tree with
- * every selector under `[data-theme="<id>"]`:
- * - `X` → `[data-theme="<id>"] X`; a leading `:root` or `html` becomes the
- *   prefix itself; a leading `.dark` / `.light` attaches to it
- *   (`[data-theme="<id>"].dark …`); `body` stays a descendant;
+ * every style rule inside the theme's boundary (./boundary.ts:
+ * `@scope ([data-theme="<id>"]) to (<any other theme>)`), its selectors
+ * relative to `:scope`:
+ * - `X` → `:scope X`; a leading `:root` or `html` becomes `:scope` itself;
+ *   a leading `.dark` / `.light` attaches to it (`:scope.dark …`); `body`
+ *   stays a descendant;
+ * - consecutive rules share one `@scope` block;
  * - `@keyframes` names gain the theme id, and `animation` / `animation-name`
  *   values that use them are rewritten to match;
  * - `@media`, `@supports`, `@container` and `@layer` are kept with their
@@ -22,6 +25,7 @@
  */
 
 import postcss, { type AtRule, type ChildNode, type Container, type Declaration, type Rule } from 'postcss';
+import { themeScopePrelude } from './boundary';
 import { rewriteUrls } from './urls';
 
 export interface ScopeOptions {
@@ -68,9 +72,12 @@ function splitList(list: string): string[] {
   return out.filter(Boolean);
 }
 
-/** Scope one complex selector. */
-export function scopeSelector(selector: string, id: string): string {
-  const prefix = `[data-theme="${id}"]`;
+/**
+ * One complex selector, relative to the theme's scope root. It is only
+ * meaningful inside the `@scope` block {@link scopeThemeCss} writes.
+ */
+export function scopeSelector(selector: string): string {
+  const prefix = ':scope';
   const s = selector.trim();
   // A leading :root or html becomes the prefix itself.
   const rootMatch = /^(?::root|html)(?![\w-])/i.exec(s);
@@ -135,6 +142,9 @@ export function scopeThemeCss(css: string, options: ScopeOptions): ScopeResult {
     }
   };
 
+  /** The `@scope` blocks this pass wrote, so a following rule joins rather than opens one. */
+  const scopeBlocks = new Set<AtRule>();
+
   /** Walk a container whose rules sit at selector top level (the root, or a kept at-rule). */
   const walkTopLevel = (container: Container) => {
     container.each((node: ChildNode) => {
@@ -159,8 +169,19 @@ export function scopeThemeCss(css: string, options: ScopeOptions): ScopeResult {
       if (node.type === 'rule') {
         const rule = node as Rule;
         rule.selector = splitList(rule.selector)
-          .map((s) => scopeSelector(s, options.id))
+          .map((s) => scopeSelector(s))
           .join(',\n');
+        // Into the theme's boundary: the open block before it, or a new one.
+        const before = rule.prev();
+        if (before && before.type === 'atrule' && scopeBlocks.has(before as AtRule)) {
+          rule.remove();
+          (before as AtRule).append(rule);
+        } else {
+          const block = postcss.atRule({ name: 'scope', params: themeScopePrelude(options.id) });
+          scopeBlocks.add(block);
+          rule.replaceWith(block);
+          block.append(rule);
+        }
         // Nested rules are relative to an already-scoped parent.
         rule.walkDecls(visitDeclaration);
         rule.walkAtRules((at) => {

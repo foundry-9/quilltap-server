@@ -20,6 +20,8 @@ import { ThemeCard } from './components/ThemeCard'
 import { ThemePreviewModal } from './components/ThemePreviewModal'
 import { RefusedThemes } from './components/RefusedThemes'
 import { Icon } from '@/components/ui/icon'
+import { useRouter } from 'next/navigation'
+import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 
 interface ThemeSelectorProps {
   activeThemeId: string | null
@@ -45,6 +47,14 @@ export function ThemeSelector({
   const [isInstalling, setIsInstalling] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { refusedThemes } = useTheme()
+  const workspace = useWorkspaceOptional()
+  const router = useRouter()
+
+  /** Open Calliope's Atelier — a tab inside the workspace, a route outside. */
+  const openAtelier = () => {
+    if (workspace) workspace.openTab('theme-editor')
+    else router.push('/calliope')
+  }
 
   // Open the full-page preview modal for a theme (null = the default theme)
   const handleOpenPreview = useCallback((themeId: string | null) => {
@@ -178,6 +188,15 @@ export function ThemeSelector({
     <section className="border-t qt-border-default pt-8">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-xl font-semibold qt-text">Theme</h2>
+        <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={openAtelier}
+          className="qt-button-secondary qt-button-sm flex items-center gap-1.5"
+        >
+          <Icon name="themes" className="w-4 h-4" />
+          Design a theme
+        </button>
         <button
           type="button"
           onClick={handleInstallClick}
@@ -196,6 +215,7 @@ export function ThemeSelector({
             </>
           )}
         </button>
+        </div>
         <input
           ref={fileInputRef}
           type="file"
