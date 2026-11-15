@@ -19,7 +19,7 @@
  * @module components/theme-editor/DraftEditor
  */
 
-import { memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { useTheme } from '@/components/providers/theme-provider'
@@ -34,6 +34,13 @@ import { LazyRow } from './LazyRow'
 import { TokenRow, type EditFn } from './TokenRow'
 import { PrimitivesPanel } from './PrimitivesPanel'
 import { DraftResourcesContext } from './controls'
+import { assetSectionViews, type AssetSectionView } from './assets/model'
+import { DraftOperationsContext, useDraftOperationsState } from './assets/use-draft-operations'
+import { FontsSection } from './assets/FontsSection'
+import { ImagesSection } from './assets/ImagesSection'
+import { IconsSection } from './assets/IconsSection'
+import { DetailsSection } from './assets/DetailsSection'
+import { FilesPanel } from './assets/FilesPanel'
 import {
   EDITOR_GROUPS,
   EMPTY_HISTORY,
@@ -63,12 +70,13 @@ import {
   type DraftInstallResult,
   type ThemeDraftSave,
 } from './use-theme-drafts'
+import { CHANGED_ELSEWHERE } from './assets/use-draft-operations'
 
 const SAVE_DELAY_MS = 700
 
 const EMPTY_TOKENS: ThemeTokensDocument = { primitives: {}, tokens: {}, choices: {} } as ThemeTokensDocument
 
-type Pending = Omit<ThemeDraftSave, 'revision'>
+type Pending = Omit<ThemeDraftSave, 'revision' | 'manifestRevision'>
 
 /**
  * The save queue for one draft: edits merge into one pending body, a timer
@@ -90,7 +98,11 @@ function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => 
 
   useEffect(() => {
     // A newer read (realtime refresh, our own save) carries the newer revision.
-    if (detail.revision !== latest.current.revision || detail.updatedAt !== latest.current.updatedAt) {
+    if (
+      detail.revision !== latest.current.revision ||
+      detail.manifestRevision !== latest.current.manifestRevision ||
+      detail.updatedAt !== latest.current.updatedAt
+    ) {
       latest.current = detail
     }
   }, [detail])
@@ -105,7 +117,11 @@ function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => 
       const run = (async () => {
         setSaving(true)
         try {
-          const fresh = await saveThemeDraft(id, { ...body, revision: latest.current.revision }, { keepalive })
+          const fresh = await saveThemeDraft(
+            id,
+            { ...body, revision: latest.current.revision, manifestRevision: latest.current.manifestRevision },
+            { keepalive },
+          )
           latest.current = fresh
           queryClient.setQueryData(queryKeys.themeDrafts.detail(id), fresh)
           void queryClient.invalidateQueries({ queryKey: queryKeys.themeDrafts.list })
@@ -119,7 +135,7 @@ function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => 
             } catch (reloadErr) {
               showErrorToast(apiErrorMessage(reloadErr, 'The draft changed elsewhere, and could not be fetched again.'))
             }
-            showWarningToast('This draft was changed elsewhere in the meantime. The newer version is now before you; your last change was set aside.')
+            showWarningToast(CHANGED_ELSEWHERE)
           } else {
             showErrorToast(apiErrorMessage(err, 'The atelier could not save the draft.'))
           }
@@ -160,8 +176,22 @@ function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => 
     [send],
   )
 
-  return { queue, flush, saving }
+  /** The newest draft seen: what an operation reads its manifest revision from. */
+  const current = useCallback(() => latest.current, [])
+  /** Take a draft an operation returned as the newest, ahead of the render that shows it. */
+  const adopt = useCallback(
+    (fresh: DraftDetail) => {
+      latest.current = fresh
+      queryClient.setQueryData(queryKeys.themeDrafts.detail(fresh.id), fresh)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.themeDrafts.list })
+    },
+    [queryClient],
+  )
+
+  return { queue, flush, saving, current, adopt }
 }
+
+export type DraftSaver = ReturnType<typeof useDraftSaver>
 
 /**
  * The editing state around the draft's tokens: the store rows read, the one
@@ -261,6 +291,34 @@ const RowList = memo(function RowList({ tokens, store, edit, label }: { tokens: 
     </ul>
   )
 })
+
+interface AssetCardProps {
+  section: AssetSectionView
+  domId: string
+  open: boolean
+  onToggle: (open: boolean) => void
+  children: ReactNode
+}
+
+/** One asset section (Spec F): fonts, images, icons, details or files. Nothing is mounted while closed. */
+function AssetCard({ section, domId, open, onToggle, children }: AssetCardProps) {
+  return (
+    <details
+      id={domId}
+      className="qt-card scroll-mt-4"
+      open={open}
+      onToggle={(e) => {
+        if (e.currentTarget.open !== open) onToggle(e.currentTarget.open)
+      }}
+    >
+      <summary className="p-4 cursor-pointer">
+        <span className="qt-heading-4">{section.label}</span>
+        <p className="qt-text-xs qt-text-secondary mt-1">{section.description}</p>
+      </summary>
+      {open && children}
+    </details>
+  )
+}
 
 interface SectionCardProps {
   section: SectionView
@@ -406,7 +464,9 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
     [setTokens, setName, setDescription, forget],
   )
   const saver = useDraftSaver(detail, onConflict)
-  const { queue } = saver
+  const { queue, flush: flushSaves, current: currentDraft, adopt: adoptDraft } = saver
+  const operationSaver = useMemo(() => ({ flush: flushSaves, current: currentDraft, adopt: adoptDraft }), [flushSaves, currentDraft, adoptDraft])
+  const operations = useDraftOperationsState(operationSaver, onConflict)
 
   // Queue a save when the tokens differ from both the server's and what was last queued.
   useEffect(() => {
@@ -454,6 +514,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
   const resources = useMemo(() => draftResources(detail.manifest, detail.images ?? []), [detail.manifest, detail.images])
   const filtering = isFiltering(filter)
   const sections = useMemo(() => sectionViews(level, filter, tokens), [level, filter, tokens])
+  const assetSections = useMemo(() => assetSectionViews(filter), [filter])
   const isSectionOpen = (id: string) => openSections.has(id)
   const toggle = (set: ReadonlySet<string>, id: string, open: boolean) => {
     const next = new Set(set)
@@ -463,7 +524,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
   }
   const setSectionOpen = (id: string, open: boolean) => setOpenSections((prev) => toggle(prev, id, open))
   const openAll = () => {
-    setOpenSections(new Set(sections.map((sec) => sec.id)))
+    setOpenSections(new Set([...sections.map((sec) => sec.id), ...assetSections.map((sec) => sec.id)]))
     setOpenAdvanced(new Set(sections.map((sec) => sec.id)))
   }
   const closeAll = () => {
@@ -491,6 +552,21 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
     }
   }
   const convertedCount = installed ? Object.keys(installed.conversion.converted).length : 0
+  const fontsConvertedCount = installed ? Object.keys(installed.fontConversion ?? {}).length : 0
+  const renderAssetBody = (section: AssetSectionView) => {
+    switch (section.kind) {
+      case 'fonts':
+        return <FontsSection detail={detail} tokens={tokens} previewing={previewing} onShowFontTokens={() => goToSection('fonts')} />
+      case 'images':
+        return <ImagesSection detail={detail} />
+      case 'icons':
+        return <IconsSection detail={detail} />
+      case 'details':
+        return <DetailsSection detail={detail} />
+      case 'files':
+        return <FilesPanel detail={detail} />
+    }
+  }
 
   const commitName = () => {
     const next = name.trim()
@@ -559,6 +635,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
   }
 
   return (
+    <DraftOperationsContext.Provider value={operations}>
     <DraftResourcesContext.Provider value={resources}>
       <div className="max-w-5xl mx-auto p-4 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -633,6 +710,13 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
             />
           </div>
           <p className="qt-text-xs qt-text-secondary">
+            The author, licence, tags, dark mode and what the subsystems are called live under{' '}
+            <button type="button" className="underline" onClick={() => goToSection('asset-details')}>
+              Subsystems and details
+            </button>
+            .
+          </p>
+          <p className="qt-text-xs qt-text-secondary">
             {errors.length} {errors.length === 1 ? 'error' : 'errors'}, {warnings.length}{' '}
             {warnings.length === 1 ? 'warning' : 'warnings'} at the last save; {contrastFails} contrast{' '}
             {contrastFails === 1 ? 'pair falls' : 'pairs fall'} short in {mode}.{' '}
@@ -667,7 +751,9 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
             <p>
               Installed as version {installed.version}
               {convertedCount > 0 && `, with ${convertedCount} image${convertedCount === 1 ? '' : 's'} converted to WebP`}
-              . The draft carries on at {installed.draftVersion}.
+              {fontsConvertedCount > 0 && `${convertedCount > 0 ? ' and' : ', with'} ${fontsConvertedCount} font${fontsConvertedCount === 1 ? '' : 's'} converted to WOFF2`}
+              . The draft carries on at {installed.draftVersion}, keeping its originals.
+              {installed.leftOut.length > 0 && ` Left out as unused: ${installed.leftOut.join(', ')}.`}
             </p>
             <button type="button" className="qt-button qt-button-primary qt-button-sm" onClick={wear}>
               Wear it now
@@ -753,7 +839,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
 
         <div className="grid gap-4 md:grid-cols-[13rem_minmax(0,1fr)] items-start">
           <nav aria-label="Sections" className="qt-card p-2 md:sticky md:top-20 md:max-h-[calc(100vh-8rem)] md:overflow-y-auto">
-            {sections.length === 0 ? (
+            {sections.length === 0 && assetSections.length === 0 ? (
               <p className="qt-text-xs qt-text-muted p-2">No section answers.</p>
             ) : (
               <ul className="space-y-0.5">
@@ -773,12 +859,26 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
                     </button>
                   </li>
                 ))}
+                {assetSections.length > 0 && (
+                  <li role="presentation" className="border-t qt-border-default my-1" aria-hidden="true" />
+                )}
+                {assetSections.map((section) => (
+                  <li key={section.id}>
+                    <button
+                      type="button"
+                      className="qt-button qt-button-ghost qt-button-sm w-full justify-between text-left"
+                      onClick={() => goToSection(section.id)}
+                    >
+                      <span className="truncate">{section.label}</span>
+                    </button>
+                  </li>
+                ))}
               </ul>
             )}
           </nav>
 
           <div className="space-y-4 min-w-0" onKeyDown={onEditorKeyDown}>
-            {filtering && sections.length === 0 && (
+            {filtering && sections.length === 0 && assetSections.length === 0 && (
               <p className="qt-card p-4 qt-text-small qt-text-muted">
                 {changedOnly && !query.trim()
                   ? 'This theme has changed nothing yet; every token stands at the house default.'
@@ -799,9 +899,21 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
               />
             ))}
             <PrimitivesPanel names={primitives} total={primitiveCount} filtering={filtering} store={store} edit={edit} />
+            {assetSections.map((section) => (
+              <AssetCard
+                key={section.id}
+                section={section}
+                domId={sectionDomId(sectionsId, section.id)}
+                open={filtering || isSectionOpen(section.id)}
+                onToggle={(open) => setSectionOpen(section.id, open)}
+              >
+                {renderAssetBody(section)}
+              </AssetCard>
+            ))}
           </div>
         </div>
       </div>
     </DraftResourcesContext.Provider>
+    </DraftOperationsContext.Provider>
   )
 }

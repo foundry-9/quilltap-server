@@ -21,3 +21,4 @@ export { checkContrast, contrastWarnings, type ContrastFinding, type ContrastMod
 export { typeProblem, CSS_WIDE_KEYWORDS, LENGTH_KEYWORDS, LENGTH_UNITS } from './type-check';
 export * from './values';
 export * from './primitives';
+export { bundleFileUsage, describeFileUse, urlTargetsIn, type BundleFileUse, type BundleUsage, type BundleUsageInput } from './usage';

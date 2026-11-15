@@ -54,9 +54,13 @@ describe.each(THEMES)('the bundled theme %s', (id) => {
       compiled: { fontFaces: '', icons: '', custom: '' },
       subsystems: {},
       issues: [],
+      images: [],
+      manifestRevision: 'mrev-1',
+      files: [],
+      totals: { files: 2, bytes: 1000, limits: { files: 200, bytes: 26214400, fileBytes: 5242880 } },
+      mountPointId: 'mp-general',
       updatedAt: '2026-11-14T12:00:00.000Z',
       version: '1.0.0',
-      images: [],
     }
     const writes: string[] = []
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

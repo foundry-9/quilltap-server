@@ -58,6 +58,11 @@ function detail(overrides: Partial<DraftDetail> = {}): DraftDetail {
     compiled: { fontFaces: '', icons: '', custom: '' },
     subsystems: {},
     issues: [],
+    images: [],
+    manifestRevision: 'mrev-1',
+    files: [],
+    totals: { files: 2, bytes: 1000, limits: { files: 200, bytes: 26214400, fileBytes: 5242880 } },
+    mountPointId: 'mp-general',
     updatedAt: '2026-11-14T12:00:00.000Z',
     version: '0.1.0',
     ...overrides,
@@ -266,7 +271,7 @@ describe('installing', () => {
     const base = fetchMock.getMockImplementation()!
     fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith('?action=install')) {
-        return respond(200, { result: { themeId: 'my-theme', version: '0.1.0', draftVersion: '0.1.1', conversion: { converted: {}, reencoded: [], skippedAnimated: [] } } })
+        return respond(200, { result: { themeId: 'my-theme', version: '0.1.0', draftVersion: '0.1.1', conversion: { converted: {}, reencoded: [], skippedAnimated: [] }, fontConversion: {}, leftOut: [] } })
       }
       return base(input, init)
     })

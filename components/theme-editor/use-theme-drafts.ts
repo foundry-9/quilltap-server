@@ -70,22 +70,59 @@ export function useDeleteThemeDraft() {
   })
 }
 
-/** The body of a draft save: the revision it was read at, and what changed. */
+/**
+ * The body of a draft save: the revisions it was read at, and what changed.
+ * Tokens go to `PUT` (guarded by `revision`); name and description are
+ * manifest fields and go to `?action=set-manifest` (guarded by
+ * `manifestRevision`, Spec F decision 6).
+ */
 export interface ThemeDraftSave {
   revision: string
+  manifestRevision: string
   tokens?: ThemeTokensDocument
   name?: string
   description?: string
 }
 
-/** One save. Throws `ApiFetchError` (409 on a stale revision). */
-export function saveThemeDraft(id: string, body: ThemeDraftSave, init?: { keepalive?: boolean }): Promise<DraftDetail> {
-  return apiFetch<{ draft: DraftDetail }>(itemUrl(id), {
-    method: 'PUT',
+/** One JSON action on a draft (`?action=…`). Throws `ApiFetchError`. */
+export function themeDraftAction<T extends { draft: DraftDetail }>(
+  id: string,
+  action: string,
+  body: Record<string, unknown>,
+  init?: { keepalive?: boolean },
+): Promise<T> {
+  return apiFetch<T>(`${itemUrl(id)}?action=${encodeURIComponent(action)}`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     keepalive: init?.keepalive,
-  }).then((r) => r.draft)
+  })
+}
+
+/** One upload action on a draft (multipart, the file in `file`). Throws `ApiFetchError`. */
+export function themeDraftUpload<T>(id: string, action: string, file: File, fields: Record<string, string | undefined>): Promise<T> {
+  const form = new FormData()
+  form.append('file', file)
+  for (const [key, value] of Object.entries(fields)) if (value !== undefined) form.append(key, value)
+  return apiFetch<T>(`${itemUrl(id)}?action=${encodeURIComponent(action)}`, { method: 'POST', body: form })
+}
+
+/** One save. Throws `ApiFetchError` (409 on a stale revision or manifest revision). */
+export async function saveThemeDraft(id: string, body: ThemeDraftSave, init?: { keepalive?: boolean }): Promise<DraftDetail> {
+  let fresh: DraftDetail | null = null
+  if (body.name !== undefined || body.description !== undefined) {
+    const fields = { name: body.name, description: body.description }
+    fresh = (await themeDraftAction(id, 'set-manifest', { manifestRevision: body.manifestRevision, fields }, init)).draft
+  }
+  if (body.tokens) {
+    fresh = await apiFetch<{ draft: DraftDetail }>(itemUrl(id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revision: body.revision, tokens: body.tokens }),
+      keepalive: init?.keepalive,
+    }).then((r) => r.draft)
+  }
+  return fresh ?? fetchThemeDraft(id)
 }
 
 /** Install a draft. Throws `ApiFetchError` (422 with `info.errors` when it has errors). */

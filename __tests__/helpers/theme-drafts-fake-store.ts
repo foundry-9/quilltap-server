@@ -64,6 +64,7 @@ const entry = (rel: string, f: FakeFile) => ({
   path: rel,
   sha256: createHash('sha256').update(f.data).digest('hex'),
   lastModified: new Date(f.mtime).toISOString(),
+  size: f.data.length,
 });
 
 export const storeModule = {
@@ -106,6 +107,7 @@ export const storeModule = {
   writeDraftFile: async (_store: unknown, id: string, file: string, data: Buffer) => {
     files.set(key(id, file), { data: Buffer.from(data), mtime: ++clock });
   },
+  deleteDraftFile: async (_store: unknown, id: string, file: string) => files.delete(key(id, file)),
   deleteDraftFolder: async (_store: unknown, id: string) => {
     const prefix = `${draftFolderPath(id)}/`;
     let n = 0;

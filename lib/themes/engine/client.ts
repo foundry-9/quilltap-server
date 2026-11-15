@@ -26,6 +26,7 @@ export { parseColor, contrastRatio, type Rgba } from '../color';
 export { typeProblem, CSS_WIDE_KEYWORDS, LENGTH_KEYWORDS, LENGTH_UNITS } from './type-check';
 export * from './values';
 export * from './primitives';
+export { bundleFileUsage, describeFileUse, urlTargetsIn, type BundleFileUse, type BundleUsage, type BundleUsageInput } from './usage';
 
 /** The registry the engine resolves against — the same view the server uses. */
 export const CLIENT_REGISTRY_VIEW: RegistryView = { tokens: THEME_TOKENS, choices: THEME_CHOICES };

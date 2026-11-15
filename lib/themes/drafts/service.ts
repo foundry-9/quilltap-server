@@ -26,8 +26,11 @@ import { resolveInside, resolveInsideSync } from '@/lib/paths/resolve-inside';
 import { docStoreUriFor } from '@/lib/doc-edit/uri-producers';
 import { DocumentConflictError } from '@/lib/documents/core/errors';
 import { HOOK_CATALOGUE } from '../hooks';
-import { ThemeTokensDocumentSchema, type ThemeTokensDocument } from '../engine';
+import { bundleFileUsage, describeFileUse, ThemeManifestSchema, ThemeTokensDocumentSchema, type BundleFileUse, type BundleUsage, type ThemeTokensDocument } from '../engine';
 import { bundleAssetUrl, imageMimeType, normaliseBundlePath } from '../engine/css-text';
+import { convertThemeFonts, type ThemeFontConversion } from '../convert-fonts';
+import { readFontInfo, type FontEmbedding, type FontStyle } from '../font-info';
+import { DRAFT_LIMITS, UPLOAD_EXTENSIONS, extensionOf } from './uploads';
 import { listBundleFiles, loadThemeFromSource, ThemeBundleError, type ThemeBundleSource } from '../theme-bundle';
 import { themeRegistry } from '../theme-registry';
 import { packThemeDirectory } from '../bundle-archive';
@@ -68,6 +71,38 @@ export class DraftRevisionConflictError extends Error {
   constructor(readonly currentRevision: string) {
     super('The draft was changed since it was read; reload it and try again');
     this.name = 'DraftRevisionConflictError';
+  }
+}
+
+/** The manifest a caller read is not the draft's: someone else changed theme.json first. */
+export class DraftManifestRevisionConflictError extends Error {
+  constructor(readonly currentRevision: string) {
+    super('The theme manifest was changed since it was read; reload the draft and try again');
+    this.name = 'DraftManifestRevisionConflictError';
+  }
+}
+
+/** A manifest edit that would leave theme.json invalid (or one already broken from outside). */
+export class DraftManifestInvalidError extends Error {
+  constructor(readonly errors: string[]) {
+    super(`theme.json would not be valid: ${errors.slice(0, 3).join('; ')}${errors.length > 3 ? ` (and ${errors.length - 3} more)` : ''}`);
+    this.name = 'DraftManifestInvalidError';
+  }
+}
+
+/** An operation refused for a reason the caller can act on (an unknown icon, a missing image). */
+export class DraftOperationRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DraftOperationRefusedError';
+  }
+}
+
+/** A file cannot be removed while something still uses it. */
+export class DraftFileInUseError extends Error {
+  constructor(readonly path: string, readonly users: string[]) {
+    super(`${path} is still used by ${users.join(', ')}`);
+    this.name = 'DraftFileInUseError';
   }
 }
 
@@ -123,6 +158,8 @@ export interface DraftDetail {
   revision: string;
   /** The draft folder's `qtap://` address. */
   uri: string;
+  /** The store holding the draft folder (Quilltap General), for a link to it in the Scriptorium. */
+  mountPointId: string;
   /** The parts the editor cannot change yet, compiled by the server (empty when invalid). */
   compiled: { fontFaces: string; icons: string; custom: string };
   /** The manifest's subsystem overrides, image paths resolved to the draft's asset URLs. */
@@ -133,6 +170,47 @@ export interface DraftDetail {
   version: string | null;
   /** Every image file in the draft (what an image token may name, Spec E decision 10). */
   images: DraftImageFile[];
+  /** The content hash of theme.json, sent back with every manifest edit (Spec F decision 6). */
+  manifestRevision: string;
+  /** Every file in the draft, with its size and what uses it. */
+  files: DraftFile[];
+  /** The draft against the bundle's limits. */
+  totals: DraftTotals;
+}
+
+/** What a file in a draft is, by its extension and place. */
+export type DraftFileKind = 'manifest' | 'tokens' | 'styles' | 'font' | 'licence' | 'image' | 'other';
+
+/** One file in a draft. */
+export interface DraftFile {
+  path: string;
+  size: number;
+  kind: DraftFileKind;
+  /** Everything that refers to it (Spec F §0.1). */
+  users: BundleFileUse[];
+  /** The same, in words. */
+  usedBy: string[];
+  /** A font or image file nothing refers to: kept in the draft, left out at install. */
+  unused: boolean;
+  /** For a font file, what the font says it is (null when it cannot be read). */
+  font?: DraftFontFacts | null;
+}
+
+/** What a font file says about itself (read from its tables, Spec F decision 1). */
+export interface DraftFontFacts {
+  family: string;
+  weight: string;
+  style: FontStyle;
+  variable: boolean;
+  embedding: FontEmbedding;
+  licence: string | null;
+  licenceUrl: string | null;
+}
+
+export interface DraftTotals {
+  files: number;
+  bytes: number;
+  limits: { files: number; bytes: number; fileBytes: number };
 }
 
 /** One image file in a draft. */
@@ -191,6 +269,10 @@ export interface DraftInstallResult {
   /** The draft's version after the bump. */
   draftVersion: string;
   conversion: Pick<ThemeImageConversion, 'converted' | 'reencoded' | 'skippedAnimated'>;
+  /** Fonts converted to WOFF2 in the installed copy (original → new path). */
+  fontConversion: ThemeFontConversion['converted'];
+  /** Font and image files nothing uses, kept in the draft and left out of the install. */
+  leftOut: string[];
 }
 
 // ============================================================================
@@ -217,6 +299,49 @@ function storeSource(store: DraftsStore, id: string, files: DraftFileEntry[]): T
 interface DraftRead {
   detail: DraftDetail;
   served: DraftServedSet | null;
+  /** What refers to each file (Spec F §0.1). */
+  usage: BundleUsage;
+}
+
+const FONT_EXTENSIONS: readonly string[] = UPLOAD_EXTENSIONS.font;
+const LICENCE_EXTENSIONS = ['.txt', '.md', '.license'];
+
+/** What a draft file is, by its place in the manifest, then its extension. */
+export function draftFileKind(file: string, manifest: Record<string, unknown> | null, users: readonly BundleFileUse[]): DraftFileKind {
+  if (file === MANIFEST_FILE) return 'manifest';
+  if (users.some((u) => u.kind === 'tokens-file') || (!manifest && file === 'tokens.json')) return 'tokens';
+  if (users.some((u) => u.kind === 'styles-file')) return 'styles';
+  const ext = extensionOf(file);
+  if (FONT_EXTENSIONS.includes(ext)) return 'font';
+  if (imageMimeType(file) !== null) return 'image';
+  if (users.some((u) => u.kind === 'licence-file')) return 'licence';
+  if (LICENCE_EXTENSIONS.includes(ext) && file.startsWith('fonts/')) return 'licence';
+  return 'other';
+}
+
+/** Kinds an install leaves out when nothing uses them (Spec F decision 3). */
+export const LEFT_OUT_WHEN_UNUSED: ReadonlySet<DraftFileKind> = new Set(['font', 'image']);
+/** Kinds the editor may remove (when nothing uses them). */
+export const REMOVABLE_KINDS: ReadonlySet<DraftFileKind> = new Set(['font', 'image', 'licence']);
+
+/** What each font file says about itself, by content hash (a font's bytes never change under its hash). */
+const fontFactsCache = new Map<string, DraftFontFacts | null>();
+
+async function fontFactsFor(store: DraftsStore, id: string, file: DraftFileEntry): Promise<DraftFontFacts | null> {
+  if (fontFactsCache.has(file.sha256)) return fontFactsCache.get(file.sha256) ?? null;
+  let facts: DraftFontFacts | null = null;
+  try {
+    const read = readFontInfo(await readDraftBytes(store, id, file.path));
+    if (read.ok) {
+      const { family, weight, style, variable, embedding, licence, licenceUrl } = read.info;
+      facts = { family, weight, style, variable, embedding, licence, licenceUrl };
+    }
+  } catch (e) {
+    logger.debug('Could not read a draft font file', { draftId: id, file: file.path, error: (e as Error).message });
+  }
+  if (fontFactsCache.size > 500) fontFactsCache.clear();
+  fontFactsCache.set(file.sha256, facts);
+  return facts;
 }
 
 async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFileEntry[]): Promise<DraftRead> {
@@ -253,6 +378,24 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
     else error(`${tokensPath}: cannot be read as JSON (${(e as Error).message})`);
   }
 
+  let manifestRevision = 'missing';
+  try {
+    manifestRevision = sha256OfString((await readDraftText(store, id, MANIFEST_FILE)).content);
+  } catch (e) {
+    if (!isMissing(e)) throw e;
+  }
+
+  const present = new Set(files.map((f) => f.path));
+  let css: string | null = null;
+  if (typeof manifest?.stylesPath === 'string' && present.has(normaliseBundlePath(manifest.stylesPath))) {
+    try {
+      css = (await readDraftText(store, id, normaliseBundlePath(manifest.stylesPath))).content;
+    } catch (e) {
+      logger.debug('Could not read a draft\'s custom CSS for its file usage', { draftId: id, error: (e as Error).message });
+    }
+  }
+  const usage = bundleFileUsage({ manifest, tokens, css });
+
   const imagePaths = files.map((f) => f.path).filter((p) => imageMimeType(p) !== null).sort();
   let compiled = { fontFaces: '', icons: '', custom: '' };
   let served: DraftServedSet | null = null;
@@ -261,12 +404,15 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
       const loaded = await loadThemeFromSource(storeSource(store, id, files), manifestJson);
       compiled = { fontFaces: loaded.compiled.css.fontFaces, icons: loaded.compiled.css.icons, custom: loaded.compiled.css.custom };
       for (const w of loaded.warnings) issues.push({ severity: 'warning', message: w });
+      // Both halves come from the file usage (Spec F §0.1): every font file a
+      // font entry names, and every image in the draft — not only those
+      // something names today, so the editor can show a thumbnail and preview
+      // an image token before saving. Every used image is in that set already
+      // (validation refused one that is missing).
       served = {
         version: loaded.document.manifest.version,
-        // Every image in the draft, not only those its CSS names today, so the
-        // editor can show a thumbnail and preview an image token before saving.
-        assets: new Set([...loaded.compiled.assets, ...imagePaths]),
-        fonts: new Set((loaded.document.manifest.fonts ?? []).map((f) => normaliseBundlePath(f.src))),
+        assets: new Set(imagePaths),
+        fonts: new Set([...usage].filter(([p, uses]) => present.has(p) && uses.some((u) => u.kind === 'font')).map(([p]) => p)),
       };
     } catch (e) {
       if (e instanceof ThemeBundleError) for (const m of e.errors) error(m);
@@ -280,6 +426,27 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
     type: imageMimeType(p) as string,
     url: served ? bundleAssetUrl(id, served.version, p) : null,
   }));
+  const draftFiles: DraftFile[] = [];
+  for (const f of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
+    const users = usage.get(f.path) ?? [];
+    const kind = draftFileKind(f.path, manifest, users);
+    const entry: DraftFile = {
+      path: f.path,
+      size: f.size,
+      kind,
+      users,
+      usedBy: users.map(describeFileUse),
+      unused: users.length === 0 && REMOVABLE_KINDS.has(kind),
+    };
+    if (kind === 'font') entry.font = await fontFactsFor(store, id, f);
+    draftFiles.push(entry);
+  }
+  const totals: DraftTotals = {
+    files: files.length,
+    bytes: files.reduce((sum, f) => sum + f.size, 0),
+    limits: { files: DRAFT_LIMITS.files, bytes: DRAFT_LIMITS.totalBytes, fileBytes: DRAFT_LIMITS.fileBytes },
+  };
+
   logger.debug('Read theme draft', {
     draftId: id,
     files: files.length,
@@ -294,14 +461,19 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
       tokens,
       revision,
       uri,
+      mountPointId: store.mountPointId,
       compiled,
       subsystems: draftSubsystems(manifest, id, typeof manifest?.version === 'string' ? manifest.version : null),
       issues,
       updatedAt: newest(files),
       version: typeof manifest?.version === 'string' ? manifest.version : null,
       images,
+      manifestRevision,
+      files: draftFiles,
+      totals,
     },
     served,
+    usage,
   };
 }
 
@@ -310,7 +482,7 @@ const servedCache = new Map<string, { signature: string; served: DraftServedSet 
 const signatureOf = (files: DraftFileEntry[]) =>
   sha256OfString(files.map((f) => `${f.path}\u0000${f.sha256}`).sort().join('\n'));
 
-async function loadDraft(id: string): Promise<{ store: DraftsStore; files: DraftFileEntry[]; read: DraftRead }> {
+export async function loadDraft(id: string): Promise<{ store: DraftsStore; files: DraftFileEntry[]; read: DraftRead }> {
   if (!isValidDraftId(id)) throw new ThemeDraftNotFoundError(id);
   const store = await draftsStore();
   const files = await listDraftFiles(store, id);
@@ -530,8 +702,35 @@ export async function writeDraftTokens(id: string, input: { revision: string; to
   return readDraft(id);
 }
 
-async function rewriteManifest(store: DraftsStore, id: string, edit: (manifest: Record<string, unknown>) => void): Promise<void> {
+export interface ManifestRewriteOptions {
+  /** The manifest revision the caller read; a mismatch writes nothing (Spec F decision 6). */
+  revision?: string;
+  /** Hold the edited manifest to `ThemeManifestSchema` (every editor operation does). */
+  validate?: boolean;
+}
+
+/**
+ * Read `theme.json`, change it, and write it back guarded by its mtime. A
+ * stale `revision` is a DraftManifestRevisionConflictError; a manifest that
+ * does not parse is DraftManifestUnreadableError; with `validate`, an edit
+ * whose result is not a valid manifest — including one already broken from
+ * outside — is DraftManifestInvalidError. In every refusal the file is
+ * untouched.
+ */
+export async function rewriteManifest(
+  store: DraftsStore,
+  id: string,
+  edit: (manifest: Record<string, unknown>) => void,
+  options: ManifestRewriteOptions = {},
+): Promise<void> {
   const current = await readDraftText(store, id, MANIFEST_FILE);
+  if (options.revision !== undefined) {
+    const currentRevision = sha256OfString(current.content);
+    if (currentRevision !== options.revision) {
+      logger.debug('Theme draft manifest edit refused: stale revision', { draftId: id });
+      throw new DraftManifestRevisionConflictError(currentRevision);
+    }
+  }
   let manifest: Record<string, unknown>;
   try {
     const parsed = JSON.parse(current.content);
@@ -541,22 +740,23 @@ async function rewriteManifest(store: DraftsStore, id: string, edit: (manifest: 
     throw new DraftManifestUnreadableError(id, (e as Error).message);
   }
   edit(manifest);
-  await writeDraftDocument(store, id, MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`, current.mtime);
-}
-
-/** Edit the draft's name and description, the only manifest fields the editor owns. */
-export async function writeDraftManifestFields(id: string, fields: { name?: string; description?: string }): Promise<DraftDetail> {
-  const { store } = await loadDraft(id);
-  await rewriteManifest(store, id, (manifest) => {
-    if (fields.name !== undefined) manifest.name = fields.name.trim();
-    if (fields.description !== undefined) {
-      const description = fields.description.trim();
-      if (description) manifest.description = description;
-      else delete manifest.description;
+  if (options.validate) {
+    const checked = ThemeManifestSchema.safeParse(manifest);
+    if (!checked.success) {
+      const errors = checked.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`);
+      logger.debug('Theme draft manifest edit refused: invalid result', { draftId: id, errors });
+      throw new DraftManifestInvalidError(errors);
     }
-  });
-  logger.debug('Saved theme draft manifest fields', { draftId: id, fields: Object.keys(fields) });
-  return readDraft(id);
+  }
+  try {
+    await writeDraftDocument(store, id, MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`, current.mtime);
+  } catch (e) {
+    if (e instanceof DocumentConflictError) {
+      const now = await readDraftText(store, id, MANIFEST_FILE).catch(() => null);
+      throw new DraftManifestRevisionConflictError(now ? sha256OfString(now.content) : 'missing');
+    }
+    throw e;
+  }
 }
 
 /** Delete a draft and every file in it. An installed copy is untouched. */
@@ -580,9 +780,11 @@ export function bumpPatch(version: string): string {
 
 /**
  * Install a draft: refuse one with validation errors; otherwise write its
- * files to a temporary directory, convert its raster images to WebP there
- * (the draft keeps its originals), pack it and run the ordinary install, so
- * it passes every check a bundle passes. Installing again replaces the
+ * files to a temporary directory, leave out the font and image files nothing
+ * uses (Spec F decision 3), convert its raster images to WebP and its
+ * TrueType and OpenType fonts to WOFF2 there (the draft keeps its originals),
+ * pack it and run the ordinary install, so it passes every check a bundle
+ * passes. Installing again replaces the
  * earlier install. Afterwards the draft's patch version is bumped, so the
  * installed theme and the draft never share asset URLs.
  */
@@ -602,13 +804,23 @@ export async function installDraft(id: string): Promise<DraftInstallResult> {
   try {
     const dir = path.join(work, 'bundle');
     await fs.mkdir(dir);
+    // Unused files are decided first, so nothing is converted that will not
+    // ship; a converted file stays used under its new name, because the
+    // conversions rewrite every reference they rename.
+    const leftOut = read.detail.files
+      .filter((f) => f.users.length === 0 && LEFT_OUT_WHEN_UNUSED.has(f.kind))
+      .map((f) => f.path);
+    const skip = new Set(leftOut);
     for (const file of files) {
+      if (skip.has(file.path)) continue;
       const target = await resolveInside(dir, file.path);
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(target, await readDraftBytes(store, id, file.path));
     }
     const conversion = await convertThemeImages(dir);
     if (conversion.errors.length > 0) throw new DraftNotInstallableError(conversion.errors);
+    const fontConversion = await convertThemeFonts(dir);
+    if (fontConversion.errors.length > 0) throw new DraftNotInstallableError(fontConversion.errors);
 
     const archive = path.join(work, `${id}.qtap-theme`);
     await packThemeDirectory(dir, archive);
@@ -629,13 +841,17 @@ export async function installDraft(id: string): Promise<DraftInstallResult> {
       version: installedVersion,
       draftVersion,
       converted: Object.keys(conversion.converted).length,
+      fontsConverted: Object.keys(fontConversion.converted).length,
       skippedAnimated: conversion.skippedAnimated.length,
+      leftOut,
     });
     return {
       themeId: result.themeId,
       version: installedVersion,
       draftVersion,
       conversion: { converted: conversion.converted, reencoded: conversion.reencoded, skippedAnimated: conversion.skippedAnimated },
+      fontConversion: fontConversion.converted,
+      leftOut,
     };
   } finally {
     await fs.rm(work, { recursive: true, force: true });

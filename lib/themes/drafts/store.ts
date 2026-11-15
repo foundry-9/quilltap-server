@@ -25,7 +25,7 @@ import { listDatabaseFiles } from '@/lib/mount-index/database-store';
 import { deleteFolder } from '@/lib/mount-index/folder-ops';
 import { detectNativeText, mimeForExtension } from '@/lib/mount-index/path-utils';
 import { resolveInsideSync } from '@/lib/paths/resolve-inside';
-import { readDocument, readDocumentBytes, writeDocument } from '@/lib/documents/core';
+import { deleteDocument, readDocument, readDocumentBytes, writeDocument } from '@/lib/documents/core';
 import { resolveOperatorDocPath, STANDALONE_ACCESS_CONTEXT } from '@/lib/documents/operator-doc-actions';
 import type { ResolvedPath } from '@/lib/doc-edit';
 import { draftFolderPath, isValidDraftId, THEME_DRAFTS_FOLDER } from './location';
@@ -60,6 +60,8 @@ export interface DraftFileEntry {
   path: string;
   sha256: string;
   lastModified: string;
+  /** Size in bytes. */
+  size: number;
 }
 
 /** Every draft folder's files, keyed by folder name (which may not be a valid id). */
@@ -79,7 +81,7 @@ export async function listDraftFolders(store: DraftsStore): Promise<Map<string, 
     }
     if (slash < 0) continue; // a loose file directly under Themes/ is not a draft
     const list = folders.get(folder) ?? [];
-    list.push({ path: rest.slice(slash + 1), sha256: entry.sha256, lastModified: entry.lastModified });
+    list.push({ path: rest.slice(slash + 1), sha256: entry.sha256, lastModified: entry.lastModified, size: entry.fileSizeBytes });
     folders.set(folder, list);
   }
   return folders;
@@ -92,7 +94,7 @@ export async function listDraftFiles(store: DraftsStore, id: string): Promise<Dr
   const prefix = `${folder}/`;
   return entries
     .filter((e) => e.kind !== 'folder' && e.relativePath.startsWith(prefix))
-    .map((e) => ({ path: e.relativePath.slice(prefix.length), sha256: e.sha256, lastModified: e.lastModified }));
+    .map((e) => ({ path: e.relativePath.slice(prefix.length), sha256: e.sha256, lastModified: e.lastModified, size: e.fileSizeBytes }));
 }
 
 /**
@@ -170,6 +172,17 @@ export async function writeDraftFile(store: DraftsStore, id: string, file: strin
     enqueueEmbedding: false,
     assetStorage: 'database',
   });
+}
+
+/**
+ * Delete one file of a draft through the document core's delete (which also
+ * garbage-collects an uploaded blob). True when a file was there.
+ */
+export async function deleteDraftFile(store: DraftsStore, id: string, file: string): Promise<boolean> {
+  const resolved = await resolveDraftFile(store, id, file);
+  const outcome = await deleteDocument(resolved);
+  logger.debug('Deleted theme draft file', { draftId: id, file, outcome });
+  return outcome === 'deleted';
 }
 
 /**

@@ -50,7 +50,7 @@ import {
   installDraft,
   listDrafts,
   readDraft,
-  writeDraftManifestFields,
+  setDraftManifestFields,
   writeDraftTokens,
 } from '@/lib/themes/drafts';
 import { serveDraftThemeFile } from '@/lib/themes/drafts/serve';
@@ -191,9 +191,12 @@ describe('save', () => {
   });
 
   it('edits the name and description, and nothing else in theme.json', async () => {
-    await createDraft({ name: 'Named' });
+    const draft = await createDraft({ name: 'Named' });
     const before = JSON.parse(fake.get('named', 'theme.json')!.toString());
-    const after = await writeDraftManifestFields('named', { name: 'Renamed', description: 'A room.' });
+    const { draft: after } = await setDraftManifestFields('named', {
+      revision: draft.manifestRevision,
+      fields: { name: 'Renamed', description: 'A room.' },
+    });
     expect(after.manifest).toEqual({ ...before, name: 'Renamed', description: 'A room.' });
   });
 

@@ -29,7 +29,7 @@ To be rid of a draft, use the bin beside it in the list. The Atelier asks first,
 
 Open a draft and the Atelier lays out every token a theme may set — some six hundred and sixty of them — arranged as Quilltap's registry arranges them, group by group.
 
-- **Name and Description** sit at the top. They are what the theme will be called on the Appearance card.
+- **Name and Description** sit at the top. They are what the theme will be called on the Appearance card. The theme's other particulars — author, licence, tags, dark mode — are under **Subsystems and details**.
 - **Light and Dark** switch which mode is on show while you work, so you see what you are changing.
 
 ### Finding your way
@@ -96,7 +96,38 @@ At the head of the tokens sits **Choices**, where the theme's broad switches liv
 
 Every change is saved as you go; the Atelier says **All changes saved** when it has caught up. Beneath the header it keeps count of the draft's errors and warnings from the last save, and of the contrast pairs that fall short in the mode on show.
 
-If the same draft is open in two tabs and you edit it in both, the second save notices that the draft has moved on beneath it, fetches the newer version and tells you so — nothing is silently overwritten.
+If the same draft is open in two tabs and you edit it in both, the second save notices that the draft has moved on beneath it, fetches the newer version and tells you so — nothing is silently overwritten. The same holds when the draft's files are changed elsewhere, in Document Mode or by a character with a pen, while you add a font or a picture.
+
+## Fonts, pictures, icons and the theme's particulars
+
+Below the tokens, in the same list of sections, sit five more: **Fonts**, **Images**, **Icons**, **Subsystems and details** and **Files**. They change the files the draft carries rather than its tokens, and each change is saved the moment it is made.
+
+### Fonts
+
+Press **Add font** and choose one file or several — WOFF2, WOFF, TrueType or OpenType; a family's weights are best added together. The Atelier reads each file and fills in its family, weight and style from what the font says of itself, marking anything it had to guess; correct whatever is amiss. Then name the **licence** the fonts come under — the font's own tables often say, and the Atelier offers what they say — and, if you have it, attach the licence text (`.txt` or `.md`) to keep beside them.
+
+- Fonts are listed by family, each face with its weight, style, licence and file, and a line set in the face itself (the sample needs the live preview on).
+- A family no font-family token names yet is marked, with a button to the **Font stacks**: the family appears there under *This theme's fonts*, and the font-weight lists mark the weights it carries.
+- A font whose own tables forbid embedding says so. A font marked **Proprietary** carries a note: whoever shares the theme answers for the right to share it.
+- **Edit** corrects a face's family, weight, style or licence; **Remove** takes the face away, and its file with it unless something else uses the file.
+- TrueType, OpenType and WOFF files become WOFF2 when the theme is installed; the draft keeps the file you gave it.
+
+### Images
+
+**Add images** takes PNG, JPEG, GIF, WebP, AVIF or SVG pictures. Each shows its size and what uses it — a page background token, a subsystem, the preview card — or is marked **Unused**. Choose an image for a token with that token's own image control. **Make it the preview** sets the picture the theme list shows. An image something still uses cannot be removed until it is let go.
+
+### Icons
+
+Every icon in Quilltap, as this theme draws it, with a search by name; those the theme redraws are marked. Choose one to see it at a few sizes and to **upload a replacement**: an **SVG** is drawn in the colour of the text around it, as Quilltap's own icons are, so draw it in one colour on a clear ground; a **WebP** is drawn exactly as it is. **Remove the override** puts Quilltap's own icon back.
+
+### Subsystems and details
+
+- **The theme's details** — author (with an optional email and web address), the theme's licence, up to twenty tags, and whether the theme **has a dark mode**. That last is a label, not a lock: unticked, the Appearance settings show the theme in light only, but a reader who prefers the dark still sees it dark, from this theme's dark values where it sets them and the house defaults where it does not. Press **Save the details**.
+- **Subsystems** — each of Quilltap's rooms (the Salon, the Foundry, the Lantern and the rest) may be renamed and given a description, a thumbnail for the Foundry and a picture for its own page. A field left empty keeps Quilltap's own; **None** means no picture at all.
+
+### Files
+
+Every file in the draft, its size, and what uses it, with the totals against a bundle's limits. A file marked **Unused** stays in the draft but is left out of the install, and may be removed here. A link opens Quilltap General in the Scriptorium, where the draft's folder lives.
 
 ## The live preview
 
@@ -111,6 +142,8 @@ When the draft pleases you, press **Install**. The Atelier packs it into a prope
 A few things happen on the way:
 
 - **Pictures are tailored for travel.** PNG, JPEG and GIF images become WebP in the installed copy; animated pictures and SVG are left as they are. The draft keeps your originals, so nothing is lost by installing.
+- **Fonts are packed tight.** TrueType, OpenType and WOFF fonts become WOFF2 in the installed copy; again the draft keeps the files you gave it.
+- **Nothing unused travels.** A file nothing in the theme uses is left out of the install and named in the Atelier's report.
 - **The draft's version moves on.** After each install the draft's version number goes up by one patch, so the installed theme and the draft carrying on in the Atelier never get muddled.
 - **Installing again replaces the earlier install** of the same theme. A draft may not take the name of a theme that ships with Quilltap.
 
@@ -118,7 +151,7 @@ If the draft has errors, **Install** waits until they are mended and lists them;
 
 ## What the Atelier does not yet do
 
-Every token can now be set, but a few rooms remain unfurnished. Adding font files and images, the theme's icons and subsystems, and custom CSS are still edited in the draft's files — see [Themes](themes.md) for the bundle format — and the Atelier will learn them in time.
+One room remains unfurnished: **custom CSS** is still edited in the draft's files — see [Themes](themes.md) for the bundle format — and the Atelier will learn it in time.
 
 ## In-Chat Navigation
 
