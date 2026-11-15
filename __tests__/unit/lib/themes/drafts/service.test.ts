@@ -94,6 +94,25 @@ describe('ids', () => {
     expect(made.map((d) => d.id).sort()).toEqual(['twin', 'twin-2', 'twin-3']);
   });
 
+  it('a copy that fails part-way leaves no folder and frees its id (#226)', async () => {
+    const realWrite = fake.storeModule.writeDraftFile;
+    let calls = 0;
+    const spy = jest.spyOn(fake.storeModule, 'writeDraftFile').mockImplementation(async (...args) => {
+      if (++calls === 2) throw new Error('database is locked');
+      return realWrite(...args);
+    });
+    try {
+      await expect(createDraft({ name: 'Half Copy', from: 'madmans-box' })).rejects.toThrow('database is locked');
+    } finally {
+      spy.mockRestore();
+    }
+    const folders = await fake.storeModule.listDraftFolders();
+    expect(folders.has('half-copy')).toBe(false);
+    expect(await listDrafts()).toEqual([]);
+    const retry = await createDraft({ name: 'Half Copy', from: 'madmans-box' });
+    expect(retry.id).toBe('half-copy');
+  });
+
   it('refuses an id that would leave the drafts folder', async () => {
     await expect(readDraft('../escape')).rejects.toThrow('No theme draft');
     await expect(readDraft('Themes')).rejects.toThrow('No theme draft');

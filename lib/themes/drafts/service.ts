@@ -429,7 +429,32 @@ async function createDraftNow({ name, from }: { name: string; from?: string }): 
   }
   logger.info('Creating theme draft', { draftId: id, from: source?.id ?? 'blank' });
 
-  if (!source?.bundlePath) {
+  try {
+    await writeNewDraft(store, id, trimmed, source?.id ?? null, source?.bundlePath ?? null);
+  } catch (e) {
+    // A write failed part-way (#226). The folder has no theme.json, so it
+    // never lists as a draft, but `takenIds` would still count it and keep
+    // the id taken forever. Remove whatever was written before rethrowing.
+    logger.warn('Theme draft create failed; removing the partial folder', { draftId: id, error: (e as Error).message });
+    try {
+      await deleteDraftFolder(store, id);
+    } catch (cleanup) {
+      logger.error('Could not remove a partial theme draft folder', { draftId: id, error: (cleanup as Error).message });
+    }
+    throw e;
+  }
+  return readDraft(id);
+}
+
+/** Write a new draft's files; the manifest always goes last. */
+async function writeNewDraft(
+  store: DraftsStore,
+  id: string,
+  trimmed: string,
+  sourceId: string | null,
+  bundleDir: string | null,
+): Promise<void> {
+  if (!bundleDir) {
     const manifest = {
       format: 'qtap-theme',
       formatVersion: 2,
@@ -443,10 +468,9 @@ async function createDraftNow({ name, from }: { name: string; from?: string }): 
     };
     await writeDraftDocument(store, id, 'tokens.json', `${JSON.stringify({ primitives: {}, tokens: {}, choices: {} }, null, 2)}\n`);
     await writeDraftDocument(store, id, MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`);
-    return readDraft(id);
+    return;
   }
 
-  const bundleDir = source.bundlePath;
   const files = [...(await listBundleFiles(bundleDir))].sort();
   let manifestText: string | null = null;
   for (const rel of files) {
@@ -464,8 +488,7 @@ async function createDraftNow({ name, from }: { name: string; from?: string }): 
   // The manifest goes last: a folder with a theme.json is a draft, so a copy
   // interrupted part-way never lists as a broken one.
   await writeDraftDocument(store, id, MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`);
-  logger.debug('Copied theme into a draft', { draftId: id, from: source.id, files: files.length });
-  return readDraft(id);
+  logger.debug('Copied theme into a draft', { draftId: id, from: sourceId, files: files.length });
 }
 
 // ============================================================================

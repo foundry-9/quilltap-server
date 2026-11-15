@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Fix: a failed theme draft copy no longer holds its id (#226)
+
+- `createDraftNow` (`lib/themes/drafts/service.ts`) removes the partial `Themes/<id>/` folder when any write fails, then rethrows. Before, the leftover folder never listed (no `theme.json`) but still counted as a taken id, so the next draft of that name got `-2` and the copied files stayed in Quilltap General
+- Regression test: a copy whose second file write fails leaves no folder, and a retry gets the un-suffixed id
+
 #### Docs: Calliope Live Spec E
 
 - `help/theme-editor.md` covers the levels, sections, search, "Changed only", each type's control and the text form, following, dark values, density, primitives and undo
