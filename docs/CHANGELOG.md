@@ -8,7 +8,7 @@
 
 - Theme engine `bundleFileUsage` (`lib/themes/engine/usage.ts`) is the one answer to "what uses which file" (fonts, licence files, icons, subsystems, preview image, tokens and styles files, token, primitive and custom CSS references); the draft detail returns every file with its kind, size, users and an `unused` flag, plus totals against the bundle limits and a `manifestRevision`
 - New draft operations (`lib/themes/drafts/operations.ts`, `uploads.ts`) on `POST /api/v1/theme-drafts/[id]`: `read-font`, `add-font`, `add-licence-file`, `add-image`, `set-icon` (multipart, fields validated by Zod) and `update-font`, `remove-font`, `remove-file`, `clear-icon`, `set-subsystem`, `set-manifest` (JSON). Stored names are built by the server; font and raster image extensions must match the file's leading bytes. Each operation checks `manifestRevision` (409 when stale) and a removal of a file still in use is a 409 naming its users
-- Font facts (family, weight, style, variable axes, embedding permission, licence hint) are read with `fontkit` in `lib/themes/font-info.ts`; TTF, OTF and WOFF fonts become WOFF2 at install with `wawoff2` in `lib/themes/convert-fonts.ts`. The draft keeps the originals
+- Font facts (family, weight, style, variable axes, embedding permission, licence hint) are read with `fontkit` in `lib/themes/font-info.ts`; TTF and OTF fonts become WOFF2 (WOFF packed as is) at install with `wawoff2` in `lib/themes/convert-fonts.ts`. The draft keeps the originals
 - Install leaves out files nothing uses and reports them (`leftOut`) with the font conversions (`fontConversion`)
 - Theme editor: Fonts, Images, Icons, Subsystems and details, and Files sections after the token sections (`components/theme-editor/assets/`). Fonts are added in batches with read-back fields and one licence (with an optional licence file), edited and removed; images added, removed when unused and chosen as the preview image; any icon overridden with an SVG (tinted) or WebP (as drawn) or reset; author, licence, tags and the dark-mode flag edited; each subsystem renamed, described and given a thumbnail and page picture. Operations flush pending token saves first; a stale revision reloads the draft and says it was changed elsewhere
 - New fonts appear in the font-family control and mark their weights in the font-weight control; new images appear in the image control
@@ -19,6 +19,11 @@
 #### Docs: Calliope Live Spec F
 
 - Added Spec F (font and image upload, icon overrides, subsystem overrides and manifest details in the theme editor; fonts are read from the file and become WOFF2 at install)
+- Spec F marked implemented and moved to `docs/developer/features/complete/`, with implementation notes for Specs G and H (custom CSS should save like `tokens.json`, with one named operation for the manifest's `customCSS` path; importing a `.qtap-theme` should extract it and reuse the draft copy path)
+- `API.md` documents the draft manifest and file operations, the new draft detail fields, the error codes and the install result's `fontConversion` and `leftOut`; the tokens `PUT` takes only `{ revision, tokens }`
+- `THEME_DEVELOPMENT.md` covers the editor's folders, what uses what, font conversion and what install leaves out
+- `CLAUDE.md` names `fontkit` and `wawoff2` with their one importer each, and states that manifest edits are named draft operations and `bundleFileUsage` is the one source for served, unused and removable files
+- Fixed the help page and changelog: only TrueType and OpenType fonts become WOFF2; WOFF is packed as is
 
 #### Fix: a failed theme draft copy no longer holds its id (#226)
 

@@ -110,7 +110,7 @@ Press **Add font** and choose one file or several — WOFF2, WOFF, TrueType or O
 - A family no font-family token names yet is marked, with a button to the **Font stacks**: the family appears there under *This theme's fonts*, and the font-weight lists mark the weights it carries.
 - A font whose own tables forbid embedding says so. A font marked **Proprietary** carries a note: whoever shares the theme answers for the right to share it.
 - **Edit** corrects a face's family, weight, style or licence; **Remove** takes the face away, and its file with it unless something else uses the file.
-- TrueType, OpenType and WOFF files become WOFF2 when the theme is installed; the draft keeps the file you gave it.
+- TrueType and OpenType files become WOFF2 when the theme is installed (a WOFF, already compressed, travels as it is); the draft keeps the file you gave it.
 
 ### Images
 
@@ -142,7 +142,7 @@ When the draft pleases you, press **Install**. The Atelier packs it into a prope
 A few things happen on the way:
 
 - **Pictures are tailored for travel.** PNG, JPEG and GIF images become WebP in the installed copy; animated pictures and SVG are left as they are. The draft keeps your originals, so nothing is lost by installing.
-- **Fonts are packed tight.** TrueType, OpenType and WOFF fonts become WOFF2 in the installed copy; again the draft keeps the files you gave it.
+- **Fonts are packed tight.** TrueType and OpenType fonts become WOFF2 in the installed copy (WOFF and WOFF2 travel as they are); again the draft keeps the files you gave it.
 - **Nothing unused travels.** A file nothing in the theme uses is left out of the install and named in the Atelier's report.
 - **The draft's version moves on.** After each install the draft's version number goes up by one patch, so the installed theme and the draft carrying on in the Atelier never get muddled.
 - **Installing again replaces the earlier install** of the same theme. A draft may not take the name of a theme that ships with Quilltap.

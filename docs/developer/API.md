@@ -6765,7 +6765,7 @@ Uninstall a bundle theme, or a refused version 1 bundle. A plugin's refused them
 
 Calliope's Atelier (the theme editor, Calliope Live Spec D). A draft is the folder `Themes/<id>/` in Quilltap General holding an unpacked version 2 bundle — no database row; dates come from the store. `lib/themes/drafts/` is the only code that knows the location. Any document edit may change a draft's files, so a file that does not parse is an issue on the draft, not an error from the route. Validation is the installed-bundle loader's (`loadThemeFromSource`). An install publishes the `themes` realtime topic (which also refreshes draft queries); draft saves publish nothing — two editors of one draft are reconciled by the revision check.
 
-Errors: `404` unknown draft; `409` stale `revision` (`{ currentRevision }`) or an unreadable `theme.json` on a manifest write; `422` an install refused (`{ errors: string[] }`); `503` Quilltap General unavailable.
+Errors: `400` a malformed upload or an operation refused for a reason the caller can act on (an unknown icon, a missing image); `404` unknown draft; `409` stale `revision` (`{ currentRevision }`), stale `manifestRevision` (`{ currentManifestRevision }`), a file still in use (`{ path, usedBy: string[] }`) or an unreadable `theme.json` on a manifest write; `413` an upload over a bundle limit; `422` an upload refused (wrong type, contents that do not match the extension), a manifest edit that would leave `theme.json` invalid, or an install refused (`{ errors: string[] }`); `503` Quilltap General unavailable.
 
 #### `GET /api/v1/theme-drafts`
 
@@ -6777,19 +6777,39 @@ Create a draft. Body (strict): `{ name: string (1–100), from?: string }`. With
 
 #### `GET /api/v1/theme-drafts/[id]`
 
-`{ draft: DraftDetail }`: `id`, `manifest` (parsed, or `null`), `tokens` (or `null` when missing or unparseable), `revision` (content hash of `tokens.json`, or `missing`), `uri` (the folder's `qtap://` address), `compiled` (`{ fontFaces, icons, custom }` — the parts the editor cannot change yet, compiled server-side; empty when invalid), `subsystems` (manifest overrides with image paths turned into draft asset URLs), `issues` (`{ severity, message }[]`), `updatedAt`, `version`.
+`{ draft: DraftDetail }`: `id`, `manifest` (parsed, or `null`), `tokens` (or `null` when missing or unparseable), `revision` (content hash of `tokens.json`, or `missing`), `uri` (the folder's `qtap://` address), `compiled` (`{ fontFaces, icons, custom }` — the parts the editor cannot change yet, compiled server-side; empty when invalid), `subsystems` (manifest overrides with image paths turned into draft asset URLs), `issues` (`{ severity, message }[]`), `updatedAt`, `version`, `mountPointId` (Quilltap General, for a Scriptorium link), `images` (`{ path, type, url }[]` — every image file), `manifestRevision` (content hash of `theme.json`, sent back with every manifest or file operation), `files` (`{ path, size, kind, users, usedBy, unused, font? }[]` — `kind` is `manifest` / `tokens` / `styles` / `font` / `licence` / `image` / `other`; `users` are `BundleFileUse` entries from `bundleFileUsage` (`lib/themes/engine/usage.ts`) and `usedBy` the same in words; `unused` marks a font or image nothing refers to; `font` is what a font file says it is — family, weight, style, variable, embedding, licence, licence URL — or `null` when unreadable) and `totals` (`{ files, bytes, limits: { files, bytes, fileBytes } }`, the limits from `bundle-archive`).
 
 #### `PUT /api/v1/theme-drafts/[id]`
 
-Save. Body (strict): `{ revision: string, tokens?: ThemeTokensDocument, name?: string (1–100), description?: string (≤ 500) }`; at least one of the optional fields. `tokens` is written only when `revision` matches the stored file, else `409`. Returns `{ draft: DraftDetail }`.
+Save the tokens. Body (strict): `{ revision: string, tokens: ThemeTokensDocument }`. Written only when `revision` matches the stored file, else `409`. The name, description and every other manifest field are changed through `?action=set-manifest`. Returns `{ draft: DraftDetail }`.
 
 #### `DELETE /api/v1/theme-drafts/[id]`
 
 Delete the draft folder. A theme installed from it stays installed.
 
+#### Manifest and file operations — `POST /api/v1/theme-drafts/[id]?action=…`
+
+Calliope Live Spec F. The client never writes `theme.json` or a draft file directly: each change is a named operation (`lib/themes/drafts/operations.ts`, uploads checked by `uploads.ts`). Every operation except `read-font` takes the `manifestRevision` it read and is refused with `409 { currentManifestRevision }` when `theme.json` has moved on; each returns `{ draft: DraftDetail }`, plus `path` (the stored file) for an upload and `deleted` (paths) where a file went with it.
+
+Uploads are `multipart/form-data` with exactly one file in `file` and every other field once, as text, held to a strict schema. The stored name is built by the server from the browser's (diacritics folded, unsafe characters turned into `-`, `-2`, `-3`… on a collision compared without case) in a fixed folder: `fonts/` (fonts, and `.txt` / `.md` licence files), `images/`, `icons/`. A font's or raster image's extension must agree with its leading bytes. Limits are the bundle's (`MAX_FILE_SIZE`, `MAX_FILE_COUNT`, `MAX_BUNDLE_SIZE`): `413` past one.
+
+| Action | Body | Effect |
+|---|---|---|
+| `read-font` | multipart: `file` | Reads a font's tables and writes nothing. `{ font: { read: true, info } }` or `{ font: { read: false, reason, guess, format } }` (a guess from the file name). |
+| `add-font` | multipart: `file`, `manifestRevision`, `license`, optional `family`, `weight`, `style`, `display`, `licenseFile` | Stores a `.woff2` / `.woff` / `.ttf` / `.otf` and adds a `fonts[]` entry; omitted family/weight/style come from the font's own tables. |
+| `update-font` | `{ manifestRevision, index, fields: { family?, weight?, style?, display?, license?, licenseFile? } }` | Changes one `fonts[]` entry; `null` clears an optional field. |
+| `remove-font` | `{ manifestRevision, index }` | Drops the entry, and its file when nothing else uses it. |
+| `add-licence-file` | multipart: `file` (`.txt` / `.md`), `manifestRevision` | Stores a licence text under `fonts/`; name it from a font with `update-font`. |
+| `add-image` | multipart: `file`, `manifestRevision` | Stores a PNG, JPEG, GIF, WebP, AVIF or SVG under `images/`. |
+| `remove-file` | `{ manifestRevision, path }` | Deletes a draft file; `409 { path, usedBy }` while anything uses it (`bundleFileUsage`). Only image, font and licence files may be removed (`400` otherwise). |
+| `set-icon` | multipart: `file` (`.svg` / `.webp`), `manifestRevision`, `name` | Stores the file under `icons/` and points `iconOverrides[name]` at it; an unknown icon name is `400`. The file it replaces goes when nothing else uses it. |
+| `clear-icon` | `{ manifestRevision, name }` | Removes the override, and its file when nothing else uses it. |
+| `set-subsystem` | `{ manifestRevision, subsystem, fields: { name?, description?, thumbnail?, backgroundImage? } }` | Sets one subsystem override; an empty field clears it, `'none'` means no picture, an image must be an image file in the draft, and an unknown subsystem is `400`. |
+| `set-manifest` | `{ manifestRevision, fields: { name?, description?, author?, license?, tags?, supportsDarkMode?, previewImage? } }` | Sets the named manifest fields. `author` is a string or `{ name, email?, url? }` and optional only (not nullable); `description`, `license` and `previewImage` take `null` to clear. A result the manifest schema refuses is `422 { errors }`. |
+
 #### `POST /api/v1/theme-drafts/[id]?action=install`
 
-Install the draft: `422` while it has validation errors, or when its id belongs to a bundled theme. Otherwise its files are copied to a temporary directory, raster images converted to WebP there (`lib/themes/convert-images.ts`; the draft keeps its originals), packed, and installed through the ordinary bundle install, replacing an earlier install; the theme is registered without a restart (`lib/themes/hot-load.ts`). Then the draft's patch version is bumped, so draft and install never share asset URLs. Returns `{ result: { themeId, version, draftVersion, conversion: { converted, reencoded, skippedAnimated } } }`.
+Install the draft: `422` while it has validation errors, or when its id belongs to a bundled theme. Otherwise its files are copied to a temporary directory, raster images converted to WebP there (`lib/themes/convert-images.ts`; the draft keeps its originals), packed, and installed through the ordinary bundle install, replacing an earlier install; the theme is registered without a restart (`lib/themes/hot-load.ts`). Then the draft's patch version is bumped, so draft and install never share asset URLs. Font and image files nothing uses (`unused` in the detail) are left out of the copy; TrueType and OpenType fonts are converted to WOFF2 there (`lib/themes/convert-fonts.ts`; WOFF and WOFF2 are packed as is), and a font that will not convert refuses the install (`422`). Returns `{ result: { themeId, version, draftVersion, conversion: { converted, reencoded, skippedAnimated }, fontConversion: { [original]: newPath }, leftOut: string[] } }`.
 
 ---
 

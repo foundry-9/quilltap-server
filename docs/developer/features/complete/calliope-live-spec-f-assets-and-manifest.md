@@ -1,14 +1,14 @@
 # Calliope Live — Spec F: fonts, images and the manifest
 
-**Status:** ready to run, 2026-11-15 (design decisions confirmed by the human).
-Implements the third slice of Phase 2 of [calliope-live.md](calliope-live.md).
+**Status:** implemented 4.14-dev, 2026-11-15 (Stages 0–1 in `043bda42a`, Stage 2 documentation; user docs [help/theme-editor.md](../../../../help/theme-editor.md)).
+Implements the third slice of Phase 2 of [calliope-live.md](../calliope-live.md).
 Read, before starting:
 
-- Spec E, [calliope-live-spec-e-typed-controls.md](complete/calliope-live-spec-e-typed-controls.md),
+- Spec E, [calliope-live-spec-e-typed-controls.md](calliope-live-spec-e-typed-controls.md),
   especially "For Specs F and G" in its implementation notes;
-- Spec D, [calliope-live-spec-d-live-preview.md](complete/calliope-live-spec-d-live-preview.md)
+- Spec D, [calliope-live-spec-d-live-preview.md](calliope-live-spec-d-live-preview.md)
   (drafts, decision 11 on images, the asset routes);
-- [THEME_DEVELOPMENT.md](../THEME_DEVELOPMENT.md);
+- [THEME_DEVELOPMENT.md](../../THEME_DEVELOPMENT.md);
 - `lib/themes/engine/document.ts` (the manifest schema) and
   `lib/themes/drafts/service.ts`.
 
@@ -303,3 +303,81 @@ results. At the end, add an "Implementation notes" section to this file,
 with what Specs G and H should know — in particular whether the manifest
 revision and the named-operation pattern suit the custom CSS file, and how
 an imported `.qtap-theme` would best become a draft.
+
+## Implementation notes
+
+Done in two commits: Stages 0–1 (`043bda42a`) and Stage 2 (documentation).
+
+### What differs from this spec
+
+- **The asset sections are a second list, not new tiers.** Fonts, Images,
+  Icons, Subsystems and details, and Files sit below the token sections in
+  the same navigation (`components/theme-editor/assets/`), each changing the
+  draft the moment it acts. They are not part of the token undo history.
+- **Name and description stay in the top card.** They now save through
+  `?action=set-manifest` like every other manifest field; the tokens `PUT`
+  takes `{ revision, tokens }` only.
+- **`LicencePicker` derives its option from `value`.** It held the chosen
+  option in state set once, so a licence filled in from a font's own tables
+  after mounting never showed. Fixed in Stage 1.
+- **The details form uses auto-fill grids**
+  (`grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]`), because the fixed
+  columns crushed the fields in a narrow pane. The Spec E navigation grid
+  (`md:grid-cols-[13rem_minmax(0,1fr)]`) has the same trouble in a narrow
+  pane and was left alone.
+- **A page background image is hidden behind subsystem and story
+  backgrounds**, as Spec A designed. The proof could not see the page
+  background token while a subsystem picture was set; that is precedence,
+  not a fault.
+- **Only TrueType and OpenType become WOFF2.** WOFF is packed as is, as the
+  spec says; an early draft of the help page claimed otherwise and was
+  corrected.
+
+### For Spec G (custom CSS, Document Mode highlighting, importing a bundle)
+
+- **The custom CSS file suits the tokens pattern, not the manifest one.**
+  It is a whole text document the author edits continuously, like
+  `tokens.json`: give it its own content-hash revision and a save that
+  compares and writes the whole file (as `writeDraftTokens` does), with
+  saves debounced and stale-revision recovery through the same
+  `CHANGED_ELSEWHERE` path. The named-operation pattern fits discrete,
+  checkable changes to `theme.json` — adding or removing a file, setting a
+  field — and still applies to the one manifest change custom CSS needs:
+  naming or clearing the `customCSS` path. Make that a named operation
+  (`set-custom-css-file`, say) taking `manifestRevision`; then the CSS file
+  is created before the manifest names it and unnamed before it is
+  deleted, like every other file here.
+- **A `url()` in custom CSS already counts as a use.** `bundleFileUsage`
+  reports `{ kind: 'custom-css' }` for it, so an image named only from CSS
+  is neither marked unused nor left out of the install, and `remove-file`
+  refuses it. Spec G's editor should read `usedBy` from the detail rather
+  than scanning the CSS itself.
+- **Undo.** Spec E's notes ask whether custom CSS joins the undo history.
+  Asset operations did not (they are immediate server writes); custom CSS
+  edits are text, so they can join it if the snapshot gains a second
+  document.
+- **Importing a `.qtap-theme` into a draft** is best done as a third
+  source for `createDraftNow` (`lib/themes/drafts/service.ts`): validate
+  and extract the archive into a temporary directory with
+  `lib/themes/bundle-archive.ts` (the same checks an install runs), then
+  hand that directory to `writeNewDraft`, which already copies a bundle
+  directory into `Themes/<id>/` through the drafts store, writes the
+  manifest last, rewrites its id, name and version, and removes a partial
+  folder on failure (#226). That keeps one copy path for "from an installed
+  theme" and "from a file", and the draft never holds anything an install
+  would refuse. An imported bundle's converted WOFF2 and WebP files arrive
+  as they are; nothing converts them back. A version 1 bundle should be
+  refused at import with the same message `lib/themes/refused.ts` gives.
+  Uploads go through the route's multipart reader; the bundle size limit
+  (`MAX_BUNDLE_SIZE`, 50 MB) bounds the body.
+
+### For Spec H (specimen gallery, inspect mode)
+
+- The draft detail now carries everything a gallery needs to show a theme's
+  own assets without reading files: `files` (with `usedBy`), `images`
+  (served URLs), the fonts' facts, `subsystems` with resolved image URLs and
+  the compiled font faces and icon rules. A specimen should render from the
+  preview slot and these, not fetch bundle files itself.
+- Inspect mode, mapping an element back to its token, can use
+  `bundleFileUsage` the other way round only for files; for tokens it needs
+  its own map from the hook catalogue.
