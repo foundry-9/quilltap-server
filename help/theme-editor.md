@@ -27,12 +27,72 @@ To be rid of a draft, use the bin beside it in the list. The Atelier asks first,
 
 ## Editing a draft
 
-Open a draft and the Atelier lays out its colour tokens, group by group. Above them sit the draft's **Primitives** — the foundational colours a theme may declare in its files for other tokens to refer to. The Atelier shows them for reference (a blank canvas defines none); they are edited in the files themselves.
+Open a draft and the Atelier lays out every token a theme may set — some six hundred and sixty of them — arranged as Quilltap's registry arranges them, group by group.
 
 - **Name and Description** sit at the top. They are what the theme will be called on the Appearance card.
 - **Light and Dark** switch which mode is on show while you work, so you see what you are changing.
-- **Each row** is one token, with a colour picker and a text field for light and another pair for dark. Pick a colour, or type one in any form CSS understands. **Reset** drops the draft's own value for that token in both modes, and the house default is in force again.
-- **Contrast.** A token that colours text, or a focus ring, is measured against the background it sits on. Each row shows its pairs with their ratio — at least 4.5 to 1 for text, 3 to 1 for a focus ring — and says plainly when one falls short. A pair the Atelier cannot measure (a gradient, say, or an image) is marked **Unchecked** rather than waved through. Falling short never stops you saving or installing; it is a warning, offered in the interest of everyone's eyesight.
+
+### Finding your way
+
+Six hundred tokens is a great many to wade through, so the Atelier keeps them in three tiers:
+
+- **Essentials** — the theme's broad strokes: its colours, fonts, radii and the like, which the rest of the house takes its lead from. This is where the Atelier opens, and for most themes it is all one needs.
+- **Components** — one component at a time: a card's padding, a bubble's background, a scrollbar's thumb. Use these when one surface ought to differ from the rest.
+- **Advanced** — the rarely set, tucked behind a disclosure at the foot of each component section.
+
+Beside the rows is the list of **sections**; choose one and the Atelier takes you to it, and each says how many of its tokens your theme has changed. **Open all** and **Close all** do as they say.
+
+The **search** box finds a token at any tier by its label, its name or its description, opening whatever section or disclosure it was hiding in. Tick **Changed only** to see nothing but what this theme sets — tokens and primitives alike.
+
+### Each token
+
+Every row is one token. It says what the token is, its name, and **where its value comes from**: the house default, a choice (such as density), this theme, or — for one of the ten optional tokens — left unset, so each place keeps its own manner. When a value **follows** a primitive or another token, the row says which, and shows what it comes to.
+
+The value is edited with a control that suits its kind:
+
+| Kind | The control |
+|---|---|
+| Colour | a picker and a text field, with a swatch |
+| Length, radius | a number and a unit; keywords such as `auto` where they are allowed. A radius may have **each corner its own** |
+| Shadow | a list of layers, each with its offsets, blur, spread, colour and an **Inset** box; add, remove and reorder them, or choose **No shadow** |
+| Font family | an ordered list of fonts — the draft's own fonts and a few well-mannered system stacks — with a sample line set in the result |
+| Font weight | a list of the weights; those the theme's font actually carries are marked |
+| Font style, and the keyword tokens | a choice of the words allowed |
+| Duration | a number in milliseconds or seconds |
+| Transition | a list of property, duration, easing and delay |
+| Opacity | a number from 0 to 1, or a percentage, with a slider beside it |
+| Blur | an amount, or **No blur** |
+| Image | **None**, or one of the images already in the draft, with a thumbnail |
+| Layer (z-index) | a whole number, or **Auto** |
+
+Every control has an **edit as text** button, which turns it into a plain field where you may write any CSS the token accepts. A value the controls cannot represent — a gradient, an image written into the file itself, a `calc()` — opens as text with a note saying so, and the Atelier leaves it precisely as written until you change it.
+
+A value that follows a primitive opens its controls on what the primitive comes to. Change it and the token takes a value of its own; to follow the primitive again, choose it under **Follows**. **Follows** points any token at a primitive of its own kind, or back to a value of its own.
+
+**Dark apart** gives a token a dark value of its own, for any kind of token; **Same as light** joins it again. **Reset** drops the theme's value in both modes and puts the house default back in force. If the value in force does not suit the token's kind, the row says so — in the very words the server would use on saving.
+
+**Contrast.** A token that colours text, or a focus ring, is measured against the background it sits on. Each row shows its pairs with their ratio — at least 4.5 to 1 for text, 3 to 1 for a focus ring — and says plainly when one falls short. A pair the Atelier cannot measure (a gradient, say, or an image) is marked **Unchecked** rather than waved through. Falling short never stops you saving or installing; it is a warning, offered in the interest of everyone's eyesight.
+
+### Choices
+
+At the head of the tokens sits **Choices**, where the theme's broad switches live. **Density** is the one so far: *compact* (the house manner) or *comfortable* (what every bundled theme wears), which gives padding, avatars, controls, the sidebar and the header more room to breathe, some two dozen tokens at once. Change it and the house repaints directly; the rows it governs say so.
+
+### Primitives
+
+**Primitives** are the theme's own named values — its palette, its radii, its favourite shadow — which tokens may follow, so that one change ripples through every token that follows it. The Primitives panel lets you:
+
+- **Add a primitive** — a name in lower case with hyphens (`brass-ink`, say), a kind, and a starting value;
+- edit its value, and give it a dark value with **Dark apart**;
+- **rename** it, which rewrites every reference to it throughout the theme;
+- change its kind;
+- see what **follows** it;
+- **Remove** it. If anything follows it, the Atelier first lists every value that will take the primitive's value in its place — so the theme looks just as it did, only with one fewer name — and asks you to confirm.
+
+### Undo
+
+**Undo** and **Redo** step back and forth through your changes since the draft was opened, as do **Ctrl+Z** and **Ctrl+Shift+Z** (⌘ on a Mac) while you are not in the middle of a text field, which keeps its own. A run of quick changes to one value undoes as one. Undo is a new save, not a rewinding of the server; the history is forgotten when you leave the draft or reload.
+
+### Saving
 
 Every change is saved as you go; the Atelier says **All changes saved** when it has caught up. Beneath the header it keeps count of the draft's errors and warnings from the last save, and of the contrast pairs that fall short in the mode on show.
 
@@ -58,7 +118,7 @@ If the draft has errors, **Install** waits until they are mended and lists them;
 
 ## What the Atelier does not yet do
 
-Colours are the first room to be furnished. Fonts, sizes and spacing, icons and custom CSS are edited in the draft's files for now — see [Themes](themes.md) for the bundle format — and the Atelier will learn them in time.
+Every token can now be set, but a few rooms remain unfurnished. Adding font files and images, the theme's icons and subsystems, and custom CSS are still edited in the draft's files — see [Themes](themes.md) for the bundle format — and the Atelier will learn them in time.
 
 ## In-Chat Navigation
 

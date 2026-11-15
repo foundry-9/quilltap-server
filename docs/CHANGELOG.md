@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live Spec E
+
+- `help/theme-editor.md` covers the levels, sections, search, "Changed only", each type's control and the text form, following, dark values, density, primitives and undo
+- `THEME_DEVELOPMENT.md`: keyword options, and what the editor can and cannot set
+- `CLAUDE.md` Themes section: `lib/themes/engine/values/` is the one place a token value is parsed or formatted; the model and `engine/primitives.ts` are the one place a tokens document is edited
+- Spec E marked implemented with implementation notes and moved to `features/complete/`
+
 #### Themes: typed controls and editable primitives in the theme editor (Calliope Live, Spec E Stage 2)
 
 - Every token type has its own control in the theme editor (`components/theme-editor/controls.tsx`): colour, length, radius (one value or each corner), shadow (layers with offsets, blur, spread, colour and inset), font family (ordered stack with the draft's fonts and system stacks, and a sample line), font weight (marks the weights the theme's font declares), keyword and font style (a choice of the allowed words), duration, transition (property, duration, easing and delay per item), opacity (field and slider, number or percent), blur, image (the draft's images or none), z-index, number and easing

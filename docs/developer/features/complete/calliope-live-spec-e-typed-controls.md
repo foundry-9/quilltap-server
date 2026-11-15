@@ -1,14 +1,15 @@
 # Calliope Live — Spec E: every token, by type
 
-**Status:** ready to run, 2026-11-14 (design decisions confirmed by the human).
-Implements the second slice of Phase 2 of [calliope-live.md](calliope-live.md).
+**Status:** implemented 4.14-dev, 2026-11-14 (design decisions confirmed by the human).
+User docs: [help/theme-editor.md](../../../../help/theme-editor.md).
+Implements the second slice of Phase 2 of [calliope-live.md](../calliope-live.md).
 Read, before starting:
 
-- Spec D, [calliope-live-spec-d-live-preview.md](complete/calliope-live-spec-d-live-preview.md),
+- Spec D, [calliope-live-spec-d-live-preview.md](calliope-live-spec-d-live-preview.md),
   with its implementation notes;
-- Spec A, [calliope-live-spec-a-token-registry.md](complete/calliope-live-spec-a-token-registry.md);
-- [THEME_DEVELOPMENT.md](../THEME_DEVELOPMENT.md) and the generated
-  [THEME_TOKENS.md](../THEME_TOKENS.md);
+- Spec A, [calliope-live-spec-a-token-registry.md](calliope-live-spec-a-token-registry.md);
+- [THEME_DEVELOPMENT.md](../../THEME_DEVELOPMENT.md) and the generated
+  [THEME_TOKENS.md](../../THEME_TOKENS.md);
 - `components/theme-editor/model.ts`, which this spec extends.
 
 **Scope:** `quilltap-server` only.
@@ -262,3 +263,100 @@ results. At the end, add an "Implementation notes" section to this file,
 and in it a list of what Specs F and G should know — in particular how a
 new section (specimens, custom CSS, the manifest) would join the editor's
 navigation.
+
+## Implementation notes
+
+Done in three commits: Stages 0–1 (`72b30fa70`), Stage 2 (`0bb14e816`) and
+Stage 3 (documentation). Stages ran without the per-stage stops after
+Stage 1, at the human's request.
+
+### Where things live
+
+- **Value parsers:** `lib/themes/engine/values/` (`length`, `quantity`
+  for duration / opacity / z-index / weight / number, `shadow`,
+  `font-stack`, `transition`, `image`, and `split` for top-level comma and
+  space splitting). Each `parse` returns null for anything it does not fully
+  read; `format(parse(v))` renders as `v`. Exported through `client.ts`.
+- **Type check:** `lib/themes/engine/type-check.ts`, shared by
+  `validate.ts` and the editor (`valueProblem` in the model), so the row
+  shows the server's own words.
+- **Primitive edits:** `lib/themes/engine/primitives.ts`. Add and rename
+  return `{ ok, document } | { ok: false, reason }`; remove writes the
+  primitive's value into every user (light into light, dark into dark).
+- **Editor model:** `components/theme-editor/model.ts` — sections, search,
+  row and primitive views, every edit, undo history, draft resources (fonts
+  from the manifest, images from the draft detail). All pure and unit-tested.
+- **Editor store:** `editor-store.ts` holds the snapshot; each `TokenRow`
+  and `PrimitiveRow` selects its own view (`tokenRowView`,
+  `primitiveRowView`), so an edit re-renders only rows whose view changed.
+  `LazyRow` mounts rows near the viewport through an `IntersectionObserver`
+  (all rows mount where there is none, as in jsdom).
+- **Controls:** `controls.tsx`, one per type in a `CONTROLS` map; a type
+  with no entry gets the text control. Each is a `Typed` frame over a
+  parser and formatter.
+- **Primitives panel:** `PrimitivesPanel.tsx`, with the remove confirmation
+  as a `BaseModal` `alertdialog`.
+
+### Differences from the spec, and what it did not foresee
+
+- **A followed value opens on what it comes to.** A whole `var()` value
+  (a shadow following a primitive, say) has nothing for a control to show,
+  and would otherwise have fallen to the text form. The controls start from
+  the resolved literal; changing one writes a value of the token's own,
+  which detaches it from the primitive. The parser-coverage pass found this.
+- **Parser coverage** over every bundled theme's non-colour values (392):
+  everything parses except gradient and `data:` images and `calc()` radii,
+  which open in the text form as decision 4 intends.
+- **Easing** has a control of its own (keyword select plus text), because
+  primitives may be of type `easing` though no token is.
+- **Font weight marking** reads the `weight` field of the manifest's fonts
+  (a single value or a `100 900` range) for the first family of the
+  font-family token the weight belongs to (`weightFamilyToken`).
+- **A zero transition delay is dropped** when formatting, as CSS does.
+- **The opacity slider** moves in hundredths; the field takes any value.
+- **A primitive's type can change while tokens follow it.** The type check
+  on each row then reports any follower whose value no longer fits; nothing
+  is refused.
+- **A draft created during a "database is locked" startup** in V4test
+  failed but left its id taken without a listed draft (Spec D's create
+  path). Not fixed here.
+- **`bundled-walk.test.tsx`** renders the editor over each bundled theme,
+  opens every section and disclosure, and checks that nothing is written.
+  It is slow (about 50 seconds).
+
+### Proof
+
+- Unit suite, `npx tsc`, `npm run lint` (including the theme snapshot,
+  contrast and CLI engine checks) pass.
+- V4test: copies of Rains and Madman's Box, every section opened without
+  edits, saved `tokens.json` unchanged. A copy of Madman's Box given one edit
+  of each type and two new primitives validated (0 errors; contrast warnings
+  only) and installed, and the installed bundle's `tokens.json` carries
+  every edit. The repaint was not checked by eye because the Browser pane
+  was hidden; the preview path is unchanged from Spec D.
+
+### For Specs F and G
+
+- **A new section joins the navigation through `sectionViews`** in the
+  model: it returns the ordered list the section nav and the body both
+  render, each with an `id`, label, rows and a changed count. A specimen
+  gallery, custom CSS or the manifest would be a section kind of its own
+  (not a registry group) added to that list, with a body component chosen
+  by kind in `DraftEditor`; the nav, Open all / Close all and search
+  filtering follow from the list. Choices and primitives are rendered
+  above the list today and are the pattern for a fixed panel instead.
+- **Edits are `edit(key, snapshot => document)`.** Anything that changes
+  the tokens document goes through it to get undo, the preview and the
+  debounced save for free. Custom CSS and the manifest are other files, so
+  Spec G needs either a second document in the snapshot (and in the undo
+  history) or a separate save path; the history today covers `tokens.json`
+  only.
+- **`DraftResourcesContext`** carries the draft's fonts and images to the
+  controls. Once Spec G uploads fonts and images, refreshing the draft detail
+  is enough for the font-family, font-weight and image controls to offer
+  them.
+- **Inspect mode (Spec F)** can scroll to a token by giving its section open
+  and focusing the row's group (`role="group"` labelled by the token's
+  label); search already opens closed sections and disclosures for a match.
+- The text form is the escape hatch; a control should be extended only
+  when its parser is, so the parsers stay the single source of truth.
