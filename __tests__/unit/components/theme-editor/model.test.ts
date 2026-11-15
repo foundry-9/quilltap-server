@@ -6,6 +6,22 @@
 
 import {
   EDITOR_GROUPS,
+  EMPTY_RESOURCES,
+  FONT_STYLE_OPTIONS,
+  appendFamilies,
+  declaredWeights,
+  draftFontWeights,
+  draftResources,
+  firstFamilyInForce,
+  isEasing,
+  keywordOptions,
+  moveItem,
+  primitiveNames,
+  primitiveRowView,
+  primitiveStarter,
+  valueProblem,
+  weightFamilyToken,
+  weightNumber,
   HISTORY_COALESCE_MS,
   HISTORY_LIMIT,
   EMPTY_HISTORY,
@@ -30,7 +46,7 @@ import {
   tokenRowView,
   undoStep,
 } from '@/components/theme-editor/model'
-import { THEME_TOKENS, type ThemeTokensDocument, type TokenDef } from '@/lib/themes/engine/client'
+import { PRIMITIVE_TYPES, THEME_TOKENS, type ThemeTokensDocument, type TokenDef } from '@/lib/themes/engine/client'
 
 const EMPTY: ThemeTokensDocument = { primitives: {}, tokens: {}, choices: {} }
 const NO_FILTER = { query: '', changedOnly: false }
@@ -229,5 +245,121 @@ describe('undo history', () => {
     let h = EMPTY_HISTORY
     for (let i = 0; i < HISTORY_LIMIT + 5; i++) h = recordEdit(h, a, null, i)
     expect(h.past).toHaveLength(HISTORY_LIMIT)
+  })
+})
+
+describe('keyword options and value problems (Stage 2)', () => {
+  it('offers the font styles to a font-style token that lists none', () => {
+    expect(keywordOptions(token('--qt-rp-narration-style'))).toEqual(FONT_STYLE_OPTIONS)
+    expect(keywordOptions(token('--qt-button-text-transform'))).toEqual(token('--qt-button-text-transform').options)
+    expect(keywordOptions(token('--theme-card'))).toBeNull()
+  })
+
+  it('checks a value of a type with no token behind it, as a primitive is', () => {
+    expect(valueProblem('length', '1rem')).toBeNull()
+    expect(valueProblem('length', 'wide')).toMatch(/length/)
+    expect(valueProblem('color', '')).toBeNull()
+  })
+})
+
+describe('the draft resources', () => {
+  it('reads the weights a face declares', () => {
+    expect(declaredWeights(undefined)).toEqual([400])
+    expect(declaredWeights('bold')).toEqual([700])
+    expect(declaredWeights('400 700')).toEqual([400, 500, 600, 700])
+    expect(declaredWeights('heavy')).toEqual([])
+  })
+
+  it('gathers faces of one family and skips malformed entries', () => {
+    const r = draftResources(
+      {
+        fonts: [
+          { family: 'Brass Serif', weight: 'bold', style: 'italic', src: 'a.woff2' },
+          { family: 'Brass Serif', weight: '400', src: 'b.woff2' },
+          { family: '', src: 'c.woff2' },
+          'junk',
+        ],
+      },
+      [{ path: 'images/paper.webp', url: '/x/paper.webp' }],
+    )
+    expect(r.fonts).toEqual([{ family: 'Brass Serif', weights: [400, 700], styles: ['italic', 'normal'] }])
+    expect(r.images).toEqual([{ path: 'images/paper.webp', url: '/x/paper.webp' }])
+    expect(draftResources(null, [])).toEqual(EMPTY_RESOURCES)
+  })
+
+  it('finds the declared weights of the family in force, ignoring case', () => {
+    const r = draftResources({ fonts: [{ family: 'Brass Serif', weight: '300 500' }] }, [])
+    expect(draftFontWeights(r, 'brass serif')).toEqual([300, 400, 500])
+    expect(draftFontWeights(r, 'Georgia')).toBeNull()
+    expect(draftFontWeights(r, null)).toBeNull()
+  })
+})
+
+describe('list helpers', () => {
+  it('appends families once, ignoring case', () => {
+    expect(appendFamilies(['Georgia', 'serif'], ['georgia', 'Times', ' ', 'Times'])).toEqual(['Georgia', 'serif', 'Times'])
+  })
+
+  it('moves an item inside the list', () => {
+    expect(moveItem(['a', 'b', 'c'], 0, 1)).toEqual(['b', 'a', 'c'])
+    expect(moveItem(['a', 'b', 'c'], 2, 5)).toEqual(['a', 'b', 'c'])
+    expect(moveItem(['a', 'b', 'c'], 1, -1)).toEqual(['b', 'a', 'c'])
+  })
+})
+
+describe('font weights', () => {
+  it('pairs a weight token with the family it weighs', () => {
+    expect(weightFamilyToken('--qt-heading-font-weight')).toBe('--qt-heading-font')
+    expect(weightFamilyToken('--qt-button-font-weight')).toBe('--theme-font-sans')
+  })
+
+  it('reads the first family in force, and none for a var()', () => {
+    const doc = setTokenValue(EMPTY, '--theme-font-sans', 'light', '"Brass Serif", serif')
+    expect(firstFamilyInForce(analyse(doc).resolved, 'light', '--theme-font-sans')).toBe('Brass Serif')
+  })
+
+  it('names the number a weight is', () => {
+    expect(weightNumber('normal')).toBe(400)
+    expect(weightNumber('bold')).toBe(700)
+    expect(weightNumber('650')).toBe(650)
+    expect(weightNumber('bolder')).toBeNull()
+  })
+
+  it('tells a timing function from anything else', () => {
+    expect(isEasing('ease-in-out')).toBe(true)
+    expect(isEasing('cubic-bezier(0.2, 0, 0, 1)')).toBe(true)
+    expect(isEasing('wobbly')).toBe(false)
+    expect(isEasing('')).toBe(false)
+  })
+})
+
+describe('the primitives panel', () => {
+  const doc: ThemeTokensDocument = {
+    ...EMPTY,
+    primitives: { paper: { type: 'color', value: '#fff', dark: '#111' }, ink: { type: 'color', value: '#000' } },
+    tokens: { '--theme-card': 'var(--p-paper)' },
+  }
+  const snapshot = { tokens: doc, ...analyse(doc), mode: 'light' as const }
+
+  it('lists names in order', () => {
+    expect(primitiveNames(doc)).toEqual(['ink', 'paper'])
+  })
+
+  it('shows each mode, its literal and who follows it', () => {
+    const view = primitiveRowView('paper', snapshot)!
+    expect(view).toMatchObject({ variable: '--p-paper', type: 'color', sameAsLight: false })
+    expect(view.light).toEqual({ value: '#fff', literal: '#fff' })
+    expect(view.dark.value).toBe('#111')
+    expect(view.users.tokens).toEqual([{ name: '--theme-card', label: token('--theme-card').label }])
+    expect(primitiveRowView('ink', snapshot)!.sameAsLight).toBe(true)
+    expect(primitiveRowView('nothing', snapshot)).toBeNull()
+  })
+
+  it('starts every primitive type on a value its type check accepts', () => {
+    for (const type of PRIMITIVE_TYPES) {
+      if (type === 'raw' || type === 'easing' || type === 'number') continue
+      expect(valueProblem(type, primitiveStarter(type))).toBeNull()
+    }
+    expect(isEasing(primitiveStarter('easing'))).toBe(true)
   })
 })

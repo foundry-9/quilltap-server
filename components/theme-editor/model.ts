@@ -25,6 +25,9 @@ import {
   deriveThemeFeatures,
   emitThemeCss,
   parseColor,
+  parseFontStack,
+  parseTransition,
+  primitiveUsers,
   primitiveVar,
   resolveLiteral,
   resolveTheme,
@@ -32,8 +35,10 @@ import {
   typeProblem,
   type ContrastFinding,
   type ResolvedTheme,
+  type ThemePrimitive,
   type ThemeTokensDocument,
   type TokenDef,
+  type TokenType,
 } from '@/lib/themes/engine/client'
 import type { ThemePreview } from '@/components/providers/theme/types'
 
@@ -263,7 +268,25 @@ export function rowModeView(resolved: ResolvedTheme, name: string, mode: EditorM
 
 /** The type check's message for `value` as `token`'s value, or null when it fits (or is empty). */
 export function rowProblem(token: TokenDef, value: string): string | null {
-  return value.trim() === '' ? null : typeProblem(token.type, value, token.options)
+  return valueProblem(token.type, value, token.options)
+}
+
+/** The type check's message for `value` as a value of `type`, or null when it fits (or is empty). */
+export function valueProblem(type: TokenType, value: string, options?: readonly string[]): string | null {
+  return value.trim() === '' ? null : typeProblem(type, value, options ?? optionsOf(type))
+}
+
+/** The words a font-style value may be. */
+export const FONT_STYLE_OPTIONS = ['normal', 'italic', 'oblique'] as const
+
+/** The words a value of `type` may be, when the type alone fixes them. */
+function optionsOf(type: TokenType): readonly string[] | undefined {
+  return type === 'font-style' ? FONT_STYLE_OPTIONS : undefined
+}
+
+/** The words a keyword or font-style token offers, or null when it offers none. */
+export function keywordOptions(token: { type: TokenType; options?: readonly string[] }): readonly string[] | null {
+  return token.options ?? optionsOf(token.type) ?? null
 }
 
 /** The theme's own dark value for `name`, when it sets one apart from light. */
@@ -513,6 +536,8 @@ export interface TokenRowView {
   contrast: ReturnType<typeof rowContrast>
   /** The draft's primitives of the token's type. */
   primitives: string[]
+  /** For a font weight: the first family of the font in force where it is read, in the mode on display. */
+  familyInForce: string | null
 }
 
 export function tokenRowView(token: TokenDef, snapshot: EditorSnapshot): TokenRowView {
@@ -533,5 +558,224 @@ export function tokenRowView(token: TokenDef, snapshot: EditorSnapshot): TokenRo
     },
     contrast: token.type === 'color' ? rowContrast(findings, token.name, mode) : [],
     primitives: primitivesOfType(tokens, token.type),
+    familyInForce: token.type === 'font-weight' ? firstFamilyInForce(resolved, mode, weightFamilyToken(token.name)) : null,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The draft's fonts and images: what the font and image controls offer.
+
+/** One font the draft's manifest declares, with the weights and styles its faces cover. */
+export interface DraftFont {
+  family: string
+  weights: number[]
+  styles: string[]
+}
+
+/** One image file in the draft. */
+export interface DraftImage {
+  path: string
+  /** Where the draft serves it, for a thumbnail; null when it is not served yet. */
+  url: string | null
+}
+
+/** What the draft itself offers the controls. */
+export interface DraftResources {
+  fonts: DraftFont[]
+  images: DraftImage[]
+}
+
+export const EMPTY_RESOURCES: DraftResources = { fonts: [], images: [] }
+
+/**
+ * The weights one `@font-face` covers: `normal` 400, `bold` 700, a range
+ * every hundred from one end to the other, and 400 when it names none.
+ */
+export function declaredWeights(weight: string | undefined): number[] {
+  const w = (weight ?? '').trim()
+  if (w === '' || w === 'normal') return [400]
+  if (w === 'bold') return [700]
+  const [from, to = from] = w.split(/\s+/).map(Number)
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return []
+  const out: number[] = []
+  for (let n = Math.min(from, to); n <= Math.max(from, to); n += 100) out.push(n)
+  return out
+}
+
+/**
+ * The draft's fonts (faces of one family gathered, weights and styles
+ * merged and sorted) and its images, from the manifest and the image list
+ * the server returns. A malformed font entry is skipped.
+ */
+export function draftResources(manifest: Record<string, unknown> | null, images: readonly DraftImage[]): DraftResources {
+  const byFamily = new Map<string, { weights: Set<number>; styles: Set<string> }>()
+  const fonts = Array.isArray(manifest?.fonts) ? (manifest.fonts as unknown[]) : []
+  for (const f of fonts) {
+    if (!f || typeof f !== 'object') continue
+    const { family, weight, style } = f as { family?: unknown; weight?: unknown; style?: unknown }
+    if (typeof family !== 'string' || family.trim() === '') continue
+    const entry = byFamily.get(family) ?? { weights: new Set<number>(), styles: new Set<string>() }
+    for (const n of declaredWeights(typeof weight === 'string' ? weight : undefined)) entry.weights.add(n)
+    entry.styles.add(typeof style === 'string' ? style : 'normal')
+    byFamily.set(family, entry)
+  }
+  return {
+    fonts: [...byFamily.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([family, e]) => ({ family, weights: [...e.weights].sort((a, b) => a - b), styles: [...e.styles].sort() })),
+    images: images.map((i) => ({ path: i.path, url: i.url })),
+  }
+}
+
+/** Font stacks every system has, offered beside the draft's own fonts (Spec E decision 2). */
+export const SYSTEM_FONT_STACKS: ReadonlyArray<{ label: string; families: readonly string[] }> = [
+  { label: 'System sans-serif', families: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'] },
+  { label: 'System serif', families: ['ui-serif', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif'] },
+  { label: 'System monospace', families: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'] },
+  { label: 'System rounded', families: ['ui-rounded', 'system-ui', 'sans-serif'] },
+  { label: 'Handwriting (cursive)', families: ['cursive'] },
+]
+
+/** `stack` with `add` appended, leaving out any family already in it (ignoring case). */
+export function appendFamilies(stack: readonly string[], add: readonly string[]): string[] {
+  const seen = new Set(stack.map((f) => f.toLowerCase()))
+  const out = [...stack]
+  for (const f of add) {
+    const key = f.trim().toLowerCase()
+    if (key === '' || seen.has(key)) continue
+    seen.add(key)
+    out.push(f.trim())
+  }
+  return out
+}
+
+/** `list` with the item at `index` moved by `by` places (kept inside the list). */
+export function moveItem<T>(list: readonly T[], index: number, by: number): T[] {
+  const to = Math.max(0, Math.min(list.length - 1, index + by))
+  if (to === index || index < 0 || index >= list.length) return [...list]
+  const out = [...list]
+  const [item] = out.splice(index, 1)
+  out.splice(to, 0, item)
+  return out
+}
+
+/** The font-family token a weight token is read beside. */
+const WEIGHT_FAMILIES: Readonly<Record<string, string>> = {
+  '--qt-heading-font-weight': '--qt-heading-font',
+  '--qt-chat-assistant-font-weight': '--qt-chat-assistant-font',
+}
+
+/** The font-family token whose font a weight token weighs: its own place's, else the body font. */
+export function weightFamilyToken(weightToken: string): string {
+  return WEIGHT_FAMILIES[weightToken] ?? '--theme-font-sans'
+}
+
+/** The first family of `familyToken`'s font in `mode`, or null when it does not come down to a font stack. */
+export function firstFamilyInForce(resolved: ResolvedTheme, mode: EditorMode, familyToken: string): string | null {
+  const literal = resolveLiteral(resolved[mode], familyToken) ?? resolved[mode][familyToken]?.value
+  if (!literal) return null
+  const first = parseFontStack(literal)?.families[0]
+  return first && !first.startsWith('var(') ? first : null
+}
+
+/** The weights the draft's font `family` declares, or null when `family` is not one of the draft's fonts. */
+export function draftFontWeights(resources: DraftResources, family: string | null): number[] | null {
+  if (!family) return null
+  const font = resources.fonts.find((f) => f.family.toLowerCase() === family.toLowerCase())
+  return font ? font.weights : null
+}
+
+/** The numeric weight a font-weight value names, for marking declared weights (`normal` 400, `bold` 700). */
+export function weightNumber(value: string): number | null {
+  const v = value.trim().toLowerCase()
+  if (v === 'normal') return 400
+  if (v === 'bold') return 700
+  return /^\d{1,4}$/.test(v) ? Number(v) : null
+}
+
+/** Whether `text` is a timing function a transition accepts (a keyword, or `cubic-bezier()` / `steps()` / `linear()`). */
+export function isEasing(text: string): boolean {
+  const t = text.trim()
+  return t !== '' && parseTransition(`all 1s ${t}`)?.layers[0]?.easing === t
+}
+
+// ---------------------------------------------------------------------------
+// The primitives panel.
+
+/** One mode of a primitive as its row shows it. */
+export interface PrimitiveModeView {
+  value: string
+  literal: string | null
+}
+
+/** Everything one primitive's row shows. */
+export interface PrimitiveRowView {
+  name: string
+  variable: string
+  type: ThemePrimitive['type']
+  light: PrimitiveModeView
+  dark: PrimitiveModeView
+  /** It has no dark value of its own. */
+  sameAsLight: boolean
+  /** The tokens (with their labels) and primitives that follow it. */
+  users: { tokens: Array<{ name: string; label: string }>; primitives: string[] }
+}
+
+/** The draft's primitive names, sorted. */
+export function primitiveNames(tokens: ThemeTokensDocument): string[] {
+  return Object.keys(tokens.primitives).sort((a, b) => a.localeCompare(b))
+}
+
+/** The row for primitive `name`, or null when the draft has none of that name. */
+export function primitiveRowView(name: string, snapshot: EditorSnapshot): PrimitiveRowView | null {
+  const p = snapshot.tokens.primitives[name]
+  if (!p) return null
+  const variable = primitiveVar(name)
+  const mode = (m: EditorMode): PrimitiveModeView => ({
+    value: m === 'dark' ? p.dark ?? p.value : p.value,
+    literal: resolveLiteral(snapshot.resolved[m], variable),
+  })
+  const users = primitiveUsers(snapshot.tokens, name)
+  return {
+    name,
+    variable,
+    type: p.type,
+    light: mode('light'),
+    dark: mode('dark'),
+    sameAsLight: p.dark === undefined,
+    users: {
+      tokens: users.tokens.sort().map((n) => ({ name: n, label: labelFor(n) })),
+      primitives: users.primitives.sort(),
+    },
+  }
+}
+
+/** A starting value for a new primitive of `type`, so the add form opens on something valid. */
+export function primitiveStarter(type: ThemePrimitive['type']): string {
+  switch (type) {
+    case 'color':
+      return '#336699'
+    case 'length':
+      return '1rem'
+    case 'radius':
+      return '0.5rem'
+    case 'shadow':
+      return '0 2px 6px rgb(0 0 0 / 0.15)'
+    case 'font-family':
+      return 'system-ui, sans-serif'
+    case 'font-weight':
+      return '400'
+    case 'duration':
+      return '150ms'
+    case 'easing':
+      return 'ease'
+    case 'opacity':
+      return '0.5'
+    case 'image':
+      return 'none'
+    case 'number':
+      return '1'
+    default:
+      return 'none'
   }
 }

@@ -32,11 +32,14 @@ import { jsonEqual } from '@/lib/hooks/use-draft'
 import { createEditorStore, type EditorStore } from './editor-store'
 import { LazyRow } from './LazyRow'
 import { TokenRow, type EditFn } from './TokenRow'
+import { PrimitivesPanel } from './PrimitivesPanel'
+import { DraftResourcesContext } from './controls'
 import {
   EDITOR_GROUPS,
   EMPTY_HISTORY,
   analyse,
   buildPreview,
+  draftResources,
   filterPrimitiveRows,
   isFiltering,
   primitiveRows,
@@ -446,7 +449,9 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
   const errors = detail.issues.filter((i) => i.severity === 'error')
   const warnings = detail.issues.filter((i) => i.severity === 'warning')
   const contrastFails = findings.filter((f) => f.status === 'fail' && f.mode === mode).length
-  const primitives = filterPrimitiveRows(primitiveRows(tokens), filter)
+  const primitives = useMemo(() => filterPrimitiveRows(primitiveRows(tokens), filter).map((p) => p.name), [tokens, filter])
+  const primitiveCount = Object.keys(tokens.primitives).length
+  const resources = useMemo(() => draftResources(detail.manifest, detail.images ?? []), [detail.manifest, detail.images])
   const filtering = isFiltering(filter)
   const sections = useMemo(() => sectionViews(level, filter, tokens), [level, filter, tokens])
   const isSectionOpen = (id: string) => openSections.has(id)
@@ -554,279 +559,249 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-4 space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={back}>
-          <Icon name="arrow-left" className="w-4 h-4" />
-          <span className="ml-1">All drafts</span>
-        </button>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="qt-text-xs qt-text-muted" aria-live="polite">
-            {saver.saving ? 'Saving…' : 'All changes saved'}
-          </span>
-          <div role="group" aria-label="Mode to edit and show in this tab" className="flex">
-            {(['light', 'dark'] as const).map((m) => (
+    <DraftResourcesContext.Provider value={resources}>
+      <div className="max-w-5xl mx-auto p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={back}>
+            <Icon name="arrow-left" className="w-4 h-4" />
+            <span className="ml-1">All drafts</span>
+          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="qt-text-xs qt-text-muted" aria-live="polite">
+              {saver.saving ? 'Saving…' : 'All changes saved'}
+            </span>
+            <div role="group" aria-label="Mode to edit and show in this tab" className="flex">
+              {(['light', 'dark'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={mode === m}
+                  className={`qt-button qt-button-sm ${mode === m ? 'qt-button-primary' : 'qt-button-secondary'}`}
+                  onClick={() => onModeChange(m)}
+                >
+                  <Icon name={m === 'light' ? 'sun' : 'moon'} className="w-4 h-4" />
+                  <span className="ml-1">{m === 'light' ? 'Light' : 'Dark'}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="qt-button qt-button-secondary qt-button-sm"
+              onClick={() => {
+                if (previewing) void saver.flush()
+                setPreviewing((p) => !p)
+              }}
+            >
+              <Icon name={previewing ? 'eye-off' : 'eye'} className="w-4 h-4" />
+              <span className="ml-1">{previewing ? 'Stop preview' : 'Resume preview'}</span>
+            </button>
+            <button
+              type="button"
+              className="qt-button qt-button-primary qt-button-sm"
+              onClick={install}
+              disabled={installing || errors.length > 0}
+              aria-describedby={errors.length > 0 ? `${nameId}-errors` : undefined}
+            >
+              <Icon name="download" className="w-4 h-4" />
+              <span className="ml-1">{installing ? 'Installing…' : 'Install'}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="qt-card p-4 space-y-3">
+          <div>
+            <label htmlFor={nameId} className="qt-label">Name</label>
+            <input
+              id={nameId}
+              className="qt-input w-full"
+              value={name}
+              maxLength={120}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={commitName}
+            />
+          </div>
+          <div>
+            <label htmlFor={descriptionId} className="qt-label">Description</label>
+            <textarea
+              id={descriptionId}
+              className="qt-textarea qt-input w-full"
+              rows={2}
+              value={description}
+              maxLength={2000}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={commitDescription}
+            />
+          </div>
+          <p className="qt-text-xs qt-text-secondary">
+            {errors.length} {errors.length === 1 ? 'error' : 'errors'}, {warnings.length}{' '}
+            {warnings.length === 1 ? 'warning' : 'warnings'} at the last save; {contrastFails} contrast{' '}
+            {contrastFails === 1 ? 'pair falls' : 'pairs fall'} short in {mode}.{' '}
+            {previewing
+              ? 'The rest of Quilltap is wearing this draft; this panel keeps the house default so you can read it.'
+              : 'The preview is paused; Quilltap is wearing its usual theme.'}
+          </p>
+        </div>
+
+        {errors.length > 0 && (
+          <div id={`${nameId}-errors`} className="qt-alert-error" role="status">
+            <p className="font-medium">Install waits until these are mended:</p>
+            <ul className="list-disc pl-5 mt-1 qt-text-small">
+              {errors.map((e, i) => (
+                <li key={i}>{e.message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {installErrors && (
+          <div className="qt-alert-error" role="alert">
+            <p className="font-medium">The install was refused:</p>
+            <ul className="list-disc pl-5 mt-1 qt-text-small">
+              {installErrors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {installed && (
+          <div className="qt-alert-success flex items-center justify-between gap-3 flex-wrap" role="status">
+            <p>
+              Installed as version {installed.version}
+              {convertedCount > 0 && `, with ${convertedCount} image${convertedCount === 1 ? '' : 's'} converted to WebP`}
+              . The draft carries on at {installed.draftVersion}.
+            </p>
+            <button type="button" className="qt-button qt-button-primary qt-button-sm" onClick={wear}>
+              Wear it now
+            </button>
+          </div>
+        )}
+
+        <div
+          className="qt-card p-3 flex items-center gap-3 flex-wrap sticky top-0 z-10"
+          role="toolbar"
+          aria-label="Finding and undoing"
+        >
+          <div role="group" aria-label="Level" className="flex">
+            {(
+              [
+                ['essentials', 'Essentials'],
+                ['components', 'Components'],
+              ] as const
+            ).map(([value, label]) => (
               <button
-                key={m}
+                key={value}
                 type="button"
-                aria-pressed={mode === m}
-                className={`qt-button qt-button-sm ${mode === m ? 'qt-button-primary' : 'qt-button-secondary'}`}
-                onClick={() => onModeChange(m)}
+                aria-pressed={level === value}
+                disabled={filtering}
+                className={`qt-button qt-button-sm ${level === value ? 'qt-button-primary' : 'qt-button-secondary'}`}
+                onClick={() => setLevel(value)}
               >
-                <Icon name={m === 'light' ? 'sun' : 'moon'} className="w-4 h-4" />
-                <span className="ml-1">{m === 'light' ? 'Light' : 'Dark'}</span>
+                {label}
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            className="qt-button qt-button-secondary qt-button-sm"
-            onClick={() => {
-              if (previewing) void saver.flush()
-              setPreviewing((p) => !p)
-            }}
-          >
-            <Icon name={previewing ? 'eye-off' : 'eye'} className="w-4 h-4" />
-            <span className="ml-1">{previewing ? 'Stop preview' : 'Resume preview'}</span>
-          </button>
-          <button
-            type="button"
-            className="qt-button qt-button-primary qt-button-sm"
-            onClick={install}
-            disabled={installing || errors.length > 0}
-            aria-describedby={errors.length > 0 ? `${nameId}-errors` : undefined}
-          >
-            <Icon name="download" className="w-4 h-4" />
-            <span className="ml-1">{installing ? 'Installing…' : 'Install'}</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="qt-card p-4 space-y-3">
-        <div>
-          <label htmlFor={nameId} className="qt-label">Name</label>
-          <input
-            id={nameId}
-            className="qt-input w-full"
-            value={name}
-            maxLength={120}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={commitName}
-          />
-        </div>
-        <div>
-          <label htmlFor={descriptionId} className="qt-label">Description</label>
-          <textarea
-            id={descriptionId}
-            className="qt-textarea qt-input w-full"
-            rows={2}
-            value={description}
-            maxLength={2000}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={commitDescription}
-          />
-        </div>
-        <p className="qt-text-xs qt-text-secondary">
-          {errors.length} {errors.length === 1 ? 'error' : 'errors'}, {warnings.length}{' '}
-          {warnings.length === 1 ? 'warning' : 'warnings'} at the last save; {contrastFails} contrast{' '}
-          {contrastFails === 1 ? 'pair falls' : 'pairs fall'} short in {mode}.{' '}
-          {previewing
-            ? 'The rest of Quilltap is wearing this draft; this panel keeps the house default so you can read it.'
-            : 'The preview is paused; Quilltap is wearing its usual theme.'}
-        </p>
-      </div>
-
-      {errors.length > 0 && (
-        <div id={`${nameId}-errors`} className="qt-alert-error" role="status">
-          <p className="font-medium">Install waits until these are mended:</p>
-          <ul className="list-disc pl-5 mt-1 qt-text-small">
-            {errors.map((e, i) => (
-              <li key={i}>{e.message}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {installErrors && (
-        <div className="qt-alert-error" role="alert">
-          <p className="font-medium">The install was refused:</p>
-          <ul className="list-disc pl-5 mt-1 qt-text-small">
-            {installErrors.map((e, i) => (
-              <li key={i}>{e}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {installed && (
-        <div className="qt-alert-success flex items-center justify-between gap-3 flex-wrap" role="status">
-          <p>
-            Installed as version {installed.version}
-            {convertedCount > 0 && `, with ${convertedCount} image${convertedCount === 1 ? '' : 's'} converted to WebP`}
-            . The draft carries on at {installed.draftVersion}.
-          </p>
-          <button type="button" className="qt-button qt-button-primary qt-button-sm" onClick={wear}>
-            Wear it now
-          </button>
-        </div>
-      )}
-
-      <div
-        className="qt-card p-3 flex items-center gap-3 flex-wrap sticky top-0 z-10"
-        role="toolbar"
-        aria-label="Finding and undoing"
-      >
-        <div role="group" aria-label="Level" className="flex">
-          {(
-            [
-              ['essentials', 'Essentials'],
-              ['components', 'Components'],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={level === value}
-              disabled={filtering}
-              className={`qt-button qt-button-sm ${level === value ? 'qt-button-primary' : 'qt-button-secondary'}`}
-              onClick={() => setLevel(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <label htmlFor={searchId} className="sr-only">Search the tokens</label>
-          <input
-            id={searchId}
-            type="search"
-            className="qt-input qt-text-small min-w-0 flex-1"
-            placeholder="Search by name, label or description"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <label className="qt-text-small flex items-center gap-1">
-          <input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} />
-          Changed only
-        </label>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className="qt-button qt-button-ghost qt-button-sm"
-            onClick={editing.undo}
-            disabled={!editing.canUndo}
-            aria-keyshortcuts="Control+Z Meta+Z"
-          >
-            Undo
-          </button>
-          <button
-            type="button"
-            className="qt-button qt-button-ghost qt-button-sm"
-            onClick={editing.redo}
-            disabled={!editing.canRedo}
-            aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
-          >
-            Redo
-          </button>
-        </div>
-        <div className="flex items-center gap-1">
-          <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={openAll} disabled={filtering}>
-            Open all
-          </button>
-          <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={closeAll} disabled={filtering}>
-            Close all
-          </button>
-        </div>
-      </div>
-      <p className="sr-only" aria-live="polite">
-        {filtering
-          ? `${sections.reduce((n, sec) => n + sec.rows.length + sec.advanced.length, 0)} tokens in ${sections.length} sections answer.`
-          : ''}
-      </p>
-
-      <ChoicesCard tokens={tokens} edit={edit} />
-
-      <div className="grid gap-4 md:grid-cols-[13rem_minmax(0,1fr)] items-start">
-        <nav aria-label="Sections" className="qt-card p-2 md:sticky md:top-20 md:max-h-[calc(100vh-8rem)] md:overflow-y-auto">
-          {sections.length === 0 ? (
-            <p className="qt-text-xs qt-text-muted p-2">No section answers.</p>
-          ) : (
-            <ul className="space-y-0.5">
-              {sections.map((section) => (
-                <li key={section.id}>
-                  <button
-                    type="button"
-                    className="qt-button qt-button-ghost qt-button-sm w-full justify-between text-left"
-                    onClick={() => goToSection(section.id)}
-                  >
-                    <span className="truncate">{section.label}</span>
-                    {section.changed > 0 && (
-                      <span className="qt-badge-secondary ml-2" aria-label={`${section.changed} set by this theme`}>
-                        {section.changed}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </nav>
-
-        <div className="space-y-4 min-w-0" onKeyDown={onEditorKeyDown}>
-          {filtering && sections.length === 0 && (
-            <p className="qt-card p-4 qt-text-small qt-text-muted">
-              {changedOnly && !query.trim()
-                ? 'This theme has changed nothing yet; every token stands at the house default.'
-                : 'Nothing in the registry answers to that description.'}
-            </p>
-          )}
-          {sections.map((section) => (
-            <SectionCard
-              key={section.id}
-              section={section}
-              domId={sectionDomId(sectionsId, section.id)}
-              open={isSectionOpen(section.id)}
-              advancedOpen={openAdvanced.has(section.id)}
-              onToggle={(open) => setSectionOpen(section.id, open)}
-              onToggleAdvanced={(open) => setOpenAdvanced((prev) => toggle(prev, section.id, open))}
-              store={store}
-              edit={edit}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <label htmlFor={searchId} className="sr-only">Search the tokens</label>
+            <input
+              id={searchId}
+              type="search"
+              className="qt-input qt-text-small min-w-0 flex-1"
+              placeholder="Search by name, label or description"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
             />
-          ))}
-          <details className="qt-card" open={filtering && primitives.length > 0 ? true : undefined}>
-            <summary className="p-4 cursor-pointer">
-              <span className="qt-heading-4">Primitives</span>
-              <span className="qt-text-xs qt-text-muted ml-2">{primitives.length} {filtering ? 'answering' : 'defined'}, read only</span>
-              <p className="qt-text-xs qt-text-secondary mt-1">
-                The theme&rsquo;s own named values. A token that follows one shows it above; editing that token writes a colour of its own in its place.
-              </p>
-            </summary>
-            {primitives.length === 0 ? (
-              <p className="px-4 pb-4 qt-text-small qt-text-muted">This theme defines none.</p>
+          </div>
+          <label className="qt-text-small flex items-center gap-1">
+            <input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} />
+            Changed only
+          </label>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="qt-button qt-button-ghost qt-button-sm"
+              onClick={editing.undo}
+              disabled={!editing.canUndo}
+              aria-keyshortcuts="Control+Z Meta+Z"
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              className="qt-button qt-button-ghost qt-button-sm"
+              onClick={editing.redo}
+              disabled={!editing.canRedo}
+              aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
+            >
+              Redo
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
+            <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={openAll} disabled={filtering}>
+              Open all
+            </button>
+            <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={closeAll} disabled={filtering}>
+              Close all
+            </button>
+          </div>
+        </div>
+        <p className="sr-only" aria-live="polite">
+          {filtering
+            ? `${sections.reduce((n, sec) => n + sec.rows.length + sec.advanced.length, 0)} tokens in ${sections.length} sections answer.`
+            : ''}
+        </p>
+
+        <ChoicesCard tokens={tokens} edit={edit} />
+
+        <div className="grid gap-4 md:grid-cols-[13rem_minmax(0,1fr)] items-start">
+          <nav aria-label="Sections" className="qt-card p-2 md:sticky md:top-20 md:max-h-[calc(100vh-8rem)] md:overflow-y-auto">
+            {sections.length === 0 ? (
+              <p className="qt-text-xs qt-text-muted p-2">No section answers.</p>
             ) : (
-              <table className="w-full qt-text-xs mx-4 mb-4">
-                <thead>
-                  <tr className="text-left qt-text-secondary">
-                    <th scope="col" className="py-1 pr-3">Variable</th>
-                    <th scope="col" className="py-1 pr-3">Type</th>
-                    <th scope="col" className="py-1 pr-3">Value</th>
-                    <th scope="col" className="py-1 pr-3">Dark</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {primitives.map((p) => (
-                    <tr key={p.name} className="border-t qt-border-default">
-                      <td className="py-1 pr-3 font-mono">{p.variable}</td>
-                      <td className="py-1 pr-3">{p.type}</td>
-                      <td className="py-1 pr-3 font-mono break-all">{p.value}</td>
-                      <td className="py-1 pr-3 font-mono break-all">{p.dark ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ul className="space-y-0.5">
+                {sections.map((section) => (
+                  <li key={section.id}>
+                    <button
+                      type="button"
+                      className="qt-button qt-button-ghost qt-button-sm w-full justify-between text-left"
+                      onClick={() => goToSection(section.id)}
+                    >
+                      <span className="truncate">{section.label}</span>
+                      {section.changed > 0 && (
+                        <span className="qt-badge-secondary ml-2" aria-label={`${section.changed} set by this theme`}>
+                          {section.changed}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
-          </details>
+          </nav>
+
+          <div className="space-y-4 min-w-0" onKeyDown={onEditorKeyDown}>
+            {filtering && sections.length === 0 && (
+              <p className="qt-card p-4 qt-text-small qt-text-muted">
+                {changedOnly && !query.trim()
+                  ? 'This theme has changed nothing yet; every token stands at the house default.'
+                  : 'Nothing in the registry answers to that description.'}
+              </p>
+            )}
+            {sections.map((section) => (
+              <SectionCard
+                key={section.id}
+                section={section}
+                domId={sectionDomId(sectionsId, section.id)}
+                open={isSectionOpen(section.id)}
+                advancedOpen={openAdvanced.has(section.id)}
+                onToggle={(open) => setSectionOpen(section.id, open)}
+                onToggleAdvanced={(open) => setOpenAdvanced((prev) => toggle(prev, section.id, open))}
+                store={store}
+                edit={edit}
+              />
+            ))}
+            <PrimitivesPanel names={primitives} total={primitiveCount} filtering={filtering} store={store} edit={edit} />
+          </div>
         </div>
       </div>
-    </div>
+    </DraftResourcesContext.Provider>
   )
 }

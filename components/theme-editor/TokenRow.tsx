@@ -27,6 +27,7 @@ import {
   detachToLiteral,
   followPrimitive,
   joinDarkToLight,
+  keywordOptions,
   resetToken,
   rowContrast,
   separateDarkValue,
@@ -103,10 +104,11 @@ interface ModeBlockProps {
   /** The heading over the block ("Light", "Dark", or "Light and dark"). */
   heading: string
   action?: React.ReactNode
+  familyInForce: string | null
 }
 
 /** One mode's value: what it follows, the control, and the type check of what is in force. */
-function ModeBlock({ token, mode, view, primitives, problem, edit, heading, action }: ModeBlockProps) {
+function ModeBlock({ token, mode, view, primitives, problem, edit, heading, action, familyInForce }: ModeBlockProps) {
   const followId = useId()
   const key = `${token.name}:${mode}`
   const followedPrimitive = view.follows?.primitive ?? null
@@ -151,11 +153,13 @@ function ModeBlock({ token, mode, view, primitives, problem, edit, heading, acti
         </div>
       )}
       <ValueControl
-        token={token}
-        mode={mode}
+        type={token.type}
+        label={`${token.label}, ${mode}`}
+        options={keywordOptions(token)}
         value={view.value}
         literal={view.literal}
         placeholder={view.source.kind === 'unset' ? token.default : undefined}
+        familyInForce={familyInForce}
         onCommit={(v) => edit(key, (s) => setTokenValue(s.tokens, token.name, mode, v))}
       />
       {problem && (
@@ -172,7 +176,7 @@ function TokenRowImpl({ token, store, edit }: TokenRowProps) {
   const labelId = useId()
   const select = useCallback((s: EditorSnapshot) => tokenRowView(token, s), [token])
   const view = useEditorSelector(store, select)
-  const { shown, light, dark, mode, overridden, sameAsLight, problems, contrast, primitives } = view
+  const { shown, light, dark, mode, overridden, sameAsLight, problems, contrast, primitives, familyInForce } = view
   const isColor = token.type === 'color'
 
   return (
@@ -217,6 +221,7 @@ function TokenRowImpl({ token, store, edit }: TokenRowProps) {
               problem={problems.light}
               edit={edit}
               heading={sameAsLight ? 'Light and dark' : 'Light'}
+              familyInForce={familyInForce}
               action={
                 sameAsLight ? (
                   <button
@@ -240,6 +245,7 @@ function TokenRowImpl({ token, store, edit }: TokenRowProps) {
                 problem={problems.dark}
                 edit={edit}
                 heading="Dark"
+                familyInForce={familyInForce}
                 action={
                   <button
                     type="button"

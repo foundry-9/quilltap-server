@@ -4,6 +4,14 @@
 
 ### 4.14-dev
 
+#### Themes: typed controls and editable primitives in the theme editor (Calliope Live, Spec E Stage 2)
+
+- Every token type has its own control in the theme editor (`components/theme-editor/controls.tsx`): colour, length, radius (one value or each corner), shadow (layers with offsets, blur, spread, colour and inset), font family (ordered stack with the draft's fonts and system stacks, and a sample line), font weight (marks the weights the theme's font declares), keyword and font style (a choice of the allowed words), duration, transition (property, duration, easing and delay per item), opacity (field and slider, number or percent), blur, image (the draft's images or none), z-index, number and easing
+- Each control has an "edit as text" form. A value its parser cannot read (a gradient, a data URI, a `calc()`) opens in the text form and is left as written until changed
+- A value that follows a primitive or another token opens its controls on what it comes to; changing one gives the token a value of its own
+- Primitives panel: add (name checked, starting value by type), rename (rewrites references), change type, set the value and a separate dark value, see what follows each, and remove behind a confirmation that lists the values that will take the primitive's value
+- Tests: a control test per type, editor tests for the controls and the panel, and a walk that opens every row of each bundled theme and checks nothing is written
+
 #### Themes: theme editor sections, search, undo and the density choice (Calliope Live, Spec E Stages 0–1)
 
 - Theme engine value parsers (`lib/themes/engine/values/`): length and length lists (radius corners), blur, shadow, font stack, transition, duration, opacity, z-index, font weight and image, each with a formatter that round-trips what it accepts; anything else parses to null and is left as written

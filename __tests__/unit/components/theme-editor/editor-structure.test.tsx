@@ -51,6 +51,7 @@ function detail(tokens: ThemeTokensDocument = EMPTY): DraftDetail {
     issues: [],
     updatedAt: '2026-11-14T12:00:00.000Z',
     version: '0.1.0',
+    images: [],
   }
 }
 
@@ -107,13 +108,13 @@ describe('finding a token', () => {
     expect(screen.queryByLabelText('Card background, light value')).not.toBeInTheDocument()
     search('card background')
     expect(await screen.findByLabelText('Card background, light value')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Focus ring width, light value')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Focus ring width, light, amount')).not.toBeInTheDocument()
   })
 
   it('shows only what the theme sets', async () => {
     await openEditor(setTokenValue(EMPTY, '--theme-focus-ring-width', 'light', '3px'))
     fireEvent.click(screen.getByLabelText('Changed only'))
-    expect(await screen.findByLabelText('Focus ring width, light value')).toHaveValue('3px')
+    expect(await screen.findByLabelText('Focus ring width, light, amount')).toHaveValue(3)
     expect(screen.queryByLabelText('Card, light value')).not.toBeInTheDocument()
   })
 
@@ -163,12 +164,79 @@ describe('the text control', () => {
   it('refuses a value that is not of the token type', async () => {
     await openEditor()
     search('focus ring width')
-    await screen.findByLabelText('Focus ring width, light value')
+    fireEvent.click(await screen.findByRole('button', { name: 'Focus ring width, light: edit as text' }))
     commit('Focus ring width, light value', 'wide')
     expect(screen.getByText(/The atelier demurs: .*length.*It will not be applied/)).toBeInTheDocument()
     expect(lastPreviewCss()).not.toContain('--theme-focus-ring-width: wide')
     commit('Focus ring width, light value', '3px')
     await waitFor(() => expect(lastPreviewCss()).toContain('--theme-focus-ring-width: 3px;'))
+  })
+})
+
+describe('the typed controls in the editor', () => {
+  it('writes a length from its controls', async () => {
+    await openEditor()
+    search('focus ring width')
+    fireEvent.change(await screen.findByLabelText('Focus ring width, light, amount'), { target: { value: '4' } })
+    await waitFor(() => expect(lastPreviewCss()).toContain('--theme-focus-ring-width: 4px;'))
+  })
+
+  it('opens a value beyond the controls as text and leaves it alone', async () => {
+    const tokens = setTokenValue(EMPTY, '--theme-focus-ring-width', 'light', 'clamp(1px, 0.2vw, 3px)')
+    await openEditor(tokens)
+    search('focus ring width')
+    expect(await screen.findByLabelText('Focus ring width, light value')).toHaveValue('clamp(1px, 0.2vw, 3px)')
+    expect(screen.getAllByText(/beyond the controls/).length).toBeGreaterThan(0)
+    expect(current.tokens).toEqual(tokens)
+  })
+})
+
+describe('the primitives panel', () => {
+  const withInk: ThemeTokensDocument = {
+    ...EMPTY,
+    primitives: { ink: { type: 'color', value: '#112233' } },
+    tokens: { '--theme-card': 'var(--p-ink)' },
+  }
+
+  it('edits a value, and every token following it repaints', async () => {
+    await openEditor(withInk)
+    commit('ink, light value', '#445566')
+    await waitFor(() => expect(lastPreviewCss()).toContain('--p-ink: #445566'))
+  })
+
+  it('adds one', async () => {
+    await openEditor()
+    fireEvent.change(screen.getByLabelText('Name of the new primitive'), { target: { value: 'brass-ink' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add the primitive' }))
+    expect(await screen.findByLabelText('Name of primitive brass-ink')).toBeInTheDocument()
+    await waitFor(() => expect(lastPreviewCss()).toContain('--p-brass-ink'))
+  })
+
+  it('refuses a name that is taken, and renames to a free one', async () => {
+    await openEditor(withInk)
+    const name = screen.getByLabelText('Name of primitive ink')
+    fireEvent.change(name, { target: { value: 'Bad Name' } })
+    expect(screen.getByText(/kebab-case.*the old name stands/)).toBeInTheDocument()
+    fireEvent.change(name, { target: { value: 'quill' } })
+    fireEvent.blur(name)
+    await waitFor(() => expect(lastPreviewCss()).toContain('var(--p-quill)'))
+  })
+
+  it('confirms before removing, naming what follows it, and hands them its value', async () => {
+    await openEditor(withInk)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove primitive ink' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent('One value follows it')
+    expect(dialog).toHaveTextContent('--theme-card')
+    fireEvent.click(screen.getByRole('button', { name: 'Remove the primitive' }))
+    await waitFor(() => expect(lastPreviewCss()).not.toContain('--p-ink'))
+    expect(lastPreviewCss()).toContain('#112233')
+  })
+
+  it('gives dark a value apart', async () => {
+    await openEditor(withInk)
+    fireEvent.click(screen.getByRole('button', { name: 'Give primitive ink a dark value of its own' }))
+    expect(await screen.findByLabelText('ink, dark value')).toHaveValue('#112233')
   })
 })
 
