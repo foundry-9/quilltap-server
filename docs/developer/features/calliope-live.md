@@ -32,6 +32,9 @@ not a settled design.
   — second slice of Phase 2: a control for every token type, primitives,
   density, search and undo (implemented 4.14-dev; user docs
   [help/theme-editor.md](../../../help/theme-editor.md)).
+- [calliope-live-spec-f-assets-and-manifest.md](calliope-live-spec-f-assets-and-manifest.md)
+  — third slice of Phase 2: font and image upload, icon overrides,
+  subsystems and the rest of the manifest (ready to run).
 
 **Scope:** `quilltap-server` (v4) only. Porting to v5 is a separate concern and
 does not shape decisions here.

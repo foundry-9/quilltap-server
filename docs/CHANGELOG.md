@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live Spec F
+
+- Added Spec F (font and image upload, icon overrides, subsystem overrides and manifest details in the theme editor; fonts are read from the file and become WOFF2 at install)
+
 #### Fix: a failed theme draft copy no longer holds its id (#226)
 
 - `createDraftNow` (`lib/themes/drafts/service.ts`) removes the partial `Themes/<id>/` folder when any write fails, then rethrows. Before, the leftover folder never listed (no `theme.json`) but still counted as a taken id, so the next draft of that name got `-2` and the copied files stayed in Quilltap General
