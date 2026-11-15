@@ -1,43 +1,53 @@
 /**
  * Theme Registry
  *
- * Singleton registry for managing loaded theme plugins and theme bundles.
- * Handles loading theme tokens from plugin files and .qtap-theme bundles,
- * theme inheritance, and provides access to available themes.
+ * Singleton registry of the themes Quilltap can wear: the built-in default
+ * (which injects nothing — the app's own stylesheet is the default) and every
+ * `.qtap-theme` bundle, shipped or installed, validated and compiled by the
+ * theme engine when it was loaded (lib/themes/theme-bundle.ts).
+ *
+ * Themes made for an earlier Quilltap — a version 1 bundle, or a theme a
+ * plugin declares — are not registered. They are recorded as refused so the
+ * Appearance card can say what became of them.
  *
  * @module themes/theme-registry
  */
 
-import fs from 'node:fs/promises';
 import { logger } from '@/lib/logger';
-import { pluginRegistry, getEnabledPluginsByCapability } from '@/lib/plugins';
-import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
-import type { ThemeTokens, ThemeManifest, ThemePreviewImage } from './types';
-import { safeValidateThemeTokens } from './types';
-import { DEFAULT_THEME_TOKENS, DEFAULT_THEME_METADATA } from './default-tokens';
-import { mergeThemeTokens, themeTokensToCSS } from './utils';
+import { getEnabledPluginsByCapability } from '@/lib/plugins';
+import type { ThemePreviewImage } from './types';
 import { getErrorMessage } from '@/lib/error-utils';
 import { loadInstalledBundles, loadBundledThemesFromDir } from './bundle-loader';
-import type { LoadedBundleTheme, LoadedBundleThemeV2 } from './bundle-loader';
-import { compiledThemeCss, type CompiledThemeV2 } from './engine/compile';
+import type { LoadedBundleTheme, LoadedBundleSet } from './bundle-loader';
+import { compiledThemeCss, defaultThemePreview, type CompiledTheme, type ThemePreview } from './engine/compile';
+import { THEME_REGISTRY_VIEW } from './theme-bundle';
+import { earlierThemeMessage, type RefusedTheme } from './refused';
 import { getBundledThemesDir } from '@/lib/paths';
-import type { ThemePlugin, EmbeddedFont } from '@quilltap/plugin-types';
 import { AbstractMapRegistry } from '@/lib/plugins/abstract-map-registry';
 import { resolveInsideSync, PathOutsideBaseError } from '@/lib/paths/resolve-inside';
 
+/** The built-in default theme's metadata. */
+export const DEFAULT_THEME_METADATA = {
+  id: 'default',
+  name: 'Default',
+  description: 'Professional neutral theme with system fonts and restrained design',
+  version: '1.0.0',
+  author: 'Quilltap',
+  supportsDarkMode: true,
+  tags: ['default', 'professional', 'neutral', 'system-fonts'],
+} as const;
+
 /**
- * Resolve a manifest-supplied path inside a theme's root directory, or return
- * undefined (with a warning) when it would land outside. Installed bundles are
- * checked with symlinks resolved; npm plugin packages lexically, since package
- * managers may link files into them.
+ * Resolve a manifest-supplied path inside a bundle's directory (symlinks
+ * resolved), or return undefined (with a warning) when it would land outside.
  */
 function themeFilePath(
   root: string,
   rel: string,
-  context: { themeId: string; field: string; realpath: boolean }
+  context: { themeId: string; field: string }
 ): string | undefined {
   try {
-    return resolveInsideSync(root, rel, { realpath: context.realpath });
+    return resolveInsideSync(root, rel, { realpath: true });
   } catch (err) {
     if (!(err instanceof PathOutsideBaseError)) throw err;
     logger.warn('Ignoring theme path outside the theme directory', {
@@ -60,7 +70,7 @@ function themeFilePath(
 export interface LoadedThemeFont {
   /** Font family name */
   family: string;
-  /** Font file path (absolute) - empty for embedded fonts */
+  /** Font file path (absolute) */
   filePath: string;
   /** Font weight */
   weight: string;
@@ -68,14 +78,10 @@ export interface LoadedThemeFont {
   style: string;
   /** Font display strategy */
   display: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
-  /** Plugin name (for URL construction) */
+  /** Bundle prefix (for URL construction), e.g. "bundle:madmans-box" */
   pluginName: string;
-  /** Original source path (relative to plugin) or data URL for embedded */
+  /** Source path relative to the bundle */
   src: string;
-  /** Whether this font is embedded (data URL or base64) */
-  isEmbedded?: boolean;
-  /** Embedded font data (base64 or data URL) */
-  embeddedData?: string;
 }
 
 /**
@@ -93,7 +99,7 @@ export interface LoadedThemeIcon {
 /**
  * Theme source type
  */
-export type ThemeSource = 'plugin' | 'bundle' | 'default';
+export type ThemeSource = 'bundle' | 'default';
 
 /**
  * A loaded theme with all its data
@@ -117,19 +123,10 @@ export interface LoadedTheme {
   /** Whether this theme supports dark mode */
   supportsDarkMode: boolean;
 
-  /** Theme document format: 1 (tokens.json + raw CSS, and the default and plugin themes) or 2. */
-  formatVersion: 1 | 2;
+  /** The theme, compiled: its CSS, choices, features and preview. Absent for the default, which injects nothing. */
+  compiled?: CompiledTheme;
 
-  /** Version 1 tokens. Absent for a version 2 theme, which never goes through themeTokensToCSS. */
-  tokens?: ThemeTokens;
-
-  /** A version 2 theme, compiled: its CSS, choices, features and preview swatches. */
-  v2?: CompiledThemeV2;
-
-  /** Optional component override CSS */
-  cssOverrides?: string;
-
-  /** Preview image path (relative to plugin) */
+  /** Preview image path (relative to the bundle) */
   previewImage?: string;
 
   /** Absolute path to preview image (for serving) */
@@ -138,7 +135,7 @@ export interface LoadedTheme {
   /** Theme tags for categorization */
   tags: string[];
 
-  /** Source plugin name or bundle prefix */
+  /** Bundle prefix, or "built-in" for the default */
   pluginName: string;
 
   /** Whether this is the built-in default theme */
@@ -150,7 +147,7 @@ export interface LoadedTheme {
   /** Per-icon overrides bundled with the theme */
   icons?: LoadedThemeIcon[];
 
-  /** Subsystem display overrides from theme plugin */
+  /** Subsystem display overrides from the theme */
   subsystems?: Record<string, {
     name?: string;
     description?: string;
@@ -163,9 +160,6 @@ export interface LoadedTheme {
 
   /** Absolute path to bundle directory (for bundle themes) */
   bundlePath?: string;
-
-  /** Whether this theme source format is deprecated */
-  deprecated?: boolean;
 }
 
 /**
@@ -181,10 +175,18 @@ export interface ThemeLoadError {
 /**
  * Theme registry state
  */
+/** The refused map's key: a plugin's refusal and a bundle's never collide. */
+function refusalKey(source: RefusedTheme['source'], id: string): string {
+  return `${source}:${id}`;
+}
+
 export interface ThemeRegistryState {
   initialized: boolean;
   themes: Map<string, LoadedTheme>;
   errors: Map<string, ThemeLoadError>;
+  /** Themes found but not registered: made for an earlier Quilltap. */
+  /** Keyed by `refusalKey(source, id)`: a plugin and a bundle may share an id. */
+  refused: Map<string, RefusedTheme>;
   lastInitTime: Date | null;
 }
 
@@ -250,6 +252,23 @@ function resolveSubsystemOverrides(
 // THEME REGISTRY CLASS
 // ============================================================================
 
+/** The theme picker's entry for one theme. */
+export interface ThemeListEntry {
+  id: string;
+  name: string;
+  description?: string;
+  supportsDarkMode: boolean;
+  previewImage?: string;
+  tags: string[];
+  isDefault: boolean;
+  source: ThemeSource;
+  previewColors: ThemePreview['previewColors'];
+  headingFont?: {
+    family: string;
+    url?: string;
+  };
+}
+
 class ThemeRegistry extends AbstractMapRegistry<
   LoadedTheme,
   ThemeRegistryState,
@@ -258,11 +277,15 @@ class ThemeRegistry extends AbstractMapRegistry<
   protected readonly registryName = 'theme-registry';
   protected readonly globalStateKey = '__quilltapThemeRegistryState';
 
+  /** The default theme's preview, resolved once from the registry defaults. */
+  private defaultPreview: ThemePreview | null = null;
+
   protected createEmptyState(): ThemeRegistryState {
     return {
       initialized: false,
       themes: new Map(),
       errors: new Map(),
+      refused: new Map(),
       lastInitTime: null,
     };
   }
@@ -276,413 +299,89 @@ class ThemeRegistry extends AbstractMapRegistry<
   }
 
   /**
-   * Initialize the theme registry by loading themes from enabled THEME plugins
-   * Note: Module-based themes should be registered via registerThemeModule() before calling this
+   * Load the default theme and every bundle; record plugin themes and
+   * earlier bundles as refused.
    */
   async initialize(): Promise<void> {
-    // Clear errors but preserve themes registered via registerThemeModule()
     this.state.errors.clear();
+    // State carried across a hot reload may predate the refused map.
+    this.state.refused = new Map();
 
-    // Register the default theme if not already present
     if (!this.state.themes.has('default')) {
       this.registerDefaultTheme();
     }
 
-    // Get enabled theme plugins (deprecated — bundles are the preferred format)
-    const themePlugins = getEnabledPluginsByCapability('THEME');
-    if (themePlugins.length > 0) {
-      logger.warn('npm-based theme plugins are deprecated; use .qtap-theme bundles instead', {
-        pluginCount: themePlugins.length,
-        plugins: themePlugins.map(p => p.manifest.name),
-      });
-    }
-    // Load each theme plugin
-    for (const plugin of themePlugins) {
-      try {
-        await this.loadThemeFromPlugin(plugin);
-        logger.info(`Theme "${plugin.manifest.name}" loaded as npm plugin (deprecated — use .qtap-theme bundles instead)`);
-      } catch (error) {
-        const errorMessage = getErrorMessage(error);
-        logger.error('Failed to load theme from plugin', {
-          plugin: plugin.manifest.name,
-          error: errorMessage,
-        });
-        const themeId = this.extractThemeId(plugin.manifest.name);
-        this.state.errors.set(themeId, {
-          themeId,
-          pluginName: plugin.manifest.name,
-          error: errorMessage,
-        });
-      }
-    }
-
-    // Load theme bundles (.qtap-theme)
+    this.recordRefusedPluginThemes();
     await this.loadThemeBundles();
 
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
+    logger.debug('Theme registry initialised', {
+      themes: this.state.themes.size,
+      refused: this.state.refused.size,
+      errors: this.state.errors.size,
+    });
   }
 
-  /**
-   * Register the built-in default theme
-   */
+  /** Register the built-in default theme. It injects no CSS. */
   private registerDefaultTheme(): void {
-    const defaultTheme: LoadedTheme = {
+    this.state.themes.set('default', {
       id: 'default',
       name: DEFAULT_THEME_METADATA.name,
       description: DEFAULT_THEME_METADATA.description,
       version: DEFAULT_THEME_METADATA.version,
       author: DEFAULT_THEME_METADATA.author,
       supportsDarkMode: DEFAULT_THEME_METADATA.supportsDarkMode,
-      formatVersion: 1,
-      tokens: DEFAULT_THEME_TOKENS,
       tags: [...DEFAULT_THEME_METADATA.tags],
       pluginName: 'built-in',
       isDefault: true,
       source: 'default',
-    };
-
-    this.state.themes.set('default', defaultTheme);
+    });
   }
 
   /**
-   * Extract theme ID from plugin name
-   * qtap-plugin-theme-great-estate -> great-estate
+   * Theme id a plugin name stands for: qtap-plugin-theme-great-estate →
+   * great-estate.
    */
   private extractThemeId(pluginName: string): string {
     const prefix = 'qtap-plugin-theme-';
-    if (pluginName.startsWith(prefix)) {
-      return pluginName.slice(prefix.length);
-    }
-    // Fallback: use full plugin name
+    if (pluginName.startsWith(prefix)) return pluginName.slice(prefix.length);
     return pluginName.replace('qtap-plugin-', '');
   }
 
   /**
-   * Load a theme from a plugin (file-based loading only)
-   * Module-based themes should be registered via registerThemeModule()
+   * A plugin that declares the THEME capability still loads for whatever else
+   * it provides, but its theme is a format this Quilltap no longer reads: it
+   * is listed as refused, never registered.
    */
-  private async loadThemeFromPlugin(plugin: LoadedPlugin): Promise<void> {
-    const themeId = this.extractThemeId(plugin.manifest.name);
-
-    // Check if this theme was already registered via module loading
-    if (this.state.themes.has(themeId)) {
-      return;
-    }
-
-    // Fall back to file-based loading
-    await this.loadThemeFromFiles(plugin, themeId);
-  }
-
-  /**
-   * Register a pre-loaded theme module
-   * Called from plugin-initialization.ts after dynamic require
-   */
-  registerThemeModule(
-    plugin: LoadedPlugin,
-    themePlugin: ThemePlugin
-  ): boolean {
-    const themeId = this.extractThemeId(plugin.manifest.name);
-    // Check if module exports a theme plugin
-    if (!themePlugin?.tokens) {
-      return false;
-    }
-
-    // Validate the tokens
-    const validationResult = safeValidateThemeTokens(themePlugin.tokens);
-    if (!validationResult.success) {
-      throw new Error(
-        `Invalid theme tokens in module: ${validationResult.errors.issues
-          .map((e) => `${e.path.join('.')}: ${e.message}`)
-          .join(', ')}`
-      );
-    }
-
-    let tokens = validationResult.data;
-
-    // Handle theme inheritance if themeConfig specifies it
-    const themeConfig = plugin.manifest.themeConfig;
-    if (themeConfig?.extendsTheme) {
-      const baseTheme = this.state.themes.get(
-        this.extractThemeId(themeConfig.extendsTheme)
-      );
-      if (baseTheme) {
-        tokens = mergeThemeTokens(baseTheme.tokens ?? DEFAULT_THEME_TOKENS, tokens);
-      } else {
-        tokens = mergeThemeTokens(DEFAULT_THEME_TOKENS, tokens);
-      }
-    }
-
-    // Convert embedded fonts to LoadedThemeFont format
-    const fonts: LoadedThemeFont[] = [];
-    if (themePlugin.fonts && themePlugin.fonts.length > 0) {
-      for (const font of themePlugin.fonts) {
-        fonts.push({
-          family: font.family,
-          filePath: '', // Embedded fonts don't have file paths
-          weight: font.weight,
-          style: font.style || 'normal',
-          display: 'swap',
-          pluginName: plugin.manifest.name,
-          src: font.data, // Store the data URL or base64 directly
-          // Mark as embedded for special handling
-          isEmbedded: true,
-          embeddedData: font.data,
-        } as LoadedThemeFont & { isEmbedded?: boolean; embeddedData?: string });
-      }
-    }
-
-    // Resolve subsystem overrides (image paths → URLs)
-    const subsystems = resolveSubsystemOverrides(
-      themePlugin.subsystems as Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> | undefined,
-      plugin.manifest.name
-    );
-
-    // Create the loaded theme
-    const loadedTheme: LoadedTheme = {
-      id: themeId,
-      name: themePlugin.metadata.displayName,
-      description: themePlugin.metadata.description,
-      version: plugin.manifest.version,
-      author: themePlugin.metadata.author || plugin.manifest.author,
-      supportsDarkMode: themePlugin.metadata.supportsDarkMode,
-      formatVersion: 1,
-      tokens,
-      cssOverrides: themePlugin.cssOverrides,
-      previewImage: themePlugin.metadata.previewImage,
-      previewImagePath: themePlugin.metadata.previewImage?.startsWith('data:')
-        ? undefined // Don't set path for data URLs
-        : themePlugin.metadata.previewImage
-          ? themeFilePath(plugin.pluginPath, themePlugin.metadata.previewImage, {
-              themeId,
-              field: 'previewImage',
-              realpath: false,
-            })
-          : undefined,
-      tags: themePlugin.metadata.tags || [],
-      pluginName: plugin.manifest.name,
-      isDefault: false,
-      source: 'plugin',
-      deprecated: true,
-      fonts: fonts.length > 0 ? fonts : undefined,
-      subsystems,
-    };
-
-    // Register the theme
-    this.state.themes.set(themeId, loadedTheme);
-
-    // Call initialize if provided (fire-and-forget)
-    if (themePlugin.initialize) {
-      try {
-        const result = themePlugin.initialize();
-        // Handle async initialize
-        if (result && typeof (result as Promise<void>).catch === 'function') {
-          (result as Promise<void>).catch((error) => {
-            logger.warn('Theme initialize() failed', {
-              themeId,
-              error: getErrorMessage(error),
-            });
-          });
-        }
-      } catch (error) {
-        logger.warn('Theme initialize() failed', {
-          themeId,
-          error: getErrorMessage(error),
-        });
-      }
-    }
-
-    logger.info('Theme registered successfully (module-based)', {
-      themeId,
-      name: loadedTheme.name,
-      supportsDarkMode: loadedTheme.supportsDarkMode,
-      hasCssOverrides: !!themePlugin.cssOverrides,
-      fontCount: fonts.length,
-    });
-
-    return true;
-  }
-
-  /**
-   * Load a theme from files (traditional file-based approach)
-   */
-  private async loadThemeFromFiles(
-    plugin: LoadedPlugin,
-    themeId: string
-  ): Promise<void> {
-    const themeConfig = plugin.manifest.themeConfig;
-
-    if (!themeConfig) {
-      throw new Error('Plugin does not have themeConfig');
-    }
-    // Load tokens file
-    const tokensPath = themeFilePath(plugin.pluginPath, themeConfig.tokensPath || 'tokens.json', {
-      themeId,
-      field: 'tokensPath',
-      realpath: false,
-    });
-    if (!tokensPath) {
-      throw new Error('Theme tokensPath must name a file inside the plugin');
-    }
-
-    let tokensData: string;
-    try {
-      tokensData = await fs.readFile(tokensPath, 'utf-8');
-    } catch (error) {
-      throw new Error(`Failed to read tokens file at ${tokensPath}: ${getErrorMessage(error)}`);
-    }
-
-    let rawTokens: unknown;
-    try {
-      rawTokens = JSON.parse(tokensData);
-    } catch (error) {
-      throw new Error(`Invalid JSON in tokens file: ${getErrorMessage(error)}`);
-    }
-
-    // Validate tokens
-    const validationResult = safeValidateThemeTokens(rawTokens);
-    if (!validationResult.success) {
-      throw new Error(`Invalid theme tokens: ${validationResult.errors.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
-    }
-
-    let tokens = validationResult.data;
-
-    // Handle theme inheritance
-    if (themeConfig.extendsTheme) {
-      const baseTheme = this.state.themes.get(
-        this.extractThemeId(themeConfig.extendsTheme)
-      );
-      if (baseTheme) {
-        tokens = mergeThemeTokens(baseTheme.tokens ?? DEFAULT_THEME_TOKENS, tokens);
-      } else {
-        logger.warn('Base theme not found for inheritance', {
-          themeId,
-          baseTheme: themeConfig.extendsTheme,
-        });
-        // Fall back to extending default
-        tokens = mergeThemeTokens(DEFAULT_THEME_TOKENS, tokens);
-      }
-    }
-
-    // Load optional CSS overrides
-    let cssOverrides: string | undefined;
-    if (themeConfig.stylesPath) {
-      const stylesPath = themeFilePath(plugin.pluginPath, themeConfig.stylesPath, {
-        themeId,
-        field: 'stylesPath',
-        realpath: false,
+  private recordRefusedPluginThemes(): void {
+    for (const plugin of getEnabledPluginsByCapability('THEME')) {
+      const pluginName = plugin.manifest.name;
+      const id = this.extractThemeId(pluginName);
+      const name = plugin.manifest.title || pluginName;
+      this.state.refused.set(refusalKey('plugin', id), {
+        id,
+        name,
+        version: plugin.manifest.version,
+        reason: 'plugin-theme',
+        source: 'plugin',
+        pluginName,
+        message: earlierThemeMessage(name),
       });
-      try {
-        if (!stylesPath) throw new Error('stylesPath is outside the plugin');
-        cssOverrides = await fs.readFile(stylesPath, 'utf-8');
-      } catch (error) {
-        logger.warn('Failed to load theme CSS overrides', {
-          themeId,
-          path: stylesPath,
-          error: getErrorMessage(error),
-        });
-      }
+      logger.warn('Theme plugin refused: plugin themes are made for an earlier Quilltap', { plugin: pluginName, themeId: id });
     }
-
-    // Determine preview image path
-    let previewImagePath: string | undefined;
-    if (themeConfig.previewImage) {
-      previewImagePath = themeFilePath(plugin.pluginPath, themeConfig.previewImage, {
-        themeId,
-        field: 'previewImage',
-        realpath: false,
-      });
-      // Verify file exists
-      try {
-        if (!previewImagePath) throw new Error('previewImage is outside the plugin');
-        await fs.access(previewImagePath);
-      } catch {
-        logger.warn('Theme preview image not found', {
-          themeId,
-          path: previewImagePath,
-        });
-        previewImagePath = undefined;
-      }
-    }
-
-    // Load custom fonts
-    const fonts: LoadedThemeFont[] = [];
-    if (themeConfig.fonts && themeConfig.fonts.length > 0) {
-      for (const fontDef of themeConfig.fonts) {
-        const fontPath = themeFilePath(plugin.pluginPath, fontDef.src, {
-          themeId,
-          field: 'fonts.src',
-          realpath: false,
-        });
-        try {
-          if (!fontPath) throw new Error('font src is outside the plugin');
-          await fs.access(fontPath);
-          fonts.push({
-            family: fontDef.family,
-            filePath: fontPath,
-            weight: fontDef.weight || '400',
-            style: fontDef.style || 'normal',
-            display: fontDef.display || 'swap',
-            pluginName: plugin.manifest.name,
-            src: fontDef.src,
-          });
-        } catch {
-          logger.warn('Theme font file not found', {
-            themeId,
-            family: fontDef.family,
-            path: fontPath,
-          });
-        }
-      }
-    }
-
-    // Resolve subsystem overrides from manifest themeConfig
-    const subsystems = resolveSubsystemOverrides(
-      themeConfig.subsystems as Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> | undefined,
-      plugin.manifest.name
-    );
-
-    // Create the loaded theme
-    const loadedTheme: LoadedTheme = {
-      id: themeId,
-      name: plugin.manifest.title,
-      description: plugin.manifest.description,
-      version: plugin.manifest.version,
-      author: plugin.manifest.author,
-      supportsDarkMode: themeConfig.supportsDarkMode ?? true,
-      formatVersion: 1,
-      tokens,
-      cssOverrides,
-      previewImage: themeConfig.previewImage,
-      previewImagePath,
-      tags: themeConfig.tags || plugin.manifest.keywords || [],
-      pluginName: plugin.manifest.name,
-      isDefault: false,
-      source: 'plugin',
-      deprecated: true,
-      fonts: fonts.length > 0 ? fonts : undefined,
-      subsystems,
-    };
-
-    // Register the theme
-    this.state.themes.set(themeId, loadedTheme);
   }
 
-  // ============================================================================
-  // BUNDLE THEME LOADING
-  // ============================================================================
+  private recordRefusals(set: LoadedBundleSet): void {
+    for (const refusal of set.refused) this.recordRefused(refusal);
+  }
 
-  /**
-   * Load theme bundles from the bundled themes directory (shipped with the app)
-   * and then from user-installed bundles in the data directory.
-   * Called during initialize() after loading plugin themes.
-   */
   private async loadThemeBundles(): Promise<void> {
-    // First, load bundled themes shipped with the app
+    // First, the bundled themes shipped with the app
     try {
-      const bundledDir = getBundledThemesDir();
-      const bundledThemes = await loadBundledThemesFromDir(bundledDir);
-      for (const bundle of bundledThemes) {
+      const bundled = await loadBundledThemesFromDir(getBundledThemesDir());
+      this.recordRefusals(bundled);
+      for (const bundle of bundled.loaded) {
         try {
           this.registerBundleTheme(bundle);
         } catch (error) {
@@ -693,13 +392,14 @@ class ThemeRegistry extends AbstractMapRegistry<
         }
       }
     } catch (error) {
+      logger.warn('Failed to load bundled themes', { error: getErrorMessage(error) });
     }
 
-    // Then, load user-installed bundles (these can override bundled themes)
+    // Then the operator's installed bundles (these can override bundled themes)
     try {
-      const bundles = await loadInstalledBundles();
-
-      for (const bundle of bundles) {
+      const installed = await loadInstalledBundles();
+      this.recordRefusals(installed);
+      for (const bundle of installed.loaded) {
         try {
           this.registerBundleTheme(bundle);
         } catch (error) {
@@ -723,125 +423,17 @@ class ThemeRegistry extends AbstractMapRegistry<
   }
 
   /**
-   * Register a loaded bundle theme into the registry
+   * Register a loaded bundle: validated and compiled by the theme engine when
+   * it was loaded (lib/themes/theme-bundle.ts).
    */
   registerBundleTheme(bundle: LoadedBundleTheme): void {
-    if (bundle.formatVersion === 2) {
-      this.registerBundleThemeV2(bundle);
-      return;
-    }
-    const { manifest, tokens, cssOverrides, installPath } = bundle;
-    const themeId = manifest.id;
-
-    // Handle theme inheritance
-    let finalTokens = tokens;
-    if (manifest.extendsTheme) {
-      const baseTheme = this.state.themes.get(manifest.extendsTheme);
-      if (baseTheme) {
-        finalTokens = mergeThemeTokens(baseTheme.tokens ?? DEFAULT_THEME_TOKENS, tokens);
-      } else {
-        finalTokens = mergeThemeTokens(DEFAULT_THEME_TOKENS, tokens);
-        logger.warn('Base theme not found for bundle inheritance', {
-          themeId,
-          baseTheme: manifest.extendsTheme,
-        });
-      }
-    }
-
-    // Build font entries
-    const fonts: LoadedThemeFont[] = [];
-    if (manifest.fonts && manifest.fonts.length > 0) {
-      for (const fontDef of manifest.fonts) {
-        const fontPath = themeFilePath(installPath, fontDef.src, {
-          themeId,
-          field: 'fonts.src',
-          realpath: true,
-        });
-        if (!fontPath) continue;
-        fonts.push({
-          family: fontDef.family,
-          filePath: fontPath,
-          weight: fontDef.weight || '400',
-          style: fontDef.style || 'normal',
-          display: fontDef.display || 'swap',
-          pluginName: `bundle:${themeId}`,
-          src: fontDef.src,
-        });
-      }
-    }
-
-    // Build icon override entries (icon name -> bundle-relative asset path).
-    // Schema validation guarantees names are kebab-case; the asset is served by
-    // the existing /api/themes/assets route, so no file existence check here.
-    const icons: LoadedThemeIcon[] = [];
-    if (manifest.icons) {
-      for (const [iconName, assetPath] of Object.entries(manifest.icons)) {
-        icons.push({
-          name: iconName,
-          pluginName: `bundle:${themeId}`,
-          src: assetPath,
-        });
-      }
-    }
-
-    // Resolve subsystem overrides
-    const subsystems = resolveSubsystemOverrides(
-      manifest.subsystems as Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> | undefined,
-      `bundle:${themeId}`
-    );
-
-    const loadedTheme: LoadedTheme = {
-      id: themeId,
-      name: manifest.name,
-      description: manifest.description,
-      version: manifest.version,
-      author: manifest.author,
-      supportsDarkMode: manifest.supportsDarkMode,
-      formatVersion: 1,
-      tokens: finalTokens,
-      cssOverrides,
-      previewImage: manifest.previewImage,
-      previewImagePath: manifest.previewImage
-        ? themeFilePath(installPath, manifest.previewImage, {
-            themeId,
-            field: 'previewImage',
-            realpath: true,
-          })
-        : undefined,
-      tags: manifest.tags || [],
-      pluginName: `bundle:${themeId}`,
-      isDefault: false,
-      source: 'bundle',
-      bundlePath: installPath,
-      fonts: fonts.length > 0 ? fonts : undefined,
-      icons: icons.length > 0 ? icons : undefined,
-      subsystems,
-    };
-
-    this.state.themes.set(themeId, loadedTheme);
-
-    logger.info('Theme registered successfully (bundle)', {
-      themeId,
-      name: loadedTheme.name,
-      version: loadedTheme.version,
-      supportsDarkMode: loadedTheme.supportsDarkMode,
-      fontCount: fonts.length,
-      iconCount: icons.length,
-    });
-  }
-
-  /**
-   * Register a version 2 bundle: validated and compiled by the theme engine
-   * when it was loaded (lib/themes/v2-bundle.ts).
-   */
-  private registerBundleThemeV2(bundle: LoadedBundleThemeV2): void {
-    const { manifest, v2, installPath } = bundle;
+    const { manifest, compiled, installPath } = bundle;
     const themeId = manifest.id;
     const pluginName = `bundle:${themeId}`;
 
     const fonts: LoadedThemeFont[] = [];
     for (const fontDef of manifest.fonts ?? []) {
-      const fontPath = themeFilePath(installPath, fontDef.src, { themeId, field: 'fonts.src', realpath: true });
+      const fontPath = themeFilePath(installPath, fontDef.src, { themeId, field: 'fonts.src' });
       if (!fontPath) continue;
       fonts.push({
         family: fontDef.family,
@@ -855,6 +447,9 @@ class ThemeRegistry extends AbstractMapRegistry<
     }
     const icons: LoadedThemeIcon[] = Object.entries(manifest.icons ?? {}).map(([name, src]) => ({ name, pluginName, src }));
 
+    // A later bundle under this id replaces an earlier refused one; a
+    // plugin's refusal stands, since the plugin is still installed.
+    this.state.refused.delete(refusalKey('bundle', themeId));
     this.state.themes.set(themeId, {
       id: themeId,
       name: manifest.name,
@@ -862,11 +457,10 @@ class ThemeRegistry extends AbstractMapRegistry<
       version: manifest.version,
       author: manifest.author,
       supportsDarkMode: manifest.supportsDarkMode,
-      formatVersion: 2,
-      v2: v2.compiled,
+      compiled,
       previewImage: manifest.previewImage,
       previewImagePath: manifest.previewImage
-        ? themeFilePath(installPath, manifest.previewImage, { themeId, field: 'previewImage', realpath: true })
+        ? themeFilePath(installPath, manifest.previewImage, { themeId, field: 'previewImage' })
         : undefined,
       tags: manifest.tags || [],
       pluginName,
@@ -878,15 +472,29 @@ class ThemeRegistry extends AbstractMapRegistry<
       subsystems: resolveSubsystemOverrides(manifest.subsystems, pluginName),
     });
 
-    logger.info('Theme registered successfully (bundle, version 2)', {
+    logger.info('Theme registered successfully (bundle)', {
       themeId,
       name: manifest.name,
       version: manifest.version,
       fontCount: fonts.length,
       iconCount: icons.length,
-      choices: v2.compiled.choices,
-      features: v2.compiled.features,
+      assetCount: compiled.assets.length,
+      choices: compiled.choices,
+      features: compiled.features,
     });
+  }
+
+  /**
+   * Record an installed bundle as refused (an install or a hot load found it
+   * made for an earlier Quilltap).
+   */
+  recordRefused(refusal: RefusedTheme): void {
+    this.state.refused.set(refusalKey(refusal.source, refusal.id), refusal);
+  }
+
+  /** Forget a refused bundle (after it is uninstalled). */
+  forgetRefused(themeId: string): boolean {
+    return this.state.refused.delete(refusalKey('bundle', themeId));
   }
 
   /**
@@ -936,40 +544,32 @@ class ThemeRegistry extends AbstractMapRegistry<
     return this.state.themes.has(themeId);
   }
 
-  /**
-   * Get theme tokens for a specific theme
-   * Falls back to default if theme not found
-   */
-  getTokens(themeId: string | null): ThemeTokens | null {
-    if (!themeId || themeId === 'default') {
-      return DEFAULT_THEME_TOKENS;
-    }
+  /** Themes found but not registered: made for an earlier Quilltap. */
+  getRefused(): RefusedTheme[] {
+    return Array.from(this.state.refused.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
 
-    const theme = this.state.themes.get(themeId);
-    if (!theme) {
-      logger.warn('Theme not found, falling back to default', { themeId });
-      return DEFAULT_THEME_TOKENS;
-    }
-
-    // A version 2 theme has no version 1 token shape.
-    return theme.tokens ?? null;
+  /** A refused theme, by id: an installed bundle before a plugin's. */
+  getRefusedTheme(themeId: string): RefusedTheme | null {
+    return this.state.refused.get(refusalKey('bundle', themeId)) ?? this.state.refused.get(refusalKey('plugin', themeId)) ?? null;
   }
 
   /**
-   * Get CSS for a specific theme
+   * The CSS the injector writes for a theme. The default theme (and an
+   * unknown id) writes nothing: the app's own stylesheet is the default.
    */
   getCSS(themeId: string | null): string {
     const theme = themeId ? this.state.themes.get(themeId) : undefined;
-    if (theme?.v2) return compiledThemeCss(theme.v2);
-    return themeTokensToCSS(this.getTokens(themeId) ?? DEFAULT_THEME_TOKENS);
+    return theme?.compiled ? compiledThemeCss(theme.compiled) : '';
   }
 
   /**
-   * Get component CSS overrides for a theme
+   * The bundle files the asset route may serve for a theme: those its
+   * manifest names or its compiled CSS points at.
    */
-  getCSSOverrides(themeId: string): string | undefined {
+  getServedAssets(themeId: string): ReadonlySet<string> {
     const theme = this.state.themes.get(themeId);
-    return theme?.cssOverrides;
+    return new Set(theme?.compiled?.assets ?? []);
   }
 
   /**
@@ -1103,7 +703,7 @@ class ThemeRegistry extends AbstractMapRegistry<
     return {
       total: themes.length,
       withDarkMode: themes.filter(t => t.supportsDarkMode).length,
-      withCssOverrides: themes.filter(t => t.cssOverrides).length,
+      refused: this.state.refused.size,
       errors: this.state.errors.size,
       initialized: this.state.initialized,
       lastInitTime: this.state.lastInitTime?.toISOString() || null,
@@ -1130,78 +730,38 @@ class ThemeRegistry extends AbstractMapRegistry<
         description: theme.description,
         version: theme.version,
         supportsDarkMode: theme.supportsDarkMode,
-        hasCssOverrides: !!theme.cssOverrides,
         tags: theme.tags,
         pluginName: theme.pluginName,
         isDefault: theme.isDefault,
         source: theme.source,
-        deprecated: theme.deprecated || false,
       })),
+      refused: this.getRefused(),
       errors: this.getErrors(),
       stats: this.getStats(),
     };
   }
 
+  /** The default theme's preview: the registry defaults, resolved. */
+  private getDefaultPreview(): ThemePreview {
+    if (!this.defaultPreview) this.defaultPreview = defaultThemePreview(THEME_REGISTRY_VIEW);
+    return this.defaultPreview;
+  }
+
   /**
-   * Get theme metadata for client (without full tokens)
-   * Useful for theme picker UI
-   * Includes preview colors for theme card swatches
+   * Theme metadata for the theme picker: preview swatches and the heading
+   * font, without any CSS.
    */
-  getThemeList(): Array<{
-    id: string;
-    name: string;
-    description?: string;
-    supportsDarkMode: boolean;
-    previewImage?: string;
-    tags: string[];
-    isDefault: boolean;
-    source: ThemeSource;
-    deprecated?: boolean;
-    formatVersion: 1 | 2;
-    previewColors?: {
-      light: { background: string; primary: string; secondary: string; accent: string };
-      dark: { background: string; primary: string; secondary: string; accent: string };
-    };
-    headingFont?: {
-      family: string;
-      url?: string;
-    };
-  }> {
+  getThemeList(): ThemeListEntry[] {
     return this.getAll().map(theme => {
-      // Determine heading font for preview
-      // Use fontSerif from tokens as the heading font (matches --qt-heading-font in most themes)
-      // For default theme, use fontSans since it uses sans-serif for headings
-      let headingFont: { family: string; url?: string } | undefined;
-
-      // Get the heading font family from tokens (a version 2 theme: its resolved --qt-heading-font)
-      const headingFontFamily = theme.v2
-        ? theme.v2.headingFont
-        : theme.isDefault
-          ? theme.tokens?.typography?.fontSans
-          : theme.tokens?.typography?.fontSerif;
-
-      if (headingFontFamily) {
-        // Extract the primary font name (first in the stack)
-        const primaryFont = headingFontFamily.split(',')[0].trim().replace(/['"]/g, '');
-
-        // Check if this font needs to be loaded (has a matching custom font file)
+      const preview = theme.compiled ?? this.getDefaultPreview();
+      let headingFont: ThemeListEntry['headingFont'];
+      if (preview.headingFont) {
+        const primaryFont = preview.headingFont.split(',')[0].trim().replace(/['"]/g, '');
         const matchingFont = theme.fonts?.find(f => f.family === primaryFont);
-
-        if (matchingFont) {
-          headingFont = {
-            family: primaryFont,
-            url: matchingFont.isEmbedded && matchingFont.embeddedData
-              ? matchingFont.embeddedData
-              : `/api/themes/fonts/${theme.pluginName}/${matchingFont.src}`,
-          };
-        } else {
-          // System font - no URL needed
-          headingFont = {
-            family: headingFontFamily,
-          };
-        }
+        headingFont = matchingFont
+          ? { family: primaryFont, url: `/api/themes/fonts/${theme.pluginName}/${matchingFont.src}` }
+          : { family: preview.headingFont };
       }
-
       return {
         id: theme.id,
         name: theme.name,
@@ -1211,25 +771,7 @@ class ThemeRegistry extends AbstractMapRegistry<
         tags: theme.tags,
         isDefault: theme.isDefault,
         source: theme.source,
-        deprecated: theme.deprecated || false,
-        formatVersion: theme.formatVersion,
-        // Include just the preview colors needed for theme cards
-        previewColors: theme.v2
-          ? theme.v2.previewColors
-          : {
-              light: {
-                background: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.light.background,
-                primary: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.light.primary,
-                secondary: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.light.secondary,
-                accent: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.light.accent,
-              },
-              dark: {
-                background: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.dark.background,
-                primary: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.dark.primary,
-                secondary: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.dark.secondary,
-                accent: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.dark.accent,
-              },
-            },
+        previewColors: preview.previewColors,
         headingFont,
       };
     });
@@ -1268,13 +810,6 @@ export function getTheme(themeId: string): LoadedTheme | null {
  */
 export function getDefaultTheme(): LoadedTheme {
   return themeRegistry.getDefault();
-}
-
-/**
- * Get theme tokens
- */
-export function getThemeTokens(themeId: string | null): ThemeTokens | null {
-  return themeRegistry.getTokens(themeId);
 }
 
 /**

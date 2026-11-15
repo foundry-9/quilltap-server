@@ -6538,11 +6538,11 @@ Delete a log entry by ID.
 
 ### Theme Assets & Fonts
 
-Static asset routes used by both plugin and bundle themes. These sit outside `/api/v1/` because they are unauthenticated asset endpoints.
+Static asset routes for installed theme bundles. These sit outside `/api/v1/` because they are unauthenticated asset endpoints. Both take `bundle:<themeId>/<path>` and serve only from a registered bundle; anything else is a 404.
 
 #### `GET /api/themes/assets/[...path]`
 
-Serve theme assets (CSS overrides, images, etc.).
+Serve a theme's images and its font licence file. Only the files the theme's manifest references are served (icons, preview images, subsystem images, font licences); any other path in the bundle is a 404. Images and plain text only.
 
 #### `GET /api/themes/fonts/[...path]`
 
@@ -6556,7 +6556,7 @@ Modern theme management API with bundle support and registry integration.
 
 #### `GET /api/v1/themes`
 
-List all installed themes with statistics.
+List all installed themes, the themes found but refused, and statistics.
 
 **Authentication**: Not required (runs before auth is available)
 
@@ -6565,13 +6565,25 @@ List all installed themes with statistics.
 ```json
 {
   "themes": [...],
+  "refused": [
+    {
+      "id": "old-theme",
+      "name": "Old Theme",
+      "version": "1.0.0",
+      "reason": "earlier-format",
+      "source": "bundle",
+      "message": "..."
+    }
+  ],
   "stats": {
-    "total": 6,
-    "withDarkMode": 4,
-    "withCssOverrides": 5
+    "total": 7,
+    "withDarkMode": 7,
+    "refused": 1
   }
 }
 ```
+
+`themes` includes the default theme. A refused theme is one made for an earlier Quilltap: a version 1 bundle among the installed themes (`reason: "earlier-format"`, `source: "bundle"`, uninstallable with `DELETE`) or a theme declared by a plugin (`reason: "plugin-theme"`, `source: "plugin"`, `pluginName` set; the plugin still loads). Refused themes are never registered and never applied.
 
 #### `GET /api/v1/themes?action=registry`
 
@@ -6614,7 +6626,7 @@ Check for available theme updates across installed bundle themes.
 
 #### `POST /api/v1/themes?action=install`
 
-Install a `.qtap-theme` bundle via multipart upload.
+Install a `.qtap-theme` bundle via multipart upload. A bundle whose `formatVersion` is earlier than 2 is refused with a `400` before anything is written.
 
 **Request**: `multipart/form-data`
 - `theme` (required) - The `.qtap-theme` file
@@ -6736,18 +6748,15 @@ Get metadata for a single theme.
 
 #### `GET /api/v1/themes/[themeId]?action=tokens`
 
-What the client needs to apply the theme. The shape depends on the theme's format:
-
-- **Version 1** (`formatVersion: 1`, also the default and plugin themes): `{ tokens, fonts, icons, cssOverrides, subsystems, images }` — the browser turns `tokens` into CSS (`themeTokensToCSS`) and appends `cssOverrides`.
-- **Version 2** (`formatVersion: 2`): `{ css, choices, features, fonts, icons, subsystems, images }` and no `tokens`. `css` is everything the injector writes, compiled and validated server-side in order (font faces, tokens, icon overrides, scoped custom CSS); `choices` (e.g. `{ density: "comfortable" }`) and `features` (`pageBackground`, `focusRing`, `scrollbar`) become `data-qt-*` attributes on `<html>` (`applyThemeToDom`).
+What the client needs to apply the theme: `{ css, choices, features, fonts, icons, subsystems, images }`. `css` is everything the injector writes, compiled and validated server-side in order (font faces, tokens, icon overrides, scoped custom CSS); `choices` (e.g. `{ density: "comfortable" }`) and `features` (`pageBackground`, `focusRing`, `scrollbar`) become `data-qt-*` attributes on `<html>` (`applyThemeToDom`). The default theme's `css` is empty: the app's own stylesheet is the default.
 
 #### `GET /api/v1/themes/[themeId]?action=export`
 
-Export the theme as a downloadable `.qtap-theme` bundle. A version 2 theme is exported as installed (`formatVersion: 2`); a version 1 theme with its tokens written inline.
+Export the theme as a downloadable `.qtap-theme` bundle, as installed (`formatVersion: 2`). The default theme has no bundle and returns `400`.
 
 #### `DELETE /api/v1/themes/[themeId]`
 
-Uninstall a bundle theme.
+Uninstall a bundle theme, or a refused version 1 bundle. A plugin's refused theme cannot be uninstalled here (`400`); disable or remove the plugin instead.
 
 ---
 

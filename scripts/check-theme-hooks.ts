@@ -6,11 +6,11 @@
  *  2. a catalogued hook, state class or variant attribute no longer in the
  *     markup (`.ts` / `.tsx` under `app/` and `components/`);
  *  3. a literal variant value in TSX that the catalogue does not list;
- *  4. a stale `docs/developer/THEME_HOOKS.md`.
+ *  4. a stale `docs/developer/THEME_HOOKS.md`;
+ *  5. a bundled theme's `styles.css` targeting anything that is not a hook.
  *
- * Then reports, WITHOUT failing, what each bundled theme's `styles.css`
- * targets that is not a hook (Spec C's worklist; it becomes a gate there).
- * Pass `--verbose` to list every finding.
+ * Installed themes are only warned about, when they load. Pass `--verbose`
+ * to list every bundled-theme finding.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -48,13 +48,13 @@ if (!existsSync(docPath) || readFileSync(docPath, 'utf8') !== expectedDoc) {
   })
 }
 
-// ---- Report-only: bundled theme selectors ---------------------------------
+// ---- Bundled theme selectors ----------------------------------------------
 const themesDir = path.join(root, 'themes', 'bundled')
 const themeIds = existsSync(themesDir)
   ? readdirSync(themesDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort()
   : []
 const totals = new Map<string, number>()
-console.log('Theme selectors off the hook catalogue (report only — Spec C makes this a gate):')
+console.log('Bundled theme selectors off the hook catalogue:')
 for (const id of themeIds) {
   const cssPath = path.join(themesDir, id, 'styles.css')
   if (!existsSync(cssPath)) continue
@@ -68,6 +68,14 @@ for (const id of themeIds) {
   }
   const summary = [...byCode.entries()].map(([code, n]) => `${code} ${n}`).join(', ') || 'clean'
   console.log(`  ${id}: ${findings.length} selectors — ${summary}`)
+  for (const finding of findings) {
+    failures.push({
+      rule: 'theme-selector',
+      file: path.join('themes', 'bundled', id, 'styles.css'),
+      line: finding.line,
+      message: `${finding.selector}: ${finding.reasons.map((r) => r.code).join(', ')}`,
+    })
+  }
   if (verbose) {
     for (const finding of findings) {
       console.log(`    styles.css:${finding.line}  ${finding.selector}`)

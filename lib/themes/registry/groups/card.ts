@@ -92,7 +92,6 @@ export const CARD_TOKENS: readonly TokenDef[] = [
     group: 'card',
     label: "Card transition",
     default: "all 150ms cubic-bezier(0.4, 0, 0.2, 1)",
-    byChoice: {"density":{"comfortable":"all 200ms cubic-bezier(0.4, 0, 0.2, 1)"}},
     visibility: 'standard',
   },
   {

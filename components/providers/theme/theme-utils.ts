@@ -4,10 +4,10 @@
  * Utility functions for theme handling, DOM manipulation, and system preference detection.
  */
 
-import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens';
-import type { ThemeTokens, ColorMode } from '@/lib/themes/types';
+import type { ColorMode } from '@/lib/themes/types';
+import type { RefusedTheme } from '@/lib/themes/refused';
 import { THEME_CHOICES } from '@/lib/themes/registry/choices';
-import type { ThemeSummary, ThemeTokensResponse, ThemesListResponse, ThemeFont, ThemeIcon, SubsystemOverride, ThemeFeatureFlags } from './types';
+import type { ThemeSummary, ThemeTokensResponse, ThemesListResponse, SubsystemOverride, ThemeFeatureFlags } from './types';
 
 /**
  * Resolve the actual color mode based on preference and system settings
@@ -31,7 +31,7 @@ export function resolveColorMode(
  * - `focusRing` → `data-qt-focus-ring`: the app's :focus-visible ring;
  * - `scrollbar` → `data-qt-scrollbar`: WebKit scrollbar styling from the
  *   --qt-scrollbar-* tokens.
- * A version 1 theme switches none of them on, so its own rules are untouched.
+ * The default theme switches none of them on.
  */
 export interface ThemeDomFeatures {
   pageBackground?: boolean;
@@ -124,47 +124,27 @@ export function getSystemDarkModePreference(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-/** A theme as the provider applies it: version 1 tokens, or version 2 compiled CSS. */
-export type LoadedThemeTokens =
-  | {
-      formatVersion: 1;
-      tokens: ThemeTokens;
-      fonts: ThemeFont[];
-      icons: ThemeIcon[];
-      cssOverrides: string | undefined;
-      subsystems: Record<string, SubsystemOverride> | null;
-    }
-  | {
-      formatVersion: 2;
-      css: string;
-      choices: Record<string, string>;
-      features: ThemeFeatureFlags;
-      subsystems: Record<string, SubsystemOverride> | null;
-    };
+/** A theme as the provider applies it: compiled CSS, features, choices. */
+export interface LoadedThemeTokens {
+  css: string;
+  choices: Record<string, string>;
+  features: ThemeFeatureFlags;
+  subsystems: Record<string, SubsystemOverride> | null;
+}
 
 /**
- * Fetch theme tokens from API
+ * Fetch a theme's compiled CSS from the API. Null when the theme is not
+ * registered (uninstalled, or refused as made for an earlier Quilltap).
  */
 export async function fetchThemeTokens(themeId: string): Promise<LoadedThemeTokens | null> {
   try {
-    const response = await fetch(`/api/v1/themes/${themeId}?action=tokens`);
+    const response = await fetch(`/api/v1/themes/${encodeURIComponent(themeId)}?action=tokens`);
     if (response.ok) {
       const data: ThemeTokensResponse = await response.json();
-      if (data.formatVersion === 2) {
-        return {
-          formatVersion: 2,
-          css: data.css,
-          choices: data.choices || {},
-          features: data.features,
-          subsystems: data.subsystems || null,
-        };
-      }
       return {
-        formatVersion: 1,
-        tokens: data.tokens,
-        fonts: data.fonts || [],
-        icons: data.icons || [],
-        cssOverrides: data.cssOverrides || undefined,
+        css: data.css || '',
+        choices: data.choices || {},
+        features: data.features,
         subsystems: data.subsystems || null,
       };
     } else if (response.status === 404) {
@@ -180,19 +160,28 @@ export async function fetchThemeTokens(themeId: string): Promise<LoadedThemeToke
 /**
  * Fetch available themes list from API
  */
-export async function fetchAvailableThemes(): Promise<ThemeSummary[]> {
+export async function fetchAvailableThemes(): Promise<{
+  themes: ThemeSummary[];
+  defaultTheme: ThemeSummary | null;
+  refused: RefusedTheme[];
+}> {
   try {
     const response = await fetch('/api/v1/themes');
     if (response.ok) {
       const data: ThemesListResponse = await response.json();
-      // Filter out the default theme since it's handled separately in the UI
-      return (data.themes || []).filter((t) => !t.isDefault);
+      const all = data.themes || [];
+      return {
+        // The default theme is handled separately in the UI
+        themes: all.filter((t) => !t.isDefault),
+        defaultTheme: all.find((t) => t.isDefault) ?? null,
+        refused: data.refused || [],
+      };
     } else {
       throw new Error(`Failed to load themes: ${response.status}`);
     }
   } catch {
-    // Return empty list on error - themes list is non-critical
-    return [];
+    // Return empty lists on error - themes list is non-critical
+    return { themes: [], defaultTheme: null, refused: [] };
   }
 }
 
@@ -248,11 +237,4 @@ export async function saveThemePreference(
   } catch (err) {
     // Don't re-throw - preference will be saved on next attempt
   }
-}
-
-/**
- * Get default tokens
- */
-export function getDefaultTokens(): ThemeTokens {
-  return DEFAULT_THEME_TOKENS;
 }

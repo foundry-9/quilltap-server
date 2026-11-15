@@ -1,13 +1,13 @@
 /**
  * Theme Asset File API Route
  *
- * Serves static asset files (images, etc.) from theme plugins and theme bundles.
- * Path format: /api/themes/assets/{pluginName}/{assetPath}
+ * Serves the files a theme bundle declares or its compiled CSS points at.
+ * Path format: /api/themes/assets/bundle:{themeId}/{assetPath}
  *
- * For plugin themes: /api/themes/assets/qtap-plugin-theme-great-estate/great-estate-bg.webp
- * For bundle themes: /api/themes/assets/bundle:{themeId}/assets/preview.webp
- *
- * Security: Only serves files from registered theme plugins/bundles within their directory.
+ * Only paths in the theme's served set (`themeRegistry.getServedAssets`) are
+ * served: the preview image, icon overrides, subsystem images, font licence
+ * files and each `url()` in the compiled CSS. Anything else in the bundle
+ * directory is a 404, and the file must still resolve inside the bundle.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,13 +16,12 @@ import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plug
 import { logger } from '@/lib/logger';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { pluginRegistry } from '@/lib/plugins';
 import { resolveInside, PathOutsideBaseError } from '@/lib/paths/resolve-inside';
 import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
+import { normaliseBundlePath } from '@/lib/themes/engine/css-text';
 
-// MIME types for common asset files
+// MIME types for the files a theme may have served
 const ASSET_MIME_TYPES: Record<string, string> = {
-  // Images
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -31,22 +30,19 @@ const ASSET_MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.avif': 'image/avif',
-  // Other assets
-  '.json': 'application/json',
-  '.css': 'text/css',
+  // Font licence files
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/plain; charset=utf-8',
+  '': 'text/plain; charset=utf-8',
 };
 
-// Allowed file extensions for security
-const ALLOWED_EXTENSIONS = new Set([
-  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.avif',
-]);
+function notFound(): NextResponse {
+  return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
+}
 
 /**
  * GET /api/themes/assets/[...path]
- * Serves asset files from theme plugins
- *
- * @param request - Next.js request object
- * @param params - Route parameters containing the asset path segments
+ * Serves a theme bundle's declared and referenced files
  */
 export async function GET(
   request: NextRequest,
@@ -66,24 +62,19 @@ export async function GET(
       );
     }
 
-    // First segment is plugin name (or "bundle" for bundle themes), rest is the asset path
-    // URL path: /api/themes/assets/bundle%3A{themeId}/{assetPath}
-    // or:       /api/themes/assets/{pluginName}/{assetPath}
+    // First segment is "bundle:<themeId>" (URL encoding may split it), rest is the asset path
     let pluginName: string;
     let assetPathSegments: string[];
-
-    // Handle "bundle:" prefix - URL encoding may split it across segments
     if (pathSegments[0] === 'bundle' && pathSegments.length >= 3) {
-      // URL split "bundle:themeId" into ["bundle", "themeId", ...]
       pluginName = `bundle:${pathSegments[1]}`;
       assetPathSegments = pathSegments.slice(2);
     } else if (pathSegments[0].startsWith('bundle:') || pathSegments[0].startsWith('bundle%3A')) {
       pluginName = decodeURIComponent(pathSegments[0]);
       assetPathSegments = pathSegments.slice(1);
     } else {
-      [pluginName, ...assetPathSegments] = pathSegments;
+      logger.debug('Theme asset request outside a bundle', { context: 'GET /api/themes/assets', first: pathSegments[0] });
+      return notFound();
     }
-    const relativeAssetPath = assetPathSegments.join('/');
 
     // Ensure plugin/theme system is initialized
     if (!isPluginSystemInitialized()) {
@@ -93,44 +84,27 @@ export async function GET(
       await initializePlugins();
     }
 
-    // Find the theme by plugin name
-    const allThemes = themeRegistry.getAll();
-    const theme = allThemes.find(t => t.pluginName === pluginName);
+    const theme = themeRegistry.getAll().find(t => t.pluginName === pluginName);
+    if (!theme || theme.source !== 'bundle' || !theme.bundlePath) {
+      logger.warn('Theme not found for asset', { context: 'GET /api/themes/assets', pluginName });
+      return notFound();
+    }
 
-    if (!theme) {
-      logger.warn('Theme not found for plugin', {
+    const relativeAssetPath = normaliseBundlePath(assetPathSegments.join('/'));
+
+    // Only what the theme declares or its CSS references is served.
+    if (!themeRegistry.getServedAssets(theme.id).has(relativeAssetPath)) {
+      logger.warn('Theme asset not in the served set', {
         context: 'GET /api/themes/assets',
-        pluginName,
+        themeId: theme.id,
+        relativeAssetPath,
       });
-      return NextResponse.json(
-        { error: 'Theme not found' },
-        { status: 404 }
-      );
+      return notFound();
     }
 
-    // Resolve the base directory depending on theme source
-    let baseDir: string;
-    if (theme.source === 'bundle' && theme.bundlePath) {
-      baseDir = theme.bundlePath;
-    } else {
-      // Plugin-based theme: get directory from plugin registry
-      const plugin = pluginRegistry.get(pluginName);
-      if (!plugin) {
-        logger.warn('Plugin not found', {
-          context: 'GET /api/themes/assets',
-          pluginName,
-        });
-        return NextResponse.json(
-          { error: 'Plugin not found' },
-          { status: 404 }
-        );
-      }
-      baseDir = path.dirname(plugin.manifestPath);
-    }
-
-    // Validate file extension for security
     const ext = path.extname(relativeAssetPath).toLowerCase();
-    if (!ALLOWED_EXTENSIONS.has(ext)) {
+    const mimeType = ASSET_MIME_TYPES[ext];
+    if (!mimeType) {
       logger.warn('Disallowed file extension', {
         context: 'GET /api/themes/assets',
         extension: ext,
@@ -142,18 +116,15 @@ export async function GET(
       );
     }
 
-    // The asset must resolve inside the theme's directory (symlinks resolved
-    // for installed bundles).
+    // The asset must resolve inside the bundle (symlinks resolved).
     let absoluteAssetPath: string;
     try {
-      absoluteAssetPath = await resolveInside(baseDir, relativeAssetPath, {
-        realpath: theme.source === 'bundle',
-      });
+      absoluteAssetPath = await resolveInside(theme.bundlePath, relativeAssetPath, { realpath: true });
     } catch (err) {
       if (!(err instanceof PathOutsideBaseError)) throw err;
       logger.warn('Asset path outside its theme directory', {
         context: 'GET /api/themes/assets',
-        baseDir,
+        themeId: theme.id,
         relativeAssetPath,
         reason: err.reason,
       });
@@ -167,8 +138,6 @@ export async function GET(
     try {
       const assetBuffer = await fs.readFile(absoluteAssetPath);
 
-      // Determine MIME type from extension
-      const mimeType = ASSET_MIME_TYPES[ext] || 'application/octet-stream';
       logger.debug('Serving theme asset', { context: 'GET /api/themes/assets', pluginName, relativeAssetPath });
       // SVG keeps image/svg+xml (CSS url() needs it) but is never inline: a
       // direct navigation downloads it, while CSS and <img> ignore disposition.

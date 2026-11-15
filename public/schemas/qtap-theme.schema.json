@@ -1,291 +1,228 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://quilltap.ai/schemas/qtap-theme.schema.json",
-  "title": "Quilltap Theme Bundle Manifest",
-  "description": "Schema for theme.json in .qtap-theme bundle files",
+  "title": "Quilltap theme manifest (formatVersion 2)",
+  "description": "theme.json in a .qtap-theme bundle. Generated from lib/themes/engine/document.ts; the rules that need the bundle itself are checked by `quilltap themes validate`.",
   "type": "object",
-  "required": ["format", "formatVersion", "id", "name", "version", "author"],
   "properties": {
     "$schema": {
-      "type": "string",
-      "description": "JSON Schema URL for validation"
+      "type": "string"
     },
     "format": {
       "type": "string",
-      "const": "qtap-theme",
-      "description": "Must be 'qtap-theme'"
+      "const": "qtap-theme"
     },
     "formatVersion": {
-      "type": "integer",
-      "const": 1,
-      "description": "Format version (currently 1)"
+      "type": "number",
+      "const": 2
     },
     "id": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$",
-      "description": "Theme identifier (lowercase letters, numbers, hyphens)"
+      "pattern": "^[a-z][a-z0-9-]*$"
     },
     "name": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 100,
-      "description": "Display name"
+      "maxLength": 100
     },
     "description": {
       "type": "string",
-      "maxLength": 500,
-      "description": "Theme description"
+      "maxLength": 500
     },
     "version": {
       "type": "string",
-      "description": "Semantic version (e.g., '1.0.0')"
+      "pattern": "^[0-9A-Za-z.+-]{1,64}$"
     },
     "author": {
-      "oneOf": [
+      "anyOf": [
         {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         {
           "type": "object",
-          "required": ["name"],
           "properties": {
-            "name": { "type": "string" },
-            "email": { "type": "string", "format": "email" },
-            "url": { "type": "string", "format": "uri" }
-          }
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
         }
-      ],
-      "description": "Theme author"
+      ]
     },
     "license": {
       "type": "string",
-      "description": "SPDX license identifier"
+      "pattern": "^(proprietary|[A-Za-z0-9.+\\-]+( (AND|OR|WITH) [A-Za-z0-9.+\\-]+)*)$"
     },
     "compatibility": {
       "type": "object",
       "properties": {
         "quilltapVersion": {
-          "type": "string",
-          "description": "Semver range for Quilltap compatibility (e.g., '>=3.3.0')"
+          "type": "string"
         }
+      },
+      "additionalProperties": false
+    },
+    "tags": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 40
       }
     },
     "supportsDarkMode": {
-      "type": "boolean",
       "default": true,
-      "description": "Whether theme provides dark mode colors"
-    },
-    "tags": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Theme tags for categorization"
-    },
-    "extendsTheme": {
-      "type": "string",
-      "description": "ID of theme to extend/inherit from"
+      "type": "boolean"
     },
     "previewImage": {
-      "$ref": "#/$defs/BundleRelativePath",
-      "description": "Relative path to preview image"
-    },
-    "tokens": {
-      "$ref": "#/$defs/ThemeTokens",
-      "description": "Inline theme design tokens"
+      "type": "string",
+      "minLength": 1
     },
     "tokensPath": {
-      "$ref": "#/$defs/BundleRelativePath",
-      "description": "Relative path to tokens JSON file"
+      "default": "tokens.json",
+      "type": "string",
+      "minLength": 1
     },
     "stylesPath": {
-      "$ref": "#/$defs/BundleRelativePath",
-      "description": "Relative path to CSS overrides file"
+      "type": "string",
+      "minLength": 1
     },
     "fonts": {
+      "maxItems": 40,
       "type": "array",
-      "items": { "$ref": "#/$defs/FontDefinition" },
-      "description": "Custom font definitions"
+      "items": {
+        "type": "object",
+        "properties": {
+          "family": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "src": {
+            "type": "string",
+            "minLength": 1
+          },
+          "weight": {
+            "type": "string",
+            "pattern": "^(normal|bold|[1-9]00|[1-9]00 [1-9]00)$"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "italic",
+              "oblique"
+            ]
+          },
+          "display": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "block",
+              "swap",
+              "fallback",
+              "optional"
+            ]
+          },
+          "license": {
+            "type": "string",
+            "pattern": "^(proprietary|[A-Za-z0-9.+\\-]+( (AND|OR|WITH) [A-Za-z0-9.+\\-]+)*)$"
+          },
+          "licenseFile": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "family",
+          "src",
+          "license"
+        ],
+        "additionalProperties": false
+      }
     },
     "icons": {
       "type": "object",
       "propertyNames": {
+        "type": "string",
         "pattern": "^[a-z][a-z0-9-]*$"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/BundleRelativePath"
-      },
-      "description": "Per-icon override map: icon name -> bundle-relative asset path (svg or webp). SVG overrides keep currentColor tinting; WebP overrides bake in their own color."
+        "type": "string",
+        "minLength": 1
+      }
     },
     "subsystems": {
       "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
       "additionalProperties": {
         "type": "object",
         "properties": {
-          "name": { "type": "string" },
-          "description": { "type": "string" },
-          "thumbnail": { "type": "string" },
-          "backgroundImage": { "type": "string" }
-        }
-      },
-      "description": "Subsystem display overrides"
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "thumbnail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "none"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          },
+          "backgroundImage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "none"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "hooksVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
     }
   },
-  "anyOf": [
-    { "required": ["tokens"] },
-    { "required": ["tokensPath"] }
+  "required": [
+    "format",
+    "formatVersion",
+    "id",
+    "name",
+    "version",
+    "author"
   ],
-  "$defs": {
-    "BundleRelativePath": {
-      "type": "string",
-      "minLength": 1,
-      "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$))[^\\u0000]+$",
-      "description": "A path inside the theme bundle: relative, with no leading separator, drive letter or '..' segment"
-    },
-    "ColorPalette": {
-      "type": "object",
-      "required": [
-        "background", "foreground",
-        "primary", "primaryForeground",
-        "secondary", "secondaryForeground",
-        "muted", "mutedForeground",
-        "accent", "accentForeground",
-        "destructive", "destructiveForeground",
-        "card", "cardForeground",
-        "popover", "popoverForeground",
-        "border", "input", "ring"
-      ],
-      "properties": {
-        "background": { "type": "string" },
-        "foreground": { "type": "string" },
-        "primary": { "type": "string" },
-        "primaryForeground": { "type": "string" },
-        "secondary": { "type": "string" },
-        "secondaryForeground": { "type": "string" },
-        "muted": { "type": "string" },
-        "mutedForeground": { "type": "string" },
-        "accent": { "type": "string" },
-        "accentForeground": { "type": "string" },
-        "destructive": { "type": "string" },
-        "destructiveForeground": { "type": "string" },
-        "card": { "type": "string" },
-        "cardForeground": { "type": "string" },
-        "popover": { "type": "string" },
-        "popoverForeground": { "type": "string" },
-        "border": { "type": "string" },
-        "input": { "type": "string" },
-        "ring": { "type": "string" },
-        "success": { "type": "string" },
-        "successForeground": { "type": "string" },
-        "warning": { "type": "string" },
-        "warningForeground": { "type": "string" },
-        "info": { "type": "string" },
-        "infoForeground": { "type": "string" },
-        "chatUser": { "type": "string" },
-        "chatUserForeground": { "type": "string" }
-      }
-    },
-    "ThemeTokens": {
-      "type": "object",
-      "required": ["colors"],
-      "properties": {
-        "colors": {
-          "type": "object",
-          "required": ["light", "dark"],
-          "properties": {
-            "light": { "$ref": "#/$defs/ColorPalette" },
-            "dark": { "$ref": "#/$defs/ColorPalette" }
-          }
-        },
-        "typography": {
-          "type": "object",
-          "properties": {
-            "fontSans": { "type": "string" },
-            "fontSerif": { "type": "string" },
-            "fontMono": { "type": "string" },
-            "fontSizeXs": { "type": "string" },
-            "fontSizeSm": { "type": "string" },
-            "fontSizeBase": { "type": "string" },
-            "fontSizeLg": { "type": "string" },
-            "fontSizeXl": { "type": "string" },
-            "fontSize2xl": { "type": "string" },
-            "fontSize3xl": { "type": "string" },
-            "fontSize4xl": { "type": "string" },
-            "lineHeightTight": { "type": "string" },
-            "lineHeightNormal": { "type": "string" },
-            "lineHeightRelaxed": { "type": "string" },
-            "fontWeightNormal": { "type": "string" },
-            "fontWeightMedium": { "type": "string" },
-            "fontWeightSemibold": { "type": "string" },
-            "fontWeightBold": { "type": "string" },
-            "letterSpacingTight": { "type": "string" },
-            "letterSpacingNormal": { "type": "string" },
-            "letterSpacingWide": { "type": "string" }
-          }
-        },
-        "spacing": {
-          "type": "object",
-          "properties": {
-            "radiusSm": { "type": "string" },
-            "radiusMd": { "type": "string" },
-            "radiusLg": { "type": "string" },
-            "radiusXl": { "type": "string" },
-            "radiusFull": { "type": "string" },
-            "spacing1": { "type": "string" },
-            "spacing2": { "type": "string" },
-            "spacing3": { "type": "string" },
-            "spacing4": { "type": "string" },
-            "spacing5": { "type": "string" },
-            "spacing6": { "type": "string" },
-            "spacing8": { "type": "string" },
-            "spacing10": { "type": "string" },
-            "spacing12": { "type": "string" },
-            "spacing16": { "type": "string" }
-          }
-        },
-        "effects": {
-          "type": "object",
-          "properties": {
-            "shadowSm": { "type": "string" },
-            "shadowMd": { "type": "string" },
-            "shadowLg": { "type": "string" },
-            "shadowXl": { "type": "string" },
-            "transitionFast": { "type": "string" },
-            "transitionNormal": { "type": "string" },
-            "transitionSlow": { "type": "string" },
-            "transitionEasing": { "type": "string" },
-            "focusRingWidth": { "type": "string" },
-            "focusRingOffset": { "type": "string" }
-          }
-        }
-      }
-    },
-    "FontDefinition": {
-      "type": "object",
-      "required": ["family", "src"],
-      "properties": {
-        "family": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Font family name"
-        },
-        "src": {
-          "$ref": "#/$defs/BundleRelativePath",
-          "description": "Font file path relative to bundle root"
-        },
-        "weight": {
-          "type": "string",
-          "description": "Font weight (e.g., '400', '700', '400 700')"
-        },
-        "style": {
-          "type": "string",
-          "description": "Font style (e.g., 'normal', 'italic')"
-        },
-        "display": {
-          "type": "string",
-          "enum": ["auto", "block", "swap", "fallback", "optional"],
-          "default": "swap",
-          "description": "Font display strategy"
-        }
-      }
-    }
-  }
+  "additionalProperties": false
 }

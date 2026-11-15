@@ -21,7 +21,7 @@ import type { HookCatalogue, HookDef, RemovedHook } from './types'
 // 1 + 2. Catalogue and markup
 // ============================================================================
 
-export type HookLintRule = 'catalogue' | 'markup' | 'variant-value'
+export type HookLintRule = 'catalogue' | 'markup' | 'variant-value' | 'theme-selector'
 
 export interface HookLintIssue {
   rule: HookLintRule
@@ -492,4 +492,24 @@ export function lintThemeSelectors(css: string, catalogue: HookCatalogue): Selec
     }
   })
   return findings
+}
+
+/**
+ * The removed hooks a theme's custom CSS still targets, for a theme that says
+ * it was written against catalogue `version` (its manifest's `hooksVersion`,
+ * Spec C decision 9). Empty when the theme is current, declares no version,
+ * or uses nothing that has gone since. Never a refusal: the loader logs it.
+ */
+export function removedHooksUsed(css: string, version: number | undefined, catalogue: HookCatalogue): RemovedHook[] {
+  if (version === undefined || version >= catalogue.version) return []
+  const gone = new Map<string, RemovedHook>(catalogue.removed.filter((hook) => hook.removedIn > version).map((hook) => [hook.className, hook]))
+  if (gone.size === 0) return []
+  const used = new Map<string, RemovedHook>()
+  for (const finding of lintThemeSelectors(css, catalogue)) {
+    for (const reason of finding.reasons) {
+      const hook = reason.code === 'removed-hook' ? gone.get(reason.token) : undefined
+      if (hook) used.set(hook.className, hook)
+    }
+  }
+  return [...used.values()]
 }

@@ -89,6 +89,20 @@ Modules: `packages/quilltap/lib/{memories-commands,memories-maintain-command,mem
 Rendering, phase parsing and the body builder are unit-tested in
 `__tests__/memories-maintain-command.test.js`.
 
+## Themes: the app's engine, bundled
+
+`quilltap themes` works without a server, so it cannot call the app — instead it carries the app's
+theme engine. `scripts/build-cli-theme-engine.mjs` bundles `lib/themes/cli/index.ts` (the archive
+module `lib/themes/bundle-archive.ts`, the engine under `lib/themes/engine/`, the refusal rules and
+the hook catalogue) with esbuild into `packages/quilltap/lib/theme-engine.generated.js`, with
+`yauzl` left external (a CLI dependency) and `@/lib/logger` replaced by a stub that is silent unless
+`QUILLTAP_THEME_DEBUG` is set. Validation, extraction (one routine, realpath-aware, refusing links)
+and packing (`zip` run with an argument list) are therefore the app's own, byte for byte.
+
+Never edit the generated file. After any change to what it bundles, run
+`npm run build:cli-theme-engine`; `npm run lint` runs the build with `--check` and fails while the
+file is stale. CLI tests: `packages/quilltap/lib/__tests__/theme-commands.test.js`.
+
 ## Shell-completion internals
 
 User-facing install instructions are in the package README. What follows is for whoever edits the

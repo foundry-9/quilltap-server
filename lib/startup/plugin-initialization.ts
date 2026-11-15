@@ -19,7 +19,6 @@ import { initializeSystemPromptRegistry, systemPromptRegistry } from '@/lib/plug
 import type { ToolPlugin } from '@/lib/plugins/interfaces/tool-plugin';
 import type { SearchProviderPlugin } from '@/lib/plugins/interfaces/search-provider-plugin';
 import type { ModerationProviderPlugin } from '@/lib/plugins/interfaces/moderation-provider-plugin';
-import type { ThemePlugin } from '@quilltap/plugin-types';
 import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
 import { __injectQuilltapVersion, __clearQuilltapVersion } from '@quilltap/plugin-utils';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -387,40 +386,8 @@ async function performInitialization(): Promise<PluginInitializationResult> {
 
     // Note: AUTH_METHODS plugins are no longer supported (single-user mode only)
 
-    // Initialize theme registry from enabled plugins with THEME capability
-    // First, load module-based themes (self-contained) via dynamic require
-    const themePlugins = pluginRegistry.getEnabledByCapability('THEME');
-    for (const loadedPlugin of themePlugins) {
-      // Check if plugin uses module-based loading
-      const themeConfig = loadedPlugin.manifest.themeConfig;
-      if (themeConfig?.useModule === false) {
-        continue; // Skip - will be loaded file-based
-      }
-
-      try {
-        const mainFile = loadedPlugin.manifest.main || 'index.js';
-        const modulePath = _resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
-
-        if (!existsSync(modulePath)) {
-          continue; // No module file, will fall back to file-based
-        }
-
-        // Use external loader for npm-installed plugins to resolve peer dependencies
-        const isExternalPlugin = loadedPlugin.source === 'npm';
-        const pluginModule = isExternalPlugin
-          ? loadExternalPluginModule(modulePath)
-          : dynamicRequire(modulePath);
-        const themePlugin = (pluginModule as { plugin?: unknown; default?: { plugin?: unknown } })?.plugin
-          || (pluginModule as { default?: { plugin?: unknown } })?.default?.plugin;
-
-        if (themePlugin && typeof themePlugin === 'object' && 'tokens' in themePlugin) {
-          themeRegistry.registerThemeModule(loadedPlugin, themePlugin as ThemePlugin);
-        }
-      } catch (error) {
-      }
-    }
-
-    // Then initialize the registry (handles file-based themes and default theme)
+    // Initialize the theme registry: the default theme and every .qtap-theme
+    // bundle. A plugin's THEME capability is recorded as refused there.
     await initializeThemeRegistry();
 
     // Initialize tool registry from enabled plugins with TOOL_PROVIDER capability

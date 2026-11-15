@@ -1,0 +1,12 @@
+{
+  "format": "qtap-theme",
+  "formatVersion": 1,
+  "id": "v1-sample",
+  "name": "Version 1 Sample",
+  "description": "A version 1 bundle for the loader tests (the tokens are old-school's before its conversion).",
+  "version": "1.0.0",
+  "author": "Foundry-9 LLC",
+  "license": "MIT",
+  "supportsDarkMode": true,
+  "tokensPath": "tokens.json"
+}

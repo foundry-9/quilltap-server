@@ -2,69 +2,52 @@
  * Theme Bundle Loader
  *
  * Handles validation, installation, uninstallation, and loading of
- * .qtap-theme bundles (logic-free zip archives containing CSS, JSON tokens, and fonts).
+ * .qtap-theme bundles (logic-free zip archives: theme.json, tokens.json,
+ * custom CSS, fonts and images). Only version 2 bundles load; a bundle made
+ * for an earlier Quilltap is refused at install and recorded, not registered,
+ * when found among the installed themes (lib/themes/refused.ts).
  *
  * @module themes/bundle-loader
  */
 
 import fs from 'node:fs/promises';
-import fsSync from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import yauzl from 'yauzl';
 import { logger } from '@/lib/logger';
 import { safeFetch, SafeFetchError } from '@/lib/net/safe-fetch';
 import { getThemesDir } from '@/lib/paths';
-import { resolveInside, resolveInsideSync } from '@/lib/paths/resolve-inside';
+import { resolveInside } from '@/lib/paths/resolve-inside';
 import { getErrorMessage } from '@/lib/error-utils';
-import { listBundleFiles, loadThemeV2FromDir, ThemeBundleV2Error, type LoadedThemeV2 } from './v2-bundle';
+import { loadThemeFromDir } from './theme-bundle';
+import {
+  extractThemeBundle,
+  MAX_BUNDLE_SIZE,
+  packThemeDirectory,
+  validateThemeBundle,
+} from './bundle-archive';
+import type { CompiledTheme } from './engine';
+import { refusalForManifest, type RefusedTheme } from './refused';
 import {
   type QtapThemeManifest,
-  type QtapThemeManifestV1,
-  type ThemeManifestV2,
   type ThemeBundleIndex,
   type ThemeBundleIndexEntry,
-  type ThemeTokens,
+  ThemeBundleIndexSchema,
   safeValidateQtapThemeManifest,
-  safeValidateThemeTokens,
 } from './types';
 
 const bundleLogger = logger.child({ module: 'theme-bundle-loader' });
+
+export { validateThemeBundle, validateThemeDirectory, type ValidationResult } from './bundle-archive';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const MAX_BUNDLE_SIZE = 50 * 1024 * 1024; // 50MB total
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
-const MAX_FILE_COUNT = 200;
 const INDEX_FILENAME = 'themes-index.json';
-
-const ALLOWED_EXTENSIONS = new Set([
-  '.json', '.css',
-  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif',
-  '.woff', '.woff2', '.ttf', '.otf',
-  '.txt', '.md', '.license',
-]);
-
-const BLOCKED_EXTENSIONS = new Set([
-  '.js', '.ts', '.mjs', '.cjs', '.jsx', '.tsx',
-  '.wasm', '.sh', '.bash', '.bat', '.cmd', '.ps1', '.exe',
-  '.dll', '.so', '.dylib', '.py', '.rb', '.php',
-]);
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export interface ValidationResult {
-  valid: boolean;
-  manifest?: QtapThemeManifest;
-  errors: string[];
-  warnings: string[];
-  fileCount: number;
-  totalSize: number;
-}
 
 export interface InstallResult {
   success: boolean;
@@ -72,6 +55,8 @@ export interface InstallResult {
   version?: string;
   installPath?: string;
   error?: string;
+  /** Set when the bundle was refused as made for an earlier Quilltap. */
+  refused?: RefusedTheme;
 }
 
 export interface UninstallResult {
@@ -80,26 +65,19 @@ export interface UninstallResult {
   error?: string;
 }
 
-export interface LoadedBundleThemeV1 {
-  formatVersion: 1;
-  manifest: QtapThemeManifestV1;
-  tokens: ThemeTokens;
-  cssOverrides?: string;
+/** A loaded bundle, validated and compiled by the theme engine. */
+export interface LoadedBundleTheme {
+  manifest: QtapThemeManifest;
+  compiled: CompiledTheme;
   installPath: string;
   indexEntry: ThemeBundleIndexEntry;
 }
 
-export interface LoadedBundleThemeV2 {
-  formatVersion: 2;
-  manifest: ThemeManifestV2;
-  /** The validated document and the CSS compiled from it. */
-  v2: LoadedThemeV2;
-  installPath: string;
-  indexEntry: ThemeBundleIndexEntry;
+/** What a directory of bundles held: themes that load, and themes refused. */
+export interface LoadedBundleSet {
+  loaded: LoadedBundleTheme[];
+  refused: RefusedTheme[];
 }
-
-/** A loaded bundle: version 1 (tokens + raw CSS) or version 2 (validated, compiled). */
-export type LoadedBundleTheme = LoadedBundleThemeV1 | LoadedBundleThemeV2;
 
 // ============================================================================
 // INDEX MANAGEMENT
@@ -109,17 +87,77 @@ function getIndexPath(): string {
   return path.join(getThemesDir(), INDEX_FILENAME);
 }
 
-async function readIndex(): Promise<ThemeBundleIndex> {
-  const indexPath = getIndexPath();
+/** A fresh index entry for a bundle found on disk without one. */
+function entryFromDisk(id: string, version: string): ThemeBundleIndexEntry {
+  return {
+    id,
+    version,
+    installedAt: new Date().toISOString(),
+    source: 'file',
+    sourceUrl: null,
+    registrySource: null,
+    signatureVerified: false,
+  };
+}
+
+/**
+ * Rebuild the index from the installed bundle directories, after the stored
+ * one could not be read as an index. Every bundle is recorded as installed
+ * from a file; where it came from is not known any more.
+ */
+async function rebuildIndex(): Promise<ThemeBundleIndex> {
+  const themes: ThemeBundleIndexEntry[] = [];
+  let dirs: string[] = [];
   try {
-    const data = await fs.readFile(indexPath, 'utf-8');
-    return JSON.parse(data) as ThemeBundleIndex;
+    dirs = (await fs.readdir(getThemesDir(), { withFileTypes: true }))
+      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+      .map(e => e.name);
+  } catch {
+    // No themes directory: an empty index.
+  }
+  for (const dir of dirs) {
+    try {
+      const json = JSON.parse(await fs.readFile(path.join(getThemesDir(), dir, 'theme.json'), 'utf-8')) as { id?: unknown; version?: unknown };
+      const id = typeof json.id === 'string' ? json.id : dir;
+      const version = typeof json.version === 'string' ? json.version : 'unknown';
+      themes.push(entryFromDisk(id, version));
+    } catch {
+      bundleLogger.debug('Skipping a theme directory without a readable theme.json while rebuilding the index', { dir });
+    }
+  }
+  return { version: 1, themes };
+}
+
+/**
+ * Read themes-index.json through its schema. A missing index is empty; one
+ * that is not valid JSON or not an index is rebuilt from the directories and
+ * written back.
+ */
+export async function readIndex(): Promise<ThemeBundleIndex> {
+  const indexPath = getIndexPath();
+  let data: string;
+  try {
+    data = await fs.readFile(indexPath, 'utf-8');
   } catch {
     return { version: 1, themes: [] };
   }
+  let parsed: ReturnType<typeof ThemeBundleIndexSchema.safeParse> | undefined;
+  try {
+    parsed = ThemeBundleIndexSchema.safeParse(JSON.parse(data));
+  } catch {
+    parsed = undefined;
+  }
+  if (parsed?.success) return parsed.data;
+  bundleLogger.warn('Theme bundle index is malformed; rebuilding it from the installed bundles', {
+    indexPath,
+    issues: parsed && !parsed.success ? parsed.error.issues.slice(0, 5).map(i => `${i.path.join('.')}: ${i.message}`) : ['not valid JSON'],
+  });
+  const rebuilt = await rebuildIndex();
+  await writeIndex(rebuilt);
+  return rebuilt;
 }
 
-async function writeIndex(index: ThemeBundleIndex): Promise<void> {
+export async function writeIndex(index: ThemeBundleIndex): Promise<void> {
   const indexPath = getIndexPath();
   await fs.mkdir(path.dirname(indexPath), { recursive: true });
   await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
@@ -141,327 +179,6 @@ async function removeFromIndex(themeId: string): Promise<void> {
 }
 
 // ============================================================================
-// ZIP EXTRACTION UTILITIES
-// ============================================================================
-
-interface ZipEntry {
-  fileName: string;
-  uncompressedSize: number;
-  isDirectory: boolean;
-}
-
-function openZip(zipPath: string): Promise<yauzl.ZipFile> {
-  return new Promise((resolve, reject) => {
-    yauzl.open(zipPath, { lazyEntries: true, autoClose: false }, (err, zipFile) => {
-      if (err) reject(err);
-      else resolve(zipFile!);
-    });
-  });
-}
-
-function readZipEntries(zipFile: yauzl.ZipFile): Promise<ZipEntry[]> {
-  return new Promise((resolve, reject) => {
-    const entries: ZipEntry[] = [];
-    zipFile.readEntry();
-    zipFile.on('entry', (entry: yauzl.Entry) => {
-      entries.push({
-        fileName: entry.fileName,
-        uncompressedSize: entry.uncompressedSize,
-        isDirectory: /\/$/.test(entry.fileName),
-      });
-      zipFile.readEntry();
-    });
-    zipFile.on('end', () => resolve(entries));
-    zipFile.on('error', reject);
-  });
-}
-
-function extractZipEntry(zipFile: yauzl.ZipFile, entry: yauzl.Entry): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    zipFile.openReadStream(entry, (err, readStream) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      const chunks: Buffer[] = [];
-      readStream!.on('data', (chunk: Buffer) => chunks.push(chunk));
-      readStream!.on('end', () => resolve(Buffer.concat(chunks)));
-      readStream!.on('error', reject);
-    });
-  });
-}
-
-async function extractZipToDir(zipPath: string, destDir: string): Promise<void> {
-  const zipFile = await openZip(zipPath);
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      zipFile.readEntry();
-      zipFile.on('entry', async (entry: yauzl.Entry) => {
-        try {
-          // Every entry must land inside the extraction directory.
-          let entryPath: string;
-          try {
-            entryPath = resolveInsideSync(destDir, entry.fileName);
-          } catch {
-            bundleLogger.warn('Refusing theme bundle entry outside the extraction directory', {
-              entry: entry.fileName,
-            });
-            reject(new Error(`Path traversal detected: ${entry.fileName}`));
-            return;
-          }
-
-          if (/\/$/.test(entry.fileName)) {
-            // Directory entry
-            await fs.mkdir(entryPath, { recursive: true });
-            zipFile.readEntry();
-          } else {
-            // File entry
-            await fs.mkdir(path.dirname(entryPath), { recursive: true });
-            const data = await extractZipEntry(zipFile, entry);
-            await fs.writeFile(entryPath, data);
-            zipFile.readEntry();
-          }
-        } catch (err) {
-          reject(err);
-        }
-      });
-      zipFile.on('end', resolve);
-      zipFile.on('error', reject);
-    });
-  } finally {
-    zipFile.close();
-  }
-}
-
-// ============================================================================
-// VALIDATION
-// ============================================================================
-
-/**
- * Validate a .qtap-theme bundle file
- */
-export async function validateThemeBundle(zipPath: string): Promise<ValidationResult> {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  let fileCount = 0;
-  let totalSize = 0;
-
-  bundleLogger.debug('Validating theme bundle', { zipPath });
-
-  // Check file exists and size
-  try {
-    const stat = await fs.stat(zipPath);
-    if (stat.size > MAX_BUNDLE_SIZE) {
-      errors.push(`Bundle exceeds maximum size of ${MAX_BUNDLE_SIZE / 1024 / 1024}MB`);
-      return { valid: false, errors, warnings, fileCount: 0, totalSize: stat.size };
-    }
-    totalSize = stat.size;
-  } catch {
-    errors.push('Bundle file not found or not readable');
-    return { valid: false, errors, warnings, fileCount: 0, totalSize: 0 };
-  }
-
-  // Open and validate zip structure
-  let zipFile: yauzl.ZipFile;
-  try {
-    zipFile = await openZip(zipPath);
-  } catch (err) {
-    errors.push(`Invalid zip file: ${getErrorMessage(err)}`);
-    return { valid: false, errors, warnings, fileCount: 0, totalSize };
-  }
-
-  try {
-    const entries = await readZipEntries(zipFile);
-    fileCount = entries.filter(e => !e.isDirectory).length;
-
-    // Check file count limit
-    if (fileCount > MAX_FILE_COUNT) {
-      errors.push(`Bundle contains ${fileCount} files, exceeding limit of ${MAX_FILE_COUNT}`);
-      return { valid: false, errors, warnings, fileCount, totalSize };
-    }
-
-    // Validate each entry
-    let hasThemeJson = false;
-    let totalUncompressed = 0;
-
-    for (const entry of entries) {
-      if (entry.isDirectory) continue;
-
-      // Check for path traversal
-      if (entry.fileName.includes('..') || path.isAbsolute(entry.fileName)) {
-        errors.push(`Unsafe path detected: ${entry.fileName}`);
-        continue;
-      }
-
-      // Check for symlinks (yauzl doesn't extract symlinks by default, but be explicit)
-      // yauzl handles this safely
-
-      // Check file size
-      if (entry.uncompressedSize > MAX_FILE_SIZE) {
-        errors.push(`File ${entry.fileName} exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
-      }
-      totalUncompressed += entry.uncompressedSize;
-
-      // Check extension
-      const ext = path.extname(entry.fileName).toLowerCase();
-      if (BLOCKED_EXTENSIONS.has(ext)) {
-        errors.push(`Blocked file type: ${entry.fileName} (${ext} files are not allowed)`);
-      } else if (ext && !ALLOWED_EXTENSIONS.has(ext)) {
-        warnings.push(`Unrecognized file type: ${entry.fileName} (${ext})`);
-      }
-
-      // Track theme.json
-      if (entry.fileName === 'theme.json' || entry.fileName.endsWith('/theme.json')) {
-        hasThemeJson = true;
-      }
-    }
-
-    // Check total uncompressed size (zip bomb protection)
-    if (totalUncompressed > MAX_BUNDLE_SIZE * 10) {
-      errors.push('Suspicious compression ratio detected (potential zip bomb)');
-      return { valid: false, errors, warnings, fileCount, totalSize };
-    }
-
-    if (!hasThemeJson) {
-      errors.push('Bundle must contain a theme.json file');
-      return { valid: false, errors, warnings, fileCount, totalSize };
-    }
-
-    if (errors.length > 0) {
-      return { valid: false, errors, warnings, fileCount, totalSize };
-    }
-
-    // Extract to temp dir for manifest validation
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-validate-'));
-    try {
-      await extractZipToDir(zipPath, tempDir);
-
-      // Find and validate theme.json
-      const found = await findAndValidateManifest(tempDir, errors, warnings);
-      if (!found) {
-        return { valid: false, errors, warnings, fileCount, totalSize };
-      }
-      const manifest = found.manifest;
-
-      // Version 2: the engine validates the whole document (tokens, files,
-      // custom CSS) against the bundle's own file list.
-      if (manifest.formatVersion === 2) {
-        try {
-          await loadThemeV2FromDir(found.dir, found.json);
-        } catch (err) {
-          if (err instanceof ThemeBundleV2Error) errors.push(...err.errors);
-          else errors.push(`Failed to load version 2 theme: ${getErrorMessage(err)}`);
-        }
-        return { valid: errors.length === 0, manifest: errors.length === 0 ? manifest : undefined, errors, warnings, fileCount, totalSize };
-      }
-
-      // Validate tokens if referenced by path
-      if (manifest.tokensPath) {
-        try {
-          const tokensFilePath = await resolveInside(tempDir, manifest.tokensPath, { realpath: true });
-          const tokensData = await fs.readFile(tokensFilePath, 'utf-8');
-          const tokensJson = JSON.parse(tokensData);
-          const tokensResult = safeValidateThemeTokens(tokensJson);
-          if (!tokensResult.success) {
-            errors.push(`Invalid tokens in ${manifest.tokensPath}: ${tokensResult.errors.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
-          }
-        } catch (err) {
-          errors.push(`Failed to read tokens file ${manifest.tokensPath}: ${getErrorMessage(err)}`);
-        }
-      }
-
-      // Validate referenced font files exist
-      if (manifest.fonts) {
-        for (const font of manifest.fonts) {
-          try {
-            const fontPath = await resolveInside(tempDir, font.src, { realpath: true });
-            await fs.access(fontPath);
-          } catch {
-            errors.push(`Font file not found: ${font.src}`);
-          }
-        }
-      }
-
-      // Validate preview image exists if referenced
-      if (manifest.previewImage) {
-        try {
-          const previewPath = await resolveInside(tempDir, manifest.previewImage, { realpath: true });
-          await fs.access(previewPath);
-        } catch {
-          warnings.push(`Preview image not found: ${manifest.previewImage}`);
-        }
-      }
-
-      return {
-        valid: errors.length === 0,
-        manifest: errors.length === 0 ? manifest : undefined,
-        errors,
-        warnings,
-        fileCount,
-        totalSize,
-      };
-    } finally {
-      await fs.rm(tempDir, { recursive: true, force: true });
-    }
-  } finally {
-    zipFile.close();
-  }
-}
-
-async function findAndValidateManifest(
-  dir: string,
-  errors: string[],
-  warnings: string[]
-): Promise<{ manifest: QtapThemeManifest; dir: string; json: unknown } | null> {
-  // Look for theme.json at root level
-  const themeJsonPath = path.join(dir, 'theme.json');
-  let manifestPath = themeJsonPath;
-
-  try {
-    await fs.access(themeJsonPath);
-  } catch {
-    // Look in subdirectories (some zips have a root folder)
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    const subdirs = entries.filter(e => e.isDirectory());
-    let found = false;
-    for (const subdir of subdirs) {
-      const subPath = path.join(dir, subdir.name, 'theme.json');
-      try {
-        await fs.access(subPath);
-        manifestPath = subPath;
-        found = true;
-        break;
-      } catch {
-        continue;
-      }
-    }
-    if (!found) {
-      errors.push('theme.json not found in bundle');
-      return null;
-    }
-  }
-
-  try {
-    const manifestData = await fs.readFile(manifestPath, 'utf-8');
-    const manifestJson = JSON.parse(manifestData);
-    const result = safeValidateQtapThemeManifest(manifestJson);
-
-    if (!result.success) {
-      for (const issue of result.errors.issues) {
-        errors.push(`theme.json validation error: ${issue.path.join('.')}: ${issue.message}`);
-      }
-      return null;
-    }
-
-    return { manifest: result.data, dir: path.dirname(manifestPath), json: manifestJson };
-  } catch (err) {
-    errors.push(`Failed to parse theme.json: ${getErrorMessage(err)}`);
-    return null;
-  }
-}
-
-// ============================================================================
 // INSTALLATION
 // ============================================================================
 
@@ -476,7 +193,7 @@ export async function installThemeBundle(zipPath: string): Promise<InstallResult
   if (!validation.valid || !validation.manifest) {
     const errorMsg = validation.errors.join('; ');
     bundleLogger.error('Theme bundle validation failed', { zipPath, errors: validation.errors });
-    return { success: false, error: errorMsg };
+    return { success: false, error: errorMsg, ...(validation.refused ? { refused: validation.refused } : {}) };
   }
 
   const manifest = validation.manifest;
@@ -492,40 +209,7 @@ export async function installThemeBundle(zipPath: string): Promise<InstallResult
       // Ignore if doesn't exist
     }
 
-    // Create theme directory
-    await fs.mkdir(installPath, { recursive: true });
-
-    // Extract bundle
-    await extractZipToDir(zipPath, installPath);
-
-    // If theme.json is in a subdirectory, move contents up
-    const directThemeJson = path.join(installPath, 'theme.json');
-    try {
-      await fs.access(directThemeJson);
-    } catch {
-      // Find and move from subdirectory
-      const entries = await fs.readdir(installPath, { withFileTypes: true });
-      const subdirs = entries.filter(e => e.isDirectory());
-      for (const subdir of subdirs) {
-        const subThemeJson = path.join(installPath, subdir.name, 'theme.json');
-        try {
-          await fs.access(subThemeJson);
-          // Move all contents from subdir to installPath
-          const subPath = path.join(installPath, subdir.name);
-          const subEntries = await fs.readdir(subPath);
-          for (const entry of subEntries) {
-            await fs.rename(
-              path.join(subPath, entry),
-              path.join(installPath, entry)
-            );
-          }
-          await fs.rmdir(subPath);
-          break;
-        } catch {
-          continue;
-        }
-      }
-    }
+    await extractThemeBundle(zipPath, installPath);
 
     // Update index
     const indexEntry: ThemeBundleIndexEntry = {
@@ -623,9 +307,15 @@ export async function installThemeBundleFromUrl(url: string): Promise<InstallRes
 export async function uninstallThemeBundle(themeId: string): Promise<UninstallResult> {
   bundleLogger.info('Uninstalling theme bundle', { themeId });
 
-  const installPath = path.join(getThemesDir(), themeId);
-
   try {
+    const themesDir = getThemesDir();
+    const installPath = await resolveInside(themesDir, themeId, { realpath: true });
+    // One segment directly under the themes directory, never a nested path.
+    // resolveInside returns the lexical path, so compare it with the lexical base.
+    if (path.dirname(installPath) !== path.resolve(themesDir)) {
+      return { success: false, themeId, error: 'Theme not found' };
+    }
+
     // Check if theme exists
     try {
       await fs.access(installPath);
@@ -653,162 +343,16 @@ export async function uninstallThemeBundle(themeId: string): Promise<UninstallRe
 // ============================================================================
 
 /**
- * Load all installed theme bundles
+ * Load every bundle directory under `dir`. A bundle made for an earlier
+ * Quilltap is returned as refused, never loaded; an invalid one is logged and
+ * skipped.
  */
-export async function loadInstalledBundles(): Promise<LoadedBundleTheme[]> {
-  const themesDir = getThemesDir();
-  const loaded: LoadedBundleTheme[] = [];
-
-  bundleLogger.debug('Loading installed theme bundles', { themesDir });
-
-  // Read index
-  const index = await readIndex();
-
-  // Check themes directory exists
-  try {
-    await fs.access(themesDir);
-  } catch {
-    bundleLogger.debug('Themes directory does not exist yet', { themesDir });
-    return loaded;
-  }
-
-  // Read theme directories
-  let entries: string[];
-  try {
-    const dirEntries = await fs.readdir(themesDir, { withFileTypes: true });
-    entries = dirEntries
-      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
-      .map(e => e.name);
-  } catch (err) {
-    bundleLogger.warn('Failed to read themes directory', { error: getErrorMessage(err) });
-    return loaded;
-  }
-
-  for (const themeDir of entries) {
-    const themePath = path.join(themesDir, themeDir);
-    const themeJsonPath = path.join(themePath, 'theme.json');
-
-    try {
-      // Check theme.json exists
-      await fs.access(themeJsonPath);
-
-      // Read and validate manifest
-      const manifestData = await fs.readFile(themeJsonPath, 'utf-8');
-      const manifestJson = JSON.parse(manifestData);
-      const manifestResult = safeValidateQtapThemeManifest(manifestJson);
-
-      if (!manifestResult.success) {
-        bundleLogger.warn('Invalid theme.json in bundle', {
-          themeDir,
-          errors: manifestResult.errors.issues.map(e => e.message),
-        });
-        continue;
-      }
-
-      const parsed = manifestResult.data;
-
-      // Find index entry
-      const indexEntryFor = (id: string, version: string): ThemeBundleIndexEntry =>
-        index.themes.find(t => t.id === id) || {
-          id,
-          version,
-          installedAt: new Date().toISOString(),
-          source: 'file' as const,
-          sourceUrl: null,
-          registrySource: null,
-          signatureVerified: false,
-        };
-
-      if (parsed.formatVersion === 2) {
-        const v2 = await loadThemeV2FromDir(themePath, manifestJson);
-        loaded.push({ formatVersion: 2, manifest: v2.document.manifest, v2, installPath: themePath, indexEntry: indexEntryFor(parsed.id, parsed.version) });
-        bundleLogger.debug('Loaded theme bundle (version 2)', { themeId: parsed.id, version: parsed.version });
-        continue;
-      }
-      const manifest = parsed;
-
-      // Load tokens
-      let tokens: ThemeTokens;
-      if (manifest.tokens) {
-        tokens = manifest.tokens;
-      } else if (manifest.tokensPath) {
-        const tokensPath = await resolveInside(themePath, manifest.tokensPath, { realpath: true });
-        const tokensData = await fs.readFile(tokensPath, 'utf-8');
-        const tokensJson = JSON.parse(tokensData);
-        const tokensResult = safeValidateThemeTokens(tokensJson);
-        if (!tokensResult.success) {
-          bundleLogger.warn('Invalid tokens in bundle', {
-            themeId: manifest.id,
-            errors: tokensResult.errors.issues.map(e => e.message),
-          });
-          continue;
-        }
-        tokens = tokensResult.data;
-      } else {
-        bundleLogger.warn('No tokens found in bundle', { themeId: manifest.id });
-        continue;
-      }
-
-      // Load CSS overrides
-      let cssOverrides: string | undefined;
-      if (manifest.stylesPath) {
-        try {
-          cssOverrides = await fs.readFile(
-            await resolveInside(themePath, manifest.stylesPath, { realpath: true }),
-            'utf-8'
-          );
-        } catch {
-          bundleLogger.warn('CSS overrides file not found', {
-            themeId: manifest.id,
-            stylesPath: manifest.stylesPath,
-          });
-        }
-      }
-
-      const indexEntry = indexEntryFor(manifest.id, manifest.version);
-
-      loaded.push({
-        formatVersion: 1,
-        manifest,
-        tokens,
-        cssOverrides,
-        installPath: themePath,
-        indexEntry,
-      });
-
-      bundleLogger.debug('Loaded theme bundle', {
-        themeId: manifest.id,
-        version: manifest.version,
-      });
-    } catch (err) {
-      bundleLogger.warn('Failed to load theme bundle', {
-        themeDir,
-        error: getErrorMessage(err),
-      });
-    }
-  }
-
-  bundleLogger.info('Theme bundles loaded', { count: loaded.length });
-  return loaded;
-}
-
-/**
- * Load theme bundles from a specific directory (e.g., app-bundled themes).
- * Same logic as loadInstalledBundles but reads from a given directory path
- * rather than the user data themes directory.
- */
-export async function loadBundledThemesFromDir(dir: string): Promise<LoadedBundleTheme[]> {
-  const loaded: LoadedBundleTheme[] = [];
-
-  bundleLogger.debug('Loading bundled themes from directory', { dir });
-
-  // Check directory exists
-  try {
-    await fs.access(dir);
-  } catch {
-    bundleLogger.debug('Bundled themes directory does not exist', { dir });
-    return loaded;
-  }
+async function loadBundlesFromDir(
+  dir: string,
+  entryFor: (id: string, version: string) => ThemeBundleIndexEntry,
+  label: string
+): Promise<LoadedBundleSet> {
+  const set: LoadedBundleSet = { loaded: [], refused: [] };
 
   let entries: string[];
   try {
@@ -817,262 +361,77 @@ export async function loadBundledThemesFromDir(dir: string): Promise<LoadedBundl
       .filter(e => e.isDirectory() && !e.name.startsWith('.'))
       .map(e => e.name);
   } catch (err) {
-    bundleLogger.warn('Failed to read bundled themes directory', { error: getErrorMessage(err) });
-    return loaded;
+    bundleLogger.debug(`No ${label} directory to read`, { dir, error: getErrorMessage(err) });
+    return set;
   }
 
   for (const themeDir of entries) {
     const themePath = path.join(dir, themeDir);
-    const themeJsonPath = path.join(themePath, 'theme.json');
-
     try {
-      await fs.access(themeJsonPath);
+      let manifestData: string;
+      try {
+        manifestData = await fs.readFile(await resolveInside(themePath, 'theme.json', { realpath: true }), 'utf-8');
+      } catch {
+        bundleLogger.debug(`Skipping ${label} directory without theme.json`, { themeDir });
+        continue;
+      }
+      const manifestJson: unknown = JSON.parse(manifestData);
 
-      const manifestData = await fs.readFile(themeJsonPath, 'utf-8');
-      const manifestJson = JSON.parse(manifestData);
+      const refused = refusalForManifest(manifestJson, themeDir);
+      if (refused) {
+        bundleLogger.warn(`Refusing ${label} made for an earlier Quilltap`, { themeDir, themeId: refused.id, version: refused.version });
+        // Keyed by its directory, which is what uninstall removes.
+        set.refused.push({ ...refused, id: themeDir });
+        continue;
+      }
+
       const manifestResult = safeValidateQtapThemeManifest(manifestJson);
-
       if (!manifestResult.success) {
-        bundleLogger.warn('Invalid theme.json in bundled theme', {
+        bundleLogger.warn(`Invalid theme.json in ${label}`, {
           themeDir,
-          errors: manifestResult.errors.issues.map(e => e.message),
+          errors: manifestResult.errors.issues.map(e => `${e.path.join('.')}: ${e.message}`),
         });
         continue;
       }
 
-      const parsed = manifestResult.data;
-      const bundledIndexEntry = (id: string, version: string): ThemeBundleIndexEntry => ({
-        id,
-        version,
-        installedAt: new Date().toISOString(),
-        source: 'file' as const,
-        sourceUrl: null,
-        registrySource: null,
-        signatureVerified: false,
-      });
-
-      if (parsed.formatVersion === 2) {
-        const v2 = await loadThemeV2FromDir(themePath, manifestJson);
-        loaded.push({ formatVersion: 2, manifest: v2.document.manifest, v2, installPath: themePath, indexEntry: bundledIndexEntry(parsed.id, parsed.version) });
-        bundleLogger.debug('Loaded bundled theme (version 2)', { themeId: parsed.id, version: parsed.version });
-        continue;
-      }
-      const manifest = parsed;
-
-      // Load tokens
-      let tokens: ThemeTokens;
-      if (manifest.tokens) {
-        tokens = manifest.tokens;
-      } else if (manifest.tokensPath) {
-        const tokensPath = await resolveInside(themePath, manifest.tokensPath, { realpath: true });
-        const tokensData = await fs.readFile(tokensPath, 'utf-8');
-        const tokensJson = JSON.parse(tokensData);
-        const tokensResult = safeValidateThemeTokens(tokensJson);
-        if (!tokensResult.success) {
-          bundleLogger.warn('Invalid tokens in bundled theme', {
-            themeId: manifest.id,
-            errors: tokensResult.errors.issues.map(e => e.message),
-          });
-          continue;
-        }
-        tokens = tokensResult.data;
-      } else {
-        bundleLogger.warn('No tokens found in bundled theme', { themeId: manifest.id });
-        continue;
-      }
-
-      // Load CSS overrides
-      let cssOverrides: string | undefined;
-      if (manifest.stylesPath) {
-        try {
-          cssOverrides = await fs.readFile(
-            await resolveInside(themePath, manifest.stylesPath, { realpath: true }),
-            'utf-8'
-          );
-        } catch {
-          bundleLogger.warn('CSS overrides file not found in bundled theme', {
-            themeId: manifest.id,
-            stylesPath: manifest.stylesPath,
-          });
-        }
-      }
-
-      const indexEntry = bundledIndexEntry(manifest.id, manifest.version);
-
-      loaded.push({
-        formatVersion: 1,
-        manifest,
-        tokens,
-        cssOverrides,
+      const { document, compiled } = await loadThemeFromDir(themePath, manifestJson);
+      set.loaded.push({
+        manifest: document.manifest,
+        compiled,
         installPath: themePath,
-        indexEntry,
+        indexEntry: entryFor(document.manifest.id, document.manifest.version),
       });
-
-      bundleLogger.debug('Loaded bundled theme', {
-        themeId: manifest.id,
-        version: manifest.version,
-      });
+      bundleLogger.debug(`Loaded ${label}`, { themeId: document.manifest.id, version: document.manifest.version });
     } catch (err) {
-      bundleLogger.warn('Failed to load bundled theme', {
-        themeDir,
-        error: getErrorMessage(err),
-      });
+      bundleLogger.warn(`Failed to load ${label}`, { themeDir, error: getErrorMessage(err) });
     }
   }
 
-  bundleLogger.info('Bundled themes loaded', { count: loaded.length });
-  return loaded;
+  bundleLogger.info(`${label[0].toUpperCase()}${label.slice(1)}s loaded`, { dir, count: set.loaded.length, refused: set.refused.length });
+  return set;
+}
+
+/** Load all installed theme bundles (the data directory's themes). */
+export async function loadInstalledBundles(): Promise<LoadedBundleSet> {
+  const index = await readIndex();
+  return loadBundlesFromDir(
+    getThemesDir(),
+    (id, version) => index.themes.find(t => t.id === id) ?? entryFromDisk(id, version),
+    'installed theme bundle'
+  );
+}
+
+/** Load the themes shipped with the app from `dir`. */
+export async function loadBundledThemesFromDir(dir: string): Promise<LoadedBundleSet> {
+  return loadBundlesFromDir(dir, entryFromDisk, 'bundled theme');
 }
 
 /**
- * Export an installed theme as a .qtap-theme bundle
+ * Export an installed theme: the bundle exactly as installed (theme.json,
+ * tokens.json, custom CSS, assets), zipped. Symbolic links are not followed.
  */
-export async function exportThemeAsBundle(
-  themeId: string,
-  outputPath: string,
-  themeData: {
-    manifest: QtapThemeManifestV1;
-    tokens: ThemeTokens;
-    cssOverrides?: string;
-    fonts?: Array<{ src: string; filePath: string; family: string; weight: string; style: string; display: string }>;
-    installPath?: string;
-  }
-): Promise<void> {
+export async function exportThemeAsBundle(themeId: string, installPath: string, outputPath: string): Promise<void> {
   bundleLogger.info('Exporting theme as bundle', { themeId, outputPath });
-
-  // We'll use the archiver library if available, otherwise create a simple zip
-  // For now, create the export directory and package it
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-export-'));
-
-  try {
-    // Write theme.json
-    const manifestData: QtapThemeManifestV1 = {
-      ...themeData.manifest,
-      $schema: './qtap-theme.schema.json',
-      format: 'qtap-theme',
-      formatVersion: 1,
-      tokens: themeData.tokens,
-    };
-    // Remove tokensPath if tokens are inline
-    delete (manifestData as Record<string, unknown>).tokensPath;
-
-    await fs.writeFile(
-      path.join(tempDir, 'theme.json'),
-      JSON.stringify(manifestData, null, 2),
-      'utf-8'
-    );
-
-    // Write CSS overrides
-    if (themeData.cssOverrides) {
-      await fs.writeFile(
-        path.join(tempDir, 'styles.css'),
-        themeData.cssOverrides,
-        'utf-8'
-      );
-    }
-
-    // Copy font files
-    if (themeData.fonts) {
-      for (const font of themeData.fonts) {
-        if (font.filePath) {
-          try {
-            const destPath = await resolveInside(tempDir, font.src);
-            await fs.mkdir(path.dirname(destPath), { recursive: true });
-            await fs.copyFile(font.filePath, destPath);
-          } catch {
-            bundleLogger.warn('Failed to copy font file for export', {
-              themeId,
-              fontSrc: font.src,
-            });
-          }
-        }
-      }
-    }
-
-    // If the theme has an existing install directory, copy assets from there
-    if (themeData.installPath) {
-      const sourceDir = themeData.installPath;
-      try {
-        const sourceEntries = await fs.readdir(sourceDir, { withFileTypes: true });
-        for (const entry of sourceEntries) {
-          const sourcePath = path.join(sourceDir, entry.name);
-          const destPath = path.join(tempDir, entry.name);
-          // Don't overwrite files we already wrote
-          try {
-            await fs.access(destPath);
-            continue; // Already exists
-          } catch {
-            // Doesn't exist, copy it
-          }
-          if (entry.isDirectory()) {
-            await copyDir(sourcePath, destPath);
-          } else {
-            await fs.copyFile(sourcePath, destPath);
-          }
-        }
-      } catch {
-        // Source dir may not exist for plugin themes
-      }
-    }
-
-    // Create zip using a simple approach with Node.js zlib
-    // We use the archiver approach via a spawned process since we already have yauzl for reading
-    const { execFileSync } = await import('node:child_process');
-
-    // Ensure output directory exists
-    await fs.mkdir(path.dirname(outputPath), { recursive: true });
-
-    // Use the zip command (available on macOS and Linux). Arguments are passed
-    // as an array, never through a shell.
-    bundleLogger.debug('Zipping theme export', { themeId, tempDir, outputPath });
-    execFileSync('zip', ['-r', path.resolve(outputPath), '.'], {
-      cwd: tempDir,
-      stdio: 'pipe',
-    });
-
-    bundleLogger.info('Theme exported successfully', { themeId, outputPath });
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
-}
-
-/**
- * Export an installed version 2 theme: the bundle exactly as installed
- * (theme.json with formatVersion 2, tokens.json, custom CSS, assets), zipped.
- * Symbolic links are not followed.
- */
-export async function exportThemeV2AsBundle(themeId: string, installPath: string, outputPath: string): Promise<void> {
-  bundleLogger.info('Exporting version 2 theme as bundle', { themeId, outputPath });
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-export-'));
-  try {
-    for (const rel of await listBundleFiles(installPath)) {
-      const source = await resolveInside(installPath, rel, { realpath: true });
-      const dest = path.join(tempDir, ...rel.split('/'));
-      await fs.mkdir(path.dirname(dest), { recursive: true });
-      await fs.copyFile(source, dest);
-    }
-    const manifest = JSON.parse(await fs.readFile(path.join(tempDir, 'theme.json'), 'utf-8')) as { formatVersion?: unknown };
-    if (manifest.formatVersion !== 2) throw new Error(`Theme ${themeId} is not a version 2 bundle on disk`);
-    const { execFileSync } = await import('node:child_process');
-    await fs.mkdir(path.dirname(outputPath), { recursive: true });
-    bundleLogger.debug('Zipping version 2 theme export', { themeId, tempDir, outputPath });
-    execFileSync('zip', ['-r', path.resolve(outputPath), '.'], { cwd: tempDir, stdio: 'pipe' });
-    bundleLogger.info('Version 2 theme exported', { themeId, outputPath });
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
-}
-
-async function copyDir(src: string, dest: string): Promise<void> {
-  await fs.mkdir(dest, { recursive: true });
-  const entries = await fs.readdir(src, { withFileTypes: true });
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
-      await copyDir(srcPath, destPath);
-    } else {
-      await fs.copyFile(srcPath, destPath);
-    }
-  }
+  await packThemeDirectory(installPath, outputPath);
+  bundleLogger.info('Theme exported', { themeId, outputPath });
 }

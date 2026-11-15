@@ -2,6 +2,18 @@
 
 All notable changes to this package will be documented in this file.
 
+## [3.0.0] - 2026-11-14
+
+### Changed
+- Writes a version 2 `.qtap-theme` bundle: `theme.json` and `tokens.json` name their published JSON Schemas in `$schema`; `tokens.json` holds four primitives, a handful of `--theme-*` overrides with dark values, and the `density` choice; `styles.css` is a short stylesheet written against the app's hooks without the theme id, and the manifest records `hooksVersion`.
+- The bundle README links the authoring guide, the token reference and the hook reference.
+- The primary colour may be any CSS colour; the author email is optional and is written as an author object when given.
+
+### Removed
+- The `--plugin` option and every npm-plugin template (package.json, manifest.json, index.ts, tsconfig, esbuild config, Storybook setup, the plugin development guide). `--plugin` now exits with an error.
+- The templates' copy of the default token values and the commented copy of the `--qt-*` defaults.
+- The empty `fonts/` and `icons/` placeholder folders.
+
 ## [2.0.24] - 2026-11-10
 
 ### Changed

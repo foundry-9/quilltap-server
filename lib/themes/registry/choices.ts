@@ -26,7 +26,7 @@ export const THEME_CHOICES: readonly ChoiceDef[] = [
     name: 'density',
     label: 'Density',
     description:
-      'How roomy the interface is: padding, avatar and control sizes, sidebar and header dimensions, and the motion that goes with them. Compact is the default theme; comfortable is what every bundled theme has used.',
+      'How roomy the interface is: padding, avatar and control sizes, and sidebar and header dimensions. Compact is the default theme; comfortable is what every bundled theme has used.',
     options: ['compact', 'comfortable'],
     default: 'compact',
   },

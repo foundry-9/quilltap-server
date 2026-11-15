@@ -488,7 +488,7 @@ The CLI includes theme management commands:
 ```bash
 quilltap themes list                    # List all installed themes
 quilltap themes install my.qtap-theme   # Install a .qtap-theme bundle
-quilltap themes validate my.qtap-theme  # Validate a bundle
+quilltap themes validate my.qtap-theme  # Validate a bundle (or a bundle directory)
 quilltap themes uninstall my-theme      # Uninstall a bundle theme
 quilltap themes export earl-grey        # Export any theme as a bundle
 quilltap themes create sunset           # Scaffold a new theme
@@ -503,6 +503,8 @@ quilltap themes registry refresh        # Refresh all registry indexes
 quilltap themes registry keygen [--output <dir>]     # Generate an Ed25519 keypair
 quilltap themes registry sign <dir> --key <private>  # Sign a registry directory
 ```
+
+Bundles are checked by the same theme engine the app uses, so `validate` reports exactly what an install would: schema errors in `theme.json` and `tokens.json`, and warnings from the hook lint with the file and line. Only version 2 bundles are accepted — `validate`, `install`, `update` and `export` all refuse one made for an earlier Quilltap. Archives containing symbolic links or paths that leave the bundle are refused.
 
 ## Shell Completion
 

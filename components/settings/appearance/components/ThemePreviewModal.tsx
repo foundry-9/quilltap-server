@@ -12,16 +12,14 @@
  * @module components/settings/appearance/components/ThemePreviewModal
  */
 
-import { useEffect, useMemo, useState, useId, type CSSProperties } from 'react'
-import type { ThemeSummary } from '@/components/providers/theme-provider'
-import type { ThemePreviewImage, ThemeTokens } from '@/lib/themes/types'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
+import type { ThemePreviewImage } from '@/lib/themes/types'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { BrandName } from '@/components/ui/brand-name'
 import { Icon, type IconName } from '@/components/ui/icon'
-import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
-import { generateScopedThemeCSS, generateIconOverridesCSS } from '@/lib/themes/utils'
 import { useThemePreview } from '../hooks/useThemePreview'
-import { ThemePreviewPanel, ThemePreviewPanelV2 } from './ThemePreviewPanel'
+import { ThemePreviewPanel } from './ThemePreviewPanel'
 import { getContrastingTextColor, getMutedTextColor, getSourceBadge } from '../utils/contrast'
 
 interface ThemePreviewModalProps {
@@ -69,8 +67,11 @@ export function ThemePreviewModal({
     : theme.description
   const supportsDarkMode = isDefault ? true : theme.supportsDarkMode
 
-  const { tokens, v2, fonts, cssOverrides, icons, images, isLoading, error, fetchTokens } =
+  const { defaultTheme } = useTheme()
+  const { preview: loadedPreview, icons, images, isLoading, error, fetchTokens } =
     useThemePreview(isDefault ? null : themeId)
+  // The default theme injects nothing: its preview is the registry defaults alone.
+  const preview = isDefault ? { css: '', choices: {} } : loadedPreview
 
   // Fetch tokens (and icons/images) when the modal opens for a real theme.
   useEffect(() => {
@@ -85,18 +86,12 @@ export function ThemePreviewModal({
   const [mode, setMode] = useState<'light' | 'dark'>('light')
   const effectiveMode: 'light' | 'dark' = supportsDarkMode ? mode : 'light'
 
-  const previewTokens = isDefault ? DEFAULT_THEME_TOKENS : tokens
-
   // Banner (Option B): theme-derived background → computed accessible foreground.
-  const bannerBg =
-    previewTokens?.colors?.[effectiveMode]?.background ||
-    (v2 ? theme?.previewColors?.[effectiveMode]?.background : undefined) ||
-    '#1a1a1a'
+  const swatches = isDefault ? defaultTheme?.previewColors : theme.previewColors
+  const bannerBg = swatches?.[effectiveMode]?.background || '#1a1a1a'
   const fg = getContrastingTextColor(bannerBg)
   const muted = getMutedTextColor(bannerBg)
-  const badge = isDefault
-    ? { label: 'Built-in', deprecated: false }
-    : getSourceBadge(theme?.source, theme?.deprecated)
+  const badge = isDefault ? { label: 'Built-in' } : getSourceBadge(theme.source)
 
   // Chips painted on the themed banner use the computed foreground so they stay legible.
   const chipStyle: CSSProperties = {
@@ -130,7 +125,6 @@ export function ThemePreviewModal({
                   style={chipStyle}
                 >
                   {badge.label}
-                  {badge.deprecated && ' (deprecated)'}
                 </span>
               )}
             </div>
@@ -215,29 +209,20 @@ export function ThemePreviewModal({
 
         {/* 4b. Live element preview */}
         <section>
-          {isLoading && !previewTokens && !v2 && (
+          {isLoading && !preview && (
             <div className="qt-loading-state py-12">
               <div className="qt-spinner" />
               <span className="ml-2 qt-text-small">Loading theme preview...</span>
             </div>
           )}
-          {error && !previewTokens && !v2 && (
+          {error && !preview && (
             <div className="qt-alert-error p-4 rounded-lg">
               <p className="font-medium">Failed to load theme preview</p>
               <p className="qt-text-small mt-1">{error}</p>
             </div>
           )}
-          {v2 && !isDefault && (
-            <ThemePreviewPanelV2 compiledCss={v2.css} themeId={themeId} mode={effectiveMode} choices={v2.choices} />
-          )}
-          {previewTokens && (
-            <ThemePreviewPanel
-              tokens={previewTokens}
-              themeId={themeId}
-              mode={effectiveMode}
-              fonts={fonts}
-              cssOverrides={cssOverrides}
-            />
+          {preview && (
+            <ThemePreviewPanel compiledCss={preview.css} themeId={themeId} mode={effectiveMode} choices={preview.choices} />
           )}
         </section>
 
@@ -260,13 +245,9 @@ export function ThemePreviewModal({
           <h3 className="qt-heading-4 mb-1">Overridden Icons</h3>
           {sortedIcons.length === 0 ? (
             <p className="qt-text-small qt-text-secondary">This theme overrides no icons.</p>
-          ) : (
-            <ThemeIconSheet
-              icons={sortedIcons}
-              tokens={previewTokens ?? DEFAULT_THEME_TOKENS}
-              mode={effectiveMode}
-            />
-          )}
+          ) : preview ? (
+            <ThemeIconSheet icons={sortedIcons} themeId={themeId} mode={effectiveMode} choices={preview.choices} />
+          ) : null}
         </section>
       </div>
     </BaseModal>
@@ -300,36 +281,30 @@ function GalleryCell({ image }: { image: ThemePreviewImage }) {
 }
 
 /**
- * Renders the theme's icon overrides inside a theme-scoped container so the
- * bundled override CSS (and theme color tokens) are in effect, each icon shown
- * in four synthetic states.
+ * Renders the theme's icon overrides inside a container that carries the
+ * theme's data-theme, mode class and choices, so the theme's compiled CSS
+ * (injected by the preview panel above) resolves the overrides and the qt-*
+ * state classes to the theme's own colours. Each icon is shown in four
+ * synthetic states.
  */
 function ThemeIconSheet({
   icons,
-  tokens,
+  themeId,
   mode,
+  choices,
 }: {
   icons: { name: string; src: string }[]
-  tokens: ThemeTokens
+  themeId: string
   mode: 'light' | 'dark'
+  choices: Record<string, string>
 }) {
-  const instanceId = useId().replace(/:/g, '')
-  const scopeClass = `theme-icon-sheet-${mode}-${instanceId}`
-
-  // Scope the theme's color tokens AND its icon overrides to this container, so
-  // <Icon> inside it resolves the override and the qt-* state classes resolve to
-  // the theme's own colors. Icon-override rules are emitted unlayered, so they
-  // beat the @layer components defaults by cascade origin.
-  const scopedCSS = useMemo(() => {
-    const tokenCSS = generateScopedThemeCSS(tokens, undefined, scopeClass, mode)
-    const iconCSS = generateIconOverridesCSS(icons, `.${scopeClass}`)
-    return `${tokenCSS}\n\n/* Icon overrides (scoped) */\n${iconCSS}`
-  }, [tokens, icons, scopeClass, mode])
+  const choiceAttributes = useMemo(
+    () => Object.fromEntries(Object.entries(choices).map(([name, option]) => [`data-qt-${name}`, option])),
+    [choices]
+  )
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: scopedCSS }} />
-
       {/* Legend for the four state columns */}
       <div className="flex items-center gap-3 mb-3 qt-text-xs qt-text-secondary">
         <span className="font-medium">States:</span>
@@ -343,7 +318,9 @@ function ThemeIconSheet({
       </div>
 
       <div
-        className={`${scopeClass} border qt-border-default rounded-lg p-4`}
+        data-theme={themeId}
+        {...choiceAttributes}
+        className={`${mode} qt-theme-preview-surface border qt-border-default rounded-lg p-4`}
         style={{ height: 'auto', minHeight: 'auto', maxHeight: 'none' }}
       >
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">

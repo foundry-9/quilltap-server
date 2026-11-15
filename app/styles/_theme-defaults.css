@@ -6,9 +6,9 @@
  * Source of truth: lib/themes/registry/ (the groups whose sheet is 'theme-defaults')
  * Regenerate with: npm run generate:theme-variables
  *
- * Declared on :root and .dark (specificity 0,1,0). A version 1 theme's
- * tokens.json is injected later as :root / .dark and so wins; Tailwind's
- * --color-* / --radius-* / --font-* map (theme-tokens.css) reads these names.
+ * Declared on [data-theme] and .dark (specificity 0,1,0); a theme's compiled
+ * CSS overrides them. Tailwind's --color-* / --radius-* / --font-* map
+ * (theme-tokens.css) reads these names.
  */
 
 /* ============================================================================
@@ -98,131 +98,130 @@
   --theme-radius-md: 0.375rem;
   --theme-radius-sm: 0.25rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-radius-xl: 0.625rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-radius-full: 9999px;
 
   /* ==========================================================================
      TYPE SCALE
-     Font sizes, line heights, weights and letter spacing from the version 1
-     tokens.json shape.
+     Font sizes, line heights, weights and letter spacing.
      ========================================================================== */
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-size-xs: 0.75rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-size-sm: 0.875rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-size-base: 1rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-size-lg: 1.125rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-size-xl: 1.25rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-size-2xl: 1.5rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-size-3xl: 1.875rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-size-4xl: 2.25rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-line-height-tight: 1.25;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-line-height-normal: 1.5;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-line-height-relaxed: 1.75;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-weight-normal: 400;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-weight-medium: 500;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-weight-semibold: 600;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-font-weight-bold: 700;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-letter-spacing-tight: -0.025em;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-letter-spacing-normal: 0;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-letter-spacing-wide: 0.025em;
 
   /* ==========================================================================
      SPACING SCALE
-     The spacing steps from the version 1 tokens.json shape.
+     The spacing steps.
      ========================================================================== */
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-spacing-1: 0.25rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-spacing-2: 0.5rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-spacing-3: 0.75rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-spacing-4: 1rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-spacing-5: 1.25rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-spacing-6: 1.5rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-spacing-8: 2rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-spacing-10: 2.5rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-spacing-12: 3rem;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-spacing-16: 4rem;
 
   /* ==========================================================================
      EFFECTS
      Shadows, transition timing and the focus ring.
      ========================================================================== */
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.04);
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-transition-fast: 150ms;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-transition-normal: 200ms;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-transition-slow: 300ms;
 
-  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  /* A theme may set it; nothing in the app reads it yet. */
   --theme-transition-easing: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Read by the app's :focus-visible ring (_base.css), for a theme that turns it on (data-qt-focus-ring). */

@@ -56,16 +56,6 @@ export const TAB_TOKENS: readonly TokenDef[] = [
     visibility: 'advanced',
   },
   {
-    name: "--qt-tab-gap",
-    tier: 'component',
-    type: 'length',
-    group: 'tab',
-    label: "Tab gap",
-    description: "Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C.",
-    default: "0.375rem",
-    visibility: 'internal',
-  },
-  {
     name: "--qt-tab-transition",
     tier: 'component',
     type: 'transition',

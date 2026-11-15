@@ -4,7 +4,8 @@
  * TypeScript interfaces and types for the Quilltap theming system.
  */
 
-import type { ThemeTokens, ColorMode, ThemePreference } from '@/lib/themes/types';
+import type { ColorMode, ThemePreference } from '@/lib/themes/types';
+import type { RefusedTheme } from '@/lib/themes/refused';
 
 /**
  * Theme summary for display in theme picker
@@ -17,12 +18,8 @@ export interface ThemeSummary {
   supportsDarkMode: boolean;
   tags?: string[];
   isDefault?: boolean;
-  /** How this theme was loaded: 'plugin', 'bundle', or 'default' */
-  source?: 'plugin' | 'bundle' | 'default';
-  /** Whether this theme's format is deprecated (plugin themes) */
-  deprecated?: boolean;
-  /** Theme document format (2: compiled server-side, see ThemeTokensResponseV2) */
-  formatVersion?: 1 | 2;
+  /** How this theme was loaded: a bundle, or the built-in default */
+  source?: 'bundle' | 'default';
   previewColors?: {
     light: { background: string; primary: string; secondary: string; accent: string };
     dark: { background: string; primary: string; secondary: string; accent: string };
@@ -49,11 +46,17 @@ export interface ThemeContextValue {
   /** Resolved color mode after applying system preference */
   resolvedColorMode: 'light' | 'dark';
 
-  /** Current theme tokens (resolved from active theme or default) */
-  tokens: ThemeTokens;
-
   /** List of available themes */
   availableThemes: ThemeSummary[];
+
+  /** The default theme's own entry: its swatches and heading font come from the registry defaults (null until loaded) */
+  defaultTheme: ThemeSummary | null;
+
+  /** Themes found but not worn: made for an earlier Quilltap */
+  refusedThemes: RefusedTheme[];
+
+  /** Changes whenever the injected theme CSS changes (a cache key for theme-coloured renders) */
+  themeRevision: number;
 
   /** Whether theme data is still loading */
   isLoading: boolean;
@@ -87,10 +90,6 @@ export interface ThemeProviderProps {
   children: React.ReactNode;
   /** Initial theme preference (for SSR hydration) */
   initialPreference?: ThemePreference;
-  /** Initial tokens (for SSR hydration) */
-  initialTokens?: ThemeTokens;
-  /** Initial CSS overrides (for SSR hydration) */
-  initialCssOverrides?: string;
 }
 
 /**
@@ -124,20 +123,7 @@ export interface ThemeIcon {
   src: string;
 }
 
-/**
- * Response from theme tokens API
- */
-/** A version 1 theme: tokens plus raw CSS overrides, turned into CSS in the browser. */
-export interface ThemeTokensResponseV1 {
-  formatVersion?: 1;
-  tokens: ThemeTokens;
-  fonts?: ThemeFont[];
-  icons?: ThemeIcon[];
-  cssOverrides?: string;
-  subsystems?: Record<string, SubsystemOverride>;
-}
-
-/** App-owned behaviour a version 2 theme switches on. */
+/** App-owned behaviour a theme switches on. */
 export interface ThemeFeatureFlags {
   pageBackground: boolean;
   focusRing: boolean;
@@ -145,12 +131,12 @@ export interface ThemeFeatureFlags {
 }
 
 /**
- * A version 2 theme: its CSS compiled and validated server-side (font faces,
- * tokens, icons, scoped custom CSS, in injection order), its choices and the
- * features it switches on. There is no version 1 token shape.
+ * Response from the theme tokens API: the theme's CSS compiled and validated
+ * server-side (font faces, tokens, icons, scoped custom CSS, in injection
+ * order), its choices and the features it switches on. The default theme's
+ * CSS is empty.
  */
-export interface ThemeTokensResponseV2 {
-  formatVersion: 2;
+export interface ThemeTokensResponse {
   css: string;
   choices: Record<string, string>;
   features: ThemeFeatureFlags;
@@ -159,12 +145,11 @@ export interface ThemeTokensResponseV2 {
   subsystems?: Record<string, SubsystemOverride>;
 }
 
-export type ThemeTokensResponse = ThemeTokensResponseV1 | ThemeTokensResponseV2;
-
 /**
  * Response from themes list API
  */
 export interface ThemesListResponse {
   themes: ThemeSummary[];
+  refused?: RefusedTheme[];
   stats?: Record<string, unknown>;
 }

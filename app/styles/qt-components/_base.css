@@ -30,11 +30,15 @@
 /* ============================================================================
    ROOT BASELINE - SHARED BETWEEN MODES
    ============================================================================ */
-[data-theme="default"] {
+/* Every theme: smoothed text and smooth scrolling. The scrollbar width is a
+   token (--qt-scrollbar-width, thin by default), set in the layered rule below. */
+:root {
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   scroll-behavior: smooth;
-  scrollbar-width: thin;
+}
+
+[data-theme="default"] {
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
@@ -48,9 +52,12 @@
 @layer base {
   :root {
     color-scheme: var(--qt-color-scheme);
+    font-weight: var(--qt-body-font-weight, normal);
     scrollbar-width: var(--qt-scrollbar-width);
-    /* Unset thumb and track leave "auto": the browser's own scrollbar. */
-    scrollbar-color: var(--qt-scrollbar-thumb, auto) var(--qt-scrollbar-track, );
+    /* An unset thumb gives "auto transparent", which is invalid and so
+       computes to "auto": the browser's own scrollbar. A thumb with no track
+       gets a transparent track, the registry default. */
+    scrollbar-color: var(--qt-scrollbar-thumb, auto) var(--qt-scrollbar-track, transparent);
   }
 
   ::selection {
@@ -122,6 +129,19 @@
   .qt-page-container
 ) {
   background: transparent;
+}
+
+/* The texture over the page background (--qt-page-background-texture), shown
+   under the same condition as the image. */
+:root[data-qt-page-background] body:not(:has([style*="--story-background-url"]))::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--qt-page-background-texture);
+  background-repeat: repeat;
+  opacity: var(--qt-page-background-texture-opacity);
 }
 
 /* ============================================================================

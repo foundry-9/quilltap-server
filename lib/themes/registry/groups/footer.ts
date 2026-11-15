@@ -9,16 +9,6 @@ import type { TokenDef } from '../types';
 
 export const FOOTER_TOKENS: readonly TokenDef[] = [
   {
-    name: "--qt-footer-bg",
-    tier: 'component',
-    type: 'color',
-    group: 'footer',
-    label: "Footer background",
-    description: "Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C.",
-    default: "var(--color-background)",
-    visibility: 'internal',
-  },
-  {
     name: "--qt-footer-border",
     tier: 'component',
     type: 'color',

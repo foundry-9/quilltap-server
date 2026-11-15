@@ -27,7 +27,7 @@ import { tailwindAlias, tailwindTokenNames as tailwindNamesOf } from '../registr
 import {
   PRIMITIVE_TYPES,
   primitiveVar,
-  ThemeManifestV2Schema,
+  ThemeManifestSchema,
   ThemeTokensDocumentSchema,
   tokenModes,
   type ThemeDocument,
@@ -126,7 +126,7 @@ function typeProblem(type: TokenType, value: string): string | null {
 
 export function validateThemeDocument(input: ValidationInput, ctx: ValidationContext): ThemeDocumentValidation {
   const errors: string[] = [];
-  const manifestResult = ThemeManifestV2Schema.safeParse(input.manifest);
+  const manifestResult = ThemeManifestSchema.safeParse(input.manifest);
   if (!manifestResult.success) {
     for (const issue of manifestResult.error.issues) errors.push(`theme.json: ${issue.path.join('.') || '(root)'}: ${issue.message}`);
   }

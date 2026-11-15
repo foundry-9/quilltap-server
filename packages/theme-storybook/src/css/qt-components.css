@@ -176,7 +176,6 @@
   --qt-input-bg: var(--color-background);
   --qt-input-fg: var(--color-foreground);
   --qt-input-border: var(--color-input);
-  --qt-input-placeholder: var(--color-muted-foreground);
   --qt-input-focus-ring: var(--color-ring);
   --qt-input-transition: colors 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
@@ -205,7 +204,7 @@
   --qt-color-scheme: normal;
   --qt-selection-bg: hsl(225 55% 48% / 0.18);
   --qt-selection-fg: var(--color-foreground);
-  --qt-scrollbar-width: auto;
+  --qt-scrollbar-width: thin;
   --qt-scrollbar-size: 8px;
   --qt-scrollbar-radius: 9999px;
   --qt-focus-ring-color: var(--color-ring);
@@ -215,6 +214,8 @@
   --qt-page-background-position: center center;
   --qt-page-background-attachment: fixed;
   --qt-page-background-repeat: no-repeat;
+  --qt-page-background-texture: none;
+  --qt-page-background-texture-opacity: 0.05;
   --qt-content-bg: var(--color-card);
   --qt-content-fg: var(--color-card-foreground);
   --qt-content-scroll-bg: var(--color-background);
@@ -223,8 +224,6 @@
   --qt-sidebar-width: 15rem;
   --qt-sidebar-bg: var(--color-sidebar-background);
   --qt-sidebar-border: var(--color-sidebar-border);
-  --qt-sidebar-fg: var(--color-sidebar-foreground);
-  --qt-sidebar-muted: var(--color-sidebar-muted);
   --qt-sidebar-item-padding-x: 0.625rem;
   --qt-sidebar-item-padding-y: 0.375rem;
   --qt-sidebar-item-radius: var(--radius-md);
@@ -235,21 +234,15 @@
   }
   --qt-sidebar-item-active-border: var(--color-primary);
   --qt-left-sidebar-width: 15rem;
-  --qt-left-sidebar-min-width: 15rem;
-  --qt-left-sidebar-max-width: 28rem;
   --qt-left-sidebar-collapsed-width: 3.5rem;
   --qt-left-sidebar-resize-handle-width: 3px;
   --qt-left-sidebar-bg: var(--color-sidebar-background);
   --qt-left-sidebar-border: var(--color-sidebar-border);
   --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
-  --qt-left-sidebar-footer-height: auto;
   --qt-left-sidebar-section-padding: 0.625rem;
   --qt-left-sidebar-section-gap: 0.125rem;
   --qt-left-sidebar-section-title-fg: var(--color-sidebar-muted);
-  --qt-left-sidebar-item-gap: 0.375rem;
   --qt-left-sidebar-item-icon-size: 1.125rem;
-  --qt-left-sidebar-overlay-bg: rgb(0 0 0 / 0.4);
-  --qt-left-sidebar-overlay-z: 40;
   --qt-left-sidebar-z: 50;
   --qt-app-header-height: 3.5rem;
   --qt-app-header-bg: var(--color-background);
@@ -633,12 +626,10 @@
   }
   --qt-link-decoration: none;
   --qt-link-decoration-hover: underline;
-  --qt-footer-bg: var(--color-background);
   --qt-footer-border: var(--color-border);
   --qt-footer-fg: var(--color-muted-foreground);
   --qt-footer-link-hover: var(--color-primary);
   --qt-brand-fg: var(--color-foreground);
-  --qt-auth-page-bg: linear-gradient(to bottom right, hsl(225 22% 8%), hsl(225 18% 14%));
   --qt-auth-card-bg: var(--color-card);
   --qt-auth-card-fg: var(--color-card-foreground);
   --qt-auth-title-fg: var(--color-foreground);
@@ -722,7 +713,6 @@
   --qt-tab-padding-y: 0.5rem;
   --qt-tab-font-size: 0.8125rem;
   --qt-tab-font-weight: 500;
-  --qt-tab-gap: 0.375rem;
   --qt-tab-transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --qt-tab-bg: var(--color-muted);
   --qt-tab-fg: var(--color-muted-foreground);
@@ -839,22 +829,16 @@
    ============================================================================ */
 [data-theme][data-qt-density="comfortable"] {
   --qt-button-padding-y: 0.5rem;
-  --qt-button-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
   --qt-card-padding: 1.5rem;
-  --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
   --qt-navbar-height: 4rem;
   --qt-navbar-link-padding-x: 0.75rem;
   --qt-left-sidebar-width: 16rem;
-  --qt-left-sidebar-min-width: 16rem;
-  --qt-left-sidebar-max-width: 32rem;
   --qt-left-sidebar-collapsed-width: 4rem;
   --qt-left-sidebar-resize-handle-width: 4px;
   --qt-left-sidebar-section-padding: 0.75rem;
   --qt-left-sidebar-section-gap: 0.25rem;
-  --qt-left-sidebar-item-gap: 0.5rem;
   --qt-left-sidebar-item-icon-size: 1.25rem;
   --qt-app-header-height: 4rem;
-  --qt-app-header-blur: blur(8px);
   --qt-chat-message-padding: 1rem;
   --qt-page-max-width: 75rem;
   --qt-card-grid-auto-min: 550px;
@@ -904,11 +888,14 @@
 /* ============================================================================
    ROOT BASELINE - SHARED BETWEEN MODES
    ============================================================================ */
-[data-theme="default"] {
+/* Every theme: smoothed text and smooth scrolling. The scrollbar width is a
+   token (--qt-scrollbar-width, thin by default), set in the layered rule below. */
+:root {
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   scroll-behavior: smooth;
-  scrollbar-width: thin;
+}
+[data-theme="default"] {
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 @layer base {
@@ -921,8 +908,9 @@
      ============================================================================ */
   :root {
     color-scheme: var(--qt-color-scheme);
+    font-weight: var(--qt-body-font-weight, normal);
     scrollbar-width: var(--qt-scrollbar-width);
-    scrollbar-color: var(--qt-scrollbar-thumb, auto) var(--qt-scrollbar-track, );
+    scrollbar-color: var(--qt-scrollbar-thumb, auto) var(--qt-scrollbar-track, transparent);
   }
   ::-moz-selection {
     background-color: var(--qt-selection-bg);
@@ -976,6 +964,18 @@
 }
 :root[data-qt-page-background] body:not(:has([style*="--story-background-url"])) :is( .bg-background, .qt-app-layout, .qt-app-main, .qt-page, .qt-page-with-navbar, .qt-content, .qt-content-scroll, .qt-auth-page, .qt-page-container ) {
   background: transparent;
+}
+/* The texture over the page background (--qt-page-background-texture), shown
+   under the same condition as the image. */
+:root[data-qt-page-background] body:not(:has([style*="--story-background-url"]))::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--qt-page-background-texture);
+  background-repeat: repeat;
+  opacity: var(--qt-page-background-texture-opacity);
 }
 /* ============================================================================
    REDUCED MOTION
@@ -13154,6 +13154,27 @@
     transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;
     transition-timing-function: var(--tw-ease, var(--default-transition-timing-function, cubic-bezier(0.4, 0, 0.2, 1)));
     transition-duration: var(--tw-duration, var(--default-transition-duration, 150ms));
+  }
+  /* ==========================================================================
+     HEADING HOOKS ON THE UI'S TITLE CLASSES
+     The page, section and homepage titles read the theme's heading tokens like
+     .qt-heading-* do. Unset, each keeps the weight, colour, spacing and case
+     it has above, so the default theme renders as before.
+     ========================================================================== */
+  .qt-page-title, .qt-section-title, .qt-homepage-section-title, .qt-text-section {
+    font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, normal);
+    text-transform: var(--qt-heading-text-transform, none);
+  }
+  .qt-text-section {
+    font-weight: var(--qt-heading-font-weight, 500);
+  }
+  .qt-page-title, .qt-section-title, .qt-homepage-section-title {
+    color: var(--qt-heading-color, var(--color-foreground));
+  }
+  .qt-text-section {
+    color: var(--qt-heading-color, var(--qt-text-primary-fg, var(--color-foreground)));
   }
   /* ==========================================================================
      SOURCE: app/styles/qt-components/_workspace.css — Tabbed workspace: panes, tab strip, divider, drop-zones

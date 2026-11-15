@@ -143,7 +143,7 @@ export function makeAlmanackFixture(
     themeInfo: {
       activeThemeId: 'madmans-box',
       colorMode: 'dark',
-      stats: { total: 6, withDarkMode: 6, withCssOverrides: 4, errors: 0 },
+      stats: { total: 6, withDarkMode: 6, refused: 0, errors: 0 },
       themes: [
         {
           name: "Madman's Box",

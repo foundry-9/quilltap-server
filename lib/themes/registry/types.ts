@@ -80,8 +80,8 @@ export interface TokenDef {
 
 /**
  * Which generated stylesheet a group is written to.
- * `theme-defaults` — app/styles/_theme-defaults.css, `:root` and `.dark`
- *   (specificity 0,1,0, so a version 1 theme's injected `:root` / `.dark` wins);
+ * `theme-defaults` — app/styles/_theme-defaults.css, `[data-theme]` and `.dark`
+ *   (specificity 0,1,0);
  * `variables` — app/styles/qt-components/_variables.css, `:root, [data-theme], …`
  *   (0,2,0).
  */

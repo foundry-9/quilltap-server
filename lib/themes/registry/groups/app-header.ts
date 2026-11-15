@@ -43,7 +43,6 @@ export const APP_HEADER_TOKENS: readonly TokenDef[] = [
     group: 'app-header',
     label: "App header blur",
     default: "blur(12px)",
-    byChoice: {"density":{"comfortable":"blur(8px)"}},
     visibility: 'standard',
   },
 ];

@@ -53,6 +53,12 @@ export const COMMON_HOOKS: readonly HookDef[] = [
   family('qt-badge-info', 'Info badge'),
   family('qt-badge-destructive', 'Destructive badge'),
   family('qt-badge-outline', 'Outline badge'),
+  family('qt-badge-character', 'Character badge'),
+  family('qt-badge-user-character', 'Operator-character badge'),
+  family('qt-badge-chat', 'Chat badge'),
+  family('qt-badge-tag', 'Tag badge'),
+  family('qt-badge-memory', 'Memory badge'),
+  family('qt-badge-project', 'Project badge'),
 
   // Alerts
   family('qt-alert', 'Alert'),
@@ -66,6 +72,27 @@ export const COMMON_HOOKS: readonly HookDef[] = [
   family('qt-heading-2', 'Heading, level 2 size'),
   family('qt-heading-3', 'Heading, level 3 size'),
   family('qt-heading-4', 'Heading, level 4 size'),
+  family('qt-page-title', 'Page title', 'The large title at the head of a page.'),
+  family('qt-section-title', 'Section title', 'A heading over a card, panel or settings group.'),
+  family('qt-text-section', 'Section heading text', 'A smaller section heading inside a form or panel.'),
+
+  // Brand
+  family('qt-text-brand', 'Brand-coloured text', 'Text in the brand colour: links, the active item, small accents.'),
+  family('qt-font-brand', 'Brand name', 'The Quilltap name, set in the brand font.'),
+
+  // Progress
+  family('qt-spinner', 'Spinner', 'A loading spinner; `qt-spinner-sm` beside it for the small one.'),
+  family('qt-thinking-indicator', 'Thinking mark', 'The mark shown while a model is thinking; it animates by --qt-thinking-duration and --qt-thinking-origin.'),
+
+  // Empty states
+  family('qt-empty-state-title', 'Empty-state title', 'The heading of the notice shown where a list has nothing in it.'),
+
+  // Links and previews
+  { ...family('qt-wikilink', 'Wiki link', 'A [[link]] between documents in rendered text.'), states: [{ kind: 'class', className: 'qt-wikilink-broken', label: 'Points at nothing' }] },
+  family('qt-file-preview-panel', 'File preview panel', 'The panel a text file is previewed on.'),
+
+  // Diagrams
+  family('qt-diagram', 'Diagram', 'A rendered diagram in a message or document, with its toolbar.'),
 
   // Avatars (components/ui/Avatar.tsx)
   family('qt-avatar-image', 'Avatar picture box', 'The framed box holding an avatar picture or its initial.'),

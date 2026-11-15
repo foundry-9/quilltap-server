@@ -16,7 +16,7 @@
  * (see `QtapThemeManifestSchema` in `lib/themes/types.ts`). An SVG override
  * keeps `currentColor` tinting (mask mode); a WebP override is pre-coloured
  * (image mode). The override format is resolved by extension at injection time
- * (see `generateIconOverridesCSS` in `lib/themes/utils.ts`).
+ * (see `iconOverrides` in `lib/themes/engine/compile.ts`).
  *
  * IMPORTANT: the icon NAME is a permanent public contract. Renaming an icon
  * after themes ship overrides for it is a breaking change. Add freely; rename

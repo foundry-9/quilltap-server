@@ -18,10 +18,10 @@ The Appearance group of Settings is where you customize how Quilltap looks and f
 
 ### Understanding Themes
 
-Quilltap includes a default theme and can display custom themes from installed plugins:
+Quilltap includes a default theme, a set of bundled themes, and any `.qtap-theme` bundles you install:
 
 - **Default theme** — Professional, clean design (always available)
-- **Plugin themes** — Custom designs from installed theme plugins
+- **Bundled and installed themes** — Further designs, from the ones that ship with Quilltap to bundles you have added yourself
 - **Color modes** — Each theme can be viewed in light or dark mode
 - **Icons and small animations** — A theme may re-cut the icons themselves, and even the little flourishes that move
 
@@ -64,11 +64,12 @@ Some themes may have additional details:
 
 To get more themes:
 
-1. Go to **Settings** → **Plugins**
-2. Search for theme plugins
-3. Install the ones you like
-4. New themes appear in Appearance → Theme Selection
-5. Refresh if needed to see newly installed themes
+1. Click **Install Theme** on the Appearance card and choose a `.qtap-theme` file, or browse a theme registry from the same card
+2. The new theme appears on the shelf at once
+
+### Garments Left at the Door
+
+A theme made for an earlier Quilltap — a version 1 bundle, or a theme supplied by a plugin — can no longer be worn. Rather than vanish without a word, it is listed beneath the shelf under **Garments Left at the Door**, with an explanation, a button to the Themes help page and, for a bundle, an **Uninstall** button. Nothing is removed unless you press it. Should the theme you had chosen be one of these, Quilltap returns to the Default theme and says so once. The [Themes](/settings?section=appearance) help page explains the particulars.
 
 ## Color Mode Selection
 
@@ -293,14 +294,13 @@ The very first press of Tab on any page now offers a **Skip to content** link, s
 
 ### Themes Won't Load
 
-**Problem:** Theme list is empty or shows "Install theme plugins"
+**Problem:** A theme you expected is missing from the shelf
 
 **Solutions:**
 
-- Make sure theme plugins are installed in Settings → Data & Maintenance → Plugins
+- Look under **Garments Left at the Door**: a theme made for an earlier Quilltap, or supplied by a plugin, is listed there instead
 - Refresh the page
-- Restart Quilltap if plugin installation required a restart
-- Check that theme plugins are enabled
+- If you installed the bundle yourself, install it again; a failed install says why
 
 ### Color Mode Changes Don't Apply
 

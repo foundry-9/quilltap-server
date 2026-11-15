@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
-  compileThemeV2,
+  compileTheme,
   compiledThemeCss,
   cssString,
   resolveTheme,
@@ -21,7 +21,7 @@ import {
   validateThemeDocument,
   type ThemeDocumentValidation,
 } from '@/lib/themes/engine';
-import { listBundleFiles, THEME_REGISTRY_VIEW, validationContextFor } from '@/lib/themes/v2-bundle';
+import { listBundleFiles, THEME_REGISTRY_VIEW, validationContextFor } from '@/lib/themes/theme-bundle';
 
 const FIXTURE = path.resolve(__dirname, '../../../fixtures/themes/v2-sample');
 const REPO_ROOT = path.resolve(__dirname, '../../../..');
@@ -84,8 +84,17 @@ describe('theme.json rejections (3.1)', () => {
     ['a subsystem image must exist', (m: any) => (m.subsystems = { salon: { thumbnail: 'textures/nope.webp' } }), /subsystems\.salon\.thumbnail: file/],
     ['paths are plain characters only', (m: any) => (m.previewImage = 'textures/my paper.webp'), /previewImage: Must be a path inside the bundle/],
     ['paths stay inside the bundle', (m: any) => (m.stylesPath = '../styles.css'), /stylesPath/],
+    ['hooksVersion is a whole number', (m: any) => (m.hooksVersion = 1.5), /hooksVersion/],
+    ['hooksVersion starts at 1', (m: any) => (m.hooksVersion = 0), /hooksVersion/],
+    ['hooksVersion is a number, not a string', (m: any) => (m.hooksVersion = '1'), /hooksVersion/],
   ])('%s', (_label, mutate, pattern) => {
     expectError(validate({ manifest: mutate }), pattern);
+  });
+
+  it('accepts a hooksVersion (Spec C decision 9)', () => {
+    const r = validate({ manifest: (m) => (m.hooksVersion = 1) });
+    expect(errorsOf(r)).toEqual([]);
+    expect(r.valid && r.document.manifest.hooksVersion).toBe(1);
   });
 
   it('accepts "none" for a subsystem image', () => {
@@ -229,7 +238,7 @@ describe('compiled CSS (3.2, 3.3)', () => {
   const compiled = () => {
     const r = validate();
     if (!r.valid) throw new Error(r.errors.join('\n'));
-    return compileThemeV2(r.document, r.scopedCss, THEME_REGISTRY_VIEW);
+    return compileTheme(r.document, r.scopedCss, THEME_REGISTRY_VIEW);
   };
 
   it('emits only what the theme sets', () => {
@@ -258,7 +267,7 @@ describe('compiled CSS (3.2, 3.3)', () => {
   it('escapes a manifest string wherever it reaches CSS', () => {
     const r = validate({ manifest: (m) => (m.fonts[0].family = 'Evil"; } body { display: none } </style>') });
     if (!r.valid) throw new Error(r.errors.join('\n'));
-    const out = compiledThemeCss(compileThemeV2(r.document, r.scopedCss, THEME_REGISTRY_VIEW));
+    const out = compiledThemeCss(compileTheme(r.document, r.scopedCss, THEME_REGISTRY_VIEW));
     expect(out).not.toContain('</style');
     expect(out).toContain('font-family: "Evil\\22 ; } body { display: none } \\3c /style>";');
     expect(cssString('a"b\\c\n<')).toBe('"a\\22 b\\5c c\\a \\3c "');

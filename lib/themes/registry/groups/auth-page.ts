@@ -9,16 +9,6 @@ import type { TokenDef } from '../types';
 
 export const AUTH_PAGE_TOKENS: readonly TokenDef[] = [
   {
-    name: "--qt-auth-page-bg",
-    tier: 'component',
-    type: 'image',
-    group: 'auth-page',
-    label: "Auth page background",
-    description: "Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C.",
-    default: "linear-gradient(to bottom right, hsl(225 22% 8%), hsl(225 18% 14%))",
-    visibility: 'internal',
-  },
-  {
     name: "--qt-auth-card-bg",
     tier: 'component',
     type: 'color',

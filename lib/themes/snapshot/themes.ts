@@ -2,20 +2,20 @@
  * The theme snapshot's inputs: which themes, which modes, and what CSS each
  * one puts on the page after the app's own stylesheet.
  *
- * A theme's injected CSS is built the way `theme-style-injector.tsx` builds
- * it — token CSS from `themeTokensToCSS`, then the bundle's `styles.css`.
- * Font faces and icon overrides are left out: neither declares a custom
- * property on the root element.
+ * A theme's injected CSS is what the engine compiled for it, in injector
+ * order (`theme-style-injector.tsx`); font faces are left out, since they
+ * declare no custom property on the root element. The default theme injects
+ * nothing: the app's generated defaults are its values.
  *
  * @module themes/snapshot/themes
  */
 
 import path from 'node:path';
 import { loadBundledThemesFromDir } from '../bundle-loader';
-import { DEFAULT_THEME_TOKENS } from '../default-tokens';
-import { mergeThemeTokens, themeTokensToCSS } from '../utils';
 import { renderAlike } from '../color';
-import type { CompiledThemeV2 } from '../engine/compile';
+import type { CompiledTheme } from '../engine/compile';
+import { THEME_CHOICES } from '../registry/choices';
+import { THEME_FEATURE_ATTRIBUTES } from '@/components/providers/theme/theme-utils';
 import { resolveRootVariables, type CascadeResult, type CascadeSheet } from './cascade';
 import type { RootElementState } from './selector-match';
 
@@ -53,6 +53,8 @@ export interface SnapshotTheme {
   id: string;
   /** CSS injected after the app stylesheet, in injector order. */
   sheets: CascadeSheet[];
+  /** Extra attributes on <html> (the theme's choices and features). */
+  rootAttributes?: Record<string, string>;
 }
 
 export interface ThemeSnapshot {
@@ -75,32 +77,37 @@ export function rootStateFor(themeId: string, mode: SnapshotMode): RootElementSt
   };
 }
 
-/** What the injector writes for a compiled version 2 theme, as snapshot sheets. */
-export function v2Sheets(compiled: CompiledThemeV2): CascadeSheet[] {
+/**
+ * The attributes `applyThemeToDom` puts on <html> for a compiled theme: each feature it switches on, and each choice set to a non-default
+ * option.
+ */
+export function themeRootAttributes(compiled: CompiledTheme): Record<string, string> {
+  const attributes: Record<string, string> = {};
+  for (const [feature, attribute] of Object.entries(THEME_FEATURE_ATTRIBUTES) as Array<[keyof CompiledTheme['features'], string]>) {
+    if (compiled.features[feature]) attributes[attribute] = '';
+  }
+  for (const choice of THEME_CHOICES) {
+    const option = compiled.choices[choice.name];
+    if (option && option !== choice.default) attributes[`data-qt-${choice.name}`] = option;
+  }
+  return attributes;
+}
+
+/** What the injector writes for a compiled theme, as snapshot sheets. */
+export function themeSheets(compiled: CompiledTheme): CascadeSheet[] {
   return [
-    { origin: 'v2:tokens', css: compiled.css.tokens },
-    { origin: 'v2:icons', css: compiled.css.icons },
-    { origin: 'v2:custom', css: compiled.css.custom },
+    { origin: 'theme:tokens', css: compiled.css.tokens },
+    { origin: 'theme:icons', css: compiled.css.icons },
+    { origin: 'theme:custom', css: compiled.css.custom },
   ].filter((sheet) => sheet.css.trim().length > 0);
 }
 
 /** The default theme plus every bundle under `themes/bundled`, sorted by id. */
 export async function loadSnapshotThemes(root: string): Promise<SnapshotTheme[]> {
-  const themes: SnapshotTheme[] = [
-    { id: 'default', sheets: [{ origin: 'injected:default:tokens', css: themeTokensToCSS(DEFAULT_THEME_TOKENS) }] },
-  ];
-  const bundles = await loadBundledThemesFromDir(path.join(root, BUNDLED_THEMES_DIR));
-  for (const bundle of bundles) {
-    const id = bundle.manifest.id;
-    if (bundle.formatVersion === 2) {
-      themes.push({ id, sheets: v2Sheets(bundle.v2.compiled) });
-      continue;
-    }
-    // Bundled themes do not use extendsTheme; mirror the registry if one ever does.
-    const tokens = bundle.manifest.extendsTheme ? mergeThemeTokens(DEFAULT_THEME_TOKENS, bundle.tokens) : bundle.tokens;
-    const sheets: CascadeSheet[] = [{ origin: `injected:${id}:tokens`, css: themeTokensToCSS(tokens) }];
-    if (bundle.cssOverrides) sheets.push({ origin: `bundle:${id}/styles.css`, css: bundle.cssOverrides });
-    themes.push({ id, sheets });
+  const themes: SnapshotTheme[] = [{ id: 'default', sheets: [] }];
+  const { loaded } = await loadBundledThemesFromDir(path.join(root, BUNDLED_THEMES_DIR));
+  for (const bundle of loaded) {
+    themes.push({ id: bundle.manifest.id, sheets: themeSheets(bundle.compiled), rootAttributes: themeRootAttributes(bundle.compiled) });
   }
   return themes.sort((a, b) => (a.id === 'default' ? -1 : b.id === 'default' ? 1 : a.id.localeCompare(b.id)));
 }
@@ -112,10 +119,9 @@ export function snapshotTheme(
   mode: SnapshotMode,
   appThemeVariables: Set<string>
 ): ThemeSnapshot {
-  const result: CascadeResult = resolveRootVariables(
-    [{ origin: 'app/globals.css (compiled)', css: appCss }, ...theme.sheets],
-    rootStateFor(theme.id, mode)
-  );
+  const root = rootStateFor(theme.id, mode);
+  Object.assign(root.attributes, theme.rootAttributes ?? {});
+  const result: CascadeResult = resolveRootVariables([{ origin: 'app/globals.css (compiled)', css: appCss }, ...theme.sheets], root);
   const variables: Record<string, string> = {};
   for (const [name, value] of Object.entries(result.values)) {
     if (EXCLUDED_PREFIXES.some((p) => name.startsWith(p))) continue;

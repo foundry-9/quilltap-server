@@ -186,9 +186,9 @@ const DEFAULTS_HEADER = `/**
  * Source of truth: lib/themes/registry/ (the groups whose sheet is 'theme-defaults')
  * Regenerate with: ${THEME_VARIABLES_REGENERATE_COMMAND}
  *
- * Declared on :root and .dark (specificity 0,1,0). A version 1 theme's
- * tokens.json is injected later as :root / .dark and so wins; Tailwind's
- * --color-* / --radius-* / --font-* map (theme-tokens.css) reads these names.
+ * Declared on [data-theme] and .dark (specificity 0,1,0); a theme's compiled
+ * CSS overrides them. Tailwind's --color-* / --radius-* / --font-* map
+ * (theme-tokens.css) reads these names.
  */`;
 
 /** app/styles/_theme-defaults.css: the semantic tier. */

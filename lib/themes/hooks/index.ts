@@ -4,7 +4,7 @@
  *
  * Conventions, versioning and the lint that holds the markup to this list:
  * docs/developer/THEME_HOOKS.md (generated from here) and
- * docs/developer/features/calliope-live-spec-b-hook-catalogue.md.
+ * docs/developer/features/complete/calliope-live-spec-b-hook-catalogue.md.
  *
  * Versioning: `HOOK_CATALOGUE_VERSION` rises by one in any change that
  * removes a hook, removes a variant value or state, or changes what element a

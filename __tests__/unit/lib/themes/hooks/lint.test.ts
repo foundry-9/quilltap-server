@@ -14,6 +14,7 @@ import {
   lintCatalogue,
   lintMarkup,
   lintThemeSelectors,
+  removedHooksUsed,
   tokenizeSelector,
   type SelectorReasonCode,
 } from '@/lib/themes/hooks/lint'
@@ -292,5 +293,25 @@ describe('hooksRemovedSince', () => {
   it('returns hooks removed after the given version', () => {
     expect(hooksRemovedSince(1, FIXTURE.removed).map((h) => h.className)).toEqual(['qt-old-card'])
     expect(hooksRemovedSince(2, FIXTURE.removed)).toEqual([])
+  })
+})
+
+describe('removedHooksUsed (Spec C decision 9)', () => {
+  const css = '.qt-old-card { color: red; }\n.qt-home-card { color: blue; }'
+
+  it('names a removed hook that a theme written against an older catalogue still uses', () => {
+    expect(removedHooksUsed(css, 1, FIXTURE)).toEqual([{ className: 'qt-old-card', removedIn: 2, replacedBy: 'qt-home-card' }])
+  })
+
+  it('says nothing for a theme written against the current catalogue', () => {
+    expect(removedHooksUsed(css, 2, FIXTURE)).toEqual([])
+  })
+
+  it('says nothing for a theme that declares no hooksVersion', () => {
+    expect(removedHooksUsed(css, undefined, FIXTURE)).toEqual([])
+  })
+
+  it('says nothing when the older theme uses no removed hook', () => {
+    expect(removedHooksUsed('.qt-home-card { color: blue; }', 1, FIXTURE)).toEqual([])
   })
 })

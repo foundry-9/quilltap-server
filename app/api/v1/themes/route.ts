@@ -1,7 +1,7 @@
 /**
  * Theme API Routes (v1)
  *
- * GET  /api/v1/themes - Get list of available themes
+ * GET  /api/v1/themes - Get list of available themes (and those refused)
  * GET  /api/v1/themes?action=registry - Browse registry themes
  * GET  /api/v1/themes?action=registry-sources - List configured registries
  * GET  /api/v1/themes?action=updates - Check for available theme updates
@@ -68,15 +68,40 @@ export async function GET(request: NextRequest) {
 async function handleGetThemes() {
   const { themeRegistry } = await getThemeRegistry();
   const themes = themeRegistry.getThemeList();
+  const refused = themeRegistry.getRefused();
   const stats = themeRegistry.getStats();
+  logger.debug('Listing themes', { context: 'themes-api', count: themes.length, refused: refused.length });
   return successResponse({
     themes,
+    refused,
     stats: {
       total: stats.total,
       withDarkMode: stats.withDarkMode,
-      withCssOverrides: stats.withCssOverrides,
+      refused: stats.refused,
     },
   });
+}
+
+/**
+ * Register a freshly installed bundle with the running registry, so it can be
+ * worn without a restart.
+ */
+async function hotLoadInstalledTheme(themeId: string | undefined): Promise<void> {
+  if (!themeId) return;
+  const { themeRegistry } = await getThemeRegistry();
+  const { loadInstalledBundles } = await getBundleLoader();
+  const bundles = await loadInstalledBundles();
+  const newBundle = bundles.loaded.find(b => b.manifest.id === themeId);
+  if (newBundle) {
+    themeRegistry.registerBundleTheme(newBundle);
+  }
+  logger.debug('Hot-loaded installed theme', { context: 'themes-api', themeId, registered: !!newBundle });
+}
+
+/** The 400 for a failed install: an earlier theme's refusal speaks for itself. */
+function installFailure(prefix: string, result: { error?: string; refused?: { message: string } }) {
+  if (result.refused) return badRequest(result.refused.message);
+  return badRequest(`${prefix}: ${result.error}`);
 }
 
 /**
@@ -166,7 +191,7 @@ async function handleInstall(request: NextRequest) {
   const fs = await import('node:fs/promises');
   const path = await import('node:path');
   const os = await import('node:os');
-  const { installThemeBundle, loadInstalledBundles } = await getBundleLoader();
+  const { installThemeBundle } = await getBundleLoader();
 
   // Write to temp file
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-upload-'));
@@ -179,16 +204,10 @@ async function handleInstall(request: NextRequest) {
     const result = await installThemeBundle(tempFile);
 
     if (!result.success) {
-      return badRequest(`Theme installation failed: ${result.error}`);
+      return installFailure('Theme installation failed', result);
     }
 
-    // Hot-load the newly installed theme into the registry
-    const { themeRegistry } = await getThemeRegistry();
-    const bundles = await loadInstalledBundles();
-    const newBundle = bundles.find(b => b.manifest.id === result.themeId);
-    if (newBundle) {
-      themeRegistry.registerBundleTheme(newBundle);
-    }
+    await hotLoadInstalledTheme(result.themeId);
 
     return created({
       message: 'Theme installed successfully',
@@ -223,20 +242,14 @@ async function handleInstallFromUrl(request: NextRequest) {
     return badRequest('Invalid URL format');
   }
 
-  const { installThemeBundleFromUrl, loadInstalledBundles } = await getBundleLoader();
+  const { installThemeBundleFromUrl } = await getBundleLoader();
   const result = await installThemeBundleFromUrl(body.url);
 
   if (!result.success) {
-    return badRequest(`Theme installation failed: ${result.error}`);
+    return installFailure('Theme installation failed', result);
   }
 
-  // Hot-load the newly installed theme into the registry
-  const { themeRegistry } = await getThemeRegistry();
-  const bundles = await loadInstalledBundles();
-  const newBundle = bundles.find(b => b.manifest.id === result.themeId);
-  if (newBundle) {
-    themeRegistry.registerBundleTheme(newBundle);
-  }
+  await hotLoadInstalledTheme(result.themeId);
 
   return created({
     message: 'Theme installed successfully',
@@ -349,17 +362,10 @@ async function handleInstallFromRegistryAction(request: NextRequest) {
   const result = await installFromRegistry(body.themeId, body.registryUrl);
 
   if (!result.success) {
-    return badRequest(`Registry installation failed: ${result.error}`);
+    return installFailure('Registry installation failed', result);
   }
 
-  // Hot-load the newly installed theme into the registry
-  const { themeRegistry } = await getThemeRegistry();
-  const { loadInstalledBundles } = await getBundleLoader();
-  const bundles = await loadInstalledBundles();
-  const newBundle = bundles.find(b => b.manifest.id === result.themeId);
-  if (newBundle) {
-    themeRegistry.registerBundleTheme(newBundle);
-  }
+  await hotLoadInstalledTheme(result.themeId);
 
   return created({
     message: 'Theme installed from registry',

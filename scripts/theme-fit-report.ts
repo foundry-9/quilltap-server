@@ -10,7 +10,7 @@
  * Method.
  * - A theme's values are its resolved snapshot (__tests__/unit/lib/themes/
  *   fixtures/snapshots), light and dark. "Sets" means the theme declares the
- *   variable (audit CSV, docs/developer/features/calliope-live-audit-matrix.csv).
+ *   variable (audit CSV, docs/developer/features/complete/calliope-live-audit-matrix.csv).
  * - Each semantic token is anchored to the theme: read off the first
  *   component token whose registry formula can be inverted — `var(S)` gives S
  *   directly; `color-mix(in srgb, var(S) <p>, transparent)` gives S as that
@@ -75,7 +75,7 @@ function parseCsv(text: string): string[][] {
   }
   return rows;
 }
-const csv = parseCsv(readFileSync(path.join(ROOT, 'docs/developer/features/calliope-live-audit-matrix.csv'), 'utf8'));
+const csv = parseCsv(readFileSync(path.join(ROOT, 'docs/developer/features/complete/calliope-live-audit-matrix.csv'), 'utf8'));
 const header = csv[0];
 const setBy: Record<string, Set<string>> = Object.fromEntries(THEMES.map((t) => [t, new Set<string>()]));
 for (const row of csv.slice(1)) for (const t of THEMES) if (row[header.indexOf(t)]) setBy[t].add(row[0]);

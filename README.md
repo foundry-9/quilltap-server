@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.14.0--dev.4-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.14.0--dev.5-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
@@ -242,7 +242,8 @@ Quilltap is a single Next.js 16 application (App Router) serving both the UI and
 
 - [Development Guide](docs/developer/DEVELOPMENT.md) — local setup, testing, building
 - [API Reference](docs/developer/API.md)
-- Plugin guides: [Providers](docs/developer/PROVIDER_PLUGIN_DEVELOPMENT.md) · [Themes](docs/developer/THEME_PLUGIN_DEVELOPMENT.md) · [Templates](docs/developer/TEMPLATE_PLUGIN_DEVELOPMENT.md) · [Tools](docs/developer/TOOL_PLUGIN_DEVELOPMENT.md) · [Search](docs/developer/SEARCH_PLUGIN_DEVELOPMENT.md)
+- Theme guide: [THEME_DEVELOPMENT.md](docs/developer/THEME_DEVELOPMENT.md) (tokens: [THEME_TOKENS.md](docs/developer/THEME_TOKENS.md), hooks: [THEME_HOOKS.md](docs/developer/THEME_HOOKS.md))
+- Plugin guides: [Providers](docs/developer/PROVIDER_PLUGIN_DEVELOPMENT.md) · [Templates](docs/developer/TEMPLATE_PLUGIN_DEVELOPMENT.md) · [Tools](docs/developer/TOOL_PLUGIN_DEVELOPMENT.md) · [Search](docs/developer/SEARCH_PLUGIN_DEVELOPMENT.md)
 - [Prompt Architecture](docs/developer/PROMPT_ARCHITECTURE.md) · [Memory Management](docs/developer/features/complete/memory_management.md) · [Database Architecture](docs/developer/DATABASE_ABSTRACTION.md) · [Image Generation](docs/developer/IMAGE_GENERATION.md)
 - [Deployment Guide](docs/DEPLOYMENT.md) — production setup with SSL and reverse proxies
 - [Changelog](docs/CHANGELOG.md) · [Roadmap](docs/developer/features/ROADMAP.md)
@@ -258,6 +259,7 @@ Quilltap's file formats are described by JSON Schemas you can validate against b
 | [`qtap-custom-tool.schema.json`](public/schemas/qtap-custom-tool.schema.json) | A Pascal custom tool: a JSON file in a store's `Tools/` folder | Writing custom mechanics outside Pascal's Workbench (characters can fetch it with `edit_custom_tool`'s `schema` action) |
 | [`qtap-progression.schema.json`](public/schemas/qtap-progression.schema.json) | The `progressions` key in a character vault's `metadata.json` | Hand-editing a character's progressions |
 | [`qtap-theme.schema.json`](public/schemas/qtap-theme.schema.json) | `theme.json` in a `.qtap-theme` bundle | Building a theme bundle |
+| [`qtap-theme-tokens.schema.json`](public/schemas/qtap-theme-tokens.schema.json) | `tokens.json` in a `.qtap-theme` bundle | Building a theme bundle |
 | [`plugin-manifest.schema.json`](public/schemas/plugin-manifest.schema.json) | A plugin's `manifest.json` | Writing a provider, tool, template or search plugin |
 
 Contributions are welcome. Please open an issue to discuss major changes before submitting a PR — it is far better to align on direction before building the bridge, as anyone who has ever built a bridge in the wrong direction can attest.

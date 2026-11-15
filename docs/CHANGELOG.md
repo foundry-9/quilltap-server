@@ -4,6 +4,76 @@
 
 ### 4.14-dev
 
+#### Themes: tools and published format (Calliope Live, Spec C Stage 4)
+
+- Published JSON Schemas for both bundle documents, generated from the engine's Zod documents (`npm run generate:theme-schemas`): `public/schemas/qtap-theme.schema.json` (version 2 manifest) and the new `qtap-theme-tokens.schema.json`, which lists every registry token and choice. Bundles name them in `$schema`
+- Added `docs/developer/THEME_TOKENS.md`, generated from the token registry (`npm run generate:theme-tokens-doc`). `scripts/check-theme-references.ts` fails lint while it or the schemas are stale
+- `quilltap themes` validates, installs, updates and exports through the app's engine, bundled into `packages/quilltap/lib/theme-engine.generated.js` (`npm run build:cli-theme-engine`; lint checks it is current). Version 1 bundles are refused with the app's message. `validate` takes a bundle directory as well as a `.qtap-theme` file. `uninstall` and `export` refuse a theme id that is not a plain id. Removed `packages/quilltap/lib/theme-validation.js`
+- `validateThemeBundle` reports an unreadable archive as an error instead of throwing
+- create-quilltap-theme 3.0.0: scaffolds a version 2 bundle only (`theme.json`, `tokens.json`, `styles.css`, `README.md`) with `$schema` and `hooksVersion`; `--plugin` and the npm plugin templates are removed; unknown options are an error
+- Added `docs/developer/THEME_DEVELOPMENT.md`, the version 2 authoring guide; removed `THEME_PLUGIN_DEVELOPMENT.md`. Updated the README, DEVELOPMENT.md, CLI.md, the CLI README, `help/themes.md` and the hook reference's note on scoping
+- The theme menu's empty-state hint says "Install theme bundles", not "theme plugins"
+- Moved the Calliope Live audit, Specs A, B and C, the fit report and the differences file to `docs/developer/features/complete/`
+- Tests: CLI validate, install, export and uninstall against the bundled engine (bundled themes, v1 refusal, archive symlinks and escaping entries, icon overrides); the scaffolder's output validates with no warnings and names the current hook catalogue version
+
+#### Themes: version 1 removed (Calliope Live, Spec C Stage 3)
+
+- Version 2 is the only theme format loaded. A version 1 bundle found among the installed themes, or a theme a plugin declares, is recorded as refused (`lib/themes/refused.ts`) and never registered; nothing is deleted. The plugin itself still loads
+- Install (file, URL, registry) refuses a version 1 bundle before anything is written, with the same message. Registry entries that state an earlier `formatVersion` are not offered
+- The Appearance card lists refused themes ("Garments Left at the Door") with the message, a link to the Themes help page, and Uninstall for bundles. `DELETE /api/v1/themes/[id]` uninstalls a refused bundle; a plugin's refused theme is a 400
+- If the stored theme is refused or missing, the app wears the default theme and shows one notice
+- `GET /api/v1/themes` returns `refused` and `stats.refused`; the Almanack reports the refused count in place of "With CSS Overrides"
+- The default theme injects no CSS; `_theme-defaults.css` and `_variables.css` carry its values
+- Removed: `ThemeTokensSchema`, `DEFAULT_THEME_TOKENS`, `themeTokensToCSS`, `mergeThemeTokens`, the version 1 font-face and icon-override generators, every version 1 branch, the plugin theme registration code, and `scripts/convert-theme-v1.ts`, `convert-theme-to-module.ts`, `convert-plugin-themes-to-bundles.sh`. Version suffixes dropped from names (`exportThemeAsBundle`, `theme-bundle.ts`)
+- Removed the 12 internal registry tokens nothing read: `--qt-auth-page-bg`, `--qt-footer-bg`, `--qt-input-placeholder`, `--qt-sidebar-fg`, `--qt-sidebar-muted`, `--qt-tab-gap`, `--qt-left-sidebar-{min-width,max-width,footer-height,item-gap,overlay-bg,overlay-z}`. Density now covers 25 sizing tokens (three of the 28 were among them)
+- `scripts/check-theme-hooks.ts` fails on any off-catalogue selector in a bundled theme; loading an installed theme logs the same findings as warnings
+- Bundle extraction and asset serving share the app's path rules; the themes index is rebuilt from the installed bundles when it is unreadable
+- Re-recorded the theme snapshot fixtures for the removed tokens; no other resolved value changed
+- Tests: refusal at install, at load and as a plugin theme; refused themes give the injector nothing; the asset route serves only the served set
+- create-quilltap-theme: templates drop the removed tokens. theme-storybook: regenerated CSS
+
+#### Themes: bundled themes refined (Calliope Live, Spec C Stage 2)
+
+- The six bundled themes use plain, typed primitives (`brass`, `walnut`, `text-muted`, `red-deep`) with a `dark` value where the modes differ; recurring literal colours are primitives too. earl-grey and rains share primitive names
+- Semantic colour families are anchored to the primitives, and overrides that reproduce them are gone. A dropped override whose value differed by ΔE ≤ 0.02 (OKLab) is listed in the differences file with its ΔE
+- Hand-written rules replaced by tokens the app already reads: colour scheme, text selection, scrollbars, focus ring, primary button, badge and alert colours, radii, heading font and letter-spacing, footer link, input focus border. madmans-box's homepage glow is `--qt-page-background-image`
+- New tokens: `--qt-page-background-texture` and `--qt-page-background-texture-opacity` (a tiling texture over the page background, hidden with it under a story background); `--qt-thinking-duration` and `--qt-thinking-origin`. `--qt-scrollbar-width` defaults to `thin`, which the default theme already rendered
+- Smoothed text and smooth scrolling apply to every theme from `_base.css`
+- The heading tokens style `.qt-page-title`, `.qt-section-title`, `.qt-homepage-section-title` and `.qt-text-section`. No change in the default theme
+- Removed the themes' dead selectors (classes no markup uses), reduced-motion resets, `*` transitions and attribute-substring stand-ins; what remains targets catalogued hooks only. `scripts/check-theme-hooks.ts` reports all six clean
+- Catalogued as hooks: `qt-text-brand`, `qt-font-brand`, `qt-spinner`, `qt-thinking-indicator`, `qt-diagram`, the six category badges, `qt-empty-state-title`, `qt-wikilink` (state `qt-wikilink-broken`), `qt-file-preview-panel`, `qt-participant-turn-dot`
+- Decision 1: earl-grey and rains set `--theme-font-sans` / `-serif` / `-mono` to the stacks they always named, so earl-grey renders in Rethink Sans and rains' code in Fira Code (rains' chat user font was already Nunito Sans)
+- New token `--qt-body-font-weight` (root font-weight, optional); rains sets 300, as its version 1 root rule did
+- The root `scrollbar-color` falls back to a transparent track when a theme sets a thumb and no track; earl-grey and rains had dropped to the browser's scrollbar
+- art-deco and great-estate give tabs (and the button inside a workspace tab), the sidebar items and profile, the settings rail, collapsible card headers and chips the tracked capitals their version 1 bare `button` rule gave; art-deco, great-estate and madmans-box set card and dialog titles in the heading face, and draw the character header's rule in the card border colour, as their `[class*="card"]` rule did
+- art-deco, great-estate and madmans-box scrollbars take the theme's colours in Chromium too; version 1 coloured them only through `::-webkit-scrollbar`, which Chromium ignores once `scrollbar-width` is set
+- Custom CSS before → after (bytes): art-deco 3063 → 1261, earl-grey 6438 → 1537, great-estate 4040 → 1732, madmans-box 4608 → 2407, old-school 1462 → none, rains 7327 → 2037
+- Re-recorded the theme snapshot fixtures; every rendered change is in `calliope-live-spec-c-differences.md`
+- theme-storybook: regenerated CSS
+
+#### Themes: bundled themes converted to version 2 (Calliope Live, Spec C Stage 1)
+
+- The six bundled themes (art-deco, earl-grey, great-estate, madmans-box, old-school, rains) are now version 2 bundles, version 2.0.0, written by `scripts/convert-theme-v1.ts` with no hand edits. Each bundle has a `fonts/OFL.txt` with its families' copyright lines as the font files state them (earl-grey's previous file named the wrong holder and year; rains' lacked Nunito Sans)
+- Re-recorded the theme snapshot fixtures. No resolved value changed: private names now appear as `--p-*`, names nothing reads are gone, and some values are re-spelt (`hsl(… / a)` as the equal `color-mix(…, transparent)`), including in the default theme, whose fixtures predated that change in the app CSS
+- The theme picker's cards show the font a theme's headings actually render in (its resolved `--qt-heading-font`), not its `fontSerif` token; swatch colours are unchanged
+- The version 1 loader test uses its own fixture, `__tests__/fixtures/themes/v1-sample/`, now that no bundled theme is version 1
+- old-school now uses the app's keyboard focus ring (2px solid in `--qt-focus-ring-color`, 2px offset) instead of the browser's default; version 2 turns `features.focusRing` on and old-school has no focus rule of its own. The other five keep their own rules
+- The theme preview dialog renders from the compiled theme, so it now matches the live app. One known gap: rains' sample shows 8px cards and 12px badges (the app shows 12px and 24px), because its radii are set as root overrides, which the preview's nested container re-applies from `--theme-radius-*`
+- Bundle asset URLs carry `?v=<theme version>`
+- `scripts/convert-theme-v1.ts` takes `--from <dir>` to read version 1 bundles from somewhere other than `themes/bundled`
+
+#### Themes: migration baseline and tools (Calliope Live, Spec C Stage 0)
+
+- Added the theme probe, `scripts/theme-probe/`: a dependency-free page function that records computed styles (colour, background, border, font, padding, gap, shadow, outline, opacity, transition, animation, filters, scrollbar, `color-scheme`, plus `::before`, `::after`, `::selection`) for `html`, `body`, bare `h1`–`h3` and the first visible element of every catalogued hook, variant value and state, with match counts; and a Playwright driver (`run.ts run` / `compare`) that runs it over seven pages per theme and mode and saves screenshots. Playwright is not a repo dependency; results go to the git-ignored `.theme-probe/`
+- Recorded the version 1 baseline on V4test (7 themes × 2 modes × 7 pages, outside the tree). Re-probing the default theme afterwards differs on none of its 14 pages
+- Added `scripts/convert-theme-v1.ts` (removed again in Stage 3): converts a bundled version 1 theme to version 2 from what it resolves to, with private names as primitives, unread names dropped and listed, rules moved to custom CSS without the theme id, density set to `comfortable`, version 2.0.0 and `hooksVersion`. It validates its output with the engine and compares the root cascade with the version 1 theme's. All six bundled themes convert with no changed value (output not yet written into `themes/bundled/`)
+- Font licences are read from each font file's name table: every font in the six bundles is SIL OFL 1.1. The converter writes one `fonts/OFL.txt` per bundle with each family's copyright line as the file states it
+- Version 2 manifests accept `hooksVersion` (integer, optional). A theme behind the hook catalogue gets a load-time warning naming any removed hook its custom CSS still uses (`removedHooksUsed` in `lib/themes/hooks/lint.ts`)
+- `--qt-button-transition`, `--qt-card-transition` and `--qt-app-header-blur` no longer change with `density`; it keeps the 28 sizing tokens. No version 1 theme or the default theme is affected
+- The snapshot harness applies a version 2 theme's choice and feature attributes to `<html>` (`v2RootAttributes`), as `applyThemeToDom` does
+- Added `docs/developer/features/calliope-live-spec-c-differences.md`, empty until a stage changes how a theme renders
+- theme-storybook 1.0.121: regenerated CSS
+
 #### Dependencies: npm update across root, packages and plugins
 
 - Ran `npm update -S` in the root project, every package and every plugin. Notable bumps: `better-sqlite3-multiple-ciphers` 13.1.1, `openai` 7.57, `@anthropic-ai/sdk` 1.8, `@openrouter/sdk` 1.5.103, `eslint` 10.15, `storybook` 10.6.7, `ws` 8.23; patch bumps to `tar`, `postcss`, `dompurify`, `croner`, `@napi-rs/canvas`, `@testing-library/user-event`
@@ -72,3 +142,4 @@
 - Added pre-spec for Calliope Live, an in-app theme editor and theme overhaul for Quilltap
 - Added the Phase 0a audit of the theme system (`calliope-live-audit.md`, with the variable-by-theme table as a CSV): 505 component variables, how each bundled theme uses them, the hand-written rules, assets, and structural hooks
 - Added Spec A (token registry and bundle format v2) and Spec B (structural hook catalogue), and linked all three from the proposal
+- Added Spec C (migrate the six bundled themes to version 2, retire version 1, move the CLI, scaffolder and JSON Schema to the new format)

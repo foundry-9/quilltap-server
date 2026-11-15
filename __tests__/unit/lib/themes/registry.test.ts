@@ -2,14 +2,12 @@
  * @jest-environment node
  *
  * The theme token registry's invariants (Calliope Live, Spec A): unique
- * names, resolvable references, no cycles, tiers respected, the default
- * theme's injected tokens equal to it, and the generated sheets in step.
+ * names, resolvable references, no cycles, tiers respected, and the
+ * generated sheets in step.
  */
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens';
-import { themeTokensToCSS } from '@/lib/themes/utils';
 import {
   GENERATED_THEME_SHEETS,
   THEME_TOKENS,
@@ -44,16 +42,32 @@ function values(token: TokenDef): string[] {
   return token.defaultDark === undefined ? [token.default] : [token.default, token.defaultDark];
 }
 
+/** The internal tokens nothing read, removed once no theme set them (Spec C 3.1). */
+const RETIRED_UNREAD_TOKENS = [
+  '--qt-auth-page-bg',
+  '--qt-footer-bg',
+  '--qt-input-placeholder',
+  '--qt-left-sidebar-footer-height',
+  '--qt-left-sidebar-item-gap',
+  '--qt-left-sidebar-max-width',
+  '--qt-left-sidebar-min-width',
+  '--qt-left-sidebar-overlay-bg',
+  '--qt-left-sidebar-overlay-z',
+  '--qt-sidebar-fg',
+  '--qt-sidebar-muted',
+  '--qt-tab-gap',
+];
+
 describe('theme token registry', () => {
   it('holds every variable _variables.css declared when the registry was built (audit CSV)', () => {
-    const csv = readFileSync(path.join(REPO_ROOT, 'docs/developer/features/calliope-live-audit-matrix.csv'), 'utf8').trim().split('\n');
+    const csv = readFileSync(path.join(REPO_ROOT, 'docs/developer/features/complete/calliope-live-audit-matrix.csv'), 'utf8').trim().split('\n');
     const audited = csv
       .slice(1)
       .map((line) => line.split(','))
       .filter((cells) => ['most', 'some', 'few', 'never'].includes(cells[2]))
       .map((cells) => cells[0]);
     expect(audited).toHaveLength(505);
-    expect(audited.filter((name) => !isThemeToken(name))).toEqual([]);
+    expect(audited.filter((name) => !isThemeToken(name)).sort()).toEqual(RETIRED_UNREAD_TOKENS);
   });
 
   it('has unique token names and group ids', () => {
@@ -151,19 +165,6 @@ describe('theme token registry', () => {
     for (const token of THEME_TOKENS.filter((t) => t.visibility === 'internal')) expect([token.name, token.description]).toEqual([token.name, expect.any(String)]);
   });
 
-  it('is what the default theme injects', () => {
-    const css = themeTokensToCSS(DEFAULT_THEME_TOKENS);
-    const blocks = [...css.matchAll(/(:root|\.dark) \{([\s\S]*?)\n\}/g)];
-    for (const [, selector, body] of blocks) {
-      for (const m of body.matchAll(/(--[\w-]+): ([^;]+);/g)) {
-        const token = getThemeToken(m[1]);
-        expect(token).toBeDefined();
-        const expected = selector === '.dark' && token!.defaultDark !== undefined ? token!.defaultDark : token!.default;
-        expect([m[1], m[2]]).toEqual([m[1], expected]);
-      }
-    }
-  });
-
   it('gives choice values only for declared choices and their non-default options', () => {
     for (const token of THEME_TOKENS) {
       for (const [name, options] of Object.entries(token.byChoice ?? {})) {
@@ -175,7 +176,12 @@ describe('theme token registry', () => {
         }
       }
     }
-    expect(THEME_TOKENS.filter((t) => t.byChoice?.density?.comfortable !== undefined)).toHaveLength(31);
+    // Density is the sizing tokens: 28 at Spec C decision 7, less the three
+    // unread ones retired in Stage 3; transitions and the header blur left it.
+    expect(THEME_TOKENS.filter((t) => t.byChoice?.density?.comfortable !== undefined)).toHaveLength(25);
+    for (const name of ['--qt-button-transition', '--qt-card-transition', '--qt-app-header-blur']) {
+      expect([name, THEME_TOKENS.find((t) => t.name === name)?.byChoice]).toEqual([name, undefined]);
+    }
   });
 
   it('never declares an optional hook', () => {

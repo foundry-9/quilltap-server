@@ -7,19 +7,23 @@ not a settled design.
 
 **Follow-on documents:**
 
-- [calliope-live-audit.md](calliope-live-audit.md) — the Phase 0a audit
-  (done), with [calliope-live-audit-matrix.csv](calliope-live-audit-matrix.csv).
+- [calliope-live-audit.md](complete/calliope-live-audit.md) — the Phase 0a audit
+  (done), with [calliope-live-audit-matrix.csv](complete/calliope-live-audit-matrix.csv).
   Where its measurements differ from the survey figures below, the audit is
   right.
-- [calliope-live-spec-a-token-registry.md](calliope-live-spec-a-token-registry.md)
+- [calliope-live-spec-a-token-registry.md](complete/calliope-live-spec-a-token-registry.md)
   — Phase 0b: token registry and bundle format v2 (implemented 4.14-dev).
   Its fit report is
-  [calliope-live-spec-a-fit.md](calliope-live-spec-a-fit.md).
-- [calliope-live-spec-b-hook-catalogue.md](calliope-live-spec-b-hook-catalogue.md)
+  [calliope-live-spec-a-fit.md](complete/calliope-live-spec-a-fit.md).
+- [calliope-live-spec-b-hook-catalogue.md](complete/calliope-live-spec-b-hook-catalogue.md)
   — Phase 0b′: structural hook catalogue (implemented 4.14-dev; reference
   [THEME_HOOKS.md](../THEME_HOOKS.md), generated from `lib/themes/hooks/`).
-- Spec C (Phase 0c, migration) is not written; it waits on Spec A's fit report
-  and Spec B's selector report.
+- [calliope-live-spec-c-migration.md](complete/calliope-live-spec-c-migration.md)
+  — Phase 0c: migrate the six bundled themes to version 2 and retire
+  version 1 (implemented 4.14-dev; authoring guide
+  [THEME_DEVELOPMENT.md](../THEME_DEVELOPMENT.md), token reference
+  [THEME_TOKENS.md](../THEME_TOKENS.md)). Its rendered differences are in
+  [calliope-live-spec-c-differences.md](complete/calliope-live-spec-c-differences.md).
 
 **Scope:** `quilltap-server` (v4) only. Porting to v5 is a separate concern and
 does not shape decisions here.
@@ -48,12 +52,13 @@ result. That is part of the project, not a side effect.
 | What to keep from Storybook? | The **specimen-sheet idea**. | Build specimens as in-app components; Storybook may consume the same components so there is one copy of the markup. |
 | Where does the logic live? | A **framework-free engine** in `lib/themes/`, with the editor UI as a thin layer. | The `quilltap themes` CLI, the bundle loader and the editor then share one source of truth for model, validation, CSS emission and packing. |
 
-## What the theme system looks like today
+## What the theme system looked like before Calliope Live
 
-Measured by a quick survey, not a full read. Counts are approximate (line and
+Measured by a quick survey, not a full read, before Spec A. Spec C Stage 3
+retired the version 1 format described here; the names below are historical. Counts are approximate (line and
 pattern counts via `grep`/`wc`).
 
-**Declared tokens** — `ThemeTokensSchema` in `lib/themes/types.ts`:
+**Declared tokens** — the version 1 token schema in `lib/themes/types.ts`:
 
 - `colors.light` / `colors.dark`: 27 colours each (19 required, 8 optional).
 - `typography`: three font stacks, sizes, line heights, weights, letter spacing.
@@ -88,7 +93,7 @@ graphic editor tractable, and it is where the hierarchy work lies.
 
 **Existing pieces to build on**
 
-- `lib/themes/types.ts` — `ThemeTokensSchema`, `QtapThemeManifestSchema`
+- `lib/themes/types.ts` — the version 1 token schema, `QtapThemeManifestSchema`
   (already has `extendsTheme` and a `subsystems` record), `FontDefinitionSchema`.
 - `lib/themes/theme-registry.ts`, `bundle-loader.ts`, `default-tokens.ts`,
   `utils.ts`.
@@ -153,7 +158,7 @@ keeps an installed theme safe.
 Three tiers, each defaulting to the one above:
 
 1. **Primitive** — the theme's raw palette, type families, scales.
-2. **Semantic** — today's `ThemeTokensSchema` roles (background, primary,
+2. **Semantic** — the version 1 token schema's roles (background, primary,
    border, radius, shadow, transition…).
 3. **Component** — today's `--qt-*` variables (badge, chat, terminal, button…),
    each with a declared default expressed in terms of tier 2.

@@ -63,16 +63,6 @@ export const INPUT_TOKENS: readonly TokenDef[] = [
     visibility: 'advanced',
   },
   {
-    name: "--qt-input-placeholder",
-    tier: 'component',
-    type: 'color',
-    group: 'input',
-    label: "Input placeholder",
-    description: "Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C.",
-    default: "var(--color-muted-foreground)",
-    visibility: 'internal',
-  },
-  {
     name: "--qt-input-focus-ring",
     tier: 'component',
     type: 'color',

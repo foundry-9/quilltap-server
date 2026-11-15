@@ -5,8 +5,7 @@
  * theme's primitives) with its value as written and where that value came
  * from — what an editor needs to show provenance. `emitThemeCss` writes only
  * what the theme itself sets, under the selectors that outrank the generated
- * registry defaults. Pure: no file access; version 2 never goes through
- * `themeTokensToCSS`.
+ * registry defaults. Pure: no file access.
  *
  * @module themes/engine/resolve
  */

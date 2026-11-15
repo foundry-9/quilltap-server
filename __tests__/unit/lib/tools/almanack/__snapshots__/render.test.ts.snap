@@ -145,7 +145,7 @@ Server names (URLs and credentials are deliberately omitted):
 - **Colour Mode**: dark
 - **Total Themes**: 6
 - **With Dark Mode**: 6
-- **With CSS Overrides**: 4
+- **Refused (earlier format)**: 0
 - **Shipping Icon Overrides**: 1
 - **Total Icon Overrides**: 23
 - **Overrides naming an unknown icon**: 1 (these take effect on nothing — likely typos in a theme manifest)

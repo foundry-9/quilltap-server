@@ -2,14 +2,14 @@
 
 <!-- GENERATED FILE — DO NOT EDIT BY HAND. Source: lib/themes/hooks/. Regenerate with `npm run generate:theme-hooks-doc`. -->
 
-The structural hooks a theme's custom CSS may rely on — catalogue version **1**, 156 hooks. Anything not listed here is an implementation detail and may change without notice. The catalogue lives in `lib/themes/hooks/`; `npm run lint` fails when the markup and the catalogue drift apart.
+The structural hooks a theme's custom CSS may rely on — catalogue version **1**, 174 hooks. Anything not listed here is an implementation detail and may change without notice. The catalogue lives in `lib/themes/hooks/`; `npm run lint` fails when the markup and the catalogue drift apart.
 
 ## Conventions
 
 - **Element identity is a `qt-*` class.** One class names one kind of element.
 - **Which one of a set is a data attribute named for the set** — `data-section`, `data-nav`, `data-role`, `data-staff`, `data-tab-kind`, `data-tool`, `data-group`, `data-card`, `data-pane`. Values are stable ids, never display text and never instance ids: no character, chat or message id is exposed for styling.
 - **State is the ARIA attribute when one says it** (`aria-current`, `aria-selected`, `aria-expanded`, `aria-pressed`, `aria-busy`); otherwise a modifier class (`qt-tab-active`, `qt-chat-message-silent`).
-- **The root element** (`<html>`) carries `data-theme` and `data-color-mode` and `.light` / `.dark`. Scope every rule to `[data-theme="<your id>"]`.
+- **The root element** (`<html>`) carries `data-theme` and `data-color-mode` and `.light` / `.dark`. Custom CSS is written without the theme id: Quilltap scopes every rule to `[data-theme="<id>"]` when it loads the theme.
 - **Not hooks:** bare elements (`h1`, `button`), non-`qt` classes (Tailwind utilities), class-substring selectors (`[class*="card"]`), and inline-style matches. They work today and break silently.
 
 ## Versioning
@@ -117,6 +117,7 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-chat-toolbar` | Salon toolbar |  |  |  |
 | `.qt-chat-toolbar-button` | Salon toolbar button | `.qt-chat-toolbar` |  | `.qt-chat-toolbar-button-active` — On |
 | `.qt-participant-card` | Participant card. One seat in the participant sidebar. |  |  | `.qt-participant-card-active` — Their turn<br>`.qt-participant-card-inactive` — Absent<br>`.qt-participant-card-silent` — Silent<br>`.qt-participant-card-dangerous` — The chat is Unmoderated |
+| `.qt-participant-turn-dot` | Turn dot. The small mark beside the seat whose turn it is. |  |  |  |
 | `.qt-participant-card-name` | Participant name | `.qt-participant-card` |  |  |
 
 ## Character page
@@ -201,6 +202,12 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-badge-info` | Info badge |  |  |  |
 | `.qt-badge-destructive` | Destructive badge |  |  |  |
 | `.qt-badge-outline` | Outline badge |  |  |  |
+| `.qt-badge-character` | Character badge |  |  |  |
+| `.qt-badge-user-character` | Operator-character badge |  |  |  |
+| `.qt-badge-chat` | Chat badge |  |  |  |
+| `.qt-badge-tag` | Tag badge |  |  |  |
+| `.qt-badge-memory` | Memory badge |  |  |  |
+| `.qt-badge-project` | Project badge |  |  |  |
 | `.qt-alert` | Alert |  |  |  |
 | `.qt-alert-info` | Info alert |  |  |  |
 | `.qt-alert-success` | Success alert |  |  |  |
@@ -210,6 +217,17 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-heading-2` | Heading, level 2 size |  |  |  |
 | `.qt-heading-3` | Heading, level 3 size |  |  |  |
 | `.qt-heading-4` | Heading, level 4 size |  |  |  |
+| `.qt-page-title` | Page title. The large title at the head of a page. |  |  |  |
+| `.qt-section-title` | Section title. A heading over a card, panel or settings group. |  |  |  |
+| `.qt-text-section` | Section heading text. A smaller section heading inside a form or panel. |  |  |  |
+| `.qt-text-brand` | Brand-coloured text. Text in the brand colour: links, the active item, small accents. |  |  |  |
+| `.qt-font-brand` | Brand name. The Quilltap name, set in the brand font. |  |  |  |
+| `.qt-spinner` | Spinner. A loading spinner; `qt-spinner-sm` beside it for the small one. |  |  |  |
+| `.qt-thinking-indicator` | Thinking mark. The mark shown while a model is thinking; it animates by --qt-thinking-duration and --qt-thinking-origin. |  |  |  |
+| `.qt-empty-state-title` | Empty-state title. The heading of the notice shown where a list has nothing in it. |  |  |  |
+| `.qt-wikilink` | Wiki link. A [[link]] between documents in rendered text. |  |  | `.qt-wikilink-broken` — Points at nothing |
+| `.qt-file-preview-panel` | File preview panel. The panel a text file is previewed on. |  |  |  |
+| `.qt-diagram` | Diagram. A rendered diagram in a message or document, with its toolbar. |  |  |  |
 | `.qt-avatar-image` | Avatar picture box. The framed box holding an avatar picture or its initial. |  |  |  |
 | `.qt-avatar-labels` | Avatar caption. Name and title beneath an avatar. |  |  |  |
 | `.qt-avatar-name` | Avatar name | `.qt-avatar-labels` |  |  |

@@ -1,39 +1,30 @@
 /**
  * useThemePreview Hook
  *
- * Hook for lazy loading theme tokens from the API when a preview is opened.
- * Caches responses to avoid re-fetching the same theme multiple times.
+ * Lazily loads a theme's compiled CSS, choices, icon overrides and preview
+ * images when a preview is opened. Caches responses so the same theme is not
+ * fetched twice.
  *
  * @module components/settings/appearance/hooks/useThemePreview
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import type { ThemeTokens, ThemePreviewImage } from '@/lib/themes/types'
-import type { ThemeFont, ThemeTokensResponse as ApiThemeTokensResponse } from '@/components/providers/theme/types'
+import { useState, useCallback, useRef } from 'react'
+import type { ThemePreviewImage } from '@/lib/themes/types'
+import type { ThemeTokensResponse as ApiThemeTokensResponse } from '@/components/providers/theme/types'
 
-/**
- * Response from the theme tokens API (either format), plus the images list.
- */
+/** Response from the theme tokens API, plus the images list. */
 type ThemeTokensResponse = ApiThemeTokensResponse & { images?: ThemePreviewImage[] }
 
-/** A version 2 theme's compiled CSS and choices, for ThemePreviewPanelV2. */
-export interface ThemePreviewV2 {
+/** A theme's compiled CSS and choices, for ThemePreviewPanel. */
+export interface ThemePreviewCss {
   css: string
   choices: Record<string, string>
 }
 
-/**
- * Return value from the useThemePreview hook
- */
+/** Return value from the useThemePreview hook */
 export interface UseThemePreviewResult {
-  /** The loaded theme tokens (version 1 themes) */
-  tokens: ThemeTokens | null
-  /** The compiled theme (version 2 themes) */
-  v2: ThemePreviewV2 | null
-  /** Custom fonts for the theme */
-  fonts: ThemeFont[]
-  /** CSS overrides from the theme */
-  cssOverrides: string | null
+  /** The compiled theme (null until loaded, and for the default theme) */
+  preview: ThemePreviewCss | null
   /** Icon overrides for the theme */
   icons: { name: string; src: string }[]
   /** Preview images for the theme */
@@ -42,26 +33,22 @@ export interface UseThemePreviewResult {
   isLoading: boolean
   /** Any error that occurred during loading */
   error: string | null
-  /** Fetch the theme tokens (call when preview is opened) */
+  /** Fetch the theme (call when preview is opened) */
   fetchTokens: () => Promise<void>
-  /** Clear the cached tokens */
+  /** Clear the cached theme */
   clearCache: () => void
 }
 
-// Module-level cache for theme tokens
+// Module-level cache for theme responses
 const tokensCache = new Map<string, ThemeTokensResponse>()
 
 /**
- * Hook for lazy loading theme tokens for preview
+ * Hook for lazy loading a theme for preview
  *
- * @param themeId - The theme ID to load tokens for (null for default theme)
- * @returns Object with tokens, fonts, cssOverrides, loading state, error, and fetch function
+ * @param themeId - The theme ID to load (null for the default theme, which needs no fetch)
  */
 export function useThemePreview(themeId: string | null): UseThemePreviewResult {
-  const [tokens, setTokens] = useState<ThemeTokens | null>(null)
-  const [v2, setV2] = useState<ThemePreviewV2 | null>(null)
-  const [fonts, setFonts] = useState<ThemeFont[]>([])
-  const [cssOverrides, setCssOverrides] = useState<string | null>(null)
+  const [preview, setPreview] = useState<ThemePreviewCss | null>(null)
   const [icons, setIcons] = useState<{ name: string; src: string }[]>([])
   const [images, setImages] = useState<ThemePreviewImage[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -71,41 +58,29 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
   const fetchIdRef = useRef(0)
 
   const applyResponse = useCallback((data: ThemeTokensResponse) => {
-    if (data.formatVersion === 2) {
-      setTokens(null)
-      setV2({ css: data.css, choices: data.choices || {} })
-      setCssOverrides(null)
-    } else {
-      setTokens(data.tokens)
-      setV2(null)
-      setCssOverrides(data.cssOverrides || null)
-    }
-    setFonts(data.fonts || [])
+    setPreview({ css: data.css, choices: data.choices || {} })
     setIcons(data.icons || [])
     setImages(data.images || [])
   }, [])
 
   const fetchTokens = useCallback(async () => {
-    // For default theme, we don't need to fetch - the tokens will be provided directly
     if (themeId === null) {
       return
     }
 
-    // Check cache first
     const cached = tokensCache.get(themeId)
     if (cached) {
       applyResponse(cached)
       return
     }
 
-    // Increment fetch ID to track this specific fetch
     const currentFetchId = ++fetchIdRef.current
 
     setIsLoading(true)
     setError(null)
 
     try {
-      const response = await fetch(`/api/v1/themes/${themeId}?action=tokens`)
+      const response = await fetch(`/api/v1/themes/${encodeURIComponent(themeId)}?action=tokens`)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -113,17 +88,14 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
       }
 
       const data: ThemeTokensResponse = await response.json()
-
-      // Cache the response
       tokensCache.set(themeId, data)
 
-      // Only update state if this is still the most recent fetch
       if (currentFetchId === fetchIdRef.current) {
         applyResponse(data)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load theme'
-      console.error('useThemePreview: Failed to fetch tokens', { themeId, error: message })
+      console.error('useThemePreview: Failed to fetch theme', { themeId, error: message })
       if (currentFetchId === fetchIdRef.current) {
         setError(message)
       }
@@ -137,25 +109,11 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
   const clearCache = useCallback(() => {
     if (themeId) {
       tokensCache.delete(themeId)
-      setTokens(null)
-      setV2(null)
-      setFonts([])
-      setCssOverrides(null)
+      setPreview(null)
       setIcons([])
       setImages([])
     }
   }, [themeId])
 
-  return {
-    tokens,
-    v2,
-    fonts,
-    cssOverrides,
-    icons,
-    images,
-    isLoading,
-    error,
-    fetchTokens,
-    clearCache,
-  }
+  return { preview, icons, images, isLoading, error, fetchTokens, clearCache }
 }

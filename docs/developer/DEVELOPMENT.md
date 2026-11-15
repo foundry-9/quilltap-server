@@ -365,29 +365,28 @@ See [plugins/README.md](plugins/README.md) for the plugin developer guide.
 
 ### Theme Development
 
-Themes are now distributed as `.qtap-theme` bundles — declarative zip archives containing JSON tokens, CSS, fonts, and images. No npm, esbuild, or TypeScript required.
+Themes are version 2 `.qtap-theme` bundles — a manifest, a tokens document, optional custom CSS, fonts, icons and images, zipped. No npm, esbuild, or TypeScript. Version 1 bundles and npm theme plugins are refused.
 
 ```bash
-# Create a new theme (bundle format, recommended)
+# Scaffold a new theme bundle
 npx create-quilltap-theme my-theme
-
-# Create a legacy npm plugin theme (deprecated)
-npx create-quilltap-theme my-theme --plugin
 ```
 
 Manage themes via CLI:
 
 ```bash
-npx quilltap themes list              # List all installed themes
-npx quilltap themes validate my.qtap-theme  # Validate a bundle
+npx quilltap themes list                    # List all installed themes
+npx quilltap themes validate ./my-theme     # Validate a bundle directory or .qtap-theme file
 npx quilltap themes install my.qtap-theme   # Install a bundle
 npx quilltap themes export earl-grey        # Export any theme as a bundle
 npx quilltap themes search "dark"           # Search registries
 ```
 
+The CLI validates with the app's own engine (`packages/quilltap/lib/theme-engine.generated.js`, rebuilt by `npm run build:cli-theme-engine`; lint fails when it is stale).
+
 Bundled themes ship in `themes/bundled/`. User-installed themes go to `<dataDir>/themes/<themeId>/`.
 
-See [THEME_PLUGIN_DEVELOPMENT.md](THEME_PLUGIN_DEVELOPMENT.md) for the legacy plugin format guide.
+See [THEME_DEVELOPMENT.md](THEME_DEVELOPMENT.md) for the authoring guide, [THEME_TOKENS.md](THEME_TOKENS.md) for every token and [THEME_HOOKS.md](THEME_HOOKS.md) for every hook.
 
 ## Logging
 

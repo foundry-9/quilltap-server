@@ -4,15 +4,15 @@
  * Theme Provider Component
  *
  * React context provider for the Quilltap theming system.
- * Manages theme selection, color mode preferences, and applies
- * theme tokens as CSS variables.
+ * Manages theme selection and color mode preferences, and injects the active
+ * theme's CSS (compiled server-side; the default theme injects none).
  *
  * Features:
- * - Theme selection (default or plugin themes)
+ * - Theme selection (default or a bundle theme)
  * - Color mode (light/dark/system)
  * - System preference detection
  * - Persistent preferences via API
- * - CSS variable injection
+ * - A one-time notice when the preferred theme can no longer be worn
  *
  * @module providers/theme/ThemeProvider
  */
@@ -23,11 +23,14 @@ import {
   useState,
   useCallback,
   useMemo,
+  useRef,
 } from 'react';
 import { useSession } from '@/components/providers/session-provider';
 import { ThemeStyleInjector } from '@/components/providers/theme-style-injector';
-import type { ThemeContextValue, ThemeProviderProps, ThemeFont, ThemeIcon, ThemeSummary, SubsystemOverride } from './types';
+import type { ThemeContextValue, ThemeProviderProps, ThemeSummary, SubsystemOverride } from './types';
 import type { ColorMode } from '@/lib/themes/types';
+import type { RefusedTheme } from '@/lib/themes/refused';
+import { showWarningToast } from '@/lib/toast';
 import {
   resolveColorMode,
   applyThemeToDom,
@@ -38,8 +41,36 @@ import {
   fetchAvailableThemes,
   fetchThemePreference,
   saveThemePreference,
-  getDefaultTokens,
 } from './theme-utils';
+
+/** The notice shown when the preferred theme is not registered. */
+function fallbackNotice(themeId: string, refused: RefusedTheme | undefined): string {
+  if (refused) return `${refused.message} Quilltap has returned to its Default attire for the present.`;
+  return `The theme “${themeId}” could not be found in the wardrobe, so Quilltap has returned to its Default attire for the present.`;
+}
+
+const FALLBACK_NOTICE_KEY = 'quilltap.themeFallbackNoticed';
+
+/**
+ * Say once (per browser, per theme id) that the preferred theme could not be
+ * worn. Storage may be unavailable; then the notice simply shows each load.
+ */
+function noticeFallbackOnce(themeId: string, refused: RefusedTheme | undefined): void {
+  let seen: string[] = [];
+  try {
+    seen = JSON.parse(window.localStorage.getItem(FALLBACK_NOTICE_KEY) || '[]');
+    if (!Array.isArray(seen)) seen = [];
+  } catch {
+    seen = [];
+  }
+  if (seen.includes(themeId)) return;
+  showWarningToast(fallbackNotice(themeId, refused), 10000);
+  try {
+    window.localStorage.setItem(FALLBACK_NOTICE_KEY, JSON.stringify([...seen, themeId]));
+  } catch {
+    // Storage unavailable: the notice shows again next time.
+  }
+}
 
 /**
  * Theme context - exported for useTheme hook
@@ -59,8 +90,6 @@ export const ThemeContext = createContext<ThemeContextValue | null>(null);
 export function ThemeProvider({
   children,
   initialPreference,
-  initialTokens,
-  initialCssOverrides,
 }: ThemeProviderProps) {
   const { status } = useSession();
 
@@ -75,13 +104,20 @@ export function ThemeProvider({
     initialPreference?.colorMode ?? 'system'
   );
   const [resolvedColorMode, setResolvedColorMode] = useState<'light' | 'dark'>('light');
-  const [tokens, setTokens] = useState(initialTokens ?? getDefaultTokens());
   const [availableThemes, setAvailableThemes] = useState<ThemeSummary[]>([]);
-  const [themeFonts, setThemeFonts] = useState<ThemeFont[]>([]);
-  const [themeIcons, setThemeIcons] = useState<ThemeIcon[]>([]);
-  const [cssOverrides, setCssOverrides] = useState<string | undefined>(initialCssOverrides);
-  // A version 2 theme: compiled CSS, the app-owned features it switches on, its choices.
+  const [defaultTheme, setDefaultTheme] = useState<ThemeSummary | null>(null);
+  const [refusedThemes, setRefusedThemes] = useState<RefusedTheme[]>([]);
+  // The active theme: compiled CSS, the app-owned features it switches on, its choices.
   const [compiledCss, setCompiledCss] = useState<string | null>(null);
+  // Bumped whenever the injected CSS changes, so renderers that bake theme
+  // colours into their output (diagrams) can key their caches on it.
+  const [themeRevision, setThemeRevision] = useState(0);
+  const lastCssRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastCssRef.current === compiledCss) return;
+    lastCssRef.current = compiledCss;
+    setThemeRevision((n) => n + 1);
+  }, [compiledCss]);
   const [themeFeatures, setThemeFeatures] = useState<ThemeDomFeatures>({});
   const [themeChoices, setThemeChoices] = useState<Record<string, string>>({});
   const [subsystems, setSubsystems] = useState<Record<string, SubsystemOverride> | null>(null);
@@ -128,46 +164,36 @@ export function ThemeProvider({
   // LOAD INITIAL DATA
   // ============================================================================
 
-  const loadThemeTokens = useCallback(async (themeId: string) => {
-    const result = await fetchThemeTokens(themeId);
-    if (result?.formatVersion === 2) {
-      // Version 2: the server compiled everything; nothing goes through themeTokensToCSS.
-      setCompiledCss(result.css);
-      setThemeFeatures(result.features);
-      setThemeChoices(result.choices);
-      setTokens(getDefaultTokens());
-      setThemeFonts([]);
-      setThemeIcons([]);
-      setCssOverrides(undefined);
-      setSubsystems(result.subsystems);
-    } else if (result) {
-      setCompiledCss(null);
-      setThemeFeatures({});
-      setThemeChoices({});
-      setTokens(result.tokens);
-      setThemeFonts(result.fonts);
-      setThemeIcons(result.icons);
-      setCssOverrides(result.cssOverrides);
-      setSubsystems(result.subsystems);
-    } else {
-      // Fall back to default tokens
-      setCompiledCss(null);
-      setThemeFeatures({});
-      setThemeChoices({});
-      setTokens(getDefaultTokens());
-      setThemeFonts([]);
-      setThemeIcons([]);
-      setCssOverrides(undefined);
-      setSubsystems(null);
-    }
+  const clearTheme = useCallback(() => {
+    setCompiledCss(null);
+    setThemeFeatures({});
+    setThemeChoices({});
+    setSubsystems(null);
   }, []);
+
+  /** Load a theme's CSS; false when the theme is not registered. */
+  const loadThemeTokens = useCallback(async (themeId: string): Promise<boolean> => {
+    const result = await fetchThemeTokens(themeId);
+    if (!result) {
+      clearTheme();
+      return false;
+    }
+    setCompiledCss(result.css || null);
+    setThemeFeatures(result.features);
+    setThemeChoices(result.choices);
+    setSubsystems(result.subsystems);
+    return true;
+  }, [clearTheme]);
 
   const loadAvailableThemes = useCallback(async () => {
-    const themes = await fetchAvailableThemes();
+    const { themes, defaultTheme: defaultEntry, refused } = await fetchAvailableThemes();
     setAvailableThemes(themes);
+    setDefaultTheme(defaultEntry);
+    setRefusedThemes(refused);
+    return refused;
   }, []);
 
-  const loadPreference = useCallback(async () => {
+  const loadPreference = useCallback(async (refused: RefusedTheme[]) => {
     // Don't load if not authenticated
     if (status !== 'authenticated') {
       setIsLoading(false);
@@ -181,9 +207,14 @@ export function ThemeProvider({
         setColorModeState(preference.colorMode);
         setShowNavThemeSelectorState(preference.showNavThemeSelector);
 
-        // If a theme is selected, load its tokens
-        if (preference.activeThemeId) {
-          await loadThemeTokens(preference.activeThemeId);
+        // If a theme is selected, load it; if it cannot be worn (refused or
+        // gone), the default stands in and the operator is told once.
+        if (preference.activeThemeId && preference.activeThemeId !== 'default') {
+          const worn = await loadThemeTokens(preference.activeThemeId);
+          if (!worn) {
+            setActiveThemeId(null);
+            noticeFallbackOnce(preference.activeThemeId, refused.find(r => r.id === preference.activeThemeId));
+          }
         }
       }
     } catch (err) {
@@ -199,11 +230,11 @@ export function ThemeProvider({
       setError(null);
 
       // Load themes list (doesn't require auth)
-      await loadAvailableThemes();
+      const refused = await loadAvailableThemes();
 
       // Load user preference (requires auth)
       if (status !== 'loading') {
-        await loadPreference();
+        await loadPreference(refused);
       }
 
       setIsLoading(false);
@@ -221,18 +252,11 @@ export function ThemeProvider({
       // Update local state immediately for responsiveness
       setActiveThemeId(themeId);
 
-      // Load new theme tokens and fonts
+      // Load the new theme's CSS
       if (themeId) {
         await loadThemeTokens(themeId);
       } else {
-        setCompiledCss(null);
-        setThemeFeatures({});
-        setThemeChoices({});
-        setTokens(getDefaultTokens());
-        setThemeFonts([]);
-        setThemeIcons([]);
-        setCssOverrides(undefined);
-        setSubsystems(null);
+        clearTheme();
       }
 
       // Persist to server
@@ -240,7 +264,7 @@ export function ThemeProvider({
         await saveThemePreference({ activeThemeId: themeId });
       }
     },
-    [status, loadThemeTokens]
+    [status, loadThemeTokens, clearTheme]
   );
 
   const setColorMode = useCallback(
@@ -282,8 +306,10 @@ export function ThemeProvider({
       activeThemeId,
       colorMode,
       resolvedColorMode,
-      tokens,
       availableThemes,
+      defaultTheme,
+      refusedThemes,
+      themeRevision,
       isLoading,
       error,
       showNavThemeSelector,
@@ -297,8 +323,10 @@ export function ThemeProvider({
       activeThemeId,
       colorMode,
       resolvedColorMode,
-      tokens,
       availableThemes,
+      defaultTheme,
+      refusedThemes,
+      themeRevision,
       isLoading,
       error,
       showNavThemeSelector,
@@ -313,12 +341,8 @@ export function ThemeProvider({
   return (
     <ThemeContext.Provider value={value}>
       <ThemeStyleInjector
-        tokens={tokens}
         mode={resolvedColorMode}
-        fonts={themeFonts}
-        icons={themeIcons}
         themeId={activeThemeId}
-        cssOverrides={cssOverrides}
         compiledCss={compiledCss}
       />
       {children}

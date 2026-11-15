@@ -154,7 +154,7 @@ export interface ThemeListItem {
 export interface ThemeReportInfo {
   activeThemeId: string | null;
   colorMode: string;
-  stats: { total: number; withDarkMode: number; withCssOverrides: number; errors: number };
+  stats: { total: number; withDarkMode: number; refused: number; errors: number };
   themes: ThemeListItem[];
   themesWithIcons: number;
   totalIconOverrides: number;

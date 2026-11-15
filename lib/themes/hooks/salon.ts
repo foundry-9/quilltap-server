@@ -269,6 +269,13 @@ export const SALON_HOOKS: readonly HookDef[] = [
     since: 1,
   },
   {
+    className: 'qt-participant-turn-dot',
+    surface: 'salon',
+    label: 'Turn dot',
+    description: 'The small mark beside the seat whose turn it is.',
+    since: 1,
+  },
+  {
     className: 'qt-participant-card-name',
     surface: 'salon',
     label: 'Participant name',

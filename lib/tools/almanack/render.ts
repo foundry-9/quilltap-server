@@ -344,7 +344,7 @@ function renderMachinery(push: Push, data: AlmanackReportData): void {
   push(`- **Colour Mode**: ${data.themeInfo.colorMode}`);
   push(`- **Total Themes**: ${data.themeInfo.stats.total}`);
   push(`- **With Dark Mode**: ${data.themeInfo.stats.withDarkMode}`);
-  push(`- **With CSS Overrides**: ${data.themeInfo.stats.withCssOverrides}`);
+  push(`- **Refused (earlier format)**: ${data.themeInfo.stats.refused}`);
   push(`- **Shipping Icon Overrides**: ${data.themeInfo.themesWithIcons}`);
   push(`- **Total Icon Overrides**: ${data.themeInfo.totalIconOverrides}`);
   if (data.themeInfo.totalUnknownIconOverrides > 0) {
