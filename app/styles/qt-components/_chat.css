@@ -2619,6 +2619,12 @@
     overflow-y: auto;
   }
 
+  /* Document Mode's code editor (JSON and CSS): fills the pane edge to edge,
+     as the plain textarea beside it does. */
+  .qt-doc-code-editor {
+    border-radius: 0;
+  }
+
   .qt-doc-gutter {
     position: relative;
     flex-shrink: 0;

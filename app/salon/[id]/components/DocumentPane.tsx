@@ -11,7 +11,7 @@
  * @module app/salon/[id]/components/DocumentPane
  */
 
-import { useRef, useState, useCallback, useMemo, useEffect } from 'react'
+import { useRef, useState, useCallback, useMemo, useEffect, useLayoutEffect } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
@@ -48,7 +48,9 @@ import { formatQtapUri } from '@/lib/doc-edit/qtap-uri'
 import { showSuccessToast } from '@/lib/toast'
 import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
 import { activateOnKey } from '@/components/ui/activate-on-key'
+import { CodeEditor, type CodeEditorHandle } from '@/components/code-editor'
 import type { ActiveDocument, DocumentMode, FocusRequest } from '../hooks/useDocumentMode'
+import { documentEditorKind, documentTypeLabel, lineOfText } from './document-editor-kind'
 
 interface DocumentPaneProps {
   document: ActiveDocument
@@ -88,17 +90,8 @@ function countWords(text: string): number {
   return trimmed.split(/\s+/).length
 }
 
-/**
- * True for files we want to edit as Markdown with Lexical. Everything else
- * (JSON, YAML, plain text, source code, etc.) renders in a plain textarea
- * so its bytes are not round-tripped through a Markdown serializer.
- */
-function isMarkdownFile(filePath: string): boolean {
-  const dot = filePath.lastIndexOf('.')
-  if (dot < 0) return false
-  const ext = filePath.slice(dot).toLowerCase()
-  return ext === '.md' || ext === '.markdown'
-}
+/** How long the code editor waits after typing before handing the text up; the document's own autosave waits after that. */
+const CODE_EDITOR_EMIT_MS = 150
 
 interface ExtractedFrontmatter {
   rawBlock: string | null
@@ -394,7 +387,18 @@ export default function DocumentPane({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const isMarkdown = useMemo(() => isMarkdownFile(document.filePath), [document.filePath])
+  // Markdown → the rich editor; JSON and CSS → the code editor; the rest → a
+  // textarea, so their bytes are never round-tripped through a Markdown
+  // serialiser (document-editor-kind.ts). The size is read when the file is
+  // loaded, so a file never changes editor under the author's hands.
+  const editorKind = useMemo(
+    () => documentEditorKind(document.filePath, document.content.length),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- decided per load (contentVersion), not per keystroke
+    [document.filePath, contentVersion],
+  )
+  const isMarkdown = editorKind === 'markdown'
+  const codeLanguage = editorKind === 'json' || editorKind === 'css' ? editorKind : null
+  const codeEditorRef = useRef<CodeEditorHandle>(null)
   const extractedContent = useMemo(() => {
     if (!isMarkdown) {
       return {
@@ -523,6 +527,44 @@ export default function DocumentPane({
     }
   }, [contentVersion, document.filePath, getScrollPosition])
 
+  // The code editor scrolls inside itself: keep and restore the place there.
+  useLayoutEffect(() => {
+    if (!codeLanguage) return
+    const el = codeEditorRef.current?.scrollElement() ?? null
+    if (!el) return
+    scrollContainerRef.current = el
+    el.addEventListener('scroll', handleScroll)
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [codeLanguage, handleScroll])
+
+  // doc_focus in the code editor: scroll to the line asked for (or the line
+  // holding the anchor or highlight) without taking the keyboard from the author.
+  useEffect(() => {
+    if (!codeLanguage || !focusRequest) return
+    if (focusRequest.clear_focus) {
+      onFocusCleared?.()
+      onFocusProcessed?.()
+      return
+    }
+    const line = focusRequest.line ?? lineOfText(document.content, focusRequest.anchor ?? focusRequest.highlight)
+    if (line) codeEditorRef.current?.revealLine(line, { focus: false })
+    onFocusProcessed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- each request is handled once, against the text as it stands
+  }, [focusRequest, codeLanguage])
+
+  /** The code editor's pending keystrokes, handed up now (before a blur saves, or the document closes). */
+  const flushCodeEditor = useCallback(() => {
+    codeEditorRef.current?.flush()
+  }, [])
+  const handleCodeBlur = useCallback(() => {
+    flushCodeEditor()
+    onBlur()
+  }, [flushCodeEditor, onBlur])
+  const handleClose = useCallback(() => {
+    flushCodeEditor()
+    onCloseDocument()
+  }, [flushCodeEditor, onCloseDocument])
+
   // Cleanup throttle timer on unmount
   useEffect(() => {
     return () => {
@@ -643,7 +685,7 @@ export default function DocumentPane({
           <button
             type="button"
             className="qt-doc-header-button"
-            onClick={onCloseDocument}
+            onClick={handleClose}
             title="Exit document mode"
             aria-label="Exit document mode"
           >
@@ -720,8 +762,25 @@ export default function DocumentPane({
             </div>
           )}
         </LexicalComposer>
+      ) : codeLanguage ? (
+        /* JSON and CSS: the code editor, which highlights them and hands back
+         * exactly the bytes it was given. A change from outside (a character's
+         * doc_* write) replaces the text and keeps the caret where it can. */
+        <div className="flex-1 min-h-0 flex flex-col" onBlur={handleCodeBlur}>
+          <CodeEditor
+            ref={codeEditorRef}
+            value={document.content}
+            language={codeLanguage}
+            onChange={onContentChange}
+            readOnly={isLLMEditing}
+            ariaLabel="Document content"
+            debounceMs={CODE_EDITOR_EMIT_MS}
+            height="100%"
+            className="qt-doc-code-editor flex-1 min-h-0"
+          />
+        </div>
       ) : (
-        /* Plain-text editor for non-Markdown files — no Lexical, no markdown
+        /* Plain-text editor for other files — no Lexical, no markdown
          * bridge, no formatting toolbar. Bytes go straight to/from disk. */
         <div
           ref={scrollContainerRef}
@@ -743,7 +802,7 @@ export default function DocumentPane({
 
       {/* Status Bar */}
       <div className="qt-doc-status-bar">
-        <span className="qt-doc-status-item">{isMarkdown ? 'Markdown' : 'Plain text'}</span>
+        <span className="qt-doc-status-item">{documentTypeLabel(document.filePath)}</span>
         <span className="qt-doc-status-item">{wordCount.toLocaleString()} word{wordCount !== 1 ? 's' : ''}</span>
         <span className="qt-doc-status-item">
           <span className={saveStatus.dot} />

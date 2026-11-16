@@ -4,6 +4,16 @@
 
 ### 4.14-dev
 
+#### Document Mode: code editor for JSON and CSS (Calliope Live, Spec G Stage 3)
+
+- Document Mode opens `.json` and `.css` files in the shared code editor (highlighting, line numbers, exact bytes). Other non-Markdown files, and JSON or CSS files over 100,000 characters, keep the textarea. The Markdown branch is unchanged
+- The editor is chosen once per load (`app/salon/[id]/components/document-editor-kind.ts`). Edits reach `onContentChange` after 150 ms and are flushed on blur and close. The "AI editing" lock makes it read-only, outside changes replace the text without an echo write, `doc_focus` scrolls to the line, and the scroll position is saved
+- The status bar says "JSON" or "CSS" instead of "Plain text"
+- Code editor handle: `revealLine(line, { focus: false })` scrolls without taking focus; new `scrollElement()`
+- CSS in a database store (such as a theme draft's `styles.css` in Quilltap General) is still view-only; database stores edit only Markdown, text, JSON and JSONL
+- `help/scriptorium.md` describes the code editor
+- Tests: `document-pane-code-editor.test.tsx`
+
 #### Themes: custom CSS section and opening a theme file in the theme editor (Calliope Live, Spec G Stage 2)
 
 - New Custom CSS section in the theme editor (`components/theme-editor/assets/StylesSection.tsx`): creates the stylesheet (`set-styles-file`), edits it in the shared code editor, and removes it behind an alertdialog (`clear-styles-file`, deleting the file by default). The rules are stated above the editor

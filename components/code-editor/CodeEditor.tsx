@@ -100,10 +100,17 @@ export interface CodeEditorHandle {
   flush: () => void
   /** Insert text at the caret (or where it last was), replacing any selection, and focus the editor. */
   insertAtCursor: (text: string) => void
-  /** Move the caret to the start of a 1-based line, scroll it into view and focus the editor. */
-  revealLine: (line: number) => void
+  /**
+   * Move the caret to the start of a 1-based line, scroll it into view and
+   * focus the editor. With `{ focus: false }` it only scrolls the line into
+   * view, leaving the caret and the focus where they are (a request from
+   * elsewhere — a character's `doc_focus` — must not take the keyboard).
+   */
+  revealLine: (line: number, options?: { focus?: boolean }) => void
   /** Focus the editor without moving the caret. */
   focus: () => void
+  /** The element that scrolls, for a host that keeps its scroll position. */
+  scrollElement: () => HTMLDivElement | null
 }
 
 export interface CodeEditorProps {
@@ -471,9 +478,14 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   }, [])
 
   const revealLine = useCallback(
-    (line: number) => {
+    (line: number, options?: { focus?: boolean }) => {
       const editor = editorRef.current
       if (!editor) return
+      if (options?.focus === false) {
+        const count = editor.getEditorState().read(() => countLines($getEditorText()))
+        scrollToLine(Math.min(Math.max(1, Math.floor(line) || 1), count))
+        return
+      }
       let target = 1
       editor.update(
         () => {
@@ -511,6 +523,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
       },
       revealLine,
       focus: () => editorRef.current?.focus(),
+      scrollElement: () => scrollRef.current,
     }),
     [revealLine],
   )
