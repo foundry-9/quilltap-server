@@ -24,6 +24,11 @@
 - `help/theme-editor.md` covers the Custom CSS section and opening a theme file
 - Tests: section and reference panel (`styles-section.test.tsx`), and editor-level saving, held preview, conflict, flushing and import cases in `theme-editor.test.tsx`
 
+#### Tests: theme editor CSS-flush test no longer times out on CI
+
+- `theme-editor.test.tsx` "saves pending CSS before an operation on the draft" waited for "Begin a stylesheet" with the default 1-second timeout. That wait covers a flushed save, the `clear-styles-file` call and a re-render, which took longer on CI. It now uses 4 seconds, like the other custom CSS tests
+- `docs/developer/TESTING_GUIDE.md` has a new troubleshooting section, "Component Tests That Pass Locally and Time Out on CI". It says to scope accessible-name queries and to give a wait an explicit timeout when it covers more than one async step
+
 #### Tests: theme editor suites no longer time out on CI
 
 - The theme editor component tests (`editor-structure`, `bundled-walk`, `theme-editor`) timed out on CI. In jsdom, each label-text or accessible-name query walks the whole document for every element it checks, and the editor mounts several hundred labelled rows. The tests now query inside the row, panel or toolbar they are about, using new helpers in `__tests__/helpers/theme-editor-queries.ts`. The theme-editor folder runs in 8 s instead of 85 s; the Rains walk takes about 2 s instead of 51 s

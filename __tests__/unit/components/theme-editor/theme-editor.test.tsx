@@ -426,7 +426,7 @@ describe('custom CSS', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove the stylesheet' }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove it' }))
 
-    await screen.findByRole('button', { name: 'Begin a stylesheet' })
+    await screen.findByRole('button', { name: 'Begin a stylesheet' }, { timeout: 4000 })
     const put = calls.findIndex((c) => c.method === 'PUT')
     const clear = calls.findIndex((c) => c.url.endsWith('?action=clear-styles-file'))
     expect(put).toBeGreaterThanOrEqual(0)
