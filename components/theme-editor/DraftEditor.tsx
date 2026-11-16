@@ -19,7 +19,7 @@
  * @module components/theme-editor/DraftEditor
  */
 
-import { memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { useTheme } from '@/components/providers/theme-provider'
@@ -30,6 +30,7 @@ import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { THEME_CHOICES, type ThemeTokensDocument, type TokenDef } from '@/lib/themes/engine/client'
 import { jsonEqual } from '@/lib/hooks/use-draft'
 import { createEditorStore, type EditorStore } from './editor-store'
+import { OpenGalleryButton } from '@/components/theme-specimens/OpenGalleryButton'
 import { LazyRow } from './LazyRow'
 import { TokenRow, type EditFn } from './TokenRow'
 import { PrimitivesPanel } from './PrimitivesPanel'
@@ -55,6 +56,8 @@ import {
   redoStep,
   sectionViews,
   setChoice,
+  tokenLocation,
+  tokenRowDomId,
   undoStep,
   type EditHistory,
   type EditorFilter,
@@ -280,6 +283,21 @@ const FIRST_SECTION = EDITOR_GROUPS.find((g) => g.essential.length > 0)?.id
 
 const sectionDomId = (prefix: string, id: string) => `${prefix}-section-${id}`
 
+/** The id of the list item that holds a token's row, mounted or not. */
+const tokenRowSlotId = (name: string) => `${tokenRowDomId(name)}-slot`
+
+/** Frames `goToToken` waits for a row to mount before it gives up. */
+const GO_TO_TOKEN_FRAMES = 30
+
+/** What other parts of the Atelier (the inspector, Spec H) may ask of an open editor. */
+export interface EditorNavigator {
+  /**
+   * Open the level and section that hold `name`'s row, scroll to it and
+   * focus it. False when the name has no row (not a registry token).
+   */
+  goToToken: (name: string) => boolean
+}
+
 /** The estimated height of a row before it is first drawn. */
 const rowEstimate = (token: TokenDef) => (token.type === 'color' ? 190 : 150)
 
@@ -292,7 +310,7 @@ const RowList = memo(function RowList({ tokens, store, edit, label }: { tokens: 
   return (
     <ul className="px-4 pb-2" aria-label={label}>
       {tokens.map((token) => (
-        <LazyRow key={token.name} estimate={rowEstimate(token)}>
+        <LazyRow key={token.name} id={tokenRowSlotId(token.name)} estimate={rowEstimate(token)}>
           <TokenRow token={token} store={store} edit={edit} />
         </LazyRow>
       ))}
@@ -426,9 +444,11 @@ interface DraftEditorProps {
   mode: EditorMode
   onModeChange: (mode: EditorMode) => void
   onBack: () => void
+  /** Filled with the editor's navigator while it is mounted. */
+  navigatorRef?: MutableRefObject<EditorNavigator | null>
 }
 
-export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorProps) {
+export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }: DraftEditorProps) {
   const { setPreview, refreshThemes, setTheme } = useTheme()
   const queryClient = useQueryClient()
   const [previewing, setPreviewing] = useState(true)
@@ -583,6 +603,38 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
     })
   }
 
+  const goToToken = useCallback((name: string): boolean => {
+    const where = tokenLocation(name)
+    if (!where) return false
+    const add = (prev: ReadonlySet<string>) => (prev.has(where.sectionId) ? prev : new Set([...prev, where.sectionId]))
+    setQuery('')
+    setChangedOnly(false)
+    setLevel(where.level)
+    setOpenSections(add)
+    if (where.advanced) setOpenAdvanced(add)
+    // The row mounts once its section is open and its slot comes near the viewport (LazyRow).
+    let frames = 0
+    const seek = () => {
+      const row = document.getElementById(tokenRowDomId(name))
+      if (row) {
+        row.scrollIntoView({ block: 'start' })
+        row.focus({ preventScroll: true })
+        return
+      }
+      document.getElementById(tokenRowSlotId(name))?.scrollIntoView({ block: 'center' })
+      if (++frames < GO_TO_TOKEN_FRAMES) requestAnimationFrame(seek)
+    }
+    requestAnimationFrame(seek)
+    return true
+  }, [])
+  useEffect(() => {
+    if (!navigatorRef) return
+    navigatorRef.current = { goToToken }
+    return () => {
+      navigatorRef.current = null
+    }
+  }, [navigatorRef, goToToken])
+
   const onEditorKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!(e.metaKey || e.ctrlKey) || e.altKey || hasOwnUndo(e.target)) return
     const key = e.key.toLowerCase()
@@ -728,6 +780,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
               <Icon name={previewing ? 'eye-off' : 'eye'} className="w-4 h-4" />
               <span className="ml-1">{previewing ? 'Stop preview' : 'Resume preview'}</span>
             </button>
+            <OpenGalleryButton />
             <button
               type="button"
               className="qt-button qt-button-primary qt-button-sm"

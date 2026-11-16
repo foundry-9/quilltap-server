@@ -6,6 +6,7 @@
  * @module components/theme-editor/DraftList
  */
 
+import { OpenGalleryButton } from '@/components/theme-specimens/OpenGalleryButton'
 import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { ApiFetchError, apiErrorMessage } from '@/lib/query/fetcher'
@@ -81,6 +82,7 @@ export function DraftList({ onOpen, onCreated }: DraftListProps) {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <OpenGalleryButton className="qt-button qt-button-secondary" />
           <FileChooser
             label={importDraft.isPending ? 'Opening the file…' : 'Open a theme file'}
             accept=".qtap-theme,application/zip"

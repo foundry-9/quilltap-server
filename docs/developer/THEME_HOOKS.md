@@ -43,7 +43,7 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-tab-icon` | Tab icon | `.qt-tab` |  |  |
 | `.qt-tab-label` | Tab title | `.qt-tab-select` |  |  |
 | `.qt-tab-close` | Tab close button | `.qt-tab` |  |  |
-| `.qt-tab-pane` | Tab content. One tab's view. Hidden tabs stay mounted (and carry `hidden`), so scope to the visible one with `:not(.hidden)`. | `.qt-workspace` | `data-pane`: `left`, `right`<br>`data-tab-kind`: `home`, `salon`, `salon-list`, `terminal`, `document`, `aurora`, `prospero`, `scriptorium`, `settings`, `files`, `photos`, `scenarios`, `brahma`, `wardrobe`, `inventory`, `atlas`, `profile`, `about`, `generate-image`, `document-standalone`, `character-new`, `character`, `settings-wizard`, `custom-tools`, `theme-editor` |  |
+| `.qt-tab-pane` | Tab content. One tab's view. Hidden tabs stay mounted (and carry `hidden`), so scope to the visible one with `:not(.hidden)`. | `.qt-workspace` | `data-pane`: `left`, `right`<br>`data-tab-kind`: `home`, `salon`, `salon-list`, `terminal`, `document`, `aurora`, `prospero`, `scriptorium`, `settings`, `files`, `photos`, `scenarios`, `brahma`, `wardrobe`, `inventory`, `atlas`, `profile`, `about`, `generate-image`, `document-standalone`, `character-new`, `character`, `settings-wizard`, `custom-tools`, `theme-editor`, `theme-specimens` |  |
 | `.qt-workspace-divider` | Split divider. The draggable bar between split panes. | `.qt-workspace` |  |  |
 | `.qt-workspace-divider-grip` | Split divider grip | `.qt-workspace-divider` |  |  |
 | `.qt-workspace-empty` | Empty pane | `.qt-workspace` |  |  |
@@ -233,7 +233,7 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-avatar-name` | Avatar name | `.qt-avatar-labels` |  |  |
 | `.qt-avatar-title` | Avatar title | `.qt-avatar-labels` |  |  |
 | `.qt-tab-group` | In-page tab group. Entity-page tabs (a character, a project) and small view switchers. |  |  |  |
-| `.qt-tab` | Tab. Shared by the workspace tab strip (`.qt-tab-strip .qt-tab`) and the in-page tabs (`.qt-tab-group .qt-tab`): scope by the parent. Only workspace tabs carry `data-tab-kind`. | `.qt-tab-strip`, `.qt-tab-group` | `data-tab-kind`: `home`, `salon`, `salon-list`, `terminal`, `document`, `aurora`, `prospero`, `scriptorium`, `settings`, `files`, `photos`, `scenarios`, `brahma`, `wardrobe`, `inventory`, `atlas`, `profile`, `about`, `generate-image`, `document-standalone`, `character-new`, `character`, `settings-wizard`, `custom-tools`, `theme-editor` | `.qt-tab-active` — The selected tab<br>`.qt-tab-dragging` — Being dragged (workspace) |
+| `.qt-tab` | Tab. Shared by the workspace tab strip (`.qt-tab-strip .qt-tab`) and the in-page tabs (`.qt-tab-group .qt-tab`): scope by the parent. Only workspace tabs carry `data-tab-kind`. | `.qt-tab-strip`, `.qt-tab-group` | `data-tab-kind`: `home`, `salon`, `salon-list`, `terminal`, `document`, `aurora`, `prospero`, `scriptorium`, `settings`, `files`, `photos`, `scenarios`, `brahma`, `wardrobe`, `inventory`, `atlas`, `profile`, `about`, `generate-image`, `document-standalone`, `character-new`, `character`, `settings-wizard`, `custom-tools`, `theme-editor`, `theme-specimens` | `.qt-tab-active` — The selected tab<br>`.qt-tab-dragging` — Being dragged (workspace) |
 
 ## Removed hooks
 

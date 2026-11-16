@@ -19,6 +19,8 @@ import { editorToolbar, primitivesPanel, tokenRow, waitForCardRow } from '../../
 
 const mockSetPreview = jest.fn()
 
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
+
 jest.mock('@/components/providers/theme-provider', () => ({
   useTheme: () => ({
     availableThemes: [{ id: 'default', name: 'Professional Neutral', source: 'default' }],

@@ -563,3 +563,22 @@
   --font-brand: var(--theme-font-brand);
   --font-chat-user: var(--theme-font-chat-user);
 }
+
+/* ============================================================================
+   OPTIONAL HOOKS ON NESTED THEME CONTAINERS
+   Optional tokens are not declared above, so they would arrive from the
+   page theme. Reset to the guaranteed-invalid value, so each reader's
+   fallback applies; specificity 0, so a theme's own value still wins.
+   ============================================================================ */
+:where([data-theme]:not(:root)) {
+  --qt-button-letter-spacing: initial;
+  --qt-button-text-transform: initial;
+  --qt-body-font-weight: initial;
+  --qt-scrollbar-thumb: initial;
+  --qt-scrollbar-track: initial;
+  --qt-scrollbar-thumb-hover: initial;
+  --qt-heading-font-weight: initial;
+  --qt-heading-letter-spacing: initial;
+  --qt-heading-text-transform: initial;
+  --qt-heading-color: initial;
+}

@@ -17,6 +17,8 @@ import type { ThemeTokensDocument } from '@/lib/themes/engine/client'
 import { renderWithQuery } from '../../../helpers/renderWithQuery'
 import { editorToolbar } from '../../../helpers/theme-editor-queries'
 
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }), usePathname: () => '/workspace' }))
+
 jest.mock('@/components/providers/theme-provider', () => ({
   useTheme: () => ({
     availableThemes: [{ id: 'default', name: 'Professional Neutral', source: 'default' }],

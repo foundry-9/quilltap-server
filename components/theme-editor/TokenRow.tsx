@@ -31,6 +31,7 @@ import {
   resetToken,
   rowContrast,
   separateDarkValue,
+  tokenRowDomId,
   setTokenValue,
   tokenRowView,
   type EditorMode,
@@ -180,7 +181,7 @@ function TokenRowImpl({ token, store, edit }: TokenRowProps) {
   const isColor = token.type === 'color'
 
   return (
-    <div className="py-3" role="group" aria-labelledby={labelId}>
+    <div id={tokenRowDomId(token.name)} tabIndex={-1} className="py-3 scroll-mt-24" role="group" aria-labelledby={labelId}>
       <div className="flex items-start gap-3">
         {isColor && <Swatch literal={shown.literal} label={`${token.label} in ${mode}`} />}
         <div className="min-w-0 flex-1 space-y-2">

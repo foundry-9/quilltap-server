@@ -60,6 +60,16 @@
     scrollbar-color: var(--qt-scrollbar-thumb, auto) var(--qt-scrollbar-track, transparent);
   }
 
+  /* A nested theme container (the Atelier's panel, the specimen gallery's
+     stages, theme previews) re-establishes what the root and <body> compute
+     once and every element inherits: computed with the page theme's tokens,
+     they would otherwise carry that theme's type into the container. */
+  [data-theme]:not(:root) {
+    color-scheme: var(--qt-color-scheme);
+    font-family: var(--font-sans);
+    font-weight: var(--qt-body-font-weight, normal);
+  }
+
   ::selection {
     background-color: var(--qt-selection-bg);
     color: var(--qt-selection-fg);

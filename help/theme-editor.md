@@ -158,6 +158,19 @@ While a draft is open, **the whole of Quilltap wears it** — sidebar, Salon, se
 
 Press **Stop preview** to put the usual theme back on while you think; **Resume preview** to try the draft on again. Go back to the list, open another draft or close the tab, and the preview comes off by itself — with anything unsaved saved first. The preview is confined to the window you are working in and changes nothing about which theme you have chosen.
 
+## The specimen gallery
+
+The live preview shows you whatever Quilltap happens to have on the table, which is all very well until you wonder how a destructive button, an alert or a dialog will look and none of them is obliging enough to appear. For that there is **Calliope's Specimens**: press **Open the gallery** — at the top of an open draft, or on the list of drafts — and it opens as a tab of its own beside the Atelier, splitting the workspace if need be. You may also reach it at `/calliope/specimens`.
+
+The gallery lays out every element a theme may dress — the app's shell, the workspace and its tabs, the home page, the left rail, the Salon's messages and composer, the character page, dialogs, settings and the shared buttons, badges, alerts and headings — each in every variant and state it can take: a user's bubble and a character's, a whisper, a page-width dialog, the current page in a list of links, and so on. Every specimen carries its label and its class name, so you know what to write in your **Custom CSS**.
+
+- **What it wears.** While the Atelier is previewing a draft, the specimens wear the draft and repaint as you edit; with no draft open, they wear the theme you have on, so the gallery is useful on its own. The gallery's own headings and controls stay in the house default, like the Atelier's panel.
+- **Light, dark or both.** **As the window** follows your color mode; **Light** and **Dark** show one or the other whatever the window wears; **Side by side** draws every specimen in both at once.
+- **Finding things.** The list of surfaces takes you to each section; the search narrows the gallery by label or class name.
+- **Hover and focus** cannot be shown standing still: point at a specimen, or Tab to it, to see them.
+
+The specimens are invented for the purpose — no real character, chat or file is read — and pressing anything in them does nothing at all.
+
 ## Installing
 
 When the draft pleases you, press **Install**. The Atelier packs it into a proper bundle and installs it exactly as though you had uploaded a `.qtap-theme` file, with every check that implies — so an install that succeeds is one that will load. Quilltap puts it on at once (*Worn with pride.*).

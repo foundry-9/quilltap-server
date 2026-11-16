@@ -27,6 +27,8 @@ const mockSetPreview = jest.fn()
 const mockRefreshThemes = jest.fn(async () => {})
 const mockSetTheme = jest.fn(async () => {})
 
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
+
 jest.mock('@/components/providers/theme-provider', () => ({
   useTheme: () => ({
     availableThemes: [

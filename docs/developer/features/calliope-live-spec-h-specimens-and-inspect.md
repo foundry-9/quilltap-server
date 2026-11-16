@@ -232,3 +232,102 @@ gallery could stand in for the Storybook stories, whether
 `scripts/theme-probe` should measure the gallery instead of seven live
 pages, and what an assistant would need from the inspector's model to be
 told what a hook is styled by.
+
+## Progress
+
+### Stage 0 — done 2026-11-16 (uncommitted)
+
+- `components/theme-inspect/model.ts` (pure): `hookForChain` / `describeHook`
+  (element to hook, decision 4); `inspectProperties` over `MatchedRule`s
+  (cascade: `!important`, the style attribute, layer order, specificity,
+  document order; hover / focus / active kept apart; `fromCustomCss`);
+  `traceProperty` (Tailwind names read as their semantic token, defaults
+  written as `var(--color-*)` followed through); helpers
+  `splitSelectorList`, `parseDeclarations` (from `style.cssText`, which
+  keeps `var()` shorthands), `varsIn`, `specificity`, `stripInteraction`,
+  `propertyCategory`.
+- `components/theme-inspect/dom.ts`: `elementFacts` / `elementChain` (classes
+  and attributes, never text) and `matchingRules` (every stylesheet;
+  unreadable sheets counted; `@media` / `@supports` evaluated, `@container`
+  always walked, `@layer` order recorded, `@scope` root and limit honoured,
+  nested rules resolved; the theme's style element told apart: token block,
+  icon overrides, custom CSS).
+- `tokenLocation` / `tokenRowDomId` (editor model), a stable id and
+  `tabIndex=-1` on `TokenRow`, a slot id on `LazyRow`, and `goToToken` on
+  `DraftEditor`, published through an optional `navigatorRef`
+  (`EditorNavigator`) for Stage 2's provider.
+- **Measured** in V4test, Salon chat with two messages, theme
+  `spec-f-lato-parlour`, 5 stylesheets, 4,114 rules: `matchingRules` takes
+  9–33 ms per element (median 9–22 ms; a message row 22 ms, a bubble 31 ms,
+  a left-rail item 13–20 ms); the model then takes under 1 ms. Fine for a
+  click, far too slow for pointer move — as the spec requires.
+- Found: a rule's selector is kept as written, `:hover` included, so its
+  specificity is right and it reads as what to write. A universal
+  `:focus-visible` rule makes "focus" appear for nearly every element; the
+  panel should say so plainly rather than hide it. The draft's custom CSS
+  carries no line mapping back to `styles.css` once compiled, so "jump to
+  the rule's line" needs the compiler to keep one (not done).
+
+### Stage 1 — done 2026-11-16 (uncommitted)
+
+- Tab kind `theme-specimens` (`TAB_KINDS`, tab meta "Calliope's Specimens",
+  `TabView`, `route-to-intent`, `/calliope/specimens` → workspace redirect).
+  Adding the kind adds a `data-tab-kind` value, so `THEME_HOOKS.md` and the
+  CLI's theme-engine bundle were regenerated. **Open the gallery**
+  (`OpenGalleryButton`) sits in the editor's header and the draft list; in the
+  workspace it opens the tab in the other pane (splitting if need be).
+- `components/theme-specimens/`: `instances.ts` (pure: an instance per
+  closed variant value, one sample for an open set, one per class state and
+  per ARIA state value; the props the hooked element wears), `types.ts`,
+  `registry.ts` (no fallback), `specimens/{shell,salon,pages,common}.tsx`,
+  `SpecimenGallery.tsx`; the view is `app/calliope/specimens/SpecimenGalleryView.tsx`.
+- Each instance is drawn on a **stage**: `data-theme` of the shown theme (the
+  preview's id, else the worn theme), the mode's class, and the root's
+  `data-qt-<choice>` attributes copied (not its feature attributes, which
+  would paint page backgrounds into stages). Stages contain layout and paint,
+  so the dialog backdrop and full-height shell stay inside them. Articles use
+  `content-visibility: auto` (415 stages; 830 side by side).
+- **Light and dark side by side holds**: in V4test the dark stage's
+  `--theme-card` equalled the window's dark value exactly, and the light
+  stage resolved to the theme's light value. Kept as a fourth mode choice
+  ("Side by side") beside "As the window", "Light" and "Dark".
+- **Real components**: `CollapsibleCard` (the settings card's first
+  instance), `EmptyState` (`qt-empty-state-title`), `QuillAnimation`
+  (`qt-thinking-indicator`, and the streaming bubble's mark). **Everything
+  else is markup** — 171 of 174 hooks. Most hooks are drawn by components
+  that read the workspace, router, chat or server; `BaseModal` portals to the
+  body; `SectionCard` and `CollapsibleCard` write DOM ids (the card's
+  `data-card` instances are therefore markup, so they cannot collide with an
+  open Settings tab).
+- **Coverage test** `__tests__/unit/components/theme-specimens/coverage.test.tsx`:
+  every hook has a specimen and none is stale; within each hook's own
+  article, every instance selector matches; every instance is on a stage;
+  no DOM id inside a stage. `NOT_SHOWN` is empty.
+- **Found:**
+  - *The page theme leaked into nested theme containers* — **fixed
+    2026-11-16, after the Stage 1 stop**. Two causes. (1) Optional tokens
+    (`--qt-button-text-transform`, the heading and scrollbar hooks, …) are
+    never declared by the defaults, so an element wearing
+    `data-theme="default"` under a page wearing Art Deco inherited Art Deco's
+    values. The generator now emits
+    `:where([data-theme]:not(:root)) { --opt: initial; … }` at the end of
+    `_theme-defaults.css` (`renderOptionalReset` in
+    `lib/themes/registry/emit-css.ts`): guaranteed-invalid, so each reader's
+    fallback applies, at specificity 0 so a theme's own `[data-theme="id"]`
+    value still wins on a stage wearing it. (2) `font-family` (from `<body>`),
+    `font-weight` and `color-scheme` (from `:root`) are computed once with the
+    page theme's tokens and inherited; `_base.css` now re-establishes them on
+    `[data-theme]:not(:root)` in `@layer base`, so any utility still
+    overrides. Effect: the Atelier panel and the gallery's chrome wear the
+    house default's type; a gallery stage and a Settings theme preview wear
+    their own theme's body font. Registry test: the reset lists exactly the
+    optional tokens, and "never declares an optional hook" now allows only
+    `initial`. Storybook CSS regenerated, `@quilltap/theme-storybook` 1.0.123.
+    Theme snapshot unchanged.
+  - No catalogued hook is missing from the app (the hook lint agrees). About
+    180 surface-prefixed `qt-*` classes in the markup are not hooks (many are
+    state classes catalogued as states); candidates a theme author would
+    reach for include `qt-chat-message-content`, `qt-chat-layout` /
+    `qt-chat-messages-list`, the roleplay text classes (`qt-chat-dialogue`,
+    `qt-chat-narration`, `qt-chat-ooc`, `qt-chat-inner-monologue`) and
+    `qt-chat-composer-actions`. Reported, not added.

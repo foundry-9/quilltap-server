@@ -47,10 +47,12 @@ function observerFor(root: Element | null): IntersectionObserver | null {
 interface LazyRowProps {
   /** Height to hold before the row was ever measured. */
   estimate: number
+  /** DOM id of the list item, present whether or not the row is mounted (so it can be scrolled to). */
+  id?: string
   children: ReactNode
 }
 
-export function LazyRow({ estimate, children }: LazyRowProps) {
+export function LazyRow({ estimate, id, children }: LazyRowProps) {
   const ref = useRef<HTMLLIElement>(null)
   const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined')
   const [height, setHeight] = useState(estimate)
@@ -78,6 +80,7 @@ export function LazyRow({ estimate, children }: LazyRowProps) {
   return (
     <li
       ref={ref}
+      id={id}
       className="border-b qt-border-default last:border-b-0"
       style={near ? undefined : { height }}
       aria-hidden={near ? undefined : true}

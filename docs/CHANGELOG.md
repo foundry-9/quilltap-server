@@ -4,6 +4,17 @@
 
 ### 4.14-dev
 
+#### Themes: specimen gallery and the inspector's model (Calliope Live, Spec H Stages 0–1)
+
+- New workspace tab "Calliope's Specimens" (`theme-specimens`, route `/calliope/specimens`). It draws all 174 catalogued hooks in every variant value and class/ARIA state, wearing the previewed draft or the worn theme. Modes: as the window, light, dark, or both side by side. Search by label or class; jump by surface
+- "Open the gallery" in the theme editor's header and on the draft list opens the tab in the other pane
+- Specimens live in `components/theme-specimens/`. Three are real components (`CollapsibleCard`, `EmptyState`, `QuillAnimation`); the rest are markup. A coverage test fails when a catalogued hook has no specimen or a variant/state is missing
+- Inspector model (`components/theme-inspect/`): element to nearest hook, matching rules to custom properties in cascade order (hover/focus/active kept apart, theme custom CSS marked), property to registry token. The stylesheet walk runs on selection only (9–33 ms on a Salon page)
+- Theme editor: stable token row ids and `goToToken(name)` (exposed through an optional `navigatorRef`)
+- Fix: the page theme leaked into nested `data-theme` containers. Optional tokens are now reset to `initial` on nested containers at zero specificity, and `font-family`, `font-weight` and `color-scheme` are re-established there. The editor panel and gallery chrome now stay in the house default; Settings theme previews now show their own body font
+- `THEME_HOOKS.md` and the CLI theme engine regenerated for the new tab kind; `@quilltap/theme-storybook` 1.0.123
+- `help/theme-editor.md`: the specimen gallery
+
 #### Docs: Calliope Live Spec H
 
 - Added Spec H (a specimen gallery showing every catalogued hook in the draft theme, and an inspect mode that names an element's hook and the tokens that style it)

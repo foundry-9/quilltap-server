@@ -161,6 +161,17 @@ describe('theme token registry', () => {
     }
   });
 
+  it('resets every optional token on nested theme containers, at specificity 0 and never on the root', () => {
+    // An optional token is not declared by the defaults, so without the reset a
+    // house-default panel inside a page wearing another theme inherits that
+    // theme's value (Calliope Live, Spec H).
+    const css = readFileSync(path.join(REPO_ROOT, 'app/styles/_theme-defaults.css'), 'utf8');
+    const block = /:where\(\[data-theme\]:not\(:root\)\) \{([^}]*)\}/.exec(css);
+    expect(block).not.toBeNull();
+    const reset = [...block![1].matchAll(/(--[\w-]+): initial;/g)].map((m) => m[1]).sort();
+    expect(reset).toEqual(THEME_TOKENS.filter((t) => t.optional).map((t) => t.name).sort());
+  });
+
   it('explains every internal token', () => {
     for (const token of THEME_TOKENS.filter((t) => t.visibility === 'internal')) expect([token.name, token.description]).toEqual([token.name, expect.any(String)]);
   });
@@ -184,10 +195,12 @@ describe('theme token registry', () => {
     }
   });
 
-  it('never declares an optional hook', () => {
+  it('never gives an optional hook a value (the nested-container reset to `initial` is not one)', () => {
     for (const sheet of GENERATED_THEME_SHEETS) {
       const css = sheet.render(TOKEN_GROUPS);
-      for (const token of THEME_TOKENS.filter((t) => t.optional)) expect(css).not.toMatch(new RegExp(`^\\s*${token.name}:`, 'm'));
+      for (const token of THEME_TOKENS.filter((t) => t.optional)) {
+        expect(css).not.toMatch(new RegExp(`^\\s*${token.name}:(?!\\s*initial;)`, 'm'));
+      }
     }
   });
 

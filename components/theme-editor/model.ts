@@ -154,6 +154,32 @@ export function sectionViews(level: EditorLevel, filter: EditorFilter, tokens: T
 
 const TOKENS_BY_NAME: ReadonlyMap<string, TokenDef> = new Map(THEME_TOKENS.map((t) => [t.name, t]))
 
+/** Where a registry token's row lives: the level that shows it, its section, and whether it sits behind the advanced disclosure. */
+export interface TokenLocation {
+  level: EditorLevel
+  sectionId: string
+  advanced: boolean
+}
+
+/**
+ * Where `name`'s row is, or null for a name with no row (not a registry
+ * token, or an internal one). An essential shows at the essentials level;
+ * a component or advanced token only at the components level.
+ */
+export function tokenLocation(name: string): TokenLocation | null {
+  for (const group of EDITOR_GROUPS) {
+    if (group.essential.some((t) => t.name === name)) return { level: 'essentials', sectionId: group.id, advanced: false }
+    if (group.component.some((t) => t.name === name)) return { level: 'components', sectionId: group.id, advanced: false }
+    if (group.advanced.some((t) => t.name === name)) return { level: 'components', sectionId: group.id, advanced: true }
+  }
+  return null
+}
+
+/** The DOM id of a token's row: stable, from the token's name. */
+export function tokenRowDomId(name: string): string {
+  return `qt-token-row-${name.replace(/^-+/, '').replace(/[^A-Za-z0-9_-]/g, '_')}`
+}
+
 /** The registry's plain-English label for a token or primitive name. */
 export function labelFor(name: string): string {
   const token = TOKENS_BY_NAME.get(name)

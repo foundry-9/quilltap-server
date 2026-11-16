@@ -191,6 +191,33 @@ const DEFAULTS_HEADER = `/**
  * (theme-tokens.css) reads these names.
  */`;
 
+/**
+ * Optional tokens are never declared by the defaults (each reader writes its
+ * own fallback), so without this an element wearing another theme inherits
+ * the page theme's value: the house-default panel inside a page wearing Art
+ * Deco took Art Deco's uppercase buttons. `initial` makes the property
+ * guaranteed-invalid there, so each `var(--x, fallback)` falls back. Wrapped
+ * in `:where()` (specificity 0) so a theme's own `[data-theme="id"]` value
+ * still wins on a container wearing that theme; never on the root, where the
+ * worn theme's value belongs.
+ */
+function renderOptionalReset(groups: readonly TokenGroupDef[]): string[] {
+  const optional = groups.flatMap((g) => g.tokens).filter((t) => t.optional);
+  if (optional.length === 0) return [];
+  return [
+    '',
+    ...banner(
+      'OPTIONAL HOOKS ON NESTED THEME CONTAINERS',
+      'Optional tokens are not declared above, so they would arrive from the',
+      'page theme. Reset to the guaranteed-invalid value, so each reader\'s',
+      'fallback applies; specificity 0, so a theme\'s own value still wins.'
+    ),
+    ':where([data-theme]:not(:root)) {',
+    ...optional.map((t) => `  ${t.name}: initial;`),
+    '}',
+  ];
+}
+
 /** app/styles/_theme-defaults.css: the semantic tier. */
 export function renderThemeDefaultsCss(groups: readonly TokenGroupDef[]): string {
   const { shared, dark } = renderBlocks(groups.filter((g) => sheetOf(g) === 'theme-defaults'));
@@ -223,6 +250,7 @@ export function renderThemeDefaultsCss(groups: readonly TokenGroupDef[]): string
     '[data-theme]:not(:root) {',
     ...map.map(([name, source]) => `  ${name}: var(${source});`),
     '}',
+    ...renderOptionalReset(groups),
     '',
   ].join('\n');
 }
