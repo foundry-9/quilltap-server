@@ -44,6 +44,8 @@ jest.mock('@/lib/api/serve-stored-bytes', () => {
 });
 
 import * as fake from '../../../../helpers/theme-drafts-fake-store';
+import { blankThemeBundle } from '@/lib/themes/blank-bundle';
+import { THEME_TOKENS_SCHEMA_URL } from '@/lib/themes/schemas';
 import { themeRegistry } from '@/lib/themes/theme-registry';
 import { publishRealtime } from '@/lib/realtime/bus';
 import {
@@ -130,9 +132,13 @@ describe('create and read', () => {
   it('a blank draft is the default theme and validates clean', async () => {
     const draft = await createDraft({ name: 'Blank Slate' });
     expect(draft.issues).toEqual([]);
-    expect(draft.tokens).toEqual({ primitives: {}, tokens: {}, choices: {} });
+    expect(draft.tokens).toEqual({ $schema: THEME_TOKENS_SCHEMA_URL, primitives: {}, tokens: {}, choices: {} });
     expect(draft.manifest).toMatchObject({ id: 'blank-slate', name: 'Blank Slate', version: '0.1.0', formatVersion: 2 });
     expect(draft.uri).toBe('qtap://Quilltap General/Themes/blank-slate');
+    // The same files `quilltap themes create` writes.
+    for (const file of blankThemeBundle({ id: 'blank-slate', name: 'Blank Slate' })) {
+      expect(fake.get('blank-slate', file.path)?.toString('utf-8')).toBe(file.text);
+    }
   });
 
   it.each(BUNDLED)('a copy of %s validates clean under its new id', async (from) => {

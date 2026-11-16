@@ -4,6 +4,14 @@
 
 ### 4.14-dev
 
+#### Themes: `create-quilltap-theme` retired; `quilltap themes create` writes the bundle (Calliope Live, Spec K)
+
+- New `lib/themes/blank-bundle.ts`: `blankThemeBundle` (a blank theme's `theme.json` and `tokens.json`) and `themeIdFromName`. The Atelier's `createDraft` and the CLI both use it; `draftIdFromName` is now an alias
+- A blank draft's `theme.json` and `tokens.json` now carry `$schema`
+- `quilltap themes create <name>` writes the blank bundle to `./<id>/` and prints next steps. It refuses an existing directory. The `npx create-quilltap-theme` delegation and its Windows argument check are gone, and the command no longer needs npm
+- Removed `packages/create-quilltap-theme/`; its test is replaced by `__tests__/unit/packages/quilltap-themes-create.test.ts`
+- `docker-test-plan.md` row 8.3 restated for the new command
+
 #### Themes: `@quilltap/theme-storybook` retired (Calliope Live, Spec K)
 
 - Removed `packages/theme-storybook/` and its `publish-theme-storybook` release job. The specimen gallery and the theme editor replace it

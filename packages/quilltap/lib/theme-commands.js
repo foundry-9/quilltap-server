@@ -23,7 +23,6 @@ const fsp = require('fs/promises');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { execFileSync } = require('child_process');
 const engine = require('./theme-engine.generated');
 const { getDefaultBaseDir } = require('./platform-paths');
 
@@ -950,6 +949,47 @@ ${c.bold}For Registry Operators:${c.reset}
   }
 }
 
+/**
+ * Create a blank theme bundle in ./<id>/, the id derived from the name as
+ * the Atelier derives one. The files are the engine's blank bundle, the same
+ * a new draft in the Atelier starts from. Refuses a directory that exists.
+ */
+async function createTheme(name, cwd = process.cwd()) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    console.error('Error: create requires a theme name');
+    console.error('Usage: quilltap themes create <name>');
+    return false;
+  }
+  const id = engine.themeIdFromName(trimmed);
+  const dir = path.join(cwd, id);
+  const relDir = `./${id}`;
+
+  try {
+    await fsp.mkdir(dir);
+  } catch (err) {
+    if (err.code === 'EEXIST') {
+      console.error(`${c.red}Error:${c.reset} ${relDir} already exists; choose another name or move it aside.`);
+    } else {
+      console.error(`${c.red}Error:${c.reset} could not create ${relDir}: ${err.message}`);
+    }
+    return false;
+  }
+
+  for (const file of engine.blankThemeBundle({ id, name: trimmed })) {
+    await fsp.writeFile(path.join(dir, file.path), file.text, 'utf-8');
+  }
+
+  console.log(`\n${c.green}Created${c.reset} ${c.bold}${trimmed}${c.reset} in ${relDir}\n`);
+  console.log(`${c.bold}Next steps:${c.reset}`);
+  console.log(`  1. Check it:  quilltap themes validate ${relDir}`);
+  console.log(`  2. Pack it:   cd ${id} && zip -r ../${id}.qtap-theme . && cd ..`);
+  console.log(`  3. Open ${id}.qtap-theme in the Atelier (/calliope → "Open a theme file")`);
+  console.log('     and carry on there.');
+  console.log('');
+  return true;
+}
+
 // ============================================================================
 // HELP
 // ============================================================================
@@ -966,7 +1006,7 @@ ${c.bold}Commands:${c.reset}
   uninstall <id>               Uninstall a theme bundle
   validate <file|dir>          Validate a .qtap-theme file or a bundle directory
   export <id> [--output <path>]  Export a theme as .qtap-theme
-  create <name>                Create a new theme (delegates to create-quilltap-theme)
+  create <name>                Create a blank theme bundle in ./<id>/
   search <query>               Search across registries for themes
   update [id]                  Update one or all themes from registry
 
@@ -1113,25 +1153,13 @@ async function themesCommand(args) {
     }
 
     case 'create': {
-      // Delegate to create-quilltap-theme, passing the arguments as a list
-      // (never through a shell string).
-      console.log(`\nDelegating to create-quilltap-theme...\n`);
-      const isWindows = process.platform === 'win32';
-      if (isWindows && positional.some(arg => !/^[A-Za-z0-9._@=\/-]+$/.test(arg))) {
-        console.error('Error: theme names and options may use only letters, digits, ".", "_", "-", "@", "=" and "/"');
+      if (positional.length === 0) {
+        console.error('Error: create requires a theme name');
+        console.error('Usage: quilltap themes create <name>');
         process.exit(1);
       }
-      try {
-        // Windows runs npx through npx.cmd, which needs the shell; the
-        // arguments are checked above.
-        execFileSync(isWindows ? 'npx.cmd' : 'npx', ['create-quilltap-theme', ...positional], {
-          stdio: 'inherit',
-          cwd: process.cwd(),
-          shell: isWindows,
-        });
-      } catch {
-        process.exit(1);
-      }
+      const created = await createTheme(positional.join(' '));
+      process.exit(created ? 0 : 1);
       break;
     }
 
@@ -1155,4 +1183,4 @@ async function themesCommand(args) {
   }
 }
 
-module.exports = { themesCommand };
+module.exports = { themesCommand, createTheme };

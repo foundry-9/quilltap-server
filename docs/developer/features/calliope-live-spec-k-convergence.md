@@ -462,3 +462,48 @@ nowhere; both lines go. `DEAD-CODE-REPORT.md`'s claim that
   docs, as the spec orders them.
 - **Checks:** `npm run lint` passes, `npx tsc` passes, `npm run test:unit`
   1,520 suites / 21,731 tests pass.
+
+### Stage 2 — `create-quilltap-theme` retired
+
+- **One blank bundle:** `lib/themes/blank-bundle.ts` holds
+  `blankThemeBundle({ id, name })` (the files in write order: `tokens.json`,
+  then `theme.json`) and `themeIdFromName` (the Atelier's slug rule, moved
+  here unchanged). It imports only the hook catalogue version and the
+  schema URLs; no store, logger or Node built-in. `createDraft` writes its
+  files; `draftIdFromName` is now an alias of `themeIdFromName`. The CLI
+  engine entry (`lib/themes/cli/index.ts`) exports both, and the generated
+  engine is rebuilt.
+- **One change to a blank draft:** both files now carry `$schema` (the
+  scaffolder's did, the draft's did not; the test asks for it). The
+  schemas admit it, the editor's pure functions spread the document, and
+  `writeDraftTokens` parses through `ThemeTokensDocumentSchema`, so a save
+  keeps it. The draft service test now expects it and checks the stored
+  files equal `blankThemeBundle`.
+- **The CLI:** `quilltap themes create <name>` (words joined, so
+  `create Brass Parlour` works unquoted) writes `./<id>/`, refuses an
+  existing directory with nothing touched, and prints three steps:
+  `quilltap themes validate ./<id>`, a `zip -r` to pack it, and opening
+  the `.qtap-theme` in the Atelier (`/calliope` → "Open a theme file").
+  The `npx` delegation, the Windows argument check and the
+  `child_process` import are gone. Help text and
+  `packages/quilltap/README.md` updated; the shell completions already
+  listed `create` and needed nothing.
+- **Options:** none carried over (Stage 0 found none worth keeping).
+- **Tests:** `__tests__/unit/packages/create-quilltap-theme.test.ts`
+  replaced by `quilltap-themes-create.test.ts`, which runs the real CLI:
+  the bundle equals `blankThemeBundle`, validates through
+  `validateThemeDirectory` with no errors or warnings, names both schemas,
+  carries `HOOK_CATALOGUE_VERSION`; ids derive as the Atelier's do; it
+  passes `quilltap themes validate`; an existing directory is refused and
+  left alone; a missing name is refused.
+- **Removed:** `packages/create-quilltap-theme/`. It had no release job
+  (it was published by hand), so `release.yml` is untouched.
+- **`docker-test-plan.md` row 8.3** restated: `docker exec -w /tmp
+  quilltap quilltap themes create Sunset` writes `/tmp/sunset/` with no npm
+  and validates clean. Not run against a container here.
+- **Left for later stages:** the remaining mentions in `README.md`,
+  `CLAUDE.md`, `.claude/commands/`, `help/themes.md`,
+  `THEME_DEVELOPMENT.md`, `DEVELOPMENT.md`, `DEAD-CODE-REPORT.md` and
+  `calliope-live.md`.
+- **Checks:** `npm run lint` passes (CLI engine current), `npx tsc`
+  passes, `npm run test:unit` 1,520 suites / 21,732 tests pass.

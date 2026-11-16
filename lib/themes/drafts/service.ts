@@ -25,7 +25,7 @@ import { getThemesDir } from '@/lib/paths';
 import { resolveInside, resolveInsideSync } from '@/lib/paths/resolve-inside';
 import { docStoreUriFor } from '@/lib/doc-edit/uri-producers';
 import { DocumentConflictError } from '@/lib/documents/core/errors';
-import { HOOK_CATALOGUE } from '../hooks';
+import { blankThemeBundle, themeIdFromName } from '../blank-bundle';
 import { bundleFileUsage, describeFileUse, ThemeManifestSchema, ThemeTokensDocumentSchema, type BundleFileUse, type BundleUsage, type ThemeIssue, type ThemeTokensDocument } from '../engine';
 import { bundleAssetUrl, imageMimeType, normaliseBundlePath } from '../engine/css-text';
 import { convertThemeFonts, type ThemeFontConversion } from '../convert-fonts';
@@ -594,18 +594,8 @@ export async function readDraftServedFile(id: string, file: string): Promise<Buf
 // Creating
 // ============================================================================
 
-/** A theme id from a name: lowercase, hyphenated, starting with a letter. */
-export function draftIdFromName(name: string): string {
-  let slug = name
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  if (!slug) slug = 'theme';
-  if (!/^[a-z]/.test(slug)) slug = `theme-${slug}`;
-  return slug.slice(0, 56).replace(/-+$/, '');
-}
+/** A theme id from a name, as `quilltap themes create` derives one (`themeIdFromName`). */
+export const draftIdFromName = themeIdFromName;
 
 /** Ids already taken: every draft folder and every registered theme (the default included). */
 async function takenIds(store: DraftsStore): Promise<Set<string>> {
@@ -677,19 +667,10 @@ async function writeNewDraft(
   options: { version?: string } = {},
 ): Promise<void> {
   if (!bundleDir) {
-    const manifest = {
-      format: 'qtap-theme',
-      formatVersion: 2,
-      id,
-      name: trimmed,
-      version: '0.1.0',
-      author: 'Anonymous',
-      supportsDarkMode: true,
-      tokensPath: 'tokens.json',
-      hooksVersion: HOOK_CATALOGUE.version,
-    };
-    await writeDraftDocument(store, id, 'tokens.json', `${JSON.stringify({ primitives: {}, tokens: {}, choices: {} }, null, 2)}\n`);
-    await writeDraftDocument(store, id, MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`);
+    // Tokens first, the manifest last (blankThemeBundle's order).
+    for (const file of blankThemeBundle({ id, name: trimmed })) {
+      await writeDraftDocument(store, id, file.path, file.text);
+    }
     return;
   }
 
