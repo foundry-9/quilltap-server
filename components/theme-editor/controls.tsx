@@ -501,9 +501,9 @@ export function LengthControl(props: ControlProps) {
           const split = apart || parts.length > 1
           const corners = radiusCorners(parts)
           return (
-            <div className="space-y-1">
+            <div className="space-y-1 @container">
               {split ? (
-                <div className="grid gap-1 sm:grid-cols-2">
+                <div className="grid gap-1 @sm:grid-cols-2">
                   {CORNERS.map((corner, i) => (
                     <label key={corner} className="flex items-center gap-1 qt-text-xs qt-text-secondary">
                       <span className="w-20 flex-shrink-0">{corner}</span>
@@ -578,8 +578,8 @@ function ShadowLayerFields({
     </label>
   )
   return (
-    <div className="space-y-1">
-      <div className="grid gap-1 sm:grid-cols-2">
+    <div className="space-y-1 @container">
+      <div className="grid gap-1 @sm:grid-cols-2">
         {field('x', 'Across')}
         {field('y', 'Down')}
         {field('blur', 'Blur', 0)}
@@ -809,7 +809,8 @@ const NO_DELAY: Quantity = { number: 0, unit: 'ms' }
 function TransitionLayerFields({ layer, label, onChange }: { layer: TransitionLayer; label: string; onChange: (l: TransitionLayer) => void }) {
   const easingList = useId()
   return (
-    <div className="grid gap-1 sm:grid-cols-2">
+    <div className="@container">
+    <div className="grid gap-1 @sm:grid-cols-2">
       <label className="flex items-center gap-1 qt-text-xs qt-text-secondary">
         <span className="w-16 flex-shrink-0">Property</span>
         <CommitText
@@ -852,6 +853,7 @@ function TransitionLayerFields({ layer, label, onChange }: { layer: TransitionLa
           }}
         />
       </label>
+    </div>
     </div>
   )
 }

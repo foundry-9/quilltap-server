@@ -4,6 +4,12 @@
 
 ### 4.14-dev
 
+#### Theme editor: layout by pane width (Calliope Live, Spec I Stage 2)
+
+- The theme editor's section navigation and the specimen gallery's surface navigation now switch on a container query (`@2xl`, 42rem) instead of the viewport `md` breakpoint. Below that width the list is replaced by a select (`components/ui/SectionJump.tsx`) above the body that reaches every section
+- The editor's field grids (token light/dark blocks, primitives, fonts, corner radii, shadow and transition fields) use container queries too; no viewport breakpoint remains in `components/theme-editor/`
+- `help/theme-editor.md`: the narrow-pane menus
+
 #### Code editor: brace indentation (Calliope Live, Spec I Stage 1)
 
 - Enter after `{` or `[` adds one indent unit (the file's detected one). Enter between a brace pair puts the caret on an indented line and the closing brace on its own line below. `}` or `]` typed on a line holding only indentation removes one unit, unless the line is already no deeper than its opening brace's line. Applies to JSON and CSS, in the theme editor and Document Mode. Nothing is reformatted and no brace is inserted

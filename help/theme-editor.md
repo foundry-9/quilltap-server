@@ -42,7 +42,7 @@ Six hundred tokens is a great many to wade through, so the Atelier keeps them in
 - **Components** — one component at a time: a card's padding, a bubble's background, a scrollbar's thumb. Use these when one surface ought to differ from the rest.
 - **Advanced** — the rarely set, tucked behind a disclosure at the foot of each component section.
 
-Beside the rows is the list of **sections**; choose one and the Atelier takes you to it, and each says how many of its tokens your theme has changed. **Open all** and **Close all** do as they say.
+Beside the rows is the list of **sections**; choose one and the Atelier takes you to it, and each says how many of its tokens your theme has changed. In a narrow pane — a split beside a chat, say — the list folds itself into a single **Go to a section** menu above the rows, which reaches every section just the same; the whole Atelier arranges itself by the width of its own pane rather than of the window. **Open all** and **Close all** do as they say.
 
 The **search** box finds a token at any tier by its label, its name or its description, opening whatever section or disclosure it was hiding in. Tick **Changed only** to see nothing but what this theme sets — tokens and primitives alike.
 
@@ -166,7 +166,7 @@ The gallery lays out every element a theme may dress — the app's shell, the wo
 
 - **What it wears.** While the Atelier is previewing a draft, the specimens wear the draft and repaint as you edit; with no draft open, they wear the theme you have on, so the gallery is useful on its own. The gallery's own headings and controls stay in the house default, like the Atelier's panel.
 - **Light, dark or both.** **As the window** follows your color mode; **Light** and **Dark** show one or the other whatever the window wears; **Side by side** draws every specimen in both at once.
-- **Finding things.** The list of surfaces takes you to each section; the search narrows the gallery by label or class name.
+- **Finding things.** The list of surfaces takes you to each section (in a narrow pane it becomes a **Go to a surface** menu); the search narrows the gallery by label or class name.
 - **Hover and focus** cannot be shown standing still: point at a specimen, or Tab to it, to see them.
 
 The specimens are invented for the purpose — no real character, chat or file is read — and pressing anything in them does nothing at all.

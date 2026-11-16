@@ -232,7 +232,7 @@ const PrimitiveRow = memo(function PrimitiveRow({ name, store, edit, onRemove }:
           <span className="ml-1">Remove</span>
         </button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 @xl:grid-cols-2">
         {block(
           'light',
           view.sameAsLight ? 'Light and dark' : 'Light',

@@ -213,7 +213,7 @@ function TokenRowImpl({ token, store, edit }: TokenRowProps) {
             </button>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 @xl:grid-cols-2">
             <ModeBlock
               token={token}
               mode="light"

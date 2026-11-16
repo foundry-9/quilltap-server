@@ -39,6 +39,7 @@ import { LazyRow } from './LazyRow'
 import { TokenRow, type EditFn } from './TokenRow'
 import { PrimitivesPanel } from './PrimitivesPanel'
 import { DraftResourcesContext } from './controls'
+import { SectionJump } from '@/components/ui/SectionJump'
 import { assetSectionViews, type AssetSectionView } from './assets/model'
 import { DraftOperationsContext, useDraftOperationsState } from './assets/use-draft-operations'
 import { FontsSection } from './assets/FontsSection'
@@ -1007,8 +1008,23 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
 
         <ChoicesCard tokens={tokens} edit={edit} />
 
-        <div className="grid gap-4 md:grid-cols-[13rem_minmax(0,1fr)] items-start">
-          <nav aria-label="Sections" className="qt-card p-2 md:sticky md:top-20 md:max-h-[calc(100vh-8rem)] md:overflow-y-auto">
+        <div className="@container">
+        <div className="grid gap-4 @2xl:grid-cols-[13rem_minmax(0,1fr)] items-start">
+          <SectionJump
+            className="qt-card p-2 @2xl:hidden"
+            label="Go to a section"
+            emptyText="No section answers."
+            options={[
+              ...sections.map((section) => ({
+                id: section.id,
+                label: section.label,
+                note: section.changed > 0 ? `${section.changed} set by this theme` : undefined,
+              })),
+              ...assetSections.map((section) => ({ id: section.id, label: section.label })),
+            ]}
+            onJump={goToSection}
+          />
+          <nav aria-label="Sections" className="qt-card p-2 hidden @2xl:block @2xl:sticky @2xl:top-20 @2xl:max-h-[calc(100vh-8rem)] @2xl:overflow-y-auto">
             {sections.length === 0 && assetSections.length === 0 ? (
               <p className="qt-text-xs qt-text-muted p-2">No section answers.</p>
             ) : (
@@ -1047,7 +1063,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
             )}
           </nav>
 
-          <div className="space-y-4 min-w-0" onKeyDown={onEditorKeyDown}>
+          <div className="space-y-4 min-w-0 @container" onKeyDown={onEditorKeyDown}>
             {filtering && sections.length === 0 && assetSections.length === 0 && (
               <p className="qt-card p-4 qt-text-small qt-text-muted">
                 {changedOnly && !query.trim()
@@ -1081,6 +1097,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
               </AssetCard>
             ))}
           </div>
+        </div>
         </div>
       </div>
     </DraftResourcesContext.Provider>

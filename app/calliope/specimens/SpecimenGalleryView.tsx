@@ -17,6 +17,7 @@ import { useTheme } from '@/components/providers/theme-provider'
 import { SpecimenGallery, specimenHeadingId, surfaceDomId, type GalleryMode, type StageTheme } from '@/components/theme-specimens/SpecimenGallery'
 import { useInspectOptional } from '@/components/theme-inspect/InspectProvider'
 import { InspectToggle } from '@/components/theme-inspect/InspectToggle'
+import { SectionJump } from '@/components/ui/SectionJump'
 import { hookGroups } from '@/components/theme-editor/assets/styles-model'
 import { THEME_CHOICES } from '@/lib/themes/engine/client'
 
@@ -149,8 +150,15 @@ export function SpecimenGalleryView() {
         </div>
         <p className="sr-only" aria-live="polite">{query.trim() ? `${total} hooks answer.` : ''}</p>
 
-        <div className="grid gap-4 @3xl:grid-cols-[13rem_minmax(0,1fr)] items-start">
-          <nav aria-label="Surfaces" className="qt-card p-2 @3xl:sticky @3xl:top-20 @3xl:max-h-[calc(100vh-8rem)] @3xl:overflow-y-auto">
+        <div className="grid gap-4 @2xl:grid-cols-[13rem_minmax(0,1fr)] items-start">
+          <SectionJump
+            className="qt-card p-2 @2xl:hidden"
+            label="Go to a surface"
+            emptyText="No surface answers."
+            options={groups.map((g) => ({ id: g.surface, label: g.title, note: `${g.hooks.length} hooks` }))}
+            onJump={goTo}
+          />
+          <nav aria-label="Surfaces" className="qt-card p-2 hidden @2xl:block @2xl:sticky @2xl:top-20 @2xl:max-h-[calc(100vh-8rem)] @2xl:overflow-y-auto">
             {groups.length === 0 ? (
               <p className="qt-text-xs qt-text-muted p-2">No surface answers.</p>
             ) : (

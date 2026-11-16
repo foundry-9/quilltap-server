@@ -346,7 +346,7 @@ function AddFontForm({ files, detail, onClose }: { files: File[]; detail: DraftD
                       style below are guessed from the file name. Check them.
                     </p>
                   )}
-                  <div className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr]">
+                  <div className="grid gap-2 @xl:grid-cols-[2fr_1fr_1fr]">
                     <div>
                       <label htmlFor={`${baseId}-${i}-family`} className="qt-label">
                         Family{row.guessed && <span className="qt-text-xs qt-text-warning"> (guessed)</span>}
@@ -464,7 +464,7 @@ function EditFontForm({ face, detail, onClose }: { face: FontEntry; detail: Draf
           <label htmlFor={`${baseId}-family`} className="qt-label">Family</label>
           <input id={`${baseId}-family`} className="qt-input w-full" value={family} maxLength={100} onChange={(e) => setFamily(e.target.value)} />
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 @lg:grid-cols-2">
           <div>
             <label htmlFor={`${baseId}-weight`} className="qt-label">Weight</label>
             <input id={`${baseId}-weight`} className="qt-input w-full" value={weight} maxLength={20} placeholder="400, or 100 900" onChange={(e) => setWeight(e.target.value)} />
