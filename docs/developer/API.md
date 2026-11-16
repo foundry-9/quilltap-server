@@ -6775,13 +6775,22 @@ Errors: `400` a malformed upload or an operation refused for a reason the caller
 
 Create a draft. Body (strict): `{ name: string (1–100), from?: string }`. Without `from`, an empty tokens document (the default theme); with it, a copy of every file of the registered theme `from` under a new id (derived from `name`, de-duplicated) at version `0.1.0`. An unknown `from` is `400`. Returns `201` `{ draft: DraftDetail }`.
 
+#### `POST /api/v1/theme-drafts?action=import`
+
+Calliope Live Spec G. Open a `.qtap-theme` as a new draft. `multipart/form-data` with exactly one file in `file` and no other field. The upload must state its `Content-Length` (`411` otherwise), and one past the bundle limit (`MAX_BUNDLE_SIZE`) is refused with `413` before the body is read. The archive is validated and extracted by `lib/themes/bundle-archive.ts`, under every check an install runs, into a temporary directory that is always removed. Refusals carry `{ errors: string[], reason }`: `reason: 'refused'` (`422`) for a version 1 bundle, with the earlier-theme message; `'invalid'` (`422`) for one that would not install; `'limit'` (`413`). The draft keeps the bundle's name and version and takes the bundle's id, or the next free one (`rains-2`); nothing existing is replaced. Returns `201` `{ draft: DraftDetail, bundleId, idChanged }`.
+
 #### `GET /api/v1/theme-drafts/[id]`
 
-`{ draft: DraftDetail }`: `id`, `manifest` (parsed, or `null`), `tokens` (or `null` when missing or unparseable), `revision` (content hash of `tokens.json`, or `missing`), `uri` (the folder's `qtap://` address), `compiled` (`{ fontFaces, icons, custom }` — the parts the editor cannot change yet, compiled server-side; empty when invalid), `subsystems` (manifest overrides with image paths turned into draft asset URLs), `issues` (`{ severity, message }[]`), `updatedAt`, `version`, `mountPointId` (Quilltap General, for a Scriptorium link), `images` (`{ path, type, url }[]` — every image file), `manifestRevision` (content hash of `theme.json`, sent back with every manifest or file operation), `files` (`{ path, size, kind, users, usedBy, unused, font? }[]` — `kind` is `manifest` / `tokens` / `styles` / `font` / `licence` / `image` / `other`; `users` are `BundleFileUse` entries from `bundleFileUsage` (`lib/themes/engine/usage.ts`) and `usedBy` the same in words; `unused` marks a font or image nothing refers to; `font` is what a font file says it is — family, weight, style, variable, embedding, licence, licence URL — or `null` when unreadable) and `totals` (`{ files, bytes, limits: { files, bytes, fileBytes } }`, the limits from `bundle-archive`).
+`{ draft: DraftDetail }`: `id`, `manifest` (parsed, or `null`), `tokens` (or `null` when missing or unparseable), `revision` (content hash of `tokens.json`, or `missing`), `uri` (the folder's `qtap://` address), `compiled` (`{ fontFaces, icons, custom }` — the parts the editor cannot change yet, compiled server-side; empty when invalid), `subsystems` (manifest overrides with image paths turned into draft asset URLs), `issues` (`{ severity, message, file?, line? }[]` — `file` is the bundle path and `line` the 1-based line where the engine knows them, Spec G), `updatedAt`, `version`, `mountPointId` (Quilltap General, for a Scriptorium link), `styles` (`{ path, text, revision }` — the custom stylesheet named by `stylesPath`, `revision` its content hash — or `null` when the manifest names none), `images` (`{ path, type, url }[]` — every image file), `manifestRevision` (content hash of `theme.json`, sent back with every manifest or file operation), `files` (`{ path, size, kind, users, usedBy, unused, font? }[]` — `kind` is `manifest` / `tokens` / `styles` / `font` / `licence` / `image` / `other`; `users` are `BundleFileUse` entries from `bundleFileUsage` (`lib/themes/engine/usage.ts`) and `usedBy` the same in words; `unused` marks a font or image nothing refers to; `font` is what a font file says it is — family, weight, style, variable, embedding, licence, licence URL — or `null` when unreadable) and `totals` (`{ files, bytes, limits: { files, bytes, fileBytes } }`, the limits from `bundle-archive`).
 
 #### `PUT /api/v1/theme-drafts/[id]`
 
-Save the tokens. Body (strict): `{ revision: string, tokens: ThemeTokensDocument }`. Written only when `revision` matches the stored file, else `409`. The name, description and every other manifest field are changed through `?action=set-manifest`. Returns `{ draft: DraftDetail }`.
+Save the tokens or the custom stylesheet. Body (strict), one of:
+
+- `{ revision: string, tokens: ThemeTokensDocument }` — `tokens.json`;
+- `{ stylesRevision: string, css: string }` — the stylesheet named by `stylesPath` (Spec G; `400` when the manifest names none, `413` past the per-file limit). The text is written exactly as sent; CSS the scoper refuses is still saved, and its errors come back as draft issues with `file` and `line`.
+
+Written only when the revision matches the stored file, else `409 { currentRevision }`. The name, description and every other manifest field are changed through `?action=set-manifest`. Returns `{ draft: DraftDetail }`.
 
 #### `DELETE /api/v1/theme-drafts/[id]`
 
@@ -6805,6 +6814,8 @@ Uploads are `multipart/form-data` with exactly one file in `file` and every othe
 | `set-icon` | multipart: `file` (`.svg` / `.webp`), `manifestRevision`, `name` | Stores the file under `icons/` and points `iconOverrides[name]` at it; an unknown icon name is `400`. The file it replaces goes when nothing else uses it. |
 | `clear-icon` | `{ manifestRevision, name }` | Removes the override, and its file when nothing else uses it. |
 | `set-subsystem` | `{ manifestRevision, subsystem, fields: { name?, description?, thumbnail?, backgroundImage? } }` | Sets one subsystem override; an empty field clears it, `'none'` means no picture, an image must be an image file in the draft, and an unknown subsystem is `400`. |
+| `set-styles-file` | `{ manifestRevision }` | Names `styles.css` as the stylesheet (`stylesPath`), creating it empty when absent (Spec G). |
+| `clear-styles-file` | `{ manifestRevision, deleteFile? }` | Removes `stylesPath` from the manifest first, then deletes the file only when `deleteFile` is `true`. |
 | `set-manifest` | `{ manifestRevision, fields: { name?, description?, author?, license?, tags?, supportsDarkMode?, previewImage? } }` | Sets the named manifest fields. `author` is a string or `{ name, email?, url? }` and optional only (not nullable); `description`, `license` and `previewImage` take `null` to clear. A result the manifest schema refuses is `422 { errors }`. |
 
 #### `POST /api/v1/theme-drafts/[id]?action=install`
