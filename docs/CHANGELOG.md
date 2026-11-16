@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Dependencies: OpenRouter SDK floor raised
+
+- `npm update` across root, packages and plugins. `@openrouter/sdk` is now `^1.5.105` in the root and the OpenRouter plugin (plugin 1.0.75), so a build no longer flips the bundled SDK between 1.5.103 and 1.5.105 depending on the machine; `@testing-library/user-event` to `^14.6.12`
+- Plugin lockfiles are not tracked (`plugins/**/package-lock.json` is ignored), so the version range in each plugin's `package.json` is what keeps machines in step
+
 #### Docs: Calliope Live Spec H complete (Stage 3)
 
 - `THEME_DEVELOPMENT.md`: adding a hook needs a specimen and the coverage test that checks it; the specimen gallery and inspect mode under the Atelier
