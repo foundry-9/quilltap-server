@@ -294,7 +294,7 @@ describe('Backup Parser', () => {
       } finally {
         cleanupZip(zipPath)
       }
-    }, 15000)
+    })
 
     it('round-trips text replacement rules through the archive', async () => {
       const now = new Date().toISOString()
@@ -331,7 +331,7 @@ describe('Backup Parser', () => {
       } finally {
         cleanupZip(zipPath)
       }
-    }, 15000)
+    })
 
     it('round-trips groups and their join tables through the archive', async () => {
       const now = new Date().toISOString()
@@ -380,7 +380,7 @@ describe('Backup Parser', () => {
       } finally {
         cleanupZip(zipPath)
       }
-    }, 15000)
+    })
 
     it('parses a pre-format-4 backup with no groups files', async () => {
       // Omit groups entirely → the data files are never written, simulating a
@@ -406,7 +406,7 @@ describe('Backup Parser', () => {
       } finally {
         cleanupZip(zipPath)
       }
-    }, 15000)
+    })
 
     it('parses a pre-change backup with no text-replacement-rules.json', async () => {
       // Omit textReplacementRules entirely → the data file is never written,
@@ -430,7 +430,7 @@ describe('Backup Parser', () => {
       } finally {
         cleanupZip(zipPath)
       }
-    }, 15000)
+    })
 
     it('parses backup with multiple entities of each type', async () => {
       const characters = [
@@ -1199,7 +1199,7 @@ describe('Backup Parser', () => {
       } finally {
         cleanupZip(zipPath)
       }
-    }, 15000)
+    })
 
     it('returns empty array for characterPluginData when file is absent (backwards compat)', async () => {
       const zipPath = createBackupZipFile({
@@ -1224,7 +1224,7 @@ describe('Backup Parser', () => {
       } finally {
         cleanupZip(zipPath)
       }
-    }, 15000)
+    })
 
     it('parses conversation-annotations.json when present in the archive', async () => {
       const now = new Date().toISOString()
@@ -1276,7 +1276,7 @@ describe('Backup Parser', () => {
       } finally {
         cleanupZip(zipPath)
       }
-    }, 15000)
+    })
 
     it('returns empty array for conversationAnnotations when file is absent (backwards compat)', async () => {
       const zipPath = createBackupZipFile({
@@ -1300,7 +1300,7 @@ describe('Backup Parser', () => {
       } finally {
         cleanupZip(zipPath)
       }
-    }, 15000)
+    })
 
     it('includes characterPluginData and conversationAnnotations counts in previewRestore()', async () => {
       const now = new Date().toISOString()
@@ -1356,6 +1356,6 @@ describe('Backup Parser', () => {
       } finally {
         cleanupZip(zipPath)
       }
-    }, 15000)
+    })
   })
 })

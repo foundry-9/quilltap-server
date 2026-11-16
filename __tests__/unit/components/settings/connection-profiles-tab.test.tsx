@@ -189,7 +189,7 @@ describe('ConnectionProfilesTab max tokens limit', () => {
       await waitFor(() => {
         maxTokensInput = screen.getByLabelText('Max Tokens') as HTMLInputElement
         expect(maxTokensInput).toHaveAttribute('max', '8192')
-      }, { timeout: 3000 })
+      })
 
       // Verify the model limit text is displayed with correct formatting
       const modelLimitElements = screen.queryAllByText((content, element) => {
@@ -202,7 +202,7 @@ describe('ConnectionProfilesTab max tokens limit', () => {
       await waitFor(() => {
         maxTokensInput = screen.getByLabelText('Max Tokens') as HTMLInputElement
         expect(maxTokensInput).toHaveAttribute('max', '8192')
-      }, { timeout: 3000 })
+      })
 
       // Verify the model limit text is displayed
       const modelLimitElements = screen.queryAllByText((content, element) => {

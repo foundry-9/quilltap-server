@@ -227,7 +227,7 @@ describe('CustomToolInterventionDialog — editing', () => {
     // Debounced: not sent in the same tick.
     expect(callsTo('intervention-preview')).toHaveLength(0)
 
-    await waitFor(() => expect(callsTo('intervention-preview')).toHaveLength(1), { timeout: 3000 })
+    await waitFor(() => expect(callsTo('intervention-preview')).toHaveLength(1))
     expect(callsTo('intervention-preview')[0]).toMatchObject({
       method: 'POST',
       body: { id: 'a', overrides: { outcomeIndex: 1 } },
@@ -248,7 +248,7 @@ describe('CustomToolInterventionDialog — editing', () => {
     fireEvent.change(message, { target: { value: 'Fix' } })
     fireEvent.change(message, { target: { value: 'Fixed.' } })
 
-    await waitFor(() => expect(callsTo('intervention-preview')).toHaveLength(1), { timeout: 3000 })
+    await waitFor(() => expect(callsTo('intervention-preview')).toHaveLength(1))
     expect(callsTo('intervention-preview')[0].body).toEqual({ id: 'a', overrides: { message: 'Fixed.' } })
   })
 
@@ -258,7 +258,7 @@ describe('CustomToolInterventionDialog — editing', () => {
     await screen.findByTestId('custom-tool-intervention')
 
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'Fixed.' } })
-    await waitFor(() => expect(callsTo('intervention-preview')).toHaveLength(1), { timeout: 3000 })
+    await waitFor(() => expect(callsTo('intervention-preview')).toHaveLength(1))
     await waitFor(() => expect((screen.getByText('Deal it') as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(screen.getByText('Deal it'))
 

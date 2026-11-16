@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Tests: longer timeouts for CI
+
+- CI's Test job kept failing on timeouts in slow jsdom suites (the theme editor's custom CSS tests): Jest's 5 s per-test default in one run, Testing Library's 1 s `findBy` / `waitFor` default in others. The suite runs ~1,500 files under v8 coverage there and render-heavy suites take several times longer than locally
+- `jest.config.ts`: `testTimeout: 30000` (matches the integration config)
+- `jest.setup.ts`: Testing Library `asyncUtilTimeout` raised to 10 s
+- Removed per-call and per-test timeouts that were now below those defaults and would have shortened them (theme editor, custom tool intervention dialog, connection profiles tab, backup parser, plugin initialization, DB encryption state)
+
 #### Theme editor: layout by pane width (Calliope Live, Spec I Stage 2)
 
 - The theme editor's section navigation and the specimen gallery's surface navigation now switch on a container query (`@2xl`, 42rem) instead of the viewport `md` breakpoint. Below that width the list is replaced by a select (`components/ui/SectionJump.tsx`) above the body that reaches every section
