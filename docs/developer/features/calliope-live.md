@@ -54,6 +54,10 @@ not a settled design.
   in the theme editor who proposes changes the author tries, keeps or
   discards (implemented 4.14-dev; user docs
   [help/theme-editor.md](../../../help/theme-editor.md)).
+- [calliope-live-spec-k-convergence.md](calliope-live-spec-k-convergence.md)
+  — Phase 3: retiring `@quilltap/theme-storybook` and
+  `create-quilltap-theme` and closing this proposal; the author's guide is
+  recorded as necessary and left for later (ready to run).
 
 **Scope:** `quilltap-server` (v4) only. Porting to v5 is a separate concern and
 does not shape decisions here.
@@ -82,6 +86,9 @@ result. That is part of the project, not a side effect.
 | What edits a theme's JSON and CSS as text? | **Lexical, with its own code highlighting switched on for JSON and CSS** (2026-11-14). Revisit if theme editing becomes common. | Needed one package after all: `@lexical/code-prism` (0.53, MIT), where Lexical 0.53 keeps the Prism highlighter; `@lexical/code` alone has none. Built in Spec G as `components/code-editor/`, used by the theme editor's CSS section and by Document Mode for `.json` and `.css`. A dedicated code editor would add completion and lint markers, which can wait. |
 | Where does a theme being worked on live? | **In Quilltap General, under `Themes/<id>/`** (2026-11-14). Its images are kept as the author supplied them; an installed theme carries WebP. | A draft is the user's work, so it belongs with the user's files: visible in the Scriptorium, editable in Document Mode, reachable by characters, backed up with the store. |
 | What to keep from Storybook? | The **specimen-sheet idea**. | Build specimens as in-app components; Storybook may consume the same components so there is one copy of the markup. |
+| What becomes of `@quilltap/theme-storybook` and `create-quilltap-theme`? | **Both are retired** (2026-11-16), in [Spec K](calliope-live-spec-k-convergence.md). | The specimen gallery draws every catalogued hook from the app's own components, and the Atelier starts, installs and exports a theme. Neither package has anything left to do that the app does not do better. |
+| How does the assistant see its work? | **It does not, by itself** (2026-11-16). The author screenshots what looks wrong and attaches it to Calliope. | A screenshot the author chose shows exactly the fault they mean, costs nothing to build, and sends a model only what the author decided to send. |
+| Is the theme author's guide part of this feature's release? | **No; it is necessary and comes after** (2026-11-16). | The Atelier's help page already documents every section. The start-to-finish guide is worth doing properly, as its own work, once the feature has been used. |
 | Where does the logic live? | A **framework-free engine** in `lib/themes/`, with the editor UI as a thin layer. | The `quilltap themes` CLI, the bundle loader and the editor then share one source of truth for model, validation, CSS emission and packing. |
 
 ## What the theme system looked like before Calliope Live

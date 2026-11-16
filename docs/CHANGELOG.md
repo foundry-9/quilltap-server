@@ -17,6 +17,11 @@
 - Console salvage notice: `salvageMessage` takes a `cause`. When a model returns an empty answer before the turn budget is spent (typically a reply cut off at its output token limit), Brahma and Calliope now say so and suggest raising the profile's max tokens, instead of claiming the turn budget ran out
 - `help/theme-editor.md`: Calliope, her proposals, hand-offs and settings; `help/appearance-settings.md`: the Calliope card. Avatar `public/images/avatars/calliope-avatar.webp`
 
+#### Docs: Calliope Live Spec K
+
+- Added Spec K (Phase 3: retire `@quilltap/theme-storybook` and `create-quilltap-theme`, close the Calliope Live proposal; the theme author's guide is noted as necessary and left for later); ready to run
+- Spec K Stage 0: inventory of both packages (stories against the specimen gallery, the icon list, every reference, root dependencies) recorded in the spec
+
 #### Docs: Calliope Live Spec J
 
 - Added Spec J (Calliope as an assistant in the theme editor: a Brahma-like console with her own chat type, read-only theme tools and engine-checked proposals the author tries, keeps or discards)
