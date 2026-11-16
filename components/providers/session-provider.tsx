@@ -8,6 +8,7 @@ import { QuickHideProvider } from "./quick-hide-provider";
 
 import { ContentWidthProvider } from "./content-width-provider";
 import { AvatarDisplayProvider } from "./avatar-display-provider";
+import { InspectProvider } from '@/components/theme-inspect/InspectProvider';
 import { ThemeProvider } from "./theme-provider";
 
 // ============================================================================
@@ -194,6 +195,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         refetchOnWindowFocus={false}
       >
         <ThemeProvider>
+          <InspectProvider>
           <TagStyleProvider>
             <QuickHideProvider>
                 <ContentWidthProvider>
@@ -203,6 +205,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 </ContentWidthProvider>
             </QuickHideProvider>
           </TagStyleProvider>
+          </InspectProvider>
         </ThemeProvider>
       </CustomSessionProvider>
     </QueryProvider>

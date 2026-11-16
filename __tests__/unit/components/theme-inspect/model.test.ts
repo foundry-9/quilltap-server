@@ -8,6 +8,7 @@
  */
 
 import {
+  customCssRules,
   describeHook,
   hookForChain,
   inspectProperties,
@@ -261,5 +262,31 @@ describe('property to token', () => {
   it('shows anything else by name only', () => {
     const resolved = resolveTheme(EMPTY, CLIENT_REGISTRY_VIEW)
     expect(traceProperty('--_qt-icon-mask', resolved, 'light')).toMatchObject({ kind: 'unknown', name: '--_qt-icon-mask', token: null, follows: [] })
+  })
+})
+
+describe('customCssRules', () => {
+  const rule = (selector: string, origin: MatchedRule['origin'], order: number, state: MatchedRule['state'] = null): MatchedRule => ({
+    selector,
+    declarations: [{ property: 'color', value: 'red', important: false }],
+    origin,
+    layer: null,
+    order,
+    state,
+    source: 'theme',
+  })
+
+  it('keeps the theme’s own rules, once each, with the compiled scoping taken off', () => {
+    const out = customCssRules([
+      rule(':scope .qt-card', 'theme-custom', 2),
+      rule('.qt-card', 'app', 0),
+      rule(':scope .qt-card', 'theme-custom', 3),
+      rule(':scope .qt-card:hover', 'theme-custom', 1, 'hover'),
+      rule('[data-theme="x"]', 'theme-tokens', 4),
+    ])
+    expect(out.map((r) => [r.selector, r.state])).toEqual([
+      ['.qt-card:hover', 'hover'],
+      ['.qt-card', null],
+    ])
   })
 })

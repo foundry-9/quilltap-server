@@ -13,6 +13,7 @@ import { useId, useMemo, useState } from 'react'
 import type { HookDef } from '@/lib/themes/hooks'
 import type { ResolvedTheme, ThemeTokensDocument } from '@/lib/themes/engine/client'
 import type { DraftDetail } from '../use-theme-drafts'
+import { useInspectOptional } from '@/components/theme-inspect/InspectProvider'
 import type { EditorMode } from '../model'
 import { filterTokenEntries, hookGroups, hookSelectors, imageEntries, tokenEntries } from './styles-model'
 
@@ -39,6 +40,9 @@ function HookEntry({ hook, onInsert }: { hook: HookDef; onInsert: (text: string)
   const selectors = useMemo(() => hookSelectors(hook), [hook])
   const [chosen, setChosen] = useState(selectors[0].selector)
   const selectId = useId()
+  const inspect = useInspectOptional()
+  const [notFound, setNotFound] = useState(false)
+  const inspectOnPage = () => setNotFound(!inspect?.inspectHook(hook.className))
   return (
     <li className="py-2 border-b qt-border-default last:border-b-0">
       <p className="qt-text-small font-medium">{hook.label}</p>
@@ -67,7 +71,20 @@ function HookEntry({ hook, onInsert }: { hook: HookDef; onInsert: (text: string)
         >
           Insert
         </button>
+        {inspect && (
+          <button type="button" className="qt-button qt-button-ghost qt-button-sm" aria-label={`Inspect ${hook.label.toLowerCase()} on the page`} onClick={inspectOnPage}>
+            Inspect this
+          </button>
+        )}
       </div>
+      {inspect && notFound && (
+        <p className="qt-text-xs qt-text-secondary mt-1" role="status">
+          Nothing on the page wears it just now.{' '}
+          <button type="button" className="underline" onClick={() => inspect.showInGallery(hook.className)}>
+            Show it in the gallery
+          </button>
+        </p>
+      )}
     </li>
   )
 }

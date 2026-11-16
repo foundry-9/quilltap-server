@@ -171,6 +171,14 @@ The gallery lays out every element a theme may dress — the app's shell, the wo
 
 The specimens are invented for the purpose — no real character, chat or file is read — and pressing anything in them does nothing at all.
 
+## Inspecting what you see
+
+When you would rather point at a thing than hunt for it, press **Inspect** — at the top of an open draft, or in the gallery's toolbar. Until you press it again, or press Escape, Quilltap stops answering clicks: point at anything and it is outlined and named; click and the inspector opens instead of whatever you clicked doing its usual business.
+
+The inspector tells you which hook the element wears (or, when it wears none, the nearest one above it), every token that colours, borders, rounds or spaces it with the value in force and what that value follows, what changes on hover, focus and press, and any rules of your own Custom CSS that reach it. **Row** takes you to a token's row in the draft; **Write CSS for this** sets an empty rule for the hook in your Custom CSS, beginning a stylesheet if the draft has none; **Show in the gallery** finds its specimen. The inspector keeps to the side away from the draft, and the arrow at its top moves it across. It reads the shape of things, never their words.
+
+Without a mouse: every specimen in the gallery has **Inspect this** and **Show on this page**, and every hook in the Custom CSS reference has **Inspect this**, which says so plainly when nothing on the page is wearing it just now.
+
 ## Installing
 
 When the draft pleases you, press **Install**. The Atelier packs it into a proper bundle and installs it exactly as though you had uploaded a `.qtap-theme` file, with every check that implies — so an install that succeeds is one that will load. Quilltap puts it on at once (*Worn with pride.*).

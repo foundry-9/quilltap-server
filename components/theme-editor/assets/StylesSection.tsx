@@ -49,6 +49,8 @@ interface StylesSectionProps {
   tokens: ThemeTokensDocument
   resolved: ResolvedTheme
   mode: EditorMode
+  /** Set, while there is a stylesheet to write in, to insert text at its cursor (the inspector's "Write CSS for this"). */
+  insertRef?: MutableRefObject<((text: string) => void) | null>
 }
 
 function Rules() {
@@ -66,7 +68,7 @@ function Rules() {
   )
 }
 
-export function StylesSection({ detail, value, onChange, status, flushRef, tokens, resolved, mode }: StylesSectionProps) {
+export function StylesSection({ detail, value, onChange, status, flushRef, tokens, resolved, mode, insertRef }: StylesSectionProps) {
   const ops = useDraftOperations()
   const editorRef = useRef<CodeEditorHandle>(null)
   const [removing, setRemoving] = useState(false)
@@ -74,6 +76,7 @@ export function StylesSection({ detail, value, onChange, status, flushRef, token
   const headingId = useId()
   const deleteId = useId()
   const styles = detail.styles
+  const hasStyles = styles !== undefined && styles !== null
 
   // While open, the draft editor's flush reaches the code editor; on the way out, hand up what is pending.
   useLayoutEffect(() => {
@@ -84,6 +87,14 @@ export function StylesSection({ detail, value, onChange, status, flushRef, token
       flushRef.current = null
     }
   }, [flushRef, styles?.path])
+
+  useLayoutEffect(() => {
+    if (!insertRef || !hasStyles) return
+    insertRef.current = (text) => editorRef.current?.insertAtCursor(text)
+    return () => {
+      insertRef.current = null
+    }
+  }, [insertRef, hasStyles])
 
   const issues = useMemo(() => (styles ? stylesheetIssues(detail.issues, styles.path) : []), [detail.issues, styles])
   const markers = useMemo(() => (styles ? stylesheetMarkers(detail.issues, styles.path) : []), [detail.issues, styles])

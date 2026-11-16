@@ -331,3 +331,88 @@ told what a hook is styled by.
     `qt-chat-messages-list`, the roleplay text classes (`qt-chat-dialogue`,
     `qt-chat-narration`, `qt-chat-ooc`, `qt-chat-inner-monologue`) and
     `qt-chat-composer-actions`. Reported, not added.
+
+### Stage 2 — done 2026-11-16 (uncommitted)
+
+- `InspectProvider` (`components/theme-inspect/InspectProvider.tsx`) sits
+  inside `ThemeProvider` in `session-provider.tsx` and holds the mode, the
+  selection, the report, the outlines and the two bridges. Its layer portals
+  to the body inside `data-theme="default"` + the window's mode +
+  `data-inspect-ignore`. `InspectToggle` is in the editor's header and the
+  gallery's toolbar; Escape turns the mode off and keeps the selection.
+- **Listeners are on `window`, in capture**, not `document`: the
+  workspace's link interceptor is a `document` capture listener registered
+  earlier, and in V4test a click on a rail link while inspecting opened
+  Characters before the inspector saw it. On the window they run ahead of
+  every document-level capture listener. Swallowed: pointer down/up, mouse
+  down/up, click, dblclick, auxclick (default prevented, propagation
+  stopped); a click chooses. All are removed when the mode goes off.
+- **What may not be inspected** is marked: `data-inspect-ignore` on the
+  editor's panel, the gallery view and the inspector's layer;
+  `data-inspect-target` on a specimen's stage reopens it inside the
+  gallery (the nearer marker wins, `isInspectIgnored` in `dom.ts`).
+  "Show on this page" and "Inspect this" from the reference skip ignored
+  zones and stages.
+- **The report** (`report.ts`) is built in the frame after the commit that
+  changed the selection, the draft's resolved theme or `themeRevision`,
+  never on pointer move; the pointer only walks classes. With no draft open
+  it traces against the registry defaults and says so instead of naming
+  sources. Values shown are the browser's computed value on the hooked
+  element. The outline follows the hooked element, not the descendant
+  clicked.
+- **The panel** (`InspectPanel.tsx`): hook, surface, depth note, variants,
+  states, other hooks on the element, a selector picker from
+  `hookSelectors`, "Write CSS for this" (begins a stylesheet first when the
+  draft has none), "Show in the gallery"; token groups by category with
+  swatch, value, chain and source, each with "Row"; a collapsed section per
+  interaction state; "Your own CSS that applies" with selectors as authored
+  (the compiler's `:scope ` taken off — `authoredSelector`). It docks on the
+  side away from the editor's panel (`data-inspect-editor`), re-docks after
+  "Row" or "Write CSS" brings the editor forward, and has a button to move
+  it. It never shows the inspected element's text.
+- **The editor bridge** (`DraftEditor`): `goToToken` and `writeCss` first
+  bring the editor's tab to the front of its pane (the gallery may be over
+  it); `writeCss` clears the filter, opens Custom CSS and inserts
+  `selector { }` at the stylesheet's caret through a new `insertRef` on
+  `StylesSection` (the same `insertAtCursor` the reference uses);
+  `beginStylesheet` is the existing `set-styles-file` operation; the
+  gallery opens in the pane beside the editor's own
+  (`useOpenSpecimenGallery`, now pane-of-the-calling-tab rather than
+  focused pane). The **gallery bridge** reveals a specimen (clears the
+  search, scrolls until the position holds — `content-visibility` above it
+  settles late — and focuses its heading); a gallery opened by "Show in the
+  gallery" is handed the hook when it registers.
+- **Keyboard path:** "Inspect this" and "Show on this page" on every
+  specimen (hidden when there is no provider); "Inspect this" on every hook
+  in the CSS section's reference, which, when nothing on the page wears the
+  hook, says so and offers the gallery.
+- `scripts/check-modal-shell.mjs`: `components/theme-specimens/specimens/pages.tsx`
+  allowlisted (it draws the dialog hooks in a stage; Stage 1's lint ran
+  before the file was tracked, so the gate never saw it).
+- **Tests:** `inspect-mode.test.tsx` (every capture listener the mode adds is
+  removed and no attribute is left on `html` / `body`; a click while
+  inspecting reaches neither the element nor an earlier document capture
+  listener, and the ignored zone still works; showing in the gallery opens
+  it through the editor and the gallery reveals the hook when it registers;
+  the panel for a hooked element via a descendant with `goToToken` and
+  `writeCss` arguments, the begin-a-stylesheet path, an unhooked element
+  without a draft, a hover state, and custom CSS), and `customCssRules` in
+  `model.test.ts`.
+- **V4test** (port 3005, draft "Blank Atelier Test", Salon on the left,
+  Atelier on the right): inspected a Salon bubble
+  (`qt-chat-message-assistant`, two levels up), a rail item, a real dialog
+  (Create Group, through the reference's "Inspect this"; the panel stays
+  usable over the modal and the dialog does not close) and specimens in the
+  gallery. "Row" focused `--qt-chat-assistant-bg` and `--theme-foreground`;
+  changing Foreground's dark value turned the page orange and the panel
+  re-read it as "Set by this theme" while its own text stayed in the house
+  default. "Write CSS for this" began a stylesheet and inserted the rule;
+  typing `outline` into it outlined the rail item and the panel listed the
+  rule as the author's own. Undone and the stylesheet removed afterwards; no
+  preference changed. A settings card was not tried by hand (the panel path
+  is the same; `CollapsibleCard` is covered by the gallery).
+- **Differs from the spec:** while the pointer is over an element its
+  `:hover` rules match for real, so the panel lists them in the base group
+  (the walker reports what matches now). Escape leaves the selection open.
+- Commands: `npx tsc` clean; `npm run lint` clean; theme snapshot unchanged;
+  `npm run test:unit` 1,512 suites / 21,544 tests passed.

@@ -236,3 +236,24 @@ export function matchingRules(el: Element, doc: Document = el.ownerDocument): Ru
 
   return { rules, layerOrder, unreadable, elapsedMs: now() - started }
 }
+
+/**
+ * True when `el` lies in a part of the page the inspector leaves alone (its
+ * own panel, the editor's panel, the gallery's chrome). A
+ * `data-inspect-target` inside such a part (a specimen's stage) is open to it
+ * again: whichever marker is nearer wins.
+ */
+export const isInspectIgnored = (el: Element | null): boolean =>
+  el?.closest('[data-inspect-ignore], [data-inspect-target]')?.hasAttribute('data-inspect-ignore') ?? false
+
+/**
+ * The nearest element at or above `el` that carries a catalogued hook, for
+ * the pointer's outline — cheap enough for pointer move (classes only, no
+ * stylesheet). Null when none does.
+ */
+export function nearestHookedElement(el: Element | null, isHookClass: (c: string) => boolean): Element | null {
+  for (let node = el; node && node !== node.ownerDocument.documentElement; node = node.parentElement) {
+    for (const c of Array.from(node.classList)) if (isHookClass(c)) return node
+  }
+  return null
+}

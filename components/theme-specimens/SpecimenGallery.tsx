@@ -20,8 +20,9 @@
  * @module components/theme-specimens/SpecimenGallery
  */
 
-import { memo, type MouseEvent } from 'react'
+import { memo, useRef, useState, type MouseEvent, type RefObject } from 'react'
 import type { HookDef } from '@/lib/themes/hooks'
+import { useInspectOptional } from '@/components/theme-inspect/InspectProvider'
 import { hookGroups } from '@/components/theme-editor/assets/styles-model'
 import { hookElementProps, isDense, specimenInstances, type SpecimenInstance } from './instances'
 import { SPECIMENS } from './registry'
@@ -46,6 +47,39 @@ interface SpecimenGalleryProps {
 
 export const surfaceDomId = (prefix: string, surface: string) => `${prefix}-surface-${surface}`
 
+/** The id of a hook's specimen heading, which takes focus when the inspector reveals it. */
+export const specimenHeadingId = (className: string) => `specimen-${className}`
+
+/** "Inspect this" and "Show on this page", when the inspector is about. */
+function SpecimenActions({ hook, articleRef }: { hook: HookDef; articleRef: RefObject<HTMLElement | null> }) {
+  const inspect = useInspectOptional()
+  const [said, setSaid] = useState('')
+  if (!inspect) return null
+  const inspectHere = () => {
+    const stage = articleRef.current?.querySelector('[data-specimen-stage]') ?? undefined
+    setSaid(inspect.inspectHook(hook.className, stage) ? '' : 'Nothing to inspect here.')
+  }
+  const showOnPage = () => {
+    const count = inspect.showMatches(`.${hook.className}`)
+    setSaid(
+      count === 0
+        ? 'Nothing on the page outside the gallery wears it just now.'
+        : `${count} ${count === 1 ? 'element' : 'elements'} on the page ${count === 1 ? 'wears' : 'wear'} it, outlined.`,
+    )
+  }
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <button type="button" className="qt-button qt-button-secondary qt-button-sm" onClick={inspectHere}>
+        Inspect this
+      </button>
+      <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={showOnPage}>
+        Show on this page
+      </button>
+      <span role="status" className="qt-text-xs qt-text-secondary">{said}</span>
+    </div>
+  )
+}
+
 /** A click on a link inside a stage goes nowhere. */
 function stopLinks(e: MouseEvent<HTMLElement>) {
   if ((e.target as Element).closest?.('a[href]')) e.preventDefault()
@@ -58,6 +92,7 @@ function Stage({ hook, instance, mode, stage }: { hook: HookDef; instance: Speci
       {...stage.choiceAttributes}
       data-theme={stage.themeId}
       data-specimen-stage={mode}
+      data-inspect-target=""
       className={`${mode} qt-bg-default qt-text rounded border qt-border-default p-3`}
       style={{ contain: 'layout paint', position: 'relative', overflow: 'auto', maxHeight: '20rem' }}
     >
@@ -70,9 +105,11 @@ const HookSpecimen = memo(function HookSpecimen({ hook, modes, stage }: { hook: 
   const def = SPECIMENS[hook.className]
   const instances = specimenInstances(hook)
   const dense = isDense(instances) && modes.length === 1
-  const headingId = `specimen-${hook.className}`
+  const headingId = specimenHeadingId(hook.className)
+  const articleRef = useRef<HTMLElement>(null)
   return (
     <article
+      ref={articleRef}
       className="qt-card p-4 space-y-3"
       aria-labelledby={headingId}
       data-specimen-for={hook.className}
@@ -80,12 +117,13 @@ const HookSpecimen = memo(function HookSpecimen({ hook, modes, stage }: { hook: 
     >
       <header className="space-y-1">
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
-          <h3 id={headingId} className="qt-heading-4">{hook.label}</h3>
+          <h3 id={headingId} tabIndex={-1} className="qt-heading-4 scroll-mt-24">{hook.label}</h3>
           <span className="qt-text-xs qt-text-muted">{def?.component ? `The real ${def.component}` : 'Markup'}</span>
         </div>
         <p className="qt-text-xs font-mono qt-text-secondary">.{hook.className}</p>
         {hook.description && <p className="qt-text-xs qt-text-secondary">{hook.description}</p>}
         {def?.note && <p className="qt-text-xs qt-text-muted">{def.note}</p>}
+        <SpecimenActions hook={hook} articleRef={articleRef} />
       </header>
       {!def ? (
         <p className="qt-text-small qt-text-destructive" role="note">No specimen has been drawn for this hook yet.</p>

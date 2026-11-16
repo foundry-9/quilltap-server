@@ -57,6 +57,9 @@ export interface HookMatch {
 }
 
 const HOOK_BY_CLASS: ReadonlyMap<string, HookDef> = new Map(HOOKS.map((h) => [h.className, h]))
+
+/** The catalogued hook a class names, or undefined. */
+export const hookByClass = (className: string): HookDef | undefined => HOOK_BY_CLASS.get(className)
 const HOOK_ORDER: ReadonlyMap<string, number> = new Map(HOOKS.map((h, i) => [h.className, i]))
 
 /** The catalogued hooks an element carries, in catalogue order. */
@@ -506,4 +509,76 @@ export function traceProperty(property: string, resolved: ResolvedTheme, mode: E
     setByTheme: view.source.kind === 'theme',
     follows,
   }
+}
+
+// ---------------------------------------------------------------------------
+// 4. What the panel shows
+
+export const CATEGORY_ORDER: readonly PropertyCategory[] = ['background', 'text', 'border', 'shadow', 'radius', 'spacing', 'type', 'other']
+
+export const CATEGORY_LABELS: Record<PropertyCategory, string> = {
+  background: 'Background',
+  text: 'Text colour',
+  border: 'Border and outline',
+  shadow: 'Shadow',
+  radius: 'Corners',
+  spacing: 'Spacing',
+  type: 'Type',
+  variable: 'Variables',
+  other: 'Other',
+}
+
+/** Plumbing the panel leaves out: Tailwind's own variables and private locals (already followed through). */
+const isPlumbing = (name: string) => name.startsWith('--tw-') || name.startsWith('--_')
+
+export interface TokenUse {
+  property: string
+  /** The declaration in force, as written. */
+  declared: string
+  /** The custom properties it reads, traced; plumbing left out. */
+  traces: TokenTrace[]
+  fromCustomCss: boolean
+}
+
+export interface CategoryGroup {
+  category: PropertyCategory
+  label: string
+  uses: TokenUse[]
+}
+
+/**
+ * The properties that read a custom property (or come from the theme's own
+ * CSS), grouped by what they set, in the panel's order. Declarations of
+ * custom properties themselves are not listed: what they feed is.
+ */
+export function groupTokenUses(reports: readonly PropertyReport[], trace: (name: string) => TokenTrace): CategoryGroup[] {
+  const groups = new Map<PropertyCategory, TokenUse[]>()
+  for (const report of reports) {
+    const category = propertyCategory(report.property)
+    if (category === 'variable') continue
+    const traces = report.vars.filter((v) => !isPlumbing(v)).map(trace)
+    if (traces.length === 0 && !report.fromCustomCss) continue
+    const list = groups.get(category) ?? []
+    list.push({ property: report.property, declared: report.uses[0].value, traces, fromCustomCss: report.fromCustomCss })
+    groups.set(category, list)
+  }
+  return CATEGORY_ORDER.filter((c) => groups.has(c)).map((c) => ({ category: c, label: CATEGORY_LABELS[c], uses: groups.get(c)! }))
+}
+
+/** A compiled custom rule's selector as its author wrote it: the scoping the compiler adds (`:scope `) taken off. */
+export const authoredSelector = (selector: string): string => selector.replace(/^:scope\s+/, '')
+
+/** The theme's own rules among those that match, each once, in document order, their selectors as authored. */
+export function customCssRules(rules: readonly MatchedRule[]): MatchedRule[] {
+  const seen = new Set<string>()
+  const out: MatchedRule[] = []
+  for (const r of [...rules].sort((a, b) => a.order - b.order)) {
+    if (r.origin !== 'theme-custom') continue
+    const selector = authoredSelector(r.selector)
+    const key = `${selector}|${r.state ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ ...r, selector })
+  }
+  return out
 }

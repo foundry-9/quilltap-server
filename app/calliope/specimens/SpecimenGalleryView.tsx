@@ -12,9 +12,11 @@
  * @module app/calliope/specimens/SpecimenGalleryView
  */
 
-import { useDeferredValue, useEffect, useId, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useId, useState } from 'react'
 import { useTheme } from '@/components/providers/theme-provider'
-import { SpecimenGallery, surfaceDomId, type GalleryMode, type StageTheme } from '@/components/theme-specimens/SpecimenGallery'
+import { SpecimenGallery, specimenHeadingId, surfaceDomId, type GalleryMode, type StageTheme } from '@/components/theme-specimens/SpecimenGallery'
+import { useInspectOptional } from '@/components/theme-inspect/InspectProvider'
+import { InspectToggle } from '@/components/theme-inspect/InspectToggle'
 import { hookGroups } from '@/components/theme-editor/assets/styles-model'
 import { THEME_CHOICES } from '@/lib/themes/engine/client'
 
@@ -49,6 +51,9 @@ function useRootChoiceAttributes(): Record<string, string> {
   return attributes
 }
 
+/** Frames a reveal waits for the specimen to be drawn (a cleared search re-renders the gallery). */
+const REVEAL_FRAMES = 30
+
 export function SpecimenGalleryView() {
   const { preview, activeThemeId, availableThemes, resolvedColorMode } = useTheme()
   const baseId = useId()
@@ -65,6 +70,37 @@ export function SpecimenGalleryView() {
   const groups = hookGroups(deferredQuery)
   const total = groups.reduce((n, g) => n + g.hooks.length, 0)
 
+  // The inspector's "Show in the gallery": clear the search, then bring the hook's specimen to view.
+  const inspect = useInspectOptional()
+  const registerGallery = inspect?.registerGallery
+  const reveal = useCallback((className: string) => {
+    setQuery('')
+    let frames = 0
+    const seek = () => {
+      const heading = document.getElementById(specimenHeadingId(className))
+      if (heading) {
+        heading.scrollIntoView({ block: 'start' })
+        heading.focus({ preventScroll: true })
+        // Specimens above it are drawn as they come near (content-visibility), so the first scroll can land short:
+        // scroll again until it stays put.
+        let last = Number.NaN
+        let settles = 0
+        const settle = () => {
+          const top = heading.getBoundingClientRect().top
+          if (top === last || ++settles > REVEAL_FRAMES) return
+          last = top
+          heading.scrollIntoView({ block: 'start' })
+          requestAnimationFrame(settle)
+        }
+        requestAnimationFrame(settle)
+        return
+      }
+      if (++frames < REVEAL_FRAMES) requestAnimationFrame(seek)
+    }
+    requestAnimationFrame(seek)
+  }, [])
+  useEffect(() => registerGallery?.({ reveal }), [registerGallery, reveal])
+
   const goTo = (surface: string) => {
     const el = document.getElementById(surfaceDomId(baseId, surface))
     el?.scrollIntoView({ block: 'start' })
@@ -72,7 +108,7 @@ export function SpecimenGalleryView() {
   }
 
   return (
-    <div data-theme="default" className={`${windowMode} h-full overflow-y-auto qt-bg-default qt-text`} data-testid="theme-specimens-panel">
+    <div data-theme="default" className={`${windowMode} h-full overflow-y-auto qt-bg-default qt-text`} data-testid="theme-specimens-panel" data-inspect-ignore="">
       <div className="max-w-6xl mx-auto p-4 space-y-4 @container">
         <header className="space-y-1">
           <h1 className="qt-heading-2">Calliope&rsquo;s Specimens</h1>
@@ -109,6 +145,7 @@ export function SpecimenGalleryView() {
               </button>
             ))}
           </div>
+          <InspectToggle />
         </div>
         <p className="sr-only" aria-live="polite">{query.trim() ? `${total} hooks answer.` : ''}</p>
 

@@ -4,6 +4,16 @@
 
 ### 4.14-dev
 
+#### Themes: inspect mode (Calliope Live, Spec H Stage 2)
+
+- "Inspect" toggle in the theme editor header and gallery toolbar. While on, pointing outlines the nearest hooked element; a click selects it and does not reach the app; Escape turns it off. Listeners are window capture listeners, removed when off
+- Inspector panel: hook, variants and states, tokens grouped by property with computed value, swatch, follow chain and source, hover/focus/press groups, matching custom CSS rules. "Row" opens the token's row; "Write CSS for this" inserts an empty rule into Custom CSS (starting a stylesheet if needed); "Show in the gallery" reveals the specimen. Docks away from the editor
+- Editor and gallery register bridges with the inspect provider; the editor's tab is brought forward before a jump. The gallery opens beside the calling tab's pane
+- "Inspect this" / "Show on this page" on every specimen; "Inspect this" on every hook in the Custom CSS reference
+- `data-inspect-ignore` / `data-inspect-target` / `data-inspect-editor` mark what may be inspected
+- `scripts/check-modal-shell.mjs`: allowlisted the specimen dialog drawing
+- `help/theme-editor.md`: inspecting
+
 #### Themes: specimen gallery and the inspector's model (Calliope Live, Spec H Stages 0–1)
 
 - New workspace tab "Calliope's Specimens" (`theme-specimens`, route `/calliope/specimens`). It draws all 174 catalogued hooks in every variant value and class/ARIA state, wearing the previewed draft or the worn theme. Modes: as the window, light, dark, or both side by side. Search by label or class; jump by surface

@@ -30,7 +30,11 @@ import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { THEME_CHOICES, type ThemeTokensDocument, type TokenDef } from '@/lib/themes/engine/client'
 import { jsonEqual } from '@/lib/hooks/use-draft'
 import { createEditorStore, type EditorStore } from './editor-store'
-import { OpenGalleryButton } from '@/components/theme-specimens/OpenGalleryButton'
+import { OpenGalleryButton, paneOfTab, useOpenSpecimenGallery } from '@/components/theme-specimens/OpenGalleryButton'
+import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
+import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { InspectToggle } from '@/components/theme-inspect/InspectToggle'
+import { useInspectOptional, type EditorBridge } from '@/components/theme-inspect/InspectProvider'
 import { LazyRow } from './LazyRow'
 import { TokenRow, type EditFn } from './TokenRow'
 import { PrimitivesPanel } from './PrimitivesPanel'
@@ -70,6 +74,7 @@ import {
   fetchThemeDraft,
   installThemeDraft,
   saveThemeDraft,
+  themeDraftAction,
   type DraftDetail,
   type DraftInstallResult,
   type ThemeDraftSave,
@@ -285,6 +290,9 @@ const sectionDomId = (prefix: string, id: string) => `${prefix}-section-${id}`
 
 /** The id of the list item that holds a token's row, mounted or not. */
 const tokenRowSlotId = (name: string) => `${tokenRowDomId(name)}-slot`
+
+/** Frames "Write CSS for this" waits for the stylesheet editor to mount before it gives up. */
+const WRITE_CSS_FRAMES = 60
 
 /** Frames `goToToken` waits for a row to mount before it gives up. */
 const GO_TO_TOKEN_FRAMES = 30
@@ -627,6 +635,57 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
     requestAnimationFrame(seek)
     return true
   }, [])
+  // What the inspector may ask of the editor (Spec H, Stage 2): a token's row, a rule in the stylesheet, the gallery.
+  const inspect = useInspectOptional()
+  const registerEditor = inspect?.registerEditor
+  const cssInsertRef = useRef<((text: string) => void) | null>(null)
+  const openGallery = useOpenSpecimenGallery()
+  // A request from the inspector brings this editor's tab to the front of its pane first (the gallery may be over it).
+  const workspace = useWorkspaceOptional()
+  const tabId = useWorkspaceTabId()
+  const editorPane = workspace ? paneOfTab(workspace.state, tabId) : null
+  const editorTabHidden = editorPane !== null && workspace?.state.panes[editorPane]?.activeTabId !== tabId
+  const setActiveTab = workspace?.setActive
+  const bringForward = useCallback(() => {
+    if (editorPane && tabId && editorTabHidden) setActiveTab?.(editorPane, tabId)
+  }, [editorPane, tabId, editorTabHidden, setActiveTab])
+  const goToTokenFromInspector = useCallback(
+    (name: string) => {
+      bringForward()
+      return goToToken(name)
+    },
+    [bringForward, goToToken],
+  )
+  const writeCss = useCallback((selector: string) => {
+    bringForward()
+    setQuery('')
+    setChangedOnly(false)
+    setOpenSections((prev) => (prev.has('asset-styles') ? prev : new Set([...prev, 'asset-styles'])))
+    let frames = 0
+    const seek = () => {
+      const insert = cssInsertRef.current
+      if (insert) {
+        document.getElementById(sectionDomId(sectionsId, 'asset-styles'))?.scrollIntoView({ block: 'start' })
+        insert(`\n${selector} {\n  \n}\n`)
+        return
+      }
+      if (++frames < WRITE_CSS_FRAMES) requestAnimationFrame(seek)
+    }
+    requestAnimationFrame(seek)
+  }, [sectionsId, bringForward])
+  const beginStylesheet = useCallback(async () => {
+    const result = await operations.run((manifestRevision, id) =>
+      themeDraftAction<{ draft: DraftDetail; path: string; created: boolean }>(id, 'set-styles-file', { manifestRevision }),
+    )
+    return result.ok
+  }, [operations])
+  const hasStylesheet = Boolean(detail.styles)
+  const bridge = useMemo<EditorBridge>(
+    () => ({ draftName: manifestName, resolved: editing.resolved, goToToken: goToTokenFromInspector, hasStylesheet, writeCss, beginStylesheet, openGallery }),
+    [manifestName, editing.resolved, goToTokenFromInspector, hasStylesheet, writeCss, beginStylesheet, openGallery],
+  )
+  useEffect(() => registerEditor?.(bridge), [registerEditor, bridge])
+
   useEffect(() => {
     if (!navigatorRef) return
     navigatorRef.current = { goToToken }
@@ -664,6 +723,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
             onChange={onCssChange}
             status={cssStatus}
             flushRef={cssFlushRef}
+            insertRef={cssInsertRef}
             tokens={tokens}
             resolved={editing.resolved}
             mode={mode}
@@ -781,6 +841,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
               <span className="ml-1">{previewing ? 'Stop preview' : 'Resume preview'}</span>
             </button>
             <OpenGalleryButton />
+            <InspectToggle />
             <button
               type="button"
               className="qt-button qt-button-primary qt-button-sm"
