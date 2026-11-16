@@ -212,7 +212,7 @@ describe('editing a colour', () => {
     fireEvent.blur(field)
 
     await waitFor(() => expect(lastPreviewCss()).toContain('--theme-card: #123456;'))
-    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true), { timeout: 3000 })
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
     const put = calls.find((c) => c.method === 'PUT')!
     expect(put.body).toEqual({ revision: 'rev-1', tokens: { primitives: {}, tokens: { '--theme-card': '#123456' }, choices: {} } })
   })
@@ -256,7 +256,7 @@ describe('editing a colour', () => {
     fireEvent.change(field, { target: { value: '#123456' } })
     fireEvent.blur(field)
 
-    await waitFor(() => expect(toast.showWarningToast).toHaveBeenCalled(), { timeout: 3000 })
+    await waitFor(() => expect(toast.showWarningToast).toHaveBeenCalled())
     await waitFor(() => expect(tokenRow('--theme-card').getByLabelText('Card, light value')).toHaveValue('#fedcba'))
     await waitFor(() => expect(lastPreviewCss()).toContain('#fedcba'))
   })
@@ -371,7 +371,7 @@ describe('custom CSS', () => {
     await waitFor(() => expect(lastPreviewCss()).toContain('/*custom good*/'))
     typeCss(CSS.length, '.qt-button { margin: 0; }\n')
 
-    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true), { timeout: 4000 })
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
     const put = calls.find((c) => c.method === 'PUT')!
     expect(put.body).toEqual({ stylesRevision: 'srev-1', css: `${CSS}.qt-button { margin: 0; }\n` })
     await waitFor(() => expect(lastPreviewCss()).toContain(`/*custom ${CSS.length + 26}*/`))
@@ -392,7 +392,7 @@ describe('custom CSS', () => {
     await waitFor(() => expect(lastPreviewCss()).toContain('/*custom good*/'))
     typeCss(CSS.length, '.broken {')
 
-    await screen.findByText(/goes on wearing the last stylesheet that compiled/, undefined, { timeout: 4000 })
+    await screen.findByText(/goes on wearing the last stylesheet that compiled/)
     expect(document.querySelectorAll('.qt-code-editor-marker-error')).toHaveLength(1)
     expect(lastPreviewCss()).toContain('/*custom good*/')
     expect(screen.getByRole('button', { name: /Install/ })).toBeDisabled()
@@ -407,7 +407,7 @@ describe('custom CSS', () => {
     await openCss(withStyles())
     typeCss(0, '/* mine */\n')
 
-    await waitFor(() => expect(toast.showWarningToast).toHaveBeenCalled(), { timeout: 4000 })
+    await waitFor(() => expect(toast.showWarningToast).toHaveBeenCalled())
     await waitFor(() => expect(codeEditor().getEditorState().read(() => $getCodeBlock()!.getTextContent())).toBe(theirs))
     expect(screen.getByText(/Changed elsewhere/)).toBeInTheDocument()
   })
@@ -428,7 +428,7 @@ describe('custom CSS', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove the stylesheet' }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove it' }))
 
-    await screen.findByRole('button', { name: 'Begin a stylesheet' }, { timeout: 4000 })
+    await screen.findByRole('button', { name: 'Begin a stylesheet' })
     const put = calls.findIndex((c) => c.method === 'PUT')
     const clear = calls.findIndex((c) => c.url.endsWith('?action=clear-styles-file'))
     expect(put).toBeGreaterThanOrEqual(0)
