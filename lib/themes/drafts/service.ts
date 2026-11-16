@@ -26,14 +26,14 @@ import { resolveInside, resolveInsideSync } from '@/lib/paths/resolve-inside';
 import { docStoreUriFor } from '@/lib/doc-edit/uri-producers';
 import { DocumentConflictError } from '@/lib/documents/core/errors';
 import { HOOK_CATALOGUE } from '../hooks';
-import { bundleFileUsage, describeFileUse, ThemeManifestSchema, ThemeTokensDocumentSchema, type BundleFileUse, type BundleUsage, type ThemeTokensDocument } from '../engine';
+import { bundleFileUsage, describeFileUse, ThemeManifestSchema, ThemeTokensDocumentSchema, type BundleFileUse, type BundleUsage, type ThemeIssue, type ThemeTokensDocument } from '../engine';
 import { bundleAssetUrl, imageMimeType, normaliseBundlePath } from '../engine/css-text';
 import { convertThemeFonts, type ThemeFontConversion } from '../convert-fonts';
 import { readFontInfo, type FontEmbedding, type FontStyle } from '../font-info';
 import { DRAFT_LIMITS, UPLOAD_EXTENSIONS, extensionOf } from './uploads';
 import { listBundleFiles, loadThemeFromSource, ThemeBundleError, type ThemeBundleSource } from '../theme-bundle';
 import { themeRegistry } from '../theme-registry';
-import { packThemeDirectory } from '../bundle-archive';
+import { extractThemeBundle, MAX_BUNDLE_SIZE, packThemeDirectory, validateThemeBundle } from '../bundle-archive';
 import { installThemeBundle } from '../bundle-loader';
 import { hotLoadInstalledTheme } from '../hot-load';
 import { convertThemeImages, type ThemeImageConversion } from '../convert-images';
@@ -122,6 +122,19 @@ export class DraftNotInstallableError extends Error {
   }
 }
 
+/** An uploaded archive that would not install, so it is not opened as a draft (Spec G decision 7). */
+export class DraftImportRefusedError extends Error {
+  constructor(
+    message: string,
+    readonly errors: string[],
+    /** `limit` for an archive past the bundle limits, `refused` for one made for an earlier Quilltap. */
+    readonly reason: 'invalid' | 'limit' | 'refused' = 'invalid',
+  ) {
+    super(message);
+    this.name = 'DraftImportRefusedError';
+  }
+}
+
 /** A create from a theme that is not registered, or has no bundle to copy. */
 export class DraftSourceNotFoundError extends Error {
   constructor(readonly from: string) {
@@ -137,6 +150,29 @@ export class DraftSourceNotFoundError extends Error {
 export interface DraftIssue {
   severity: 'error' | 'warning';
   message: string;
+  /** The draft file it is in, when it is in one (Spec G decision 6). */
+  file?: string;
+  /** 1-based line in that file, where the engine knows it (custom CSS). */
+  line?: number;
+}
+
+/** A draft's custom stylesheet as the editor reads it. */
+export interface DraftStyles {
+  /** The file `stylesPath` names. */
+  path: string;
+  /** Its text, or empty when the manifest names a file that is not there. */
+  text: string;
+  /** The content hash of the file, or `missing`; sent back with a save. */
+  revision: string;
+}
+
+/** The result of opening an archive as a draft. */
+export interface DraftImportResult {
+  draft: DraftDetail;
+  /** The id in the archive's theme.json. */
+  bundleId: string;
+  /** True when that id was taken and the draft has another. */
+  idChanged: boolean;
 }
 
 export interface DraftSummary {
@@ -176,6 +212,8 @@ export interface DraftDetail {
   files: DraftFile[];
   /** The draft against the bundle's limits. */
   totals: DraftTotals;
+  /** The custom stylesheet, or null when the manifest names none. */
+  styles: DraftStyles | null;
 }
 
 /** What a file in a draft is, by its extension and place. */
@@ -346,7 +384,8 @@ async function fontFactsFor(store: DraftsStore, id: string, file: DraftFileEntry
 
 async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFileEntry[]): Promise<DraftRead> {
   const issues: DraftIssue[] = [];
-  const error = (message: string) => issues.push({ severity: 'error', message });
+  const error = (message: string, file?: string) => issues.push(file ? { severity: 'error', message, file } : { severity: 'error', message });
+  const located = (severity: DraftIssue['severity'], issue: ThemeIssue): DraftIssue => ({ severity, ...issue });
 
   let manifestJson: unknown;
   let manifest: Record<string, unknown> | null = null;
@@ -355,13 +394,13 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
     if (manifestJson && typeof manifestJson === 'object' && !Array.isArray(manifestJson)) {
       manifest = manifestJson as Record<string, unknown>;
     } else {
-      error('theme.json: is not a JSON object');
+      error('theme.json: is not a JSON object', MANIFEST_FILE);
     }
   } catch (e) {
-    error(`theme.json: cannot be read as JSON (${(e as Error).message})`);
+    error(`theme.json: cannot be read as JSON (${(e as Error).message})`, MANIFEST_FILE);
   }
   if (manifest && manifest.id !== id) {
-    error(`theme.json: id ${JSON.stringify(manifest.id)} does not match the draft folder ${JSON.stringify(id)}`);
+    error(`theme.json: id ${JSON.stringify(manifest.id)} does not match the draft folder ${JSON.stringify(id)}`, MANIFEST_FILE);
   }
 
   const tokensPath = typeof manifest?.tokensPath === 'string' ? manifest.tokensPath : 'tokens.json';
@@ -372,10 +411,10 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
     revision = sha256OfString(content);
     const parsed = ThemeTokensDocumentSchema.safeParse(JSON.parse(content));
     if (parsed.success) tokens = parsed.data;
-    else error(`${tokensPath}: ${parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ')}`);
+    else error(`${tokensPath}: ${parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ')}`, tokensPath);
   } catch (e) {
-    if (isMissing(e)) error(`${tokensPath}: is not in the draft`);
-    else error(`${tokensPath}: cannot be read as JSON (${(e as Error).message})`);
+    if (isMissing(e)) error(`${tokensPath}: is not in the draft`, tokensPath);
+    else error(`${tokensPath}: cannot be read as JSON (${(e as Error).message})`, tokensPath);
   }
 
   let manifestRevision = 'missing';
@@ -387,11 +426,17 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
 
   const present = new Set(files.map((f) => f.path));
   let css: string | null = null;
-  if (typeof manifest?.stylesPath === 'string' && present.has(normaliseBundlePath(manifest.stylesPath))) {
-    try {
-      css = (await readDraftText(store, id, normaliseBundlePath(manifest.stylesPath))).content;
-    } catch (e) {
-      logger.debug('Could not read a draft\'s custom CSS for its file usage', { draftId: id, error: (e as Error).message });
+  let styles: DraftStyles | null = null;
+  if (typeof manifest?.stylesPath === 'string' && manifest.stylesPath.trim() !== '') {
+    const stylesPath = normaliseBundlePath(manifest.stylesPath);
+    styles = { path: stylesPath, text: '', revision: 'missing' };
+    if (present.has(stylesPath)) {
+      try {
+        css = (await readDraftText(store, id, stylesPath)).content;
+        styles = { path: stylesPath, text: css, revision: sha256OfString(css) };
+      } catch (e) {
+        logger.debug('Could not read a draft\'s custom CSS', { draftId: id, error: (e as Error).message });
+      }
     }
   }
   const usage = bundleFileUsage({ manifest, tokens, css });
@@ -403,7 +448,7 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
     try {
       const loaded = await loadThemeFromSource(storeSource(store, id, files), manifestJson);
       compiled = { fontFaces: loaded.compiled.css.fontFaces, icons: loaded.compiled.css.icons, custom: loaded.compiled.css.custom };
-      for (const w of loaded.warnings) issues.push({ severity: 'warning', message: w });
+      for (const w of loaded.warningIssues) issues.push(located('warning', w));
       // Both halves come from the file usage (Spec F §0.1): every font file a
       // font entry names, and every image in the draft — not only those
       // something names today, so the editor can show a thumbnail and preview
@@ -415,7 +460,7 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
         fonts: new Set([...usage].filter(([p, uses]) => present.has(p) && uses.some((u) => u.kind === 'font')).map(([p]) => p)),
       };
     } catch (e) {
-      if (e instanceof ThemeBundleError) for (const m of e.errors) error(m);
+      if (e instanceof ThemeBundleError) for (const i of e.issues) issues.push(located('error', i));
       else error((e as Error).message);
     }
   }
@@ -471,6 +516,7 @@ async function readDraftFromStore(store: DraftsStore, id: string, files: DraftFi
       manifestRevision,
       files: draftFiles,
       totals,
+      styles,
     },
     served,
     usage,
@@ -602,7 +648,7 @@ async function createDraftNow({ name, from }: { name: string; from?: string }): 
   logger.info('Creating theme draft', { draftId: id, from: source?.id ?? 'blank' });
 
   try {
-    await writeNewDraft(store, id, trimmed, source?.id ?? null, source?.bundlePath ?? null);
+    await writeNewDraft(store, id, trimmed, source?.id ?? null, source?.bundlePath ?? null, { version: '0.1.0' });
   } catch (e) {
     // A write failed part-way (#226). The folder has no theme.json, so it
     // never lists as a draft, but `takenIds` would still count it and keep
@@ -618,13 +664,17 @@ async function createDraftNow({ name, from }: { name: string; from?: string }): 
   return readDraft(id);
 }
 
-/** Write a new draft's files; the manifest always goes last. */
+/**
+ * Write a new draft's files; the manifest always goes last. A copy restarts
+ * at `version` 0.1.0; an import keeps the bundle's own (`version` omitted).
+ */
 async function writeNewDraft(
   store: DraftsStore,
   id: string,
   trimmed: string,
   sourceId: string | null,
   bundleDir: string | null,
+  options: { version?: string } = {},
 ): Promise<void> {
   if (!bundleDir) {
     const manifest = {
@@ -656,11 +706,80 @@ async function writeNewDraft(
   const manifest = JSON.parse(manifestText ?? '{}') as Record<string, unknown>;
   manifest.id = id;
   manifest.name = trimmed;
-  manifest.version = '0.1.0';
+  if (options.version !== undefined) manifest.version = options.version;
   // The manifest goes last: a folder with a theme.json is a draft, so a copy
   // interrupted part-way never lists as a broken one.
   await writeDraftDocument(store, id, MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`);
   logger.debug('Copied theme into a draft', { draftId: id, from: sourceId, files: files.length });
+}
+
+/**
+ * Open an uploaded `.qtap-theme` archive as a new draft (Spec G decision 7).
+ * The archive is held to the checks an install runs (`validateThemeBundle`:
+ * size, file count, file types, paths, links, a version 1 refusal, then the
+ * whole document) before anything is written to the store; it is extracted
+ * into a temporary directory with the same containment checks and copied in
+ * by the copy path. The draft keeps the bundle's name and version, under the
+ * bundle's id when that is free and a numbered one when it is not. The
+ * temporary directory is removed whatever happens.
+ */
+export function importDraft(upload: { fileName: string; bytes: Buffer }): Promise<DraftImportResult> {
+  const run = createChain.then(() => importDraftNow(upload));
+  createChain = run.catch(() => undefined);
+  return run;
+}
+
+async function importDraftNow(upload: { fileName: string; bytes: Buffer }): Promise<DraftImportResult> {
+  if (upload.bytes.length > MAX_BUNDLE_SIZE) {
+    throw new DraftImportRefusedError(
+      `The archive is larger than a theme may be (${MAX_BUNDLE_SIZE / 1024 / 1024} MB)`,
+      [`Bundle exceeds maximum size of ${MAX_BUNDLE_SIZE / 1024 / 1024}MB`],
+      'limit',
+    );
+  }
+  const work = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-import-'));
+  try {
+    // The archive's own name is never used for anything but the log.
+    const archive = path.join(work, 'upload.qtap-theme');
+    await fs.writeFile(archive, upload.bytes);
+    const checked = await validateThemeBundle(archive);
+    if (checked.refused) {
+      logger.info('Theme import refused: made for an earlier Quilltap', { fileName: upload.fileName, themeId: checked.refused.id });
+      throw new DraftImportRefusedError(checked.refused.message, [checked.refused.message], 'refused');
+    }
+    if (!checked.valid || !checked.manifest) {
+      const overLimit = checked.errors.some((e) => /exceed|maximum size|zip bomb/i.test(e));
+      logger.info('Theme import refused: the archive would not install', { fileName: upload.fileName, errors: checked.errors.slice(0, 20) });
+      throw new DraftImportRefusedError(
+        `The archive is not a theme that would install: ${checked.errors.slice(0, 3).join('; ')}${checked.errors.length > 3 ? ` (and ${checked.errors.length - 3} more)` : ''}`,
+        checked.errors,
+        overLimit ? 'limit' : 'invalid',
+      );
+    }
+
+    const dir = path.join(work, 'bundle');
+    await extractThemeBundle(archive, dir);
+    const bundleId = checked.manifest.id;
+    const name = checked.manifest.name.trim();
+
+    const store = await draftsStore();
+    const id = freeId(isValidDraftId(bundleId) ? bundleId : draftIdFromName(name), await takenIds(store));
+    logger.info('Importing a theme archive as a draft', { draftId: id, bundleId, fileName: upload.fileName, files: checked.fileCount });
+    try {
+      await writeNewDraft(store, id, name, bundleId, dir);
+    } catch (e) {
+      logger.warn('Theme import failed; removing the partial folder', { draftId: id, error: (e as Error).message });
+      try {
+        await deleteDraftFolder(store, id);
+      } catch (cleanup) {
+        logger.error('Could not remove a partial theme draft folder', { draftId: id, error: (cleanup as Error).message });
+      }
+      throw e;
+    }
+    return { draft: await readDraft(id), bundleId, idChanged: id !== bundleId };
+  } finally {
+    await fs.rm(work, { recursive: true, force: true });
+  }
 }
 
 // ============================================================================

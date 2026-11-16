@@ -13,6 +13,7 @@ export { cssString, isSafeBundlePath, bundleAssetUrl, bundleFontUrl } from './cs
 export { rewriteUrls, mapUrlTargets, type UrlContext } from './urls';
 export { resolveTheme, emitThemeCss, choicesInForce, type RegistryView, type ResolvedTheme, type ResolvedValue, type ValueSource } from './resolve';
 export { scopeThemeCss, scopeSelector, type ScopeResult } from './scope';
+export { themeIssue, type ThemeIssue } from './issues';
 export { themeScopePrelude, wrapInThemeScope } from './boundary';
 export { validateThemeDocument, tailwindTokenNames, tailwindAlias, nearestName, type ValidationContext, type ThemeDocumentValidation } from './validate';
 export { compileTheme, compiledThemeCss, defaultThemePreview, deriveThemeFeatures, type CompiledTheme, type CompiledThemeFeatures, type PreviewSwatch, type ThemePreview } from './compile';

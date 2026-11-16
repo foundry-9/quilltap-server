@@ -590,6 +590,35 @@
   --qt-code-fg: var(--color-foreground);
   --qt-code-border: var(--color-border);
   --qt-code-font: var(--font-mono);
+  --qt-code-token-comment: var(--qt-code-fg);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-code-token-comment: color-mix(in srgb, var(--qt-code-fg) 78%, var(--qt-code-bg));
+  }
+  --qt-code-token-keyword: var(--qt-code-fg);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-code-token-keyword: color-mix(in srgb, var(--qt-code-fg) 68%, #d0105a);
+  }
+  --qt-code-token-string: var(--qt-code-fg);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-code-token-string: color-mix(in srgb, var(--qt-code-fg) 68%, #189040);
+  }
+  --qt-code-token-number: var(--qt-code-fg);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-code-token-number: color-mix(in srgb, var(--qt-code-fg) 68%, #1a6fe0);
+  }
+  --qt-code-token-property: var(--qt-code-fg);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-code-token-property: color-mix(in srgb, var(--qt-code-fg) 68%, #9040e0);
+  }
+  --qt-code-token-selector: var(--qt-code-fg);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-code-token-selector: color-mix(in srgb, var(--qt-code-fg) 68%, #c06000);
+  }
+  --qt-code-token-function: var(--qt-code-fg);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-code-token-function: color-mix(in srgb, var(--qt-code-fg) 68%, #0090b0);
+  }
+  --qt-code-token-punctuation: var(--qt-code-fg);
   --qt-copy-button-bg: rgba(0, 0, 0, 0.6);
   --qt-copy-button-text: rgba(255, 255, 255, 0.9);
   --qt-copy-button-border: rgba(255, 255, 255, 0.1);
@@ -11106,6 +11135,246 @@
     border-color: var(--theme-border);
     border-radius: var(--qt-code-radius) var(--qt-code-radius) 0 0;
     background: var(--qt-code-bg);
+  }
+  /* ==========================================================================
+     CODE EDITOR
+     components/code-editor/CodeEditor.tsx — one JSON or CSS file, highlighted,
+     with line numbers and problem markers. Gutter and text share one line
+     height, so a marker at line n sits at (n - 1) line heights.
+     ========================================================================== */
+  .qt-code-editor {
+    --qt-code-editor-line-height: 1.25rem;
+    --qt-code-editor-pad-y: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-radius: var(--qt-code-radius);
+    background: var(--qt-code-bg);
+    color: var(--qt-code-fg);
+    border: 1px solid var(--qt-code-border);
+    font-family: var(--qt-code-font);
+  }
+  .qt-code-editor:focus-within {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+  }
+  .qt-code-editor-scroll {
+    overflow: auto;
+    font-size: 0.8125rem;
+    line-height: var(--qt-code-editor-line-height);
+    border-radius: inherit;
+  }
+  .qt-code-editor-body {
+    display: flex;
+    min-width: -moz-max-content;
+    min-width: max-content;
+    min-height: 100%;
+  }
+  .qt-code-editor-gutter {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    flex: none;
+    background: var(--qt-code-bg);
+    border-right: 1px solid var(--qt-code-border);
+    -webkit-user-select: none;
+       -moz-user-select: none;
+            user-select: none;
+  }
+  .qt-code-editor-line-numbers {
+    margin: 0;
+    padding: var(--qt-code-editor-pad-y) 0.5rem var(--qt-code-editor-pad-y) 1.5rem;
+    min-width: 3.5rem;
+    text-align: right;
+    font: inherit;
+    line-height: var(--qt-code-editor-line-height);
+    color: var(--qt-code-token-comment);
+    white-space: pre;
+  }
+  .qt-code-editor-marker {
+    position: absolute;
+    left: 0.125rem;
+    top: calc(var(--qt-code-editor-pad-y) + var(--qt-code-editor-marker-line) * var(--qt-code-editor-line-height));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: var(--qt-code-editor-line-height);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+  }
+  .qt-code-editor-marker:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 0;
+  }
+  .qt-code-editor-marker-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex: none;
+  }
+  .qt-code-editor-marker-error, .qt-code-editor-problem-error .qt-code-editor-marker-icon {
+    color: var(--color-destructive);
+  }
+  .qt-code-editor-marker-warning, .qt-code-editor-problem-warning .qt-code-editor-marker-icon {
+    color: var(--color-warning);
+  }
+  .qt-code-editor-marker-info, .qt-code-editor-problem-info .qt-code-editor-marker-icon {
+    color: var(--color-info);
+  }
+  /* The message beside a marker, on hover and on keyboard focus. */
+  .qt-code-editor-tooltip {
+    position: absolute;
+    left: 1.5rem;
+    top: 0;
+    z-index: 2;
+    display: none;
+    flex-direction: column;
+    gap: 0.125rem;
+    width: -moz-max-content;
+    width: max-content;
+    max-width: 28rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-popover);
+    color: var(--color-popover-foreground);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    text-align: left;
+    white-space: normal;
+    box-shadow: var(--qt-popover-shadow);
+  }
+  .qt-code-editor-marker:hover .qt-code-editor-tooltip, .qt-code-editor-marker:focus-visible .qt-code-editor-tooltip {
+    display: flex;
+  }
+  .qt-code-editor-text {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  /* A tint across a marked line, behind its text. */
+  .qt-code-editor-band {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(var(--qt-code-editor-pad-y) + var(--qt-code-editor-marker-line) * var(--qt-code-editor-line-height));
+    height: var(--qt-code-editor-line-height);
+    pointer-events: none;
+  }
+  .qt-code-editor-band-error {
+    background: var(--color-destructive);
+    @supports (color: color-mix(in lab, red, red)) {
+      background: color-mix(in srgb, var(--color-destructive) 12%, transparent);
+    }
+  }
+  .qt-code-editor-band-warning {
+    background: var(--color-warning);
+    @supports (color: color-mix(in lab, red, red)) {
+      background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    }
+  }
+  .qt-code-editor-band-info {
+    background: var(--color-info);
+    @supports (color: color-mix(in lab, red, red)) {
+      background: color-mix(in srgb, var(--color-info) 10%, transparent);
+    }
+  }
+  .qt-code-editor-content {
+    position: relative;
+    min-height: 100%;
+    padding: var(--qt-code-editor-pad-y) 1rem var(--qt-code-editor-pad-y) 0.75rem;
+    outline: none;
+    caret-color: var(--qt-code-fg);
+    -moz-tab-size: 4;
+      -o-tab-size: 4;
+         tab-size: 4;
+  }
+  .qt-code-editor-code {
+    display: block;
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    line-height: var(--qt-code-editor-line-height);
+    white-space: pre;
+    background: transparent;
+    color: inherit;
+  }
+  .qt-code-editor-problems {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin: 0;
+    padding: 0.375rem;
+    list-style: none;
+    border-top: 1px solid var(--qt-code-border);
+    max-height: 9rem;
+    overflow-y: auto;
+  }
+  .qt-code-editor-problem {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.25rem 0.375rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--qt-code-fg);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .qt-code-editor-problem .qt-code-editor-marker-icon {
+    align-self: center;
+  }
+  .qt-code-editor-problem:hover {
+    background: var(--qt-code-fg);
+    @supports (color: color-mix(in lab, red, red)) {
+      background: color-mix(in srgb, var(--qt-code-fg) 8%, transparent);
+    }
+  }
+  .qt-code-editor-problem:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
+  }
+  .qt-code-editor-problem-line {
+    flex: none;
+    font-family: var(--qt-code-font);
+    color: var(--qt-code-token-comment);
+  }
+  .qt-code-editor-problem-message {
+    min-width: 0;
+  }
+  /* Highlighted source: the --qt-code-token-* colours. */
+  .qt-code-token-comment {
+    color: var(--qt-code-token-comment);
+    font-style: italic;
+  }
+  .qt-code-token-keyword {
+    color: var(--qt-code-token-keyword);
+  }
+  .qt-code-token-string {
+    color: var(--qt-code-token-string);
+  }
+  .qt-code-token-number {
+    color: var(--qt-code-token-number);
+  }
+  .qt-code-token-property {
+    color: var(--qt-code-token-property);
+  }
+  .qt-code-token-selector {
+    color: var(--qt-code-token-selector);
+  }
+  .qt-code-token-function {
+    color: var(--qt-code-token-function);
+  }
+  .qt-code-token-punctuation {
+    color: var(--qt-code-token-punctuation);
   }
   /* ==========================================================================
      DIAGRAMS

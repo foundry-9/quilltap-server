@@ -17,6 +17,7 @@ import { THEME_CHOICES, THEME_TOKENS } from '../registry';
 import type { RegistryView } from './resolve';
 
 export * from './document';
+export { themeIssue, type ThemeIssue } from './issues';
 export { resolveTheme, emitThemeCss, choicesInForce, type RegistryView, type ResolvedTheme, type ResolvedValue, type ValueSource } from './resolve';
 export { deriveThemeFeatures, type CompiledThemeFeatures } from './compile';
 export { resolveLiteral } from './literal';

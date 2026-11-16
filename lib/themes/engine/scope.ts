@@ -26,6 +26,7 @@
 
 import postcss, { type AtRule, type ChildNode, type Container, type Declaration, type Rule } from 'postcss';
 import { themeScopePrelude } from './boundary';
+import { themeIssue, type ThemeIssue } from './issues';
 import { rewriteUrls } from './urls';
 
 export interface ScopeOptions {
@@ -39,6 +40,8 @@ export interface ScopeResult {
   /** The scoped CSS; empty when there are errors. */
   css: string;
   errors: string[];
+  /** The same errors, each with its line in the stylesheet where there is one (no `file`: the caller knows it). */
+  issues: ThemeIssue[];
 }
 
 const KEPT_AT_RULES = new Set(['media', 'supports', 'container', 'layer']);
@@ -90,7 +93,9 @@ export function scopeSelector(selector: string): string {
   return `${prefix} ${s}`;
 }
 
-function lineOf(node: { source?: { start?: { line: number } } }): string {
+type Located = { source?: { start?: { line: number } } };
+
+function lineOf(node: Located): string {
   const line = node.source?.start?.line;
   return line ? `line ${line}` : 'unknown line';
 }
@@ -104,13 +109,18 @@ function renameAnimations(value: string, names: Map<string, string>): string {
 }
 
 export function scopeThemeCss(css: string, options: ScopeOptions): ScopeResult {
-  const errors: string[] = [];
+  const issues: ThemeIssue[] = [];
+  /** An error at a node: the message gains its line, and the issue carries it. */
+  const fail = (text: string, node?: Located) => {
+    issues.push(themeIssue(node ? `${text} (${lineOf(node)})` : text, undefined, node?.source?.start?.line));
+  };
   let root: postcss.Root;
   try {
     root = postcss.parse(css, { from: undefined });
   } catch (error) {
     const e = error as { line?: number; reason?: string; message: string };
-    return { css: '', errors: [`custom CSS does not parse (line ${e.line ?? '?'}): ${e.reason ?? e.message}`] };
+    const issue = themeIssue(`custom CSS does not parse (line ${e.line ?? '?'}): ${e.reason ?? e.message}`, undefined, e.line);
+    return { css: '', errors: [issue.message], issues: [issue] };
   }
 
   root.walkComments((c) => {
@@ -123,7 +133,7 @@ export function scopeThemeCss(css: string, options: ScopeOptions): ScopeResult {
     if (KEYFRAMES.has(at.name.toLowerCase())) {
       const name = at.params.trim();
       if (!/^-?[A-Za-z_][\w-]*$/.test(name)) {
-        errors.push(`@keyframes name "${name}" is not a plain identifier (${lineOf(at)})`);
+        fail(`@keyframes name "${name}" is not a plain identifier`, at);
         return;
       }
       keyframeNames.set(name, `${options.id}-${name}`);
@@ -137,7 +147,7 @@ export function scopeThemeCss(css: string, options: ScopeOptions): ScopeResult {
     if (prop === 'animation' || prop === 'animation-name') decl.value = renameAnimations(decl.value, keyframeNames);
     if (/url\(|image-set\(/i.test(decl.value)) {
       const rewritten = rewriteUrls(decl.value, urlContext);
-      for (const e of rewritten.errors) errors.push(`${e} (${lineOf(decl)})`);
+      for (const e of rewritten.errors) fail(e, decl);
       decl.value = rewritten.value;
     }
   };
@@ -161,9 +171,9 @@ export function scopeThemeCss(css: string, options: ScopeOptions): ScopeResult {
           walkTopLevel(at);
           return;
         }
-        if (name === 'font-face') errors.push(`@font-face is not allowed in custom CSS; declare fonts in theme.json (${lineOf(at)})`);
-        else if (name === 'import' || name === 'charset' || name === 'namespace') errors.push(`@${name} is not allowed (${lineOf(at)})`);
-        else errors.push(`@${at.name} is not allowed in theme CSS (${lineOf(at)})`);
+        if (name === 'font-face') fail('@font-face is not allowed in custom CSS; declare fonts in theme.json', at);
+        else if (name === 'import' || name === 'charset' || name === 'namespace') fail(`@${name} is not allowed`, at);
+        else fail(`@${at.name} is not allowed in theme CSS`, at);
         return;
       }
       if (node.type === 'rule') {
@@ -186,12 +196,12 @@ export function scopeThemeCss(css: string, options: ScopeOptions): ScopeResult {
         rule.walkDecls(visitDeclaration);
         rule.walkAtRules((at) => {
           const name = at.name.toLowerCase();
-          if (!KEPT_AT_RULES.has(name)) errors.push(`@${at.name} is not allowed inside a rule (${lineOf(at)})`);
+          if (!KEPT_AT_RULES.has(name)) fail(`@${at.name} is not allowed inside a rule`, at);
         });
         return;
       }
       if (node.type === 'decl') {
-        errors.push(`declaration "${(node as Declaration).prop}" outside a rule (${lineOf(node)})`);
+        fail(`declaration "${(node as Declaration).prop}" outside a rule`, node);
       }
     });
   };
@@ -199,6 +209,7 @@ export function scopeThemeCss(css: string, options: ScopeOptions): ScopeResult {
   walkTopLevel(root);
 
   const out = root.toString();
-  if (out.includes('</')) errors.push('custom CSS may not contain "</"');
-  return errors.length > 0 ? { css: '', errors } : { css: out, errors: [] };
+  if (out.includes('</')) fail('custom CSS may not contain "</"');
+  const errors = issues.map((i) => i.message);
+  return errors.length > 0 ? { css: '', errors, issues } : { css: out, errors: [], issues: [] };
 }

@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE — DO NOT EDIT BY HAND. Source: lib/themes/registry/. Regenerate with `npm run generate:theme-tokens-doc`. -->
 
-Every token a theme's `tokens.json` may set — 704 tokens in 50 groups. A theme stores only what it changes: a value for both modes, or `{ "value": …, "dark": … }`. Defaults may reference other tokens with `var()`. The registry lives in `lib/themes/registry/`; the authoring guide is [THEME_DEVELOPMENT.md](THEME_DEVELOPMENT.md) and the structural hooks are in [THEME_HOOKS.md](THEME_HOOKS.md).
+Every token a theme's `tokens.json` may set — 712 tokens in 50 groups. A theme stores only what it changes: a value for both modes, or `{ "value": …, "dark": … }`. Defaults may reference other tokens with `var()`. The registry lives in `lib/themes/registry/`; the authoring guide is [THEME_DEVELOPMENT.md](THEME_DEVELOPMENT.md) and the structural hooks are in [THEME_HOOKS.md](THEME_HOOKS.md).
 
 **Visibility:** `standard` tokens are the ones themes set often; `advanced` ones rarely; `internal` ones are app plumbing a theme should leave alone.
 
@@ -858,7 +858,7 @@ Group id `avatar`, 8 tokens.
 
 ## Code block
 
-Group id `code-block`, 14 tokens.
+Group id `code-block`, 22 tokens.
 
 | Token | Type | Default | Dark default | By choice | Visibility | What it is |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -867,6 +867,14 @@ Group id `code-block`, 14 tokens.
 | `--qt-code-fg` | color | `var(--color-foreground)` |  |  | advanced | Code text colour |
 | `--qt-code-border` | color | `var(--color-border)` |  |  | advanced | Code border |
 | `--qt-code-font` | font-family | `var(--font-mono)` |  |  | standard | Code font |
+| `--qt-code-token-comment` | color | `color-mix(in srgb, var(--qt-code-fg) 78%, var(--qt-code-bg))` |  |  | advanced | Code comment. Comments in highlighted source (the theme editor's CSS, JSON files in Document Mode). |
+| `--qt-code-token-keyword` | color | `color-mix(in srgb, var(--qt-code-fg) 68%, #d0105a)` |  |  | advanced | Code keyword. At-rules, `!important`, `true` / `false` / `null`. |
+| `--qt-code-token-string` | color | `color-mix(in srgb, var(--qt-code-fg) 68%, #189040)` |  |  | advanced | Code string. Strings and `url()` values. |
+| `--qt-code-token-number` | color | `color-mix(in srgb, var(--qt-code-fg) 68%, #1a6fe0)` |  |  | advanced | Code number. Numbers, lengths and hex colours. |
+| `--qt-code-token-property` | color | `color-mix(in srgb, var(--qt-code-fg) 68%, #9040e0)` |  |  | advanced | Code property. CSS property names and JSON keys. |
+| `--qt-code-token-selector` | color | `color-mix(in srgb, var(--qt-code-fg) 68%, #c06000)` |  |  | advanced | Code selector. CSS selectors. |
+| `--qt-code-token-function` | color | `color-mix(in srgb, var(--qt-code-fg) 68%, #0090b0)` |  |  | advanced | Code function. CSS functions such as `var()` and `calc()`. |
+| `--qt-code-token-punctuation` | color | `var(--qt-code-fg)` |  |  | advanced | Code punctuation. Braces, colons, commas and semicolons. |
 | `--qt-copy-button-bg` | color | `rgba(0, 0, 0, 0.6)` |  |  | advanced | Copy button background. Hook: _content.css reads it as var(--qt-copy-button-bg, rgba(0, 0, 0, 0.6)); the default is that fallback. |
 | `--qt-copy-button-text` | color | `rgba(255, 255, 255, 0.9)` |  |  | advanced | Copy button text. Hook: _content.css reads it as var(--qt-copy-button-text, rgba(255, 255, 255, 0.9)); the default is that fallback. |
 | `--qt-copy-button-border` | color | `rgba(255, 255, 255, 0.1)` |  |  | advanced | Copy button border. Hook: _content.css reads it as var(--qt-copy-button-border, rgba(255, 255, 255, 0.1)); the default is that fallback. |

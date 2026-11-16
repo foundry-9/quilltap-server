@@ -16,6 +16,7 @@ import {
   DraftNotInstallableError,
   DraftRevisionConflictError,
   DraftSourceNotFoundError,
+  DraftImportRefusedError,
   ThemeDraftNotFoundError,
 } from './service';
 import { ThemeDraftStoreUnavailableError } from './store';
@@ -37,6 +38,9 @@ export function draftErrorResponse(error: unknown): NextResponse<ErrorResponse> 
   if (error instanceof DraftUploadRefusedError) return errorResponse(error.message, error.reason === 'limit' ? 413 : 422);
   if (error instanceof DraftNotInstallableError) return errorResponse(error.message, 422, { errors: error.errors });
   if (error instanceof DraftSourceNotFoundError) return badRequest(error.message);
+  if (error instanceof DraftImportRefusedError) {
+    return errorResponse(error.message, error.reason === 'limit' ? 413 : 422, { errors: error.errors, reason: error.reason });
+  }
   if (error instanceof ThemeDraftStoreUnavailableError) return errorResponse(error.message, 503);
   return null;
 }

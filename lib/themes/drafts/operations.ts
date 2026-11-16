@@ -1,7 +1,8 @@
 /**
  * Theme draft operations on the manifest and its files (Calliope Live, Spec F
  * §0.2): fonts, licence files, images, icon overrides, subsystem pictures and
- * the manifest's own fields.
+ * the manifest's own fields; and the custom stylesheet (Spec G §1.2): attach,
+ * detach and save.
  *
  * Every operation takes the manifest revision the caller read (decision 6) and
  * is checked in full before anything is written: the revision, the upload
@@ -20,6 +21,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
+import { sha256OfString } from '@/lib/utils/sha256';
 import { ThemeFontSchema, ThemeManifestSchema, type ThemeFont } from '../engine';
 import { normaliseBundlePath } from '../engine/css-text';
 import { guessFontFromFileName, readFontInfo, type FontInfo, type FontNameGuess } from '../font-info';
@@ -30,14 +32,15 @@ import {
   DraftManifestRevisionConflictError,
   DraftManifestUnreadableError,
   DraftOperationRefusedError,
+  DraftRevisionConflictError,
   REMOVABLE_KINDS,
   loadDraft,
   readDraft,
   rewriteManifest,
   type DraftDetail,
 } from './service';
-import { deleteDraftFile, writeDraftFile, type DraftFileEntry, type DraftsStore } from './store';
-import { checkUploadContent, checkUploadLimits, storedUploadPath, type DraftUploadKind } from './uploads';
+import { deleteDraftFile, readDraftText, writeDraftFile, type DraftFileEntry, type DraftsStore } from './store';
+import { checkUploadContent, checkUploadLimits, DRAFT_LIMITS, DraftUploadRefusedError, storedUploadPath, type DraftUploadKind } from './uploads';
 
 const logger = createServiceLogger('ThemeDraftOperations');
 
@@ -517,5 +520,113 @@ export function setDraftManifestFields(id: string, input: { revision: string; fi
     await commit(ctx, edit);
     logger.debug('Set theme draft manifest fields', { draftId: id, fields: Object.keys(fields) });
     return { draft: await readDraft(id) };
+  });
+}
+
+// ============================================================================
+// The custom stylesheet (Spec G §1.2)
+// ============================================================================
+
+/** Where a new stylesheet goes. */
+export const DEFAULT_STYLES_PATH = 'styles.css';
+
+/** The text of a draft file, or null when it is not there. */
+async function currentText(store: DraftsStore, id: string, file: string): Promise<string | null> {
+  try {
+    return (await readDraftText(store, id, file)).content;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException)?.code === 'ENOENT') return null;
+    throw e;
+  }
+}
+
+/**
+ * Give the draft a custom stylesheet: name `styles.css` in `stylesPath`,
+ * creating it empty when it is not there (a `styles.css` left behind by an
+ * earlier detach is named again as it is). A draft that already names a
+ * stylesheet is left as it is, except that a named file that is missing is
+ * created. The file is written before the manifest names it.
+ */
+export function setDraftStylesFile(id: string, input: { revision: string }): Promise<DraftOperationResult & { path: string; created: boolean }> {
+  return serialised(id, async () => {
+    const ctx = await open(id, input.revision);
+    const named = ctx.detail.styles?.path ?? null;
+    const target = named ?? DEFAULT_STYLES_PATH;
+    const exists = hasFile(ctx, target);
+    const edit: ManifestEdit = (m) => { m.stylesPath = target; };
+    if (named === null) dryRun(ctx, edit);
+    // The file first: a manifest naming a stylesheet that is not there is a validation error.
+    if (!exists) await writeDraftFile(ctx.store, id, target, Buffer.alloc(0));
+    if (named === null) {
+      try {
+        await commit(ctx, edit);
+      } catch (error) {
+        if (!exists) {
+          await deleteDraftFile(ctx.store, id, target).catch((cleanup) => {
+            logger.warn('Could not remove a new stylesheet whose manifest edit was refused', { draftId: id, file: target, error: (cleanup as Error).message });
+          });
+        }
+        throw error;
+      }
+    }
+    logger.debug('Set a theme draft stylesheet', { draftId: id, file: target, created: !exists, named: named === null });
+    return { draft: await readDraft(id), path: target, created: !exists };
+  });
+}
+
+/**
+ * Stop the draft using its custom stylesheet: unname it in the manifest, then
+ * delete the file when `deleteFile` asks for that (else it stays in the
+ * draft, unused, and an install leaves it out).
+ */
+export function clearDraftStylesFile(id: string, input: { revision: string; deleteFile?: boolean }): Promise<DraftOperationResult & { deleted: string[] }> {
+  return serialised(id, async () => {
+    const ctx = await open(id, input.revision);
+    const named = ctx.detail.styles?.path ?? null;
+    if (named === null) throw new DraftOperationRefusedError('The draft has no custom stylesheet');
+    const edit: ManifestEdit = (m) => { delete m.stylesPath; };
+    dryRun(ctx, edit);
+    await commit(ctx, edit);
+    const deleted: string[] = [];
+    if (input.deleteFile && hasFile(ctx, named)) {
+      if (await deleteDraftFile(ctx.store, id, named)) deleted.push(named);
+    }
+    logger.debug('Cleared a theme draft stylesheet', { draftId: id, file: named, deleted });
+    return { draft: await readDraft(id), deleted };
+  });
+}
+
+/**
+ * Save a draft's custom stylesheet: the file `stylesPath` names, written as
+ * given. `revision` is the one the caller read (`styles.revision`); on a
+ * mismatch nothing is written and DraftRevisionConflictError carries the
+ * current one. A stylesheet with errors is still saved — its errors come back
+ * as issues, with their lines, on the fresh detail, as an invalid tokens
+ * document's do. A draft that names no stylesheet refuses.
+ *
+ * A `.css` file is a blob in the store, which has no write guarded by its
+ * mtime (a tokens file has), so the revision is checked inside the draft's
+ * operation queue immediately before the write: two saves through this module
+ * cannot cross, and a write from elsewhere between the check and the write is
+ * the only window left.
+ */
+export function writeDraftStyles(id: string, input: { revision: string; css: string }): Promise<DraftDetail> {
+  return serialised(id, async () => {
+    const { store, read } = await loadDraft(id);
+    const styles = read.detail.styles;
+    if (!styles) throw new DraftOperationRefusedError('The draft has no custom stylesheet to save; add one first');
+    const bytes = Buffer.from(input.css, 'utf-8');
+    if (bytes.length > DRAFT_LIMITS.fileBytes) {
+      throw new DraftUploadRefusedError(`The stylesheet is larger than a theme file may be (${DRAFT_LIMITS.fileBytes / 1024 / 1024} MB)`, 'limit');
+    }
+    const now = await currentText(store, id, styles.path);
+    const currentRevision = now === null ? 'missing' : sha256OfString(now);
+    if (currentRevision !== input.revision) {
+      logger.debug('Theme draft stylesheet save refused: stale revision', { draftId: id });
+      throw new DraftRevisionConflictError(currentRevision);
+    }
+    await writeDraftFile(store, id, styles.path, bytes);
+    logger.debug('Saved theme draft stylesheet', { draftId: id, file: styles.path, bytes: bytes.length });
+    return readDraft(id);
   });
 }

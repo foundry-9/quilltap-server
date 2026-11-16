@@ -613,6 +613,30 @@
   --qt-code-border: var(--color-border);
   --qt-code-font: var(--font-mono);
 
+  /* Comments in highlighted source (the theme editor's CSS, JSON files in Document Mode). */
+  --qt-code-token-comment: color-mix(in srgb, var(--qt-code-fg) 78%, var(--qt-code-bg));
+
+  /* At-rules, `!important`, `true` / `false` / `null`. */
+  --qt-code-token-keyword: color-mix(in srgb, var(--qt-code-fg) 68%, #d0105a);
+
+  /* Strings and `url()` values. */
+  --qt-code-token-string: color-mix(in srgb, var(--qt-code-fg) 68%, #189040);
+
+  /* Numbers, lengths and hex colours. */
+  --qt-code-token-number: color-mix(in srgb, var(--qt-code-fg) 68%, #1a6fe0);
+
+  /* CSS property names and JSON keys. */
+  --qt-code-token-property: color-mix(in srgb, var(--qt-code-fg) 68%, #9040e0);
+
+  /* CSS selectors. */
+  --qt-code-token-selector: color-mix(in srgb, var(--qt-code-fg) 68%, #c06000);
+
+  /* CSS functions such as `var()` and `calc()`. */
+  --qt-code-token-function: color-mix(in srgb, var(--qt-code-fg) 68%, #0090b0);
+
+  /* Braces, colons, commas and semicolons. */
+  --qt-code-token-punctuation: var(--qt-code-fg);
+
   /* Hook: _content.css reads it as var(--qt-copy-button-bg, rgba(0, 0, 0, 0.6)); the default is that fallback. */
   --qt-copy-button-bg: rgba(0, 0, 0, 0.6);
 

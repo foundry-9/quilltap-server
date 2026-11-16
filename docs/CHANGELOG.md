@@ -4,6 +4,17 @@
 
 ### 4.14-dev
 
+#### Themes: code editor, located issues, draft stylesheet and import (Calliope Live, Spec G Stages 0–1)
+
+- New shared code editor (`components/code-editor/`): Lexical plain text with Prism highlighting for JSON and CSS, line numbers, issue markers with tooltips, Tab / Shift+Tab indent and outdent, Escape-then-Tab to leave, auto-indent on Enter, and line endings kept as the file had them. A reusing tokenizer only rebuilds the changed stretch, so a 2,000-line file types at about 16 ms a key. Not yet mounted anywhere
+- Eight `--qt-code-token-*` theme tokens for the highlight colors, with contrast pairs; added `@lexical/code-prism`
+- Theme engine issues are structured: the CSS scoper, the theme validator and the bundle loader return `{ message, file?, line? }` beside each message (`lib/themes/engine/issues.ts`). Message text and `quilltap themes validate` output are unchanged. Draft issues carry `file` and `line`
+- Draft detail returns `styles` (`{ path, text, revision }` or `null`)
+- New draft operations `set-styles-file` (creates an empty `styles.css` when absent, then names it in the manifest) and `clear-styles-file` (unnames it first, then deletes the file only with `deleteFile`), both taking `manifestRevision`
+- `PUT /api/v1/theme-drafts/[id]` takes `{ revision, tokens }` or `{ stylesRevision, css }`. CSS with errors is saved and reported; a stale revision is a 409
+- `POST /api/v1/theme-drafts?action=import` (multipart, one `file`) makes a draft from a `.qtap-theme`. The archive is checked and extracted by `bundle-archive.ts` into a temp directory that is always removed; a version 1 bundle is refused with the earlier-theme message; an oversized upload is refused (411 / 413) before it is read whole. The draft keeps the bundle's name and version and gets a free id; the result has `bundleId` and `idChanged`
+- Tests: code editor, engine issues, stylesheet operations, import (all six bundled themes, free and numbered ids, version 1, symlinks, climbing paths, size and count limits, broken CSS, temp cleanup) and the routes
+
 #### Docs: Calliope Live Spec G
 
 - Added Spec G (custom CSS section in the theme editor, a shared code editor with JSON and CSS highlighting, and importing a `.qtap-theme` file as a draft)

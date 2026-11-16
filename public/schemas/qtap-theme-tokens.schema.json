@@ -6010,6 +6010,214 @@
           ],
           "description": "Code radius — radius, group code-block — default: var(--radius-md)"
         },
+        "--qt-code-token-comment": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Code comment — color, group code-block — default: color-mix(in srgb, var(--qt-code-fg) 78%, var(--qt-code-bg))"
+        },
+        "--qt-code-token-function": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Code function — color, group code-block — default: color-mix(in srgb, var(--qt-code-fg) 68%, #0090b0)"
+        },
+        "--qt-code-token-keyword": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Code keyword — color, group code-block — default: color-mix(in srgb, var(--qt-code-fg) 68%, #d0105a)"
+        },
+        "--qt-code-token-number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Code number — color, group code-block — default: color-mix(in srgb, var(--qt-code-fg) 68%, #1a6fe0)"
+        },
+        "--qt-code-token-property": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Code property — color, group code-block — default: color-mix(in srgb, var(--qt-code-fg) 68%, #9040e0)"
+        },
+        "--qt-code-token-punctuation": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Code punctuation — color, group code-block — default: var(--qt-code-fg)"
+        },
+        "--qt-code-token-selector": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Code selector — color, group code-block — default: color-mix(in srgb, var(--qt-code-fg) 68%, #c06000)"
+        },
+        "--qt-code-token-string": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Code string — color, group code-block — default: color-mix(in srgb, var(--qt-code-fg) 68%, #189040)"
+        },
         "--qt-color-scheme": {
           "anyOf": [
             {

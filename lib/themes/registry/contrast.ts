@@ -73,6 +73,11 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   pair('--qt-chat-system-bar-fg', '--qt-chat-system-bar-bg'),
   // ---- roleplay chips
   ...([1, 2, 3, 4] as const).map((n) => pair(`--theme-roleplay-chip-${n}-foreground`, `--theme-roleplay-chip-${n}`)),
+  // ---- highlighted source (the code editor) on the code surface
+  pair('--qt-code-fg', '--qt-code-bg'),
+  ...(['comment', 'keyword', 'string', 'number', 'property', 'selector', 'function', 'punctuation'] as const).map((t) => pair(`--qt-code-token-${t}`, '--qt-code-bg')),
+  // the code editor's problem marks (graphics with a text alternative)
+  ...(['destructive', 'warning', 'info'] as const).map((s) => pair(`--theme-${s}`, '--qt-code-bg', 'non-text')),
   // ---- links
   pair('--qt-link-color', '--theme-background'),
   pair('--qt-link-color', '--theme-card'),

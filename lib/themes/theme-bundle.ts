@@ -21,8 +21,10 @@ import { HOOK_CATALOGUE } from './hooks';
 import { lintThemeSelectors, removedHooksUsed } from './hooks/lint';
 import {
   compileTheme,
+  themeIssue,
   validateThemeDocument,
   type CompiledTheme,
+  type ThemeIssue,
   type RegistryView,
   type ThemeDocument,
   type ValidationContext,
@@ -34,12 +36,17 @@ const bundleLogger = logger.child({ module: 'theme-bundle' });
 export const THEME_REGISTRY_VIEW: RegistryView = { tokens: THEME_TOKENS, choices: THEME_CHOICES };
 
 export class ThemeBundleError extends Error {
+  /** The errors with their file and line (Spec G decision 6); the same messages as `errors`. */
+  readonly issues: ThemeIssue[];
+
   constructor(
     readonly themeDir: string,
-    readonly errors: string[]
+    readonly errors: string[],
+    issues?: ThemeIssue[]
   ) {
     super(`Invalid theme bundle: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? ` (and ${errors.length - 5} more)` : ''}`);
     this.name = 'ThemeBundleError';
+    this.issues = issues ?? errors.map((message) => themeIssue(message));
   }
 }
 
@@ -52,6 +59,8 @@ export interface LoadedThemeDocument {
    * its `hooksVersion`, and contrast findings. Also logged; `quilltap themes validate` prints them.
    */
   warnings: string[];
+  /** The same warnings, each with its file and line where known. */
+  warningIssues: ThemeIssue[];
 }
 
 /** Every regular file under `dir`, as bundle-relative paths with "/" separators. */
@@ -108,11 +117,11 @@ export async function directoryBundleSource(dir: string): Promise<ThemeBundleSou
   };
 }
 
-async function readJson(source: ThemeBundleSource, rel: string, errors: string[]): Promise<unknown> {
+async function readJson(source: ThemeBundleSource, rel: string, errors: ThemeIssue[]): Promise<unknown> {
   try {
     return JSON.parse(await source.readText(rel));
   } catch (error) {
-    errors.push(`${rel}: cannot be read as JSON (${(error as Error).message})`);
+    errors.push(themeIssue(`${rel}: cannot be read as JSON (${(error as Error).message})`, rel));
     return undefined;
   }
 }
@@ -131,27 +140,27 @@ export async function loadThemeFromDir(dir: string, manifestJson: unknown): Prom
  * ThemeBundleError (carrying `source.label`) listing every problem.
  */
 export async function loadThemeFromSource(source: ThemeBundleSource, manifestJson: unknown): Promise<LoadedThemeDocument> {
-  const errors: string[] = [];
+  const errors: ThemeIssue[] = [];
   const { files } = source;
   const manifest = (manifestJson ?? {}) as { tokensPath?: unknown; stylesPath?: unknown };
   const tokensPath = typeof manifest.tokensPath === 'string' ? manifest.tokensPath : 'tokens.json';
   const tokens = files.has(tokensPath) ? await readJson(source, tokensPath, errors) : undefined;
-  if (!files.has(tokensPath)) errors.push(`theme.json: tokensPath: file "${tokensPath}" is not in the bundle`);
+  if (!files.has(tokensPath)) errors.push(themeIssue(`theme.json: tokensPath: file "${tokensPath}" is not in the bundle`, 'theme.json'));
 
   let css: string | undefined;
   if (typeof manifest.stylesPath === 'string' && files.has(manifest.stylesPath)) {
     try {
       css = await source.readText(manifest.stylesPath);
     } catch (error) {
-      errors.push(`${manifest.stylesPath}: cannot be read (${(error as Error).message})`);
+      errors.push(themeIssue(`${manifest.stylesPath}: cannot be read (${(error as Error).message})`, manifest.stylesPath));
     }
   }
-  if (errors.length > 0) throw new ThemeBundleError(source.label, errors);
+  if (errors.length > 0) throw new ThemeBundleError(source.label, errors.map((e) => e.message), errors);
 
   const result = validateThemeDocument({ manifest: manifestJson, tokens, css }, validationContextFor(files));
   if (!result.valid) {
     bundleLogger.warn('Theme bundle failed validation', { source: source.label, errorCount: result.errors.length, errors: result.errors.slice(0, 20) });
-    throw new ThemeBundleError(source.label, result.errors);
+    throw new ThemeBundleError(source.label, result.errors, result.errorIssues);
   }
 
   // Files the manifest names are read later by the asset and font routes;
@@ -163,16 +172,21 @@ export async function loadThemeFromSource(source: ThemeBundleSource, manifestJso
   ].filter((p): p is string => typeof p === 'string');
   if (source.checkReferenced) for (const p of referenced) await source.checkReferenced(p);
 
+  const stylesPath = result.document.manifest.stylesPath ?? 'styles.css';
   const warnings: string[] = [...result.warnings];
+  const warningIssues: ThemeIssue[] = [...result.warningIssues];
+  const warn = (message: string, line?: number) => {
+    warnings.push(message);
+    warningIssues.push(themeIssue(message, stylesPath, line));
+  };
   if (result.warnings.length > 0) {
     bundleLogger.debug('Theme has contrast findings', { themeId: result.document.manifest.id, count: result.warnings.length });
   }
-  const stylesPath = result.document.manifest.stylesPath ?? 'styles.css';
   const { hooksVersion } = result.document.manifest;
   if (css !== undefined && hooksVersion !== undefined && hooksVersion < HOOK_CATALOGUE.version) {
     const removed = removedHooksUsed(css, hooksVersion, HOOK_CATALOGUE);
     for (const hook of removed) {
-      warnings.push(
+      warn(
         `${stylesPath}: .${hook.className} was removed from the hook catalogue in version ${hook.removedIn}` +
           (hook.replacedBy ? `; use .${hook.replacedBy}` : '')
       );
@@ -199,7 +213,7 @@ export async function loadThemeFromSource(source: ThemeBundleSource, manifestJso
   if (css !== undefined && css.trim()) {
     const findings = lintThemeSelectors(css, HOOK_CATALOGUE);
     for (const finding of findings) {
-      warnings.push(`${stylesPath}:${finding.line}: ${finding.selector} — ${finding.reasons.map((r) => r.message).join('; ')}`);
+      warn(`${stylesPath}:${finding.line}: ${finding.selector} — ${finding.reasons.map((r) => r.message).join('; ')}`, finding.line);
     }
     if (findings.length > 0) {
       bundleLogger.warn('Theme custom CSS targets selectors off the hook catalogue', {
@@ -220,5 +234,5 @@ export async function loadThemeFromSource(source: ThemeBundleSource, manifestJso
     features: compiled.features,
     customCssBytes: compiled.css.custom.length,
   });
-  return { document: result.document, compiled, warnings };
+  return { document: result.document, compiled, warnings, warningIssues };
 }

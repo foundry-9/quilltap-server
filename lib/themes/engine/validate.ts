@@ -36,6 +36,7 @@ import {
 import { checkContrast, contrastWarnings } from './contrast';
 import { hasImageExtension } from './css-text';
 import { resolveTheme, type RegistryView } from './resolve';
+import { themeIssue, type ThemeIssue } from './issues';
 import { scopeThemeCss } from './scope';
 import { rewriteUrls } from './urls';
 import { typeProblem } from './type-check';
@@ -62,8 +63,8 @@ export interface ValidationInput {
  * findings (./contrast.ts) — a failed or unchecked pair, one line each.
  */
 export type ThemeDocumentValidation =
-  | { valid: true; document: ThemeDocument; scopedCss: string; errors: []; warnings: string[] }
-  | { valid: false; errors: string[]; warnings: string[] };
+  | { valid: true; document: ThemeDocument; scopedCss: string; errors: []; warnings: string[]; errorIssues: []; warningIssues: ThemeIssue[] }
+  | { valid: false; errors: string[]; warnings: string[]; errorIssues: ThemeIssue[]; warningIssues: ThemeIssue[] };
 
 /** Tailwind's names (theme-tokens.css), read off the registry the engine is given. */
 export function tailwindTokenNames(registry: RegistryView): Set<string> {
@@ -101,31 +102,35 @@ export function nearestName(name: string, candidates: Iterable<string>): string 
 }
 
 export function validateThemeDocument(input: ValidationInput, ctx: ValidationContext): ThemeDocumentValidation {
-  const errors: string[] = [];
+  const errorIssues: ThemeIssue[] = [];
+  /** An error in `file`: the message is `<file>: <text>`, the issue says which file (and line, for CSS). */
+  const fail = (file: string, text: string, line?: number) => {
+    errorIssues.push(themeIssue(`${file}: ${text}`, file, line));
+  };
   const manifestResult = ThemeManifestSchema.safeParse(input.manifest);
   if (!manifestResult.success) {
-    for (const issue of manifestResult.error.issues) errors.push(`theme.json: ${issue.path.join('.') || '(root)'}: ${issue.message}`);
+    for (const issue of manifestResult.error.issues) fail('theme.json', `${issue.path.join('.') || '(root)'}: ${issue.message}`);
   }
   const tokensResult = ThemeTokensDocumentSchema.safeParse(input.tokens);
   if (!tokensResult.success) {
-    for (const issue of tokensResult.error.issues) errors.push(`tokens.json: ${issue.path.join('.') || '(root)'}: ${issue.message}`);
+    for (const issue of tokensResult.error.issues) fail('tokens.json', `${issue.path.join('.') || '(root)'}: ${issue.message}`);
   }
-  if (!manifestResult.success || !tokensResult.success) return { valid: false, errors, warnings: [] };
+  if (!manifestResult.success || !tokensResult.success) return { valid: false, errors: errorIssues.map((i) => i.message), warnings: [], errorIssues, warningIssues: [] };
 
   const manifest = manifestResult.data;
   const tokens = tokensResult.data;
   const { files, registry } = ctx;
   const exists = (where: string, p: string) => {
-    if (!files.has(p)) errors.push(`theme.json: ${where}: file "${p}" is not in the bundle`);
+    if (!files.has(p)) fail('theme.json', `${where}: file "${p}" is not in the bundle`);
   };
 
   // ---- manifest files
   exists('tokensPath', manifest.tokensPath);
   if (manifest.stylesPath) exists('stylesPath', manifest.stylesPath);
-  if (manifest.stylesPath && input.css === undefined) errors.push(`theme.json: stylesPath: "${manifest.stylesPath}" could not be read`);
+  if (manifest.stylesPath && input.css === undefined) fail('theme.json', `stylesPath: "${manifest.stylesPath}" could not be read`);
   if (manifest.previewImage) {
     exists('previewImage', manifest.previewImage);
-    if (!hasImageExtension(manifest.previewImage)) errors.push('theme.json: previewImage: not an image file');
+    if (!hasImageExtension(manifest.previewImage)) fail('theme.json', 'previewImage: not an image file');
   }
   manifest.fonts?.forEach((font, i) => {
     exists(`fonts.${i}.src`, font.src);
@@ -134,20 +139,20 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
   for (const [name, p] of Object.entries(manifest.icons ?? {})) {
     if (!ctx.iconNames.has(name)) {
       const near = nearestName(name, ctx.iconNames);
-      errors.push(`theme.json: icons.${name}: not an app icon${near ? ` (did you mean "${near}"?)` : ''}`);
+      fail('theme.json', `icons.${name}: not an app icon${near ? ` (did you mean "${near}"?)` : ''}`);
     }
-    if (!/\.(svg|webp)$/i.test(p)) errors.push(`theme.json: icons.${name}: must be .svg or .webp`);
+    if (!/\.(svg|webp)$/i.test(p)) fail('theme.json', `icons.${name}: must be .svg or .webp`);
     exists(`icons.${name}`, p);
   }
   for (const [id, sub] of Object.entries(manifest.subsystems ?? {})) {
     if (!ctx.subsystemIds.has(id)) {
       const near = nearestName(id, ctx.subsystemIds);
-      errors.push(`theme.json: subsystems.${id}: not a subsystem id${near ? ` (did you mean "${near}"?)` : ''}`);
+      fail('theme.json', `subsystems.${id}: not a subsystem id${near ? ` (did you mean "${near}"?)` : ''}`);
     }
     for (const key of ['thumbnail', 'backgroundImage'] as const) {
       const p = sub[key];
       if (p === undefined || p === 'none') continue;
-      if (!hasImageExtension(p)) errors.push(`theme.json: subsystems.${id}.${key}: not an image file`);
+      if (!hasImageExtension(p)) fail('theme.json', `subsystems.${id}.${key}: not an image file`);
       exists(`subsystems.${id}.${key}`, p);
     }
   }
@@ -159,16 +164,16 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
   const urlContext = { themeId: manifest.id, version: manifest.version, files };
 
   const checkValue = (where: string, value: string, type: TokenType | (typeof PRIMITIVE_TYPES)[number], options?: readonly string[]) => {
-    if (/[;{}!]|<\//.test(value)) errors.push(`tokens.json: ${where}: a value may not contain ";", "{", "}", "!" or "</"`);
+    if (/[;{}!]|<\//.test(value)) fail('tokens.json', `${where}: a value may not contain ";", "{", "}", "!" or "</"`);
     for (const m of value.matchAll(/var\(\s*(--[\w-]+)\s*(,)?/g)) {
       const ref = m[1];
       if (m[2] || primitiveNames.has(ref) || registryNames.has(ref) || tailwind.has(ref)) continue;
       const near = nearestName(ref, [...primitiveNames, ...registryNames.keys()]);
-      errors.push(`tokens.json: ${where}: var(${ref}) names no primitive or registry token and has no fallback${near ? ` (did you mean ${near}?)` : ''}`);
+      fail('tokens.json', `${where}: var(${ref}) names no primitive or registry token and has no fallback${near ? ` (did you mean ${near}?)` : ''}`);
     }
-    for (const e of rewriteUrls(value, urlContext).errors) errors.push(`tokens.json: ${where}: ${e}`);
+    for (const e of rewriteUrls(value, urlContext).errors) fail('tokens.json', `${where}: ${e}`);
     const problem = typeProblem(type as TokenType, value, options);
-    if (problem) errors.push(`tokens.json: ${where}: ${problem}`);
+    if (problem) fail('tokens.json', `${where}: ${problem}`);
   };
 
   for (const [name, primitive] of Object.entries(tokens.primitives)) {
@@ -180,7 +185,7 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
     if (!token) {
       const near = nearestName(name, registryNames.keys());
       const hint = name.startsWith('--p-') ? ' (primitives go under "primitives", without the --p- prefix)' : near ? ` (did you mean ${near}?)` : '';
-      errors.push(`tokens.json: tokens.${name}: not a registry token${hint}`);
+      fail('tokens.json', `tokens.${name}: not a registry token${hint}`);
       continue;
     }
     const { value, dark } = tokenModes(entry);
@@ -189,12 +194,12 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
   }
   for (const [name, option] of Object.entries(tokens.choices)) {
     const choice = registry.choices.find((c) => c.name === name);
-    if (!choice) errors.push(`tokens.json: choices.${name}: not a choice (choices: ${registry.choices.map((c) => c.name).join(', ')})`);
-    else if (!choice.options.includes(option)) errors.push(`tokens.json: choices.${name}: "${option}" is not an option (${choice.options.join(', ')})`);
+    if (!choice) fail('tokens.json', `choices.${name}: not a choice (choices: ${registry.choices.map((c) => c.name).join(', ')})`);
+    else if (!choice.options.includes(option)) fail('tokens.json', `choices.${name}: "${option}" is not an option (${choice.options.join(', ')})`);
   }
 
   // ---- cycles, per mode, over the theme's values on top of the registry
-  if (errors.length === 0) {
+  if (errorIssues.length === 0) {
     const resolved = resolveTheme(tokens, registry);
     for (const mode of ['light', 'dark'] as const) {
       const values = resolved[mode];
@@ -213,7 +218,7 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
           const key = [...cycle].sort().join(',');
           if (!reported.has(key)) {
             reported.add(key);
-            errors.push(`tokens.json: reference cycle (${mode}): ${cycle.join(' -> ')}`);
+            fail('tokens.json', `reference cycle (${mode}): ${cycle.join(' -> ')}`);
           }
           return;
         }
@@ -229,13 +234,15 @@ export function validateThemeDocument(input: ValidationInput, ctx: ValidationCon
   let scopedCss = '';
   if (input.css !== undefined) {
     const scoped = scopeThemeCss(input.css, { id: manifest.id, version: manifest.version, files });
-    for (const e of scoped.errors) errors.push(`${manifest.stylesPath ?? 'styles'}: ${e}`);
+    for (const e of scoped.issues) fail(manifest.stylesPath ?? 'styles', e.message, e.line);
     scopedCss = scoped.css;
   }
 
   // ---- contrast (warnings only), once the tokens resolve cleanly
-  const warnings = errors.length === 0 ? contrastWarnings(checkContrast(resolveTheme(tokens, registry))) : [];
+  const warnings = errorIssues.length === 0 ? contrastWarnings(checkContrast(resolveTheme(tokens, registry))) : [];
+  // Contrast is a property of the whole theme, not of a line in a file.
+  const warningIssues = warnings.map((message) => themeIssue(message));
 
-  if (errors.length > 0) return { valid: false, errors, warnings };
-  return { valid: true, document: { manifest, tokens, css: input.css }, scopedCss, errors: [], warnings };
+  if (errorIssues.length > 0) return { valid: false, errors: errorIssues.map((i) => i.message), warnings, errorIssues, warningIssues };
+  return { valid: true, document: { manifest, tokens, css: input.css }, scopedCss, errors: [], warnings, errorIssues: [], warningIssues };
 }

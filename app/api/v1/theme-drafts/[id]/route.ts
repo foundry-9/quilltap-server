@@ -2,7 +2,7 @@
  * One theme draft (Calliope Live, Spec D)
  *
  * GET    /api/v1/theme-drafts/[id]                         - The draft: tokens, revisions, compiled parts, files and their users, totals, issues
- * PUT    /api/v1/theme-drafts/[id]                         - Save `{ revision, tokens }`; 409 when `revision` is stale
+ * PUT    /api/v1/theme-drafts/[id]                         - Save `{ revision, tokens }`, or the stylesheet `{ stylesRevision, css }`; 409 when the revision is stale
  * DELETE /api/v1/theme-drafts/[id]                         - Delete the draft folder (an installed copy stays)
  * POST   /api/v1/theme-drafts/[id]?action=install          - Install the draft as a theme (422 when it has errors)
  *
@@ -20,6 +20,8 @@
  * POST ?action=clear-icon         - `{ name }`
  * POST ?action=set-subsystem      - `{ subsystem, fields }`; an empty field clears it
  * POST ?action=set-manifest       - `{ fields }`: name, description, author, license, tags, supportsDarkMode, previewImage
+ * POST ?action=set-styles-file    - `{}`: name `styles.css` as the custom stylesheet, creating it when absent (Spec G)
+ * POST ?action=clear-styles-file  - `{ deleteFile? }`: stop using the stylesheet; delete the file too when asked
  */
 
 import type { NextRequest, NextResponse } from 'next/server';
@@ -39,10 +41,17 @@ async function ensureThemesLoaded() {
   if (!isPluginSystemInitialized()) await initializePlugins();
 }
 
-const SaveDraftSchema = z.strictObject({
-  revision: z.string().min(1),
-  tokens: ThemeTokensDocumentSchema,
-});
+const SaveDraftSchema = z.union([
+  z.strictObject({
+    revision: z.string().min(1),
+    tokens: ThemeTokensDocumentSchema,
+  }),
+  z.strictObject({
+    stylesRevision: z.string().min(1),
+    // Bytes are held to the bundle's per-file limit by the drafts module.
+    css: z.string(),
+  }),
+]);
 
 const manifestRevision = z.string().min(1);
 const fontStyle = z.enum(['normal', 'italic', 'oblique']);
@@ -159,7 +168,11 @@ const handleGet: Handler = async (_req, _ctx, { id }) => {
 
 const handlePut: Handler = async (request, _ctx, { id }) => {
   const body = SaveDraftSchema.parse(await request.json());
-  const { writeDraftTokens } = await getDrafts();
+  const { writeDraftTokens, writeDraftStyles } = await getDrafts();
+  if ('css' in body) {
+    logger.debug('Saving theme draft stylesheet', { context: 'theme-drafts-api', draftId: id, chars: body.css.length });
+    return answering(() => writeDraftStyles(id, { revision: body.stylesRevision, css: body.css }), (draft) => successResponse({ draft }));
+  }
   logger.debug('Saving theme draft tokens', { context: 'theme-drafts-api', draftId: id });
   return answering(() => writeDraftTokens(id, { revision: body.revision, tokens: body.tokens }), (draft) => successResponse({ draft }));
 };
@@ -180,7 +193,7 @@ const handleInstall: Handler = async (_req, _ctx, { id }) => {
 // Manifest and file operations (Spec F)
 // ----------------------------------------------------------------------------
 
-const respondDraft = (result: { draft: unknown; path?: string; deleted?: string[] }) => successResponse(result);
+const respondDraft = (result: { draft: unknown; path?: string; deleted?: string[]; created?: boolean }) => successResponse(result);
 
 const handleReadFont: Handler = async (request, _ctx, { id }) => {
   const drafts = await getDrafts();
@@ -271,6 +284,23 @@ const handleSetManifest: Handler = async (request, _ctx, { id }) => {
   return answering(() => setDraftManifestFields(id, { revision: body.manifestRevision, fields: body.fields }), respondDraft);
 };
 
+const SetStylesFileSchema = z.strictObject({ manifestRevision });
+const ClearStylesFileSchema = z.strictObject({ manifestRevision, deleteFile: z.boolean().optional() });
+
+const handleSetStylesFile: Handler = async (request, _ctx, { id }) => {
+  const body = SetStylesFileSchema.parse(await request.json());
+  const { setDraftStylesFile } = await getDrafts();
+  logger.debug('Setting a theme draft stylesheet', { context: 'theme-drafts-api', draftId: id });
+  return answering(() => setDraftStylesFile(id, { revision: body.manifestRevision }), respondDraft);
+};
+
+const handleClearStylesFile: Handler = async (request, _ctx, { id }) => {
+  const body = ClearStylesFileSchema.parse(await request.json());
+  const { clearDraftStylesFile } = await getDrafts();
+  logger.debug('Clearing a theme draft stylesheet', { context: 'theme-drafts-api', draftId: id, deleteFile: body.deleteFile === true });
+  return answering(() => clearDraftStylesFile(id, { revision: body.manifestRevision, deleteFile: body.deleteFile }), respondDraft);
+};
+
 export const GET = createContextParamsHandler<{ id: string }>(withActionDispatch({}, handleGet));
 export const PUT = createContextParamsHandler<{ id: string }>(withActionDispatch({}, handlePut));
 export const DELETE = createContextParamsHandler<{ id: string }>(withActionDispatch({}, handleDelete));
@@ -288,5 +318,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
     'clear-icon': handleClearIcon,
     'set-subsystem': handleSetSubsystem,
     'set-manifest': handleSetManifest,
+    'set-styles-file': handleSetStylesFile,
+    'clear-styles-file': handleClearStylesFile,
   }),
 );
