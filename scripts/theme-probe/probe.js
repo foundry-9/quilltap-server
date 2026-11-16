@@ -26,6 +26,22 @@
  * as "0 matched", never as "unchanged". Hidden elements (closed workspace
  * tabs, collapsed panels) are not counted.
  *
+ * Gallery mode (Calliope Live, Spec I Stage 3) is for Calliope's specimen
+ * gallery, which draws every hook in every variant value and state:
+ *
+ *   window.__qtThemeProbe({ gallery: [{ className, instances: [{ key, selector }] }] })
+ *
+ * Instead of taking the first visible match on the page, it reads each
+ * instance where the gallery put it — inside
+ * `[data-specimen-for="<class>"] [data-specimen-instance="<key>"]
+ * [data-specimen-stage]` — and measures the first element there matching the
+ * instance's selector. Every article is made visible first (the gallery
+ * renders them with `content-visibility: auto`), and every running
+ * animation is held at its start. The result adds
+ * `kind: "gallery"`, the stage's theme and mode, and `missing`: every
+ * instance it could not find, which in the gallery should never happen.
+ * Elements are keyed by the instance's selector, as on a live page.
+ *
  * @module scripts/theme-probe/probe
  */
 (function install() {
@@ -136,6 +152,68 @@
     return String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   }
 
+  /** Make every specimen article render, so its stages can be measured. */
+  function revealGallery() {
+    var articles = document.querySelectorAll('[data-specimen-for]');
+    for (var i = 0; i < articles.length; i++) articles[i].style.contentVisibility = 'visible';
+    // Force the layout now rather than at the first measurement.
+    void document.body.offsetHeight;
+    return articles.length;
+  }
+
+  /**
+   * Hold every running animation at its start, so an animated property (a
+   * pulsing dot's opacity) reads the same on every run. Gallery mode only:
+   * live-page results stay comparable with runs made before it.
+   */
+  function settleAnimations() {
+    if (typeof document.getAnimations !== 'function') return 0;
+    var all = document.getAnimations();
+    for (var i = 0; i < all.length; i++) {
+      all[i].pause();
+      all[i].currentTime = 0;
+    }
+    return all.length;
+  }
+
+  function probeGallery(gallery, result) {
+    result.kind = 'gallery';
+    result.articles = revealGallery();
+    result.animationsHeld = settleAnimations();
+    result.stage = { theme: null, mode: null };
+    result.missing = [];
+    gallery.forEach(function (hook) {
+      var article = document.querySelector('[data-specimen-for="' + escapeValue(hook.className) + '"]');
+      hook.instances.forEach(function (instance) {
+        var item = article && article.querySelector('[data-specimen-instance="' + escapeValue(instance.key) + '"]');
+        var stage = item && item.querySelector('[data-specimen-stage]');
+        var list = [];
+        if (stage) {
+          try {
+            list = stage.querySelectorAll(instance.selector);
+          } catch (e) {
+            list = [];
+          }
+        }
+        result.counts[instance.selector] = list.length;
+        if (list.length === 0) {
+          result.missing.push(instance.selector + (article ? (item ? '' : ' (no item ' + instance.key + ')') : ' (no article)'));
+          return;
+        }
+        if (!result.stage.theme) {
+          result.stage.theme = stage.getAttribute('data-theme');
+          result.stage.mode = stage.getAttribute('data-specimen-stage');
+        }
+        // A specimen may hold several elements of the class; the first visible
+        // one is the hooked element, else the first (a state that hides it).
+        var chosen = null;
+        for (var i = 0; i < list.length && !chosen; i++) if (visible(list[i])) chosen = list[i];
+        result.elements[instance.selector] = measure(chosen || list[0]);
+      });
+    });
+    return result;
+  }
+
   window.__qtThemeProbe = function probe(options) {
     var hooks = (options && options.hooks) || [];
     var root = document.documentElement;
@@ -147,6 +225,7 @@
       counts: {},
       elements: {},
     };
+    if (options && options.gallery) return probeGallery(options.gallery, result);
     result.elements.html = measure(root);
     result.elements.body = measure(document.body);
     result.counts.html = 1;

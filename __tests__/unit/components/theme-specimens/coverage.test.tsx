@@ -46,9 +46,12 @@ describe('the specimen gallery covers the hook catalogue', () => {
     (className, hook) => {
       const article = container.querySelector(`[data-specimen-for="${className}"]`)
       expect(article).not.toBeNull()
+      // Each instance in its own item and on its own stage: the theme probe
+      // (scripts/theme-probe) addresses it as
+      // [data-specimen-for] [data-specimen-instance] [data-specimen-stage].
       const absent = specimenInstances(hook)
-        .map((i) => i.selector)
-        .filter((selector) => !article!.querySelector(selector))
+        .filter((i) => !article!.querySelector(`[data-specimen-instance="${i.key.replace(/"/g, '\\"')}"] [data-specimen-stage] ${i.selector}`))
+        .map((i) => i.key)
       expect(absent).toEqual([])
     },
   )

@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Theme probe: measures the specimen gallery (Calliope Live, Spec I Stage 3)
+
+- `scripts/theme-probe/run.ts` now probes Calliope's specimen gallery for how every hook looks, plus three live pages for layout: home, one Salon chat and the theme preview dialog. The character, Settings, Appearance and second Salon pages are gone, and so is `--character`; `--chat` takes one id
+- `probe.js` has a gallery mode that reads each instance at `[data-specimen-for] [data-specimen-instance] [data-specimen-stage]` instead of taking the first visible match, after making every `content-visibility: auto` article visible. Instances it cannot find are listed in `missing`. Gallery mode also holds every running animation at its start (`document.getAnimations()`), so an animated property such as the turn dot's opacity reads the same on every run
+- `compare` reports a gallery instance missing on either side as an error
+- The gallery's instance items carry `data-specimen-instance="<key>"`; the coverage test now checks each instance on its own stage
+
 #### Tests: longer timeouts for CI
 
 - CI's Test job kept failing on timeouts in slow jsdom suites (the theme editor's custom CSS tests): Jest's 5 s per-test default in one run, Testing Library's 1 s `findBy` / `waitFor` default in others. The suite runs ~1,500 files under v8 coverage there and render-heavy suites take several times longer than locally

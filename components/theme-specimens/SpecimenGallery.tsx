@@ -134,7 +134,7 @@ const HookSpecimen = memo(function HookSpecimen({ hook, modes, stage }: { hook: 
           aria-label={`${hook.label}: instances`}
         >
           {instances.map((instance) => (
-            <li key={instance.key} className="space-y-1 min-w-0">
+            <li key={instance.key} className="space-y-1 min-w-0" data-specimen-instance={instance.key}>
               <p className="qt-text-xs qt-text-secondary">
                 {instance.label}
                 {instance.kind !== 'base' && <span className="font-mono qt-text-muted"> · {instance.selector}</span>}

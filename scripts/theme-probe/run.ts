@@ -1,13 +1,19 @@
 /**
- * Theme probe — the driver (Calliope Live, Spec C 0.1, 0.2).
+ * Theme probe — the driver (Calliope Live, Spec C 0.1, 0.2; Spec I Stage 3).
  *
  * Loads a fixed set of pages for each theme and colour mode in a headless
  * Chromium, runs ./probe.js on each, and writes one JSON file and one
  * screenshot per page:
  *
  *   npx tsx scripts/theme-probe/run.ts run --base http://localhost:3005 \
- *     --chat <chatId>[,<chatId>…] --character <characterId> --out .theme-probe/<label>
+ *     --chat <chatId> --out .theme-probe/<label>
  *   npx tsx scripts/theme-probe/run.ts compare .theme-probe/<before> .theme-probe/<after>
+ *
+ * How a hook looks is measured in Calliope's specimen gallery, which draws
+ * every hook in every variant value and state on a stage wearing the theme
+ * (the `gallery` page). Three live pages stay for what a stage cannot show —
+ * the shell's layout, a Salon chat, and a page with a dialog open — and for
+ * bare `html`, `body` and headings.
  *
  * See ./README.md for what it needs (Playwright is not a dependency of the
  * repo) and how the pages are chosen. The driver switches the instance's theme
@@ -19,8 +25,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { HOOKS } from '../../lib/themes/hooks';
+import { specimenInstances } from '../../components/theme-specimens/instances';
 
 type ProbeHook = { className: string; variants?: Array<{ attribute: string; values: readonly string[] | 'open' }>; states?: unknown[] };
+
+type GalleryHook = { className: string; instances: Array<{ key: string; selector: string }> };
 
 interface ProbeResult {
   url: string;
@@ -28,6 +37,10 @@ interface ProbeResult {
   mode: string | null;
   counts: Record<string, number>;
   elements: Record<string, Record<string, Record<string, string>>>;
+  /** Present on a gallery page. */
+  kind?: 'gallery';
+  stage?: { theme: string | null; mode: string | null };
+  missing?: string[];
 }
 
 interface PageSpec {
@@ -35,6 +48,8 @@ interface PageSpec {
   path: string;
   /** Open the active theme's preview dialog from the Appearance card after load. */
   openPreviewDialog?: boolean;
+  /** Calliope's specimen gallery: probed in gallery mode. */
+  gallery?: boolean;
 }
 
 const ALL_THEMES = ['default', 'art-deco', 'earl-grey', 'great-estate', 'madmans-box', 'old-school', 'rains'];
@@ -47,16 +62,19 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-/** `chats` is comma-separated: one Salon page each (`salon`, `salon-2`, …), for when no one chat shows every kind of row. */
-function pagesFor(chats: string, character: string): PageSpec[] {
+/** The gallery for how every hook looks; the shell, a Salon chat and an open dialog for layout. */
+function pagesFor(chat: string): PageSpec[] {
   return [
+    { name: 'gallery', path: '/calliope/specimens', gallery: true },
     { name: 'home', path: '/' },
-    ...chats.split(',').map((id, i) => ({ name: i === 0 ? 'salon' : `salon-${i + 1}`, path: `/salon/${id}` })),
-    { name: 'character', path: `/aurora/${character}` },
-    { name: 'settings', path: '/settings?section=connection-profiles' },
+    { name: 'salon', path: `/salon/${chat}` },
     { name: 'dialog', path: '/settings?section=appearance', openPreviewDialog: true },
-    { name: 'appearance', path: '/settings?section=appearance' },
   ];
+}
+
+/** Every hook's instances, as the gallery draws them. */
+function galleryHooks(): GalleryHook[] {
+  return HOOKS.map((h) => ({ className: h.className, instances: specimenInstances(h).map((i) => ({ key: i.key, selector: i.selector })) }));
 }
 
 /** Playwright is not a repo dependency: resolve it from PLAYWRIGHT_CORE (a directory) or normally. */
@@ -74,10 +92,9 @@ function loadPlaywright(): typeof import('playwright-core') {
 async function run() {
   const base = arg('base') ?? 'http://localhost:3005';
   const chat = arg('chat');
-  const character = arg('character');
   const out = arg('out');
-  if (!chat || !character || !out) {
-    console.error('run needs --chat <chatId> --character <characterId> --out <dir>');
+  if (!chat || chat.includes(',') || !out) {
+    console.error('run needs --chat <chatId> (one) --out <dir>');
     process.exit(2);
   }
   const themes = arg('themes')?.split(',') ?? ALL_THEMES;
@@ -85,7 +102,9 @@ async function run() {
   const screens = !process.argv.includes('--no-screens');
   const probeSource = readFileSync(path.join(__dirname, 'probe.js'), 'utf8');
   const hooks: ProbeHook[] = HOOKS.map((h) => ({ className: h.className, variants: h.variants, states: h.states }));
-  const pages = pagesFor(chat, character);
+  const gallery = galleryHooks();
+  const instanceTotal = gallery.reduce((n, h) => n + h.instances.length, 0);
+  const pages = pagesFor(chat);
   mkdirSync(out, { recursive: true });
 
   const { chromium } = loadPlaywright();
@@ -144,10 +163,24 @@ async function run() {
                 await page.waitForSelector('[role="dialog"], [role="alertdialog"]', { timeout: 10_000 });
                 await page.waitForTimeout(800);
               }
+              if (spec.gallery) {
+                // Every article rendered (they are content-visibility: auto),
+                // then time for their fonts and images.
+                await page.waitForSelector('[data-specimen-for] [data-specimen-stage]', { timeout: 30_000 });
+                await page.evaluate(() => {
+                  document.querySelectorAll<HTMLElement>('[data-specimen-for]').forEach((a) => {
+                    a.style.contentVisibility = 'visible';
+                  });
+                });
+                await page.evaluate(() => document.fonts.ready.then(() => undefined));
+                await page.waitForTimeout(SETTLE_MS);
+              }
               await page.addScriptTag({ content: probeSource });
-              const probed = (await page.evaluate((h) => (window as unknown as { __qtThemeProbe: (o: unknown) => unknown }).__qtThemeProbe({ hooks: h }), hooks)) as ProbeResult;
-              if (probed.theme === theme && probed.mode === mode && Object.keys(probed.elements).length > 10) result = probed;
-              else console.log(`  ${label}: attempt ${attempt} saw ${probed.theme} / ${probed.mode}, ${Object.keys(probed.elements).length} elements; retrying`);
+              const options = spec.gallery ? { gallery } : { hooks };
+              const probed = (await page.evaluate((o) => (window as unknown as { __qtThemeProbe: (o: unknown) => unknown }).__qtThemeProbe(o), options)) as ProbeResult;
+              const right = probed.theme === theme && probed.mode === mode && (!spec.gallery || (probed.stage?.theme === theme && probed.stage?.mode === mode));
+              if (right && Object.keys(probed.elements).length > 10) result = probed;
+              else console.log(`  ${label}: attempt ${attempt} saw ${probed.theme} / ${probed.mode}${spec.gallery ? ` (stage ${probed.stage?.theme} / ${probed.stage?.mode})` : ''}, ${Object.keys(probed.elements).length} elements; retrying`);
             } catch (error) {
               console.log(`  ${label}: attempt ${attempt} failed (${(error as Error).message.split('\n')[0]})`);
             }
@@ -155,8 +188,14 @@ async function run() {
           if (!result) throw new Error(`${label}: no good probe after three attempts`);
           writeFileSync(path.join(out, `${label}.json`), `${JSON.stringify(result, null, 1)}\n`);
           if (screens) await page.screenshot({ path: path.join(out, `${label}.png`) });
-          const matched = Object.values(result.counts).filter((n) => n > 0).length;
-          console.log(`${label}: ${Object.keys(result.elements).length} elements measured, ${matched} selectors matched`);
+          if (result.kind === 'gallery') {
+            const missing = result.missing ?? [];
+            console.log(`${label}: ${Object.keys(result.elements).length} of ${instanceTotal} instances measured${missing.length ? `, ${missing.length} MISSING` : ''}`);
+            for (const m of missing) console.log(`  MISSING ${m}`);
+          } else {
+            const matched = Object.values(result.counts).filter((n) => n > 0).length;
+            console.log(`${label}: ${Object.keys(result.elements).length} elements measured, ${matched} selectors matched`);
+          }
         }
         await context.close();
       }
@@ -188,12 +227,23 @@ function compare() {
     const before = JSON.parse(readFileSync(path.join(a, file), 'utf8')) as ProbeResult;
     const after = JSON.parse(readFileSync(other, 'utf8')) as ProbeResult;
     const lines: string[] = [];
+    // In the gallery every instance is drawn by construction, so one missing
+    // from either side is an error, not a count change.
+    const gallery = before.kind === 'gallery' || after.kind === 'gallery';
+    if (gallery) {
+      for (const m of before.missing ?? []) lines.push(`  MISSING in ${a}: ${m}`);
+      for (const m of after.missing ?? []) lines.push(`  MISSING in ${b}: ${m}`);
+    }
     for (const key of new Set([...Object.keys(before.counts), ...Object.keys(after.counts)])) {
       if ((before.counts[key] ?? 0) !== (after.counts[key] ?? 0)) lines.push(`  count ${key}: ${before.counts[key] ?? 0} -> ${after.counts[key] ?? 0}`);
     }
     for (const key of new Set([...Object.keys(before.elements), ...Object.keys(after.elements)])) {
       const x = before.elements[key];
       const y = after.elements[key];
+      if (gallery && (!x || !y)) {
+        lines.push(`  MISSING ${key} in ${x ? b : a}`);
+        continue;
+      }
       if (!x || !y) continue; // reported as a count change
       for (const part of new Set([...Object.keys(x), ...Object.keys(y)])) {
         const px = x[part] ?? {};
@@ -222,6 +272,6 @@ if (command === 'run') {
 } else if (command === 'compare') {
   compare();
 } else {
-  console.error('usage: run.ts run --chat <id> --character <id> --out <dir> [--base <url>] [--themes a,b] [--modes light,dark] [--no-screens]\n       run.ts compare <dirA> <dirB> [--themes a,b]');
+  console.error('usage: run.ts run --chat <id> --out <dir> [--base <url>] [--themes a,b] [--modes light,dark] [--no-screens]\n       run.ts compare <dirA> <dirB> [--themes a,b]');
   process.exit(2);
 }
