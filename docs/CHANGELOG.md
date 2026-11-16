@@ -4,6 +4,12 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live Spec H complete (Stage 3)
+
+- `THEME_DEVELOPMENT.md`: adding a hook needs a specimen and the coverage test that checks it; the specimen gallery and inspect mode under the Atelier
+- `CLAUDE.md` Themes: new hooks need specimens; the inspector reads stylesheets only on selection
+- Spec H moved to `features/complete/` with implementation notes (gallery vs. Storybook, theme probe on the gallery, a hook → token table for LLM assistance)
+
 #### Themes: inspect mode (Calliope Live, Spec H Stage 2)
 
 - "Inspect" toggle in the theme editor header and gallery toolbar. While on, pointing outlines the nearest hooked element; a click selects it and does not reach the app; Escape turns it off. Listeners are window capture listeners, removed when off

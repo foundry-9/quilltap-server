@@ -40,9 +40,10 @@ not a settled design.
   — fourth slice of Phase 2: the custom CSS section, JSON and CSS
   highlighting, and opening a theme file as a draft (implemented 4.14-dev;
   user docs [help/theme-editor.md](../../../help/theme-editor.md)).
-- [calliope-live-spec-h-specimens-and-inspect.md](calliope-live-spec-h-specimens-and-inspect.md)
-  — last slice of Phase 2: the specimen gallery and inspect mode (ready to
-  run).
+- [calliope-live-spec-h-specimens-and-inspect.md](complete/calliope-live-spec-h-specimens-and-inspect.md)
+  — last slice of Phase 2: the specimen gallery and inspect mode
+  (implemented 4.14-dev; user docs
+  [help/theme-editor.md](../../../help/theme-editor.md)).
 
 **Scope:** `quilltap-server` (v4) only. Porting to v5 is a separate concern and
 does not shape decisions here.

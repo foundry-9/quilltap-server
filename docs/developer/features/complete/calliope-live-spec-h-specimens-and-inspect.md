@@ -1,15 +1,15 @@
 # Calliope Live — Spec H: the specimen gallery and inspect mode
 
-**Status:** ready to run, 2026-11-16 (design decisions confirmed by the human).
-Implements the last slice of Phase 2 of [calliope-live.md](calliope-live.md).
+**Status:** implemented 4.14-dev, 2026-11-16 (Stages 0–1 in `141df9f06`, Stage 2 in `68789c967`, Stage 3 documentation; user docs [help/theme-editor.md](../../../../help/theme-editor.md)).
+Implements the last slice of Phase 2 of [calliope-live.md](../calliope-live.md).
 Read, before starting:
 
-- Spec G, [calliope-live-spec-g-custom-css.md](complete/calliope-live-spec-g-custom-css.md),
+- Spec G, [calliope-live-spec-g-custom-css.md](calliope-live-spec-g-custom-css.md),
   especially "For Spec H" in its implementation notes;
-- Spec B, [calliope-live-spec-b-hook-catalogue.md](complete/calliope-live-spec-b-hook-catalogue.md),
-  and the generated [THEME_HOOKS.md](../THEME_HOOKS.md);
+- Spec B, [calliope-live-spec-b-hook-catalogue.md](calliope-live-spec-b-hook-catalogue.md),
+  and the generated [THEME_HOOKS.md](../../THEME_HOOKS.md);
 - Spec D's implementation notes on the nested-theme boundary
-  ([calliope-live-spec-d-live-preview.md](complete/calliope-live-spec-d-live-preview.md));
+  ([calliope-live-spec-d-live-preview.md](calliope-live-spec-d-live-preview.md));
 - `lib/themes/hooks/`, `components/theme-editor/assets/styles-model.ts`
   and `scripts/theme-probe/README.md`.
 
@@ -416,3 +416,87 @@ told what a hook is styled by.
   (the walker reports what matches now). Escape leaves the selection open.
 - Commands: `npx tsc` clean; `npm run lint` clean; theme snapshot unchanged;
   `npm run test:unit` 1,512 suites / 21,544 tests passed.
+
+### Stage 3 — done 2026-11-16
+
+- `help/theme-editor.md`: "The specimen gallery" (Stage 1) and "Inspecting
+  what you see" (Stage 2, with the keyboard path) checked against what was
+  built.
+- `docs/developer/THEME_DEVELOPMENT.md`: adding a hook means adding a
+  specimen, and the coverage test that asks for it (under "Hooks and
+  `hooksVersion`"); the gallery and inspect mode under "Drafts and the
+  Atelier".
+- `CLAUDE.md`, Themes: a new hook needs a specimen; the inspector reads
+  stylesheets only on selection, never on pointer move.
+- `docs/CHANGELOG.md`; this spec marked implemented, moved to
+  `features/complete/` and linked from the proposal.
+
+## Implementation notes
+
+What the LLM-assistance step and Phase 3 should know.
+
+### Could the gallery stand in for the Storybook stories?
+
+For a theme author checking a theme, yes, and better: it shows all 174 hooks
+in every variant and state under the real compiled theme, in both modes at
+once, inside the running app, where Storybook shows a hand-kept subset under
+a CSS copy (`@quilltap/theme-storybook`'s `qt-components.css` is generated
+from the app's styles, but the stories are not). It cannot replace the
+package for someone writing a theme *outside* a Quilltap instance, which is
+what the published Storybook is for. And it is not component documentation:
+171 of the 174 specimens are markup carrying the hook's classes and
+attributes, not the components that render them (most read the router,
+workspace, a chat or the server; `BaseModal` portals; some write DOM ids).
+So: retire the theme-facing stories in favour of the gallery once Phase 3
+decides the external authoring path; keep Storybook for components if it is
+kept at all.
+
+### Should `scripts/theme-probe` measure the gallery instead of seven live pages?
+
+For hook coverage, yes. The probe records "the first visible element of
+every catalogued hook (and of each variant value and state)" and today finds
+many of them missing on the seven pages (no dialog open, no whisper, no
+error alert), so a missing element reads as a count change. On
+`/calliope/specimens` every hook and instance is present by construction
+(the coverage test guarantees it), each on a stage that is easy to address
+(`[data-specimen-for="<class>"] [data-specimen-stage="<mode>"]`), in both
+modes in one page with "Side by side". Two cautions: a stage contains layout
+and paint and caps its height, so anything measuring position or viewport
+size (the shell, fixed overlays, sticky headers) still needs a live page;
+and articles use `content-visibility: auto`, so the driver must scroll each
+into view (or the probe must set `content-visibility: visible` on them)
+before measuring. Keep two or three live pages for layout and use the
+gallery for everything else.
+
+### What an assistant needs from the inspector's model
+
+`hookForChain`, `inspectProperties`, `groupTokenUses`, `traceProperty` and
+`customCssRules` are pure, client-safe and indifferent to where the rules
+came from; only `matchingRules` needs a DOM. To tell an assistant "what is
+this hook styled by" without a user pointing at anything:
+
+- run `buildInspectReport` on each hook's base specimen in the gallery (a
+  browser pass, like the probe) and keep the result as a static table, hook →
+  property → token names (plus the hover/focus/press groups). The table
+  depends on the app's stylesheets, not on any theme, so it can be generated
+  at build time and checked for staleness the way `THEME_HOOKS.md` is;
+- give the assistant, per hook, that table joined with `traceProperty`
+  against the draft being edited (value, what it follows, whether the theme
+  sets it) — the same rows the panel shows, as text;
+- the assistant should prefer a token change when the property is read
+  through a token the hook owns, and propose custom CSS only when the
+  property is set by a literal or a shared token whose change would reach
+  other hooks; `inspectProperties` already tells the two apart (`vars` empty
+  versus present) and `fromCustomCss` marks the theme's own rules.
+
+### Smaller things found
+
+- While the pointer is over an element its `:hover` rules match for real,
+  so they appear in the base group; a "freeze state" (strip `:hover` from
+  matches when not forced) would make the panel stable but disagree with
+  what is on screen.
+- The custom CSS has no line mapping from the compiled rule back to
+  `styles.css`; the panel shows selectors as authored, not line numbers.
+- About 180 surface `qt-*` classes are not hooks (see Stage 1); the
+  inspector reports "no hook" and the nearest one above, which makes them
+  easy to find for the catalogue's next version.
