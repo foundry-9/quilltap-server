@@ -4,6 +4,16 @@
 
 ### 4.14-dev
 
+#### Themes: custom CSS section and opening a theme file in the theme editor (Calliope Live, Spec G Stage 2)
+
+- New Custom CSS section in the theme editor (`components/theme-editor/assets/StylesSection.tsx`): creates the stylesheet (`set-styles-file`), edits it in the shared code editor, and removes it behind an alertdialog (`clear-styles-file`, deleting the file by default). The rules are stated above the editor
+- CSS saves go through the editor's save queue as `PUT { stylesRevision, css }`. A stale revision reloads the draft and shows "Changed elsewhere". Pending CSS is flushed before any draft operation, install, pausing the preview, going back to the list, closing the section and closing the tab (keepalive)
+- Issues with the stylesheet's `file` and `line` become editor markers and a list with jump-to-line buttons. While the draft has errors, the preview keeps the last good server compile (font faces, icons and custom CSS) instead of dropping it
+- Reference panel (`StylesReference.tsx`, pure helpers in `styles-model.ts`): the hook catalogue by surface with every variant and state selector, registry tokens and primitives with the value in force, and the draft's images. Each entry inserts at the caret. Switching lists clears the search. The section lays out side by side only when its container is wide enough
+- "Open a theme file" on the draft list posts a `.qtap-theme` to `?action=import` and opens the new draft. A refusal is shown on the list (version 1: one sentence; invalid: the reasons; too large: the limit), and a changed id is announced
+- `help/theme-editor.md` covers the Custom CSS section and opening a theme file
+- Tests: section and reference panel (`styles-section.test.tsx`), and editor-level saving, held preview, conflict, flushing and import cases in `theme-editor.test.tsx`
+
 #### Tests: theme editor suites no longer time out on CI
 
 - The theme editor component tests (`editor-structure`, `bundled-walk`, `theme-editor`) timed out on CI. In jsdom, each label-text or accessible-name query walks the whole document for every element it checks, and the editor mounts several hundred labelled rows. The tests now query inside the row, panel or toolbar they are about, using new helpers in `__tests__/helpers/theme-editor-queries.ts`. The theme-editor folder runs in 8 s instead of 85 s; the Rains walk takes about 2 s instead of 51 s

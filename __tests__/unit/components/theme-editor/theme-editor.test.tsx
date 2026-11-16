@@ -12,8 +12,10 @@
 
 // Uses global jest (not @jest/globals) so the jest-dom matcher augmentation
 // resolves on the global `expect` under tsc.
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import React from 'react'
+import { $getSelection, $isRangeSelection, type LexicalEditor } from 'lexical'
+import { $getCodeBlock, $selectOffsets } from '@/components/code-editor/lexical-text'
 import { ThemeEditorView } from '@/app/calliope/ThemeEditorView'
 import { buildPreview, setTokenValue } from '@/components/theme-editor/model'
 import type { DraftDetail, DraftSummary } from '@/lib/themes/drafts/service'
@@ -45,7 +47,7 @@ jest.mock('@/lib/toast', () => ({
   showInfoToast: jest.fn(),
 }))
 
-const toast = require('@/lib/toast') as { showWarningToast: jest.Mock; showErrorToast: jest.Mock }
+const toast = require('@/lib/toast') as { showWarningToast: jest.Mock; showErrorToast: jest.Mock; showInfoToast: jest.Mock }
 
 const EMPTY: ThemeTokensDocument = { primitives: {}, tokens: {}, choices: {} }
 
@@ -66,6 +68,7 @@ function detail(overrides: Partial<DraftDetail> = {}): DraftDetail {
     mountPointId: 'mp-general',
     updatedAt: '2026-11-14T12:00:00.000Z',
     version: '0.1.0',
+    styles: null,
     ...overrides,
   }
 }
@@ -79,7 +82,8 @@ interface Call {
 let calls: Call[]
 let drafts: DraftSummary[]
 let current: DraftDetail
-let onPut: (body: { revision: string; tokens?: ThemeTokensDocument }) => { status: number; json: unknown }
+let onPut: (body: { revision?: string; tokens?: ThemeTokensDocument; stylesRevision?: string; css?: string }) => { status: number; json: unknown }
+let onImport: (form: FormData) => { status: number; json: unknown }
 
 const realFetch = global.fetch
 
@@ -93,14 +97,27 @@ beforeEach(() => {
   drafts = [{ id: 'my-theme', name: 'My Theme', updatedAt: '2026-11-14T12:00:00.000Z', errorCount: 1, warningCount: 2 }]
   current = detail()
   onPut = (body) => {
+    if (body.css !== undefined) {
+      current = {
+        ...current,
+        styles: { path: current.styles?.path ?? 'styles.css', text: body.css, revision: `${current.styles?.revision}+` },
+        compiled: { ...current.compiled, custom: `/*custom ${body.css.length}*/` },
+      }
+      return { status: 200, json: { draft: current } }
+    }
     current = { ...current, tokens: body.tokens ?? current.tokens, revision: `${current.revision}+` }
     return { status: 200, json: { draft: current } }
   }
+  onImport = () => ({ status: 404, json: { error: 'not stubbed' } })
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
-    const body = init?.body ? JSON.parse(String(init.body)) : undefined
+    const body = init?.body instanceof FormData ? init.body : init?.body ? JSON.parse(String(init.body)) : undefined
     calls.push({ url, method, body })
+    if (url === '/api/v1/theme-drafts?action=import' && method === 'POST') {
+      const r = onImport(body as FormData)
+      return respond(r.status, r.json)
+    }
     if (url === '/api/v1/theme-drafts' && method === 'GET') return respond(200, { drafts })
     if (url === '/api/v1/theme-drafts' && method === 'POST') {
       current = detail({ id: 'new-one', manifest: { id: 'new-one', name: body.name, version: '0.1.0' } })
@@ -294,5 +311,215 @@ describe('buildPreview', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order)
     expect(preview.subsystems).toBeNull()
     expect(preview.themeId).toBe('my-theme')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Custom CSS (Spec G, Stage 2)
+
+const CSS = '.qt-card {\n  color: red;\n}\n'
+const withStyles = (overrides: Partial<DraftDetail> = {}) =>
+  detail({
+    manifest: { id: 'my-theme', name: 'My Theme', version: '0.1.0', stylesPath: 'styles.css' },
+    styles: { path: 'styles.css', text: CSS, revision: 'srev-1' },
+    compiled: { fontFaces: '', icons: '', custom: '/*custom good*/' },
+    ...overrides,
+  })
+
+function codeEditor(): LexicalEditor {
+  const root = document.querySelector('.qt-code-editor [contenteditable]') as (HTMLElement & { __lexicalEditor?: LexicalEditor }) | null
+  if (!root?.__lexicalEditor) throw new Error('no code editor mounted')
+  return root.__lexicalEditor
+}
+
+function typeCss(offset: number, text: string) {
+  const editor = codeEditor()
+  act(() => {
+    editor.update(
+      () => {
+        const code = $getCodeBlock()!
+        $selectOffsets(code, offset)
+        const selection = $getSelection()
+        if ($isRangeSelection(selection)) selection.insertRawText(text)
+      },
+      { discrete: true },
+    )
+  })
+}
+
+async function openCss(d: DraftDetail) {
+  await openEditor(d)
+  fireEvent.click(within(screen.getByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Custom CSS' }))
+  await screen.findByRole('textbox', { name: 'styles.css' })
+}
+
+describe('custom CSS', () => {
+  beforeAll(() => {
+    // jsdom has no layout: the section list scrolls to a section, and Lexical asks a Range for its rectangle.
+    if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {}
+    const rect = () => ({ x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0, toJSON: () => ({}) }) as DOMRect
+    if (!Range.prototype.getBoundingClientRect) Range.prototype.getBoundingClientRect = rect
+    if (!Range.prototype.getClientRects) {
+      Range.prototype.getClientRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
+    }
+  })
+
+  it('saves typed CSS with its revision, and previews what the save compiled', async () => {
+    await openCss(withStyles())
+    await waitFor(() => expect(lastPreviewCss()).toContain('/*custom good*/'))
+    typeCss(CSS.length, '.qt-button { margin: 0; }\n')
+
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true), { timeout: 4000 })
+    const put = calls.find((c) => c.method === 'PUT')!
+    expect(put.body).toEqual({ stylesRevision: 'srev-1', css: `${CSS}.qt-button { margin: 0; }\n` })
+    await waitFor(() => expect(lastPreviewCss()).toContain(`/*custom ${CSS.length + 26}*/`))
+    expect(screen.getByText('Saved')).toBeInTheDocument()
+  })
+
+  it('keeps the last good custom CSS in the preview while the stylesheet has errors', async () => {
+    onPut = (body) => {
+      current = {
+        ...current,
+        styles: { path: 'styles.css', text: body.css!, revision: 'srev-2' },
+        compiled: { fontFaces: '', icons: '', custom: '' },
+        issues: [{ severity: 'error', message: 'styles.css: custom CSS does not parse (line 4): Unclosed block', file: 'styles.css', line: 4 }],
+      }
+      return { status: 200, json: { draft: current } }
+    }
+    await openCss(withStyles())
+    await waitFor(() => expect(lastPreviewCss()).toContain('/*custom good*/'))
+    typeCss(CSS.length, '.broken {')
+
+    await screen.findByText(/goes on wearing the last stylesheet that compiled/, undefined, { timeout: 4000 })
+    expect(document.querySelectorAll('.qt-code-editor-marker-error')).toHaveLength(1)
+    expect(lastPreviewCss()).toContain('/*custom good*/')
+    expect(screen.getByRole('button', { name: /Install/ })).toBeDisabled()
+  })
+
+  it('takes the newer stylesheet and says so when it changed elsewhere', async () => {
+    const theirs = '.qt-card { color: blue; }\n'
+    onPut = () => {
+      current = { ...current, styles: { path: 'styles.css', text: theirs, revision: 'srev-theirs' } }
+      return { status: 409, json: { error: 'stale', details: { currentRevision: 'srev-theirs' } } }
+    }
+    await openCss(withStyles())
+    typeCss(0, '/* mine */\n')
+
+    await waitFor(() => expect(toast.showWarningToast).toHaveBeenCalled(), { timeout: 4000 })
+    await waitFor(() => expect(codeEditor().getEditorState().read(() => $getCodeBlock()!.getTextContent())).toBe(theirs))
+    expect(screen.getByText(/Changed elsewhere/)).toBeInTheDocument()
+  })
+
+  it('saves pending CSS before an operation on the draft', async () => {
+    await openCss(withStyles())
+    const fetchMock = global.fetch as jest.Mock
+    const base = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('?action=clear-styles-file')) {
+        calls.push({ url: String(input), method: 'POST', body: JSON.parse(String(init?.body)) })
+        current = { ...current, styles: null, manifest: { id: 'my-theme', name: 'My Theme', version: '0.1.0' } }
+        return respond(200, { draft: current, deleted: ['styles.css'] })
+      }
+      return base(input, init)
+    })
+    typeCss(0, '/* last words */\n')
+    fireEvent.click(screen.getByRole('button', { name: 'Remove the stylesheet' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove it' }))
+
+    await screen.findByRole('button', { name: 'Begin a stylesheet' })
+    const put = calls.findIndex((c) => c.method === 'PUT')
+    const clear = calls.findIndex((c) => c.url.endsWith('?action=clear-styles-file'))
+    expect(put).toBeGreaterThanOrEqual(0)
+    expect(calls[put].body).toEqual({ stylesRevision: 'srev-1', css: `/* last words */\n${CSS}` })
+    expect(clear).toBeGreaterThan(put)
+  })
+
+  it('saves pending CSS on the way back to the list', async () => {
+    await openCss(withStyles())
+    typeCss(0, '/* parting */\n')
+    fireEvent.click(screen.getByRole('button', { name: /All drafts/ }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
+    expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ stylesRevision: 'srev-1', css: `/* parting */\n${CSS}` })
+  })
+
+  it('saves pending CSS, kept alive, when the tab goes', async () => {
+    current = withStyles()
+    const view = renderWithQuery(<ThemeEditorView payload={{ draftId: 'my-theme' }} />)
+    await waitForCardRow()
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Custom CSS' }))
+    await screen.findByRole('textbox', { name: 'styles.css' })
+    typeCss(0, '/* gone */\n')
+    view.unmount()
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
+    const fetchMock = global.fetch as jest.Mock
+    const putInit = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === 'PUT')![1] as RequestInit
+    expect(JSON.parse(String(putInit.body))).toEqual({ stylesRevision: 'srev-1', css: `/* gone */\n${CSS}` })
+    expect(putInit.keepalive).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Opening a theme file (Spec G, Stage 2)
+
+describe('opening a theme file', () => {
+  function chooseThemeFile(name = 'rains.qtap-theme') {
+    const input = document.querySelector<HTMLInputElement>('input[type="file"][accept*=".qtap-theme"]')!
+    fireEvent.change(input, { target: { files: [new File(['PK'], name, { type: 'application/zip' })] } })
+  }
+
+  it('posts the file and opens the new draft, saying when its id differs', async () => {
+    onImport = (form) => {
+      expect(form.get('file')).toBeInstanceOf(File)
+      current = detail({ id: 'rains-2', manifest: { id: 'rains-2', name: 'Rains', version: '2.0.0' } })
+      return { status: 201, json: { draft: current, bundleId: 'rains', idChanged: true } }
+    }
+    renderWithQuery(<ThemeEditorView />)
+    await screen.findByRole('list', { name: 'Theme drafts' })
+    chooseThemeFile()
+    await waitForCardRow()
+    expect(toast.showInfoToast).toHaveBeenCalledWith(expect.stringContaining('“rains”, and that name was already taken, so this draft is “rains-2”'), 12000)
+  })
+
+  it('says nothing of the id when it was free', async () => {
+    onImport = () => {
+      current = detail({ id: 'rains', manifest: { id: 'rains', name: 'Rains', version: '2.0.0' } })
+      return { status: 201, json: { draft: current, bundleId: 'rains', idChanged: false } }
+    }
+    renderWithQuery(<ThemeEditorView />)
+    await screen.findByRole('list', { name: 'Theme drafts' })
+    chooseThemeFile()
+    await waitForCardRow()
+    expect(toast.showInfoToast).not.toHaveBeenCalled()
+  })
+
+  it('shows the refusal of a version 1 theme in one sentence', async () => {
+    const sentence = '“Old Thing” was tailored for an earlier Quilltap, and the present establishment can no longer wear it.'
+    onImport = () => ({ status: 422, json: { error: sentence, details: { errors: [sentence], reason: 'refused' } } })
+    renderWithQuery(<ThemeEditorView />)
+    await screen.findByRole('list', { name: 'Theme drafts' })
+    chooseThemeFile('old.qtap-theme')
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(`“old.qtap-theme” could not be opened. ${sentence}`)
+    expect(within(alert).queryByRole('list')).toBeNull()
+  })
+
+  it('lists the reasons a file would not install', async () => {
+    onImport = () => ({
+      status: 422,
+      json: { error: 'The archive is not a theme that would install: x', details: { errors: ['styles.css: @import is not allowed (line 2)'], reason: 'invalid' } },
+    })
+    renderWithQuery(<ThemeEditorView />)
+    await screen.findByRole('list', { name: 'Theme drafts' })
+    chooseThemeFile('bad.qtap-theme')
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByRole('listitem')).toHaveTextContent('styles.css: @import is not allowed (line 2)')
+  })
+
+  it('says when a file is too large', async () => {
+    onImport = () => ({ status: 413, json: { error: 'The archive is larger than a theme may be (50 MB).' } })
+    renderWithQuery(<ThemeEditorView />)
+    await screen.findByRole('list', { name: 'Theme drafts' })
+    chooseThemeFile('huge.qtap-theme')
+    expect(await screen.findByRole('alert')).toHaveTextContent('larger than a theme may be')
   })
 })

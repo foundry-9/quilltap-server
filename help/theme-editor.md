@@ -19,6 +19,8 @@ The Atelier opens on the list of your drafts. Press **New theme** to commission 
 - **A blank canvas (the house default)** — every token at Quilltap's own setting, waiting for your hand;
 - **A copy of** any theme in your wardrobe — the bundled themes included — so you may begin from a design you admire and make it your own. The copy is yours outright; it keeps no tie to the original, and the original is never altered.
 
+Or press **Open a theme file** and choose a `.qtap-theme` bundle — one a friend sent, or one you exported from the Appearance card — to make a new draft of it. The file goes through every check an install would, so a bundle that would not install is turned away with its reasons, and a theme made for an earlier Quilltap is refused outright. The draft keeps the bundle's name and version. Should its id already be taken (as it will be if you open a theme you have installed), the draft is given the next free one — `rains-2`, say — and the Atelier tells you so; nothing you already have is ever replaced.
+
 Each draft lives as an ordinary folder in your **Quilltap General** document store, under `Themes/<its id>/`, holding exactly the files a `.qtap-theme` bundle would. You may open those files in the Scriptorium or Document Mode and edit them by hand, and a character with document tools may do the same — the Atelier reads them afresh. Should a hand edit leave a file that will not read, the draft still appears in the list, with a note saying which file wants mending.
 
 Drafts are kept in your backups, but they do not travel in a `.qtap` export; to share a finished theme, install it and export it from the Appearance card as a `.qtap-theme` bundle.
@@ -100,7 +102,7 @@ If the same draft is open in two tabs and you edit it in both, the second save n
 
 ## Fonts, pictures, icons and the theme's particulars
 
-Below the tokens, in the same list of sections, sit five more: **Fonts**, **Images**, **Icons**, **Subsystems and details** and **Files**. They change the files the draft carries rather than its tokens, and each change is saved the moment it is made.
+Below the tokens, in the same list of sections, sit six more: **Fonts**, **Images**, **Icons**, **Custom CSS**, **Subsystems and details** and **Files**. They change the files the draft carries rather than its tokens, and each change is saved the moment it is made.
 
 ### Fonts
 
@@ -119,6 +121,27 @@ Press **Add font** and choose one file or several — WOFF2, WOFF, TrueType or O
 ### Icons
 
 Every icon in Quilltap, as this theme draws it, with a search by name; those the theme redraws are marked. Choose one to see it at a few sizes and to **upload a replacement**: an **SVG** is drawn in the colour of the text around it, as Quilltap's own icons are, so draw it in one colour on a clear ground; a **WebP** is drawn exactly as it is. **Remove the override** puts Quilltap's own icon back.
+
+### Custom CSS
+
+Tokens dress most of a theme. What they cannot say — a textured panel, a heading with its letters spaced just so, a lamp that flickers — is written as CSS of your own. A draft has no stylesheet until you press **Begin a stylesheet**.
+
+The stylesheet is edited as highlighted text. **Tab** indents and **Shift+Tab** outdents; to leave the editor by keyboard, press **Escape** and then **Tab**. Your writing is saved after a short pause, and the preview takes it up as each save returns. The rules, stated once above the editor:
+
+- every rule is fitted to this theme alone, automatically;
+- keyframe names are made unique, so an animation never collides with the house's own;
+- `@import` and `@font-face` are not admitted — fonts go in the **Fonts** section;
+- a `url()` must name one of the draft's images.
+
+A rule that will not read is marked on its line and listed below the editor, where **Line N** takes you to it. While the stylesheet has an error the preview goes on wearing the last stylesheet that worked, and **Install** waits until it is mended.
+
+Beside the editor (or below it, in a narrow pane) the **Reference** lists what you may write against, each entry set down at the caret when chosen:
+
+- **Hooks** — the elements of Quilltap a theme may style, grouped by where they appear, each with its variants and states;
+- **Tokens** — every token and the draft's primitives, with the value in force, inserted as `var(--name)`;
+- **Images** — the draft's pictures, inserted as `url('images/…')`.
+
+Undo inside the editor undoes your typing there; the editor's **Undo** button above looks after the tokens alone. **Remove the stylesheet** stops the theme wearing it, and throws the file away too unless you untick that.
 
 ### Subsystems and details
 
@@ -148,10 +171,6 @@ A few things happen on the way:
 - **Installing again replaces the earlier install** of the same theme. A draft may not take the name of a theme that ships with Quilltap.
 
 If the draft has errors, **Install** waits until they are mended and lists them; if the install itself is refused, the Atelier shows why.
-
-## What the Atelier does not yet do
-
-One room remains unfurnished: **custom CSS** is still edited in the draft's files — see [Themes](themes.md) for the bundle format — and the Atelier will learn it in time.
 
 ## In-Chat Navigation
 

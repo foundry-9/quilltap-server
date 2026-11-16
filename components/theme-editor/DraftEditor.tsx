@@ -41,6 +41,7 @@ import { ImagesSection } from './assets/ImagesSection'
 import { IconsSection } from './assets/IconsSection'
 import { DetailsSection } from './assets/DetailsSection'
 import { FilesPanel } from './assets/FilesPanel'
+import { StylesSection, type StylesStatus } from './assets/StylesSection'
 import {
   EDITOR_GROUPS,
   EMPTY_HISTORY,
@@ -76,7 +77,7 @@ const SAVE_DELAY_MS = 700
 
 const EMPTY_TOKENS: ThemeTokensDocument = { primitives: {}, tokens: {}, choices: {} } as ThemeTokensDocument
 
-type Pending = Omit<ThemeDraftSave, 'revision' | 'manifestRevision'>
+type Pending = Omit<ThemeDraftSave, 'revision' | 'manifestRevision' | 'stylesRevision'>
 
 /**
  * The save queue for one draft: edits merge into one pending body, a timer
@@ -110,16 +111,23 @@ function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => 
   const send = useCallback(
     async (keepalive: boolean): Promise<void> => {
       if (inFlight.current) await inFlight.current
-      const body = pending.current
-      if (Object.keys(body).length === 0) return
+      const body = { ...pending.current }
       pending.current = {}
+      // A stylesheet removed since the edit was queued has nothing to save it to.
+      if (body.css !== undefined && !latest.current.styles) delete body.css
+      if (Object.keys(body).length === 0) return
       const id = latest.current.id
       const run = (async () => {
         setSaving(true)
         try {
           const fresh = await saveThemeDraft(
             id,
-            { ...body, revision: latest.current.revision, manifestRevision: latest.current.manifestRevision },
+            {
+              ...body,
+              revision: latest.current.revision,
+              manifestRevision: latest.current.manifestRevision,
+              stylesRevision: latest.current.styles?.revision,
+            },
             { keepalive },
           )
           latest.current = fresh
@@ -436,6 +444,16 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
   const manifestDescription = typeof detail.manifest?.description === 'string' ? detail.manifest.description : ''
   const [name, setName] = useDraft(manifestName)
   const [description, setDescription] = useDraft(manifestDescription)
+  // The stylesheet as edited (Spec G): the code editor owns the keystrokes and hands its text up after a pause.
+  const serverCss = detail.styles?.text ?? ''
+  const [css, setCss] = useDraft<string>(serverCss, Object.is)
+  const [cssConflict, setCssConflict] = useState(false)
+  const cssRef = useRef(css)
+  useLayoutEffect(() => {
+    cssRef.current = css
+  }, [css])
+  /** The code editor's flush, while the Custom CSS section is open. */
+  const cssFlushRef = useRef<(() => void) | null>(null)
 
   // The JSON last queued or adopted, so an adopted server value is never sent back.
   const lastTokensJson = useRef(JSON.stringify(serverTokens))
@@ -460,12 +478,32 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
       forget()
       setName(typeof fresh.manifest?.name === 'string' ? fresh.manifest.name : fresh.id)
       setDescription(typeof fresh.manifest?.description === 'string' ? fresh.manifest.description : '')
+      const freshCss = fresh.styles?.text ?? ''
+      if (freshCss !== cssRef.current) setCssConflict(true)
+      setCss(freshCss)
     },
-    [setTokens, setName, setDescription, forget],
+    [setTokens, setName, setDescription, setCss, forget],
   )
   const saver = useDraftSaver(detail, onConflict)
   const { queue, flush: flushSaves, current: currentDraft, adopt: adoptDraft } = saver
-  const operationSaver = useMemo(() => ({ flush: flushSaves, current: currentDraft, adopt: adoptDraft }), [flushSaves, currentDraft, adoptDraft])
+  /** Everything unsaved, the stylesheet's pending keystrokes included, sent now. */
+  const flushAll = useCallback(
+    (keepalive = false) => {
+      cssFlushRef.current?.()
+      return flushSaves(keepalive)
+    },
+    [flushSaves],
+  )
+  const operationSaver = useMemo(() => ({ flush: () => flushAll(), current: currentDraft, adopt: adoptDraft }), [flushAll, currentDraft, adoptDraft])
+  const onCssChange = useCallback(
+    (text: string) => {
+      setCss(text)
+      setCssConflict(false)
+      queue({ css: text })
+    },
+    [setCss, queue],
+  )
+  const cssStatus: StylesStatus = saver.saving ? 'saving' : cssConflict ? 'conflict' : css !== serverCss ? 'unsaved' : 'saved'
   const operations = useDraftOperationsState(operationSaver, onConflict)
 
   // Queue a save when the tokens differ from both the server's and what was last queued.
@@ -481,12 +519,17 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
   // The analysis follows the tokens (useEditing); the preview a deferred copy of them.
   const { findings } = editing
   const deferredTokens = useDeferredValue(tokens)
+  // While the draft has errors the server compiles nothing, so the preview keeps the last good compile (Spec G decision 1).
+  const draftHasErrors = detail.issues.some((i) => i.severity === 'error')
+  const [goodCompiled, setGoodCompiled] = useState(detail.compiled)
+  if (!draftHasErrors && detail.compiled !== goodCompiled) setGoodCompiled(detail.compiled)
+  const compiled = draftHasErrors ? goodCompiled : detail.compiled
   const preview = useMemo(
     () =>
       detail.tokens
-        ? buildPreview({ id: detail.id, version: detail.version, compiled: detail.compiled, subsystems: detail.subsystems }, deferredTokens)
+        ? buildPreview({ id: detail.id, version: detail.version, compiled, subsystems: detail.subsystems }, deferredTokens)
         : null,
-    [detail.id, detail.version, detail.compiled, detail.subsystems, detail.tokens, deferredTokens],
+    [detail.id, detail.version, compiled, detail.subsystems, detail.tokens, deferredTokens],
   )
 
   useEffect(() => {
@@ -494,10 +537,10 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
   }, [previewing, preview, setPreview])
 
   // Leaving: flush, then let the worn theme back.
-  const flushRef = useRef(saver.flush)
+  const flushRef = useRef(flushAll)
   useEffect(() => {
-    flushRef.current = saver.flush
-  }, [saver.flush])
+    flushRef.current = flushAll
+  }, [flushAll])
   useEffect(
     () => () => {
       void flushRef.current(true)
@@ -561,6 +604,19 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
         return <ImagesSection detail={detail} />
       case 'icons':
         return <IconsSection detail={detail} />
+      case 'styles':
+        return (
+          <StylesSection
+            detail={detail}
+            value={css}
+            onChange={onCssChange}
+            status={cssStatus}
+            flushRef={cssFlushRef}
+            tokens={tokens}
+            resolved={editing.resolved}
+            mode={mode}
+          />
+        )
       case 'details':
         return <DetailsSection detail={detail} />
       case 'files':
@@ -585,7 +641,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
     setInstallErrors(null)
     setInstalled(null)
     try {
-      await saver.flush()
+      await flushAll()
       const result = await installThemeDraft(detail.id)
       setInstalled(result)
       void queryClient.invalidateQueries({ queryKey: queryKeys.themeDrafts.all })
@@ -610,7 +666,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
   }
 
   const back = async () => {
-    await saver.flush()
+    await flushAll()
     onBack()
   }
 
@@ -665,7 +721,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack }: DraftEditorP
               type="button"
               className="qt-button qt-button-secondary qt-button-sm"
               onClick={() => {
-                if (previewing) void saver.flush()
+                if (previewing) void flushAll()
                 setPreviewing((p) => !p)
               }}
             >

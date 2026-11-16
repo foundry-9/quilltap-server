@@ -14,10 +14,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import type { DraftDetail, DraftInstallResult, DraftSummary } from '@/lib/themes/drafts/service'
+import type { DraftDetail, DraftImportResult, DraftInstallResult, DraftSummary } from '@/lib/themes/drafts/service'
 import type { ThemeTokensDocument } from '@/lib/themes/engine/client'
 
-export type { DraftDetail, DraftSummary, DraftInstallResult }
+export type { DraftDetail, DraftSummary, DraftInstallResult, DraftImportResult }
 
 const BASE = '/api/v1/theme-drafts'
 const itemUrl = (id: string) => `${BASE}/${encodeURIComponent(id)}`
@@ -59,6 +59,26 @@ export function useCreateThemeDraft() {
   })
 }
 
+/**
+ * Open a `.qtap-theme` file as a new draft (`?action=import`). Throws
+ * `ApiFetchError`: 422 with `details.errors` when the archive would not
+ * install (a version 1 bundle among them), 413 when it is too large.
+ */
+export function useImportThemeDraft() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      return apiFetch<DraftImportResult>(`${BASE}?action=import`, { method: 'POST', body: form })
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKeys.themeDrafts.detail(result.draft.id), result.draft)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.themeDrafts.list }),
+  })
+}
+
 export function useDeleteThemeDraft() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -72,14 +92,18 @@ export function useDeleteThemeDraft() {
 
 /**
  * The body of a draft save: the revisions it was read at, and what changed.
- * Tokens go to `PUT` (guarded by `revision`); name and description are
- * manifest fields and go to `?action=set-manifest` (guarded by
- * `manifestRevision`, Spec F decision 6).
+ * Tokens go to `PUT` (guarded by `revision`); the custom CSS goes to `PUT`
+ * too, as its own body (guarded by `stylesRevision`, Spec G); name and
+ * description are manifest fields and go to `?action=set-manifest` (guarded
+ * by `manifestRevision`, Spec F decision 6).
  */
 export interface ThemeDraftSave {
   revision: string
   manifestRevision: string
+  /** The stylesheet's revision; needed with `css`. */
+  stylesRevision?: string
   tokens?: ThemeTokensDocument
+  css?: string
   name?: string
   description?: string
 }
@@ -119,6 +143,14 @@ export async function saveThemeDraft(id: string, body: ThemeDraftSave, init?: { 
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ revision: body.revision, tokens: body.tokens }),
+      keepalive: init?.keepalive,
+    }).then((r) => r.draft)
+  }
+  if (body.css !== undefined && body.stylesRevision !== undefined) {
+    fresh = await apiFetch<{ draft: DraftDetail }>(itemUrl(id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stylesRevision: body.stylesRevision, css: body.css }),
       keepalive: init?.keepalive,
     }).then((r) => r.draft)
   }

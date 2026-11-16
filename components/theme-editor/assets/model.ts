@@ -21,7 +21,7 @@ type DraftFile = DraftDetail['files'][number]
 // ---------------------------------------------------------------------------
 // The sections
 
-export type AssetSectionKind = 'fonts' | 'images' | 'icons' | 'details' | 'files'
+export type AssetSectionKind = 'fonts' | 'images' | 'icons' | 'styles' | 'details' | 'files'
 
 /** A section the editor draws below the token sections. */
 export interface AssetSectionView {
@@ -55,6 +55,13 @@ export const ASSET_SECTIONS: readonly AssetSectionView[] = [
     label: 'Icons',
     description: 'Every icon in Quilltap, and any this theme redraws.',
     keywords: ['icon', 'glyph', 'svg', 'webp'],
+  },
+  {
+    kind: 'styles',
+    id: 'asset-styles',
+    label: 'Custom CSS',
+    description: 'The theme’s own stylesheet, with the hooks, tokens and images to hand.',
+    keywords: ['css', 'stylesheet', 'styles', 'custom', 'rule', 'selector', 'hook', 'keyframes', 'animation'],
   },
   {
     kind: 'details',
