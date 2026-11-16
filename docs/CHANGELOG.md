@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live Spec J
+
+- Added Spec J (Calliope as an assistant in the theme editor: a Brahma-like console with her own chat type, read-only theme tools and engine-checked proposals the author tries, keeps or discards)
+
 #### Docs: Calliope Live Spec I complete
 
 - Spec I (loose ends) marked implemented, with implementation notes for all five stages, and moved with its catalogue triage to `docs/developer/features/complete/`; linked from `calliope-live.md`. The help pages took their brace-indentation text in Stage 1; `THEME_DEVELOPMENT.md` does not describe the probe and was not changed

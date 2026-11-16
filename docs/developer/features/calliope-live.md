@@ -49,6 +49,10 @@ not a settled design.
   editor layout by pane width, the theme probe on the gallery, and 45 new
   catalogue hooks (implemented 4.14-dev; user docs
   [help/theme-editor.md](../../../help/theme-editor.md)).
+- [calliope-live-spec-j-calliope.md](calliope-live-spec-j-calliope.md)
+  — the LLM-assistance step of Phase 2: Calliope, a Brahma-like assistant
+  in the theme editor who proposes changes the author tries, keeps or
+  discards (ready to run).
 
 **Scope:** `quilltap-server` (v4) only. Porting to v5 is a separate concern and
 does not shape decisions here.
