@@ -1,7 +1,7 @@
 # Calliope Live — Phase 0a audit
 
 **Status:** findings, 2026-11-14. Input to the Phase 0b / 0b′ / 0c specs in
-[calliope-live.md](../calliope-live.md). Nothing was changed in the app.
+[calliope-live.md](calliope-live.md). Nothing was changed in the app.
 
 **Method.** The six bundled `styles.css` files and every stylesheet under
 `app/` were parsed with PostCSS (not grep), so counts here are exact for what

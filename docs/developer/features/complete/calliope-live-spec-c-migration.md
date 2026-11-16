@@ -2,7 +2,7 @@
 
 **Status:** implemented 4.14-dev, 2026-11-14 (design decisions confirmed by the human).
 Implements Phase 0c of
-[calliope-live.md](../calliope-live.md). Read, before starting:
+[calliope-live.md](calliope-live.md). Read, before starting:
 
 - the audit, [calliope-live-audit.md](calliope-live-audit.md), with its
   variable table [calliope-live-audit-matrix.csv](calliope-live-audit-matrix.csv);

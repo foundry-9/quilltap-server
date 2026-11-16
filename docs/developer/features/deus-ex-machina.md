@@ -315,7 +315,7 @@ Migration, pretty label, domain and row schemas, DDL.md, export schema, round-tr
 - the dialog tab
 - rendering: the ribbon, the band, labels, tier, accent and the render-items exclusion
 
-The new `qt-*` classes go in `app/styles/qt-components/` and are mirrored de-Tailwinded into `packages/theme-storybook/src/css/qt-components.css`. Bump that package's patch version, then **stop and ask the operator to `npm publish`**: the publish gates the commit. Run `/release-checklist-13-ui` contrast checks on the tint and ribbon.
+The new `qt-*` classes go in `app/styles/qt-components/`; then run `npm run generate:theme-styled-by` so Calliope's styled-by table follows (lint fails while it is stale), and give each new hook its specimen. Run `/release-checklist-13-ui` contrast checks on the tint and ribbon.
 
 ### Phase 5: docs and CHANGELOG
 Everything under [Documentation](#documentation).

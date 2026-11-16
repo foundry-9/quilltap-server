@@ -1,7 +1,7 @@
 # Calliope Live — Spec B: structural hook catalogue
 
 **Status:** implemented 2026-11-14 (4.14-dev); see "As built" at the end. Design decisions confirmed by the human. Implements Phase 0b′ of
-[calliope-live.md](../calliope-live.md). Read that document and the audit,
+[calliope-live.md](calliope-live.md). Read that document and the audit,
 [calliope-live-audit.md](calliope-live-audit.md) — sections 2.3 and 4 in
 particular — before starting.
 

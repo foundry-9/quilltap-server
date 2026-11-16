@@ -1,63 +1,68 @@
 # Calliope Live — a graphic theme editor
 
-**Status:** proposal, pre-design. Nothing is built. This document records a
-planning conversation (2026-11-14) and hands the work to a Claude Code session.
-Everything under "Proposed shape" is a recommendation to be tested by Phase 0,
-not a settled design.
+**Status:** complete (2026-11-16), but for the theme author's guide, which is
+necessary and outstanding ([ROADMAP](../ROADMAP.md); outline in
+[Spec K's appendix](calliope-live-spec-k-convergence.md#appendix--outline-for-the-authors-guide-not-built-here)).
+Phases 0 to 3 were carried out by Specs A to K below. This document began as
+the record of a planning conversation (2026-11-14); "Proposed shape" and
+"Next steps" are kept as written then, with notes where the work decided
+otherwise, and every open question now has its answer.
 
 **Follow-on documents:**
 
-- [calliope-live-audit.md](complete/calliope-live-audit.md) — the Phase 0a audit
-  (done), with [calliope-live-audit-matrix.csv](complete/calliope-live-audit-matrix.csv).
+- [calliope-live-audit.md](calliope-live-audit.md) — the Phase 0a audit
+  (done), with [calliope-live-audit-matrix.csv](calliope-live-audit-matrix.csv).
   Where its measurements differ from the survey figures below, the audit is
   right.
-- [calliope-live-spec-a-token-registry.md](complete/calliope-live-spec-a-token-registry.md)
+- [calliope-live-spec-a-token-registry.md](calliope-live-spec-a-token-registry.md)
   — Phase 0b: token registry and bundle format v2 (implemented 4.14-dev).
   Its fit report is
-  [calliope-live-spec-a-fit.md](complete/calliope-live-spec-a-fit.md).
-- [calliope-live-spec-b-hook-catalogue.md](complete/calliope-live-spec-b-hook-catalogue.md)
+  [calliope-live-spec-a-fit.md](calliope-live-spec-a-fit.md).
+- [calliope-live-spec-b-hook-catalogue.md](calliope-live-spec-b-hook-catalogue.md)
   — Phase 0b′: structural hook catalogue (implemented 4.14-dev; reference
-  [THEME_HOOKS.md](../THEME_HOOKS.md), generated from `lib/themes/hooks/`).
-- [calliope-live-spec-c-migration.md](complete/calliope-live-spec-c-migration.md)
+  [THEME_HOOKS.md](../../THEME_HOOKS.md), generated from `lib/themes/hooks/`).
+- [calliope-live-spec-c-migration.md](calliope-live-spec-c-migration.md)
   — Phase 0c: migrate the six bundled themes to version 2 and retire
   version 1 (implemented 4.14-dev; authoring guide
-  [THEME_DEVELOPMENT.md](../THEME_DEVELOPMENT.md), token reference
-  [THEME_TOKENS.md](../THEME_TOKENS.md)). Its rendered differences are in
-  [calliope-live-spec-c-differences.md](complete/calliope-live-spec-c-differences.md).
-- [calliope-live-spec-d-live-preview.md](complete/calliope-live-spec-d-live-preview.md)
+  [THEME_DEVELOPMENT.md](../../THEME_DEVELOPMENT.md), token reference
+  [THEME_TOKENS.md](../../THEME_TOKENS.md)). Its rendered differences are in
+  [calliope-live-spec-c-differences.md](calliope-live-spec-c-differences.md).
+- [calliope-live-spec-d-live-preview.md](calliope-live-spec-d-live-preview.md)
   — rest of Phase 1 and first slice of Phase 2: contrast checks, drafts and
   a live preview of colour tokens (implemented 4.14-dev; user docs
-  [help/theme-editor.md](../../../help/theme-editor.md)).
-- [calliope-live-spec-e-typed-controls.md](complete/calliope-live-spec-e-typed-controls.md)
+  [help/theme-editor.md](../../../../help/theme-editor.md)).
+- [calliope-live-spec-e-typed-controls.md](calliope-live-spec-e-typed-controls.md)
   — second slice of Phase 2: a control for every token type, primitives,
   density, search and undo (implemented 4.14-dev; user docs
-  [help/theme-editor.md](../../../help/theme-editor.md)).
-- [calliope-live-spec-f-assets-and-manifest.md](complete/calliope-live-spec-f-assets-and-manifest.md)
+  [help/theme-editor.md](../../../../help/theme-editor.md)).
+- [calliope-live-spec-f-assets-and-manifest.md](calliope-live-spec-f-assets-and-manifest.md)
   — third slice of Phase 2: font and image upload, icon overrides,
   subsystems and the rest of the manifest (implemented 4.14-dev; user docs
-  [help/theme-editor.md](../../../help/theme-editor.md)).
-- [calliope-live-spec-g-custom-css.md](complete/calliope-live-spec-g-custom-css.md)
+  [help/theme-editor.md](../../../../help/theme-editor.md)).
+- [calliope-live-spec-g-custom-css.md](calliope-live-spec-g-custom-css.md)
   — fourth slice of Phase 2: the custom CSS section, JSON and CSS
   highlighting, and opening a theme file as a draft (implemented 4.14-dev;
-  user docs [help/theme-editor.md](../../../help/theme-editor.md)).
-- [calliope-live-spec-h-specimens-and-inspect.md](complete/calliope-live-spec-h-specimens-and-inspect.md)
+  user docs [help/theme-editor.md](../../../../help/theme-editor.md)).
+- [calliope-live-spec-h-specimens-and-inspect.md](calliope-live-spec-h-specimens-and-inspect.md)
   — last slice of Phase 2: the specimen gallery and inspect mode
   (implemented 4.14-dev; user docs
-  [help/theme-editor.md](../../../help/theme-editor.md)).
-- [calliope-live-spec-i-loose-ends.md](complete/calliope-live-spec-i-loose-ends.md)
+  [help/theme-editor.md](../../../../help/theme-editor.md)).
+- [calliope-live-spec-i-loose-ends.md](calliope-live-spec-i-loose-ends.md)
   — clean-up after Specs E to H: brace indentation in the code editor,
   editor layout by pane width, the theme probe on the gallery, and 45 new
   catalogue hooks (implemented 4.14-dev; user docs
-  [help/theme-editor.md](../../../help/theme-editor.md)).
-- [calliope-live-spec-j-calliope.md](complete/calliope-live-spec-j-calliope.md)
+  [help/theme-editor.md](../../../../help/theme-editor.md)).
+- [calliope-live-spec-j-calliope.md](calliope-live-spec-j-calliope.md)
   — the LLM-assistance step of Phase 2: Calliope, a Brahma-like assistant
   in the theme editor who proposes changes the author tries, keeps or
   discards (implemented 4.14-dev; user docs
-  [help/theme-editor.md](../../../help/theme-editor.md)).
+  [help/theme-editor.md](../../../../help/theme-editor.md)).
 - [calliope-live-spec-k-convergence.md](calliope-live-spec-k-convergence.md)
-  — Phase 3: retiring `@quilltap/theme-storybook` and
-  `create-quilltap-theme` and closing this proposal; the author's guide is
-  recorded as necessary and left for later (ready to run).
+  — Phase 3 (done): `@quilltap/theme-storybook` and `create-quilltap-theme`
+  retired, `quilltap themes create` writing the Atelier's blank bundle,
+  Calliope asking for a screenshot when she cannot tell what the author
+  sees, and this proposal closed; the author's guide is recorded as
+  necessary and left for later.
 
 **Scope:** `quilltap-server` (v4) only. Porting to v5 is a separate concern and
 does not shape decisions here.
@@ -85,7 +90,7 @@ result. That is part of the project, not a side effect.
 | Use Storybook as the basis? | **No.** | Storybook is a developer tool needing a dev server; its controls are built for component props, not for authoring a theme document. Its stories are hand-written markup covering a fraction of the UI. |
 | What edits a theme's JSON and CSS as text? | **Lexical, with its own code highlighting switched on for JSON and CSS** (2026-11-14). Revisit if theme editing becomes common. | Needed one package after all: `@lexical/code-prism` (0.53, MIT), where Lexical 0.53 keeps the Prism highlighter; `@lexical/code` alone has none. Built in Spec G as `components/code-editor/`, used by the theme editor's CSS section and by Document Mode for `.json` and `.css`. A dedicated code editor would add completion and lint markers, which can wait. |
 | Where does a theme being worked on live? | **In Quilltap General, under `Themes/<id>/`** (2026-11-14). Its images are kept as the author supplied them; an installed theme carries WebP. | A draft is the user's work, so it belongs with the user's files: visible in the Scriptorium, editable in Document Mode, reachable by characters, backed up with the store. |
-| What to keep from Storybook? | The **specimen-sheet idea**. | Build specimens as in-app components; Storybook may consume the same components so there is one copy of the markup. |
+| What to keep from Storybook? | The **specimen-sheet idea**. | Build specimens as in-app components; Storybook may consume the same components so there is one copy of the markup. (In the event Storybook consumed nothing: it was retired in Spec K, and the in-app gallery is the one copy.) |
 | What becomes of `@quilltap/theme-storybook` and `create-quilltap-theme`? | **Both are retired** (2026-11-16), in [Spec K](calliope-live-spec-k-convergence.md). | The specimen gallery draws every catalogued hook from the app's own components, and the Atelier starts, installs and exports a theme. Neither package has anything left to do that the app does not do better. |
 | How does the assistant see its work? | **It does not, by itself** (2026-11-16). The author screenshots what looks wrong and attaches it to Calliope. | A screenshot the author chose shows exactly the fault they mean, costs nothing to build, and sends a model only what the author decided to send. |
 | Is the theme author's guide part of this feature's release? | **No; it is necessary and comes after** (2026-11-16). | The Atelier's help page already documents every section. The start-to-finish guide is worth doing properly, as its own work, once the feature has been used. |
@@ -247,8 +252,14 @@ parse the registry out of annotated CSS) is an open question below.
 
 ### 4. Storybook
 
-Not the basis. Once specimens exist as app components, decide whether
-`theme-storybook` consumes them or is retired in favour of the in-app gallery.
+Decided (Spec K, 2026-11-16): **retired**. The specimen gallery
+(`components/theme-specimens/`, one specimen per catalogued hook, held by a
+coverage test) and the Atelier's Icons section show everything the 20
+stories did that the app still has; the rest was dead CSS. The compiled
+component CSS is no longer a file: `scripts/lib/qt-components-css.mjs`
+compiles it in memory for Calliope's styled-by table. `create-quilltap-theme`
+went with it; `quilltap themes create` writes the Atelier's blank bundle
+(`lib/themes/blank-bundle.ts`). Both packages are deprecated on npm.
 
 ## Next steps
 
@@ -317,51 +328,75 @@ import/export and drafts.
 
 Settle Storybook's role; write the help documentation for theme authors.
 
+**Done** (Spec K), but for the author's guide: Storybook and the scaffolder
+are retired and the existing help pages are true without them. The guide
+itself is necessary and was left out of this release by decision; it is on
+the ROADMAP with an outline.
+
 ## Open questions
 
-- **Old-format bundles.** Compatibility is not required (see Phase 0), but an
-  old bundle should be refused with a clear message rather than loaded and
-  rendered wrongly. That covers themes installed under `<dataDir>/themes/` on
-  existing instances, anything in a registry, and the deprecated npm plugin
-  theme format. Decide whether to bump `formatVersion` to 2 to make that check
-  trivial.
-- **Source of truth for component tokens.** Registry generates
-  `_variables.css`, or annotated CSS generates the registry? Either way the
-  lint gates (`check-css-vars.mjs`, `check-qt-classes.mjs`,
-  `check-storybook-css.mjs`) must keep holding.
-- **Where the editor lives.** A section of the Appearance settings card, or its
-  own route / workspace tab with the app visible beside it? Live preview argues
-  for a panel that can sit next to real content.
-- **Draft storage.** A working theme under `<dataDir>/themes/` flagged as a
-  draft, or separate storage?
-- **`extendsTheme`.** Already in the manifest schema; confirm how far the
-  loader honours it today before leaning on it for "start from an existing
-  theme".
-- **Fonts and licensing.** Exporting a theme that started from a bundled one
-  copies its font files; check the licences permit that, and record the licence
-  in the exported manifest.
-- **Animation.** Only three of six themes use `@keyframes`, and only one or two
-  each. Decide whether animation is a token family (durations, easings, named
-  motion presets) or stays in custom CSS for a first version.
-- **Scale of the editable surface.** ~618 component variables is too many to
-  present flat. The audit should say how many are worth showing by default.
+Each is answered; the spec that settled it is named.
 
-- **Hook stability.** How is the hook catalogue versioned, and how does a
-  theme declare which version it was written against, so that an app release
-  that changes markup can warn instead of silently breaking a theme?
-- **CSS safety.** Custom CSS is far more powerful than tokens. Confirm what
-  the bundle loader allows today, and decide the rules: remote `url()` and
-  `@import` (data can leak through them), and whether a theme may hide or
-  cover security-relevant UI. Matters most for themes from a registry.
-- **Accessibility under heavy restyling.** A theme can visually reorder
-  content without changing focus order, or drop contrast. Decide what the
-  editor checks and warns about, and what is left to the author.
-- **How the LLM sees its work.** Text-only proposals against the registry and
-  catalogue are straightforward. Letting the model look at the rendered result
-  (a screenshot loop) is much more valuable for layout work and much harder;
-  decide whether it is in scope and for which surface (in-app, or Claude Code
-  with a browser).
-- **First layout variants.** Which, if any, ship with the first version.
+- **Old-format bundles.** `formatVersion` went to 2, and a version 1 bundle
+  or a plugin theme is refused, never registered (`lib/themes/refused.ts`):
+  listed on the Appearance card with an uninstall button, refused at
+  install and by the CLI, and the active theme falls back to the default
+  with one notice. — [Spec A](calliope-live-spec-a-token-registry.md),
+  [Spec C](calliope-live-spec-c-migration.md).
+- **Source of truth for component tokens.** The registry
+  (`lib/themes/registry/`) generates `_theme-defaults.css` and
+  `_variables.css`; lint fails while they disagree. The lint gates hold;
+  `check-storybook-css.mjs` itself went in Spec K. —
+  [Spec A](calliope-live-spec-a-token-registry.md).
+- **Where the editor lives.** Its own workspace tab, `theme-editor`, with
+  the route `/calliope`, opened from **Design a theme** on the Appearance
+  card, so it sits beside any other tab. —
+  [Spec D](calliope-live-spec-d-live-preview.md).
+- **Draft storage.** A folder `Themes/<id>/` in Quilltap General (see
+  "Decisions made"), with `lib/themes/drafts/` as its one door. —
+  [Spec D](calliope-live-spec-d-live-preview.md),
+  [Spec F](calliope-live-spec-f-assets-and-manifest.md).
+- **`extendsTheme`.** Dropped from version 2; every theme inherits from the
+  registry defaults, and "start from an installed theme" is a copy. —
+  [Spec A](calliope-live-spec-a-token-registry.md) decision 5.
+- **Fonts and licensing.** The licence is asked for, not judged: every font
+  needs a licence choice (read from the font's own tables where it has
+  one) and may carry a licence file; a `proprietary` font installs and
+  exports with a standing note that the author answers for it. —
+  [Spec F](calliope-live-spec-f-assets-and-manifest.md).
+- **Animation.** Durations and easings are token types; keyframes stay in
+  custom CSS, where the engine prefixes their names with the theme id. —
+  [Spec A](calliope-live-spec-a-token-registry.md),
+  [Spec G](calliope-live-spec-g-custom-css.md).
+- **Scale of the editable surface.** Three levels with one search:
+  Essentials (139 semantic tokens) by default, Components (239), and
+  Advanced (288) behind a disclosure; internal tokens are never shown. —
+  [Spec E](calliope-live-spec-e-typed-controls.md).
+- **Hook stability.** The catalogue carries `HOOK_CATALOGUE_VERSION`, a
+  theme declares `hooksVersion`, and a theme behind the app is warned at
+  load about any removed hook its CSS still uses. —
+  [Spec B](calliope-live-spec-b-hook-catalogue.md),
+  [Spec C](calliope-live-spec-c-migration.md).
+- **CSS safety.** Custom CSS may not `@import`, declare `@font-face` or
+  reach a remote `url()`; every descendant rule is scoped to the theme with
+  `@scope`; selecting anything outside the hook catalogue is a warning with
+  file and line. Nothing stops a theme from covering UI it can select;
+  registry themes are signed (Ed25519), and that is the line drawn. —
+  [Spec G](calliope-live-spec-g-custom-css.md),
+  [Spec B](calliope-live-spec-b-hook-catalogue.md).
+- **Accessibility under heavy restyling.** The engine measures every
+  contrast pair the app checks (4.5:1 text, 3:1 non-text, light and dark),
+  the editor shows each as it changes, a failure is a warning, and lint
+  holds the bundled themes to every pair. Visual reordering against focus
+  order is not checked; it is left to the author. —
+  [Spec D](calliope-live-spec-d-live-preview.md).
+- **How the LLM sees its work.** It does not, by itself: no screenshot
+  loop, inspect tool or headless render. The author screenshots what looks
+  wrong and attaches it; Calliope asks for one when the draft does not show
+  her what the author means, and only when her model reads images. —
+  [Spec K](calliope-live-spec-k-convergence.md) decision 2.
+- **First layout variants.** None shipped. Left open, on the
+  [ROADMAP](../ROADMAP.md).
 
 ## Standing rules that will bite
 
@@ -374,10 +409,10 @@ From `CLAUDE.md`; listed here because this feature touches all of them.
 - New Tailwind classes go into a `qt-*` utility; variant forms are written out
   by hand in `_utilities.css`.
 - After any change under `app/styles/qt-components/` or to
-  `theme-tokens.css`, run `npm run generate:storybook-css` and bump
-  `packages/theme-storybook`.
+  `theme-tokens.css`, run `npm run generate:theme-styled-by` (until Spec K:
+  `generate:storybook-css` and a `packages/theme-storybook` bump).
 - `packages/` changes: bump the version, then stop for a manual `npm publish`
-  (except `packages/quilltap` and `packages/theme-storybook`).
+  (except `packages/quilltap`).
 - New API routes go under `/api/v1/` with action dispatch; untrusted bundle
   paths resolve through `resolveInside`, uploaded bytes are served by
   `serveStoredBytes`.

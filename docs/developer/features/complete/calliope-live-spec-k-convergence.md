@@ -1,17 +1,18 @@
 # Calliope Live — Spec K: convergence
 
-**Status:** ready to run, 2026-11-16. Decisions 1, 2 and 6 are the human's;
+**Status:** complete, 2026-11-16 (Stages 0–4; the two `npm deprecate`
+commands are the human's to run). Decisions 1, 2 and 6 are the human's;
 decisions 3 to 5 are confirmed. Implements Phase 3 of [calliope-live.md](calliope-live.md),
 the last phase. Read, before starting:
 
 - Spec H's implementation notes on the specimen gallery and its coverage
   test
-  ([calliope-live-spec-h-specimens-and-inspect.md](complete/calliope-live-spec-h-specimens-and-inspect.md));
+  ([calliope-live-spec-h-specimens-and-inspect.md](calliope-live-spec-h-specimens-and-inspect.md));
 - Spec J's implementation notes, "What Phase 3's author documentation
   should say about her" and the styled-by table
-  ([calliope-live-spec-j-calliope.md](complete/calliope-live-spec-j-calliope.md));
+  ([calliope-live-spec-j-calliope.md](calliope-live-spec-j-calliope.md));
 - the design of the generated Storybook CSS
-  ([refactor-4-12-storybook-css-generated.md](refactor-4-12-storybook-css-generated.md))
+  ([refactor-4-12-storybook-css-generated.md](../refactor-4-12-storybook-css-generated.md))
   and its code: `scripts/lib/storybook-css.mjs`,
   `scripts/generate-storybook-css.mjs`, `scripts/check-storybook-css.mjs`;
 - `packages/theme-storybook/` and `packages/create-quilltap-theme/` as they
@@ -569,3 +570,92 @@ nowhere; both lines go. `DEAD-CODE-REPORT.md`'s claim that
   notes, ROADMAP.
 - **Checks:** `npm run lint` passes, `npx tsc` passes, `npm run test:unit`
   1,520 suites / 21,733 tests pass.
+
+### Stage 4 — closing the proposal
+
+- **`CLAUDE.md`:** the `packages/` exception names `packages/quilltap`
+  only; "Design docs" is the specimen gallery; the Themes rules no longer
+  mention the generated Storybook file, `generate:storybook-css` or the
+  scaffolder. A new rule says the compiled qt-* layer is not a file
+  (`qt-components-css.mjs`, in memory, for the styled-by table) and that
+  `npm run generate:theme-styled-by` is what follows a change under
+  `app/styles/qt-components/`; the CLI rule names `blankThemeBundle` as the
+  one blank bundle.
+- **`.claude/commands/`:** `update-documentation.md` loses six rows (both
+  packages' README and CHANGELOG, the two Storybook spec rows);
+  `refactor.md`, `release-checklist-7-qt-classes.md` and
+  `release-checklist-13-ui.md` send a qt-* change to the styled-by table
+  and the specimen gallery; `release-checklist-5-dead-code.md` lists theme
+  specimens where it listed Storybook stories.
+- **`features/`:** a retirement note at the top of
+  `refactor-4-12-storybook-css-generated.md` and
+  `refactor-4-12/storybook-css-diff.md`. `ROADMAP.md` (Calliope: Themes &
+  UI) records Calliope Live and the retirement as done, and adds the
+  author's guide (necessary, linking the appendix) and layout variants as
+  open. Calliope seeing the rendered app is not on it.
+- **`calliope-live.md`:** status complete but for the author's guide;
+  Spec K's follow-on entry marked done; "4. Storybook" rewritten as
+  decided; the Storybook row in "Decisions made" notes what happened (the
+  three Spec K decisions were already in the table from when this spec was
+  written); Phase 3 marked done but for the guide; every open question
+  answered with the spec that settled it (A, B, C, D, E, F, G or K), layout
+  variants pointing at the ROADMAP; the standing-rules list updated.
+- **Moved to `features/complete/`:** `calliope-live.md` and this spec. The
+  audit files were already there. Relative links were rewritten in the two
+  moved files and in the eleven completed Calliope specs that pointed at
+  `../calliope-live.md`; every relative link in the changed files resolves.
+  (A first pass also normalised unrelated `./x.md` links in some forty
+  other files; that churn was reverted before anything was committed.)
+- **`docs/CHANGELOG.md`** has a Stage 4 entry; **`DEAD-CODE-REPORT.md`**
+  has a dated 2026-11-16 note (not a knip run) for the two packages, the
+  three scripts and the ~40 unused qt-* classes, leaving the dated history
+  that names them as it was.
+- **Also rewritten:** the live specs still naming the packages —
+  `deus-ex-machina.md` (as Stage 0 listed), `composer-document-references.md`
+  and the `refactor-4-12.md` index row (a pointer to this spec).
+- **Checks:** `npm run lint` passes, `npx tsc` passes, `npm run test:unit`
+  1,520 suites / 21,733 tests pass. A repository sweep finds the two
+  package names only in history (release notes, CHANGELOG history,
+  `features/complete/`, the dated dead-code entries, the done ROADMAP items
+  and the two retired Storybook CSS documents, each with its note).
+
+## Implementation notes
+
+- **The inventory's outcome.** Every Storybook story was set against the
+  specimen gallery and the Atelier's Icons section; nothing needed a new
+  home (decision 7). What the stories showed and the app does not is about
+  40 qt-* classes defined in CSS and written by no markup — dead CSS, left
+  for the next sweep and listed in Stage 0 and in `DEAD-CODE-REPORT.md`.
+  `quilltap-defaults.css` was used only inside the package.
+- **What was dropped, and why.** The two packages (decision 1); the
+  563 KB compiled stylesheet, its generator and its lint gate (decision 3:
+  a large generated file kept only to feed another); the scaffolder's
+  flags, its sample `styles.css`, its README template and its sample
+  palette (Stage 0: nothing worth keeping — the Atelier is where a theme
+  is made, and a blank bundle should be blank); the comment-banner and
+  layer-order machinery of the old compile step, which served only readers
+  of the shipped file.
+- **The styled-by table** compiled the same: every hook row byte for byte
+  the same, and only the `sources` header changed, because it named the
+  removed file. A later reader comparing tables across this change should
+  expect that one line.
+- **One blank bundle.** `lib/themes/blank-bundle.ts` is the only place a
+  new theme's files are made, for the Atelier and the CLI alike. A
+  consequence: a blank draft's `theme.json` and `tokens.json` now carry
+  `$schema` (they did not before); the schemas admit it and saves keep it.
+  `draftIdFromName` is an alias of `themeIdFromName`.
+- **Calliope and screenshots.** Her brief now has a "What you can see"
+  paragraph, chosen per turn by whether her model can be sent an image.
+  The live trial (Stage 3) showed she reads an attached screenshot
+  correctly; gpt-5 did not volunteer what it saw before proposing, though
+  the brief asks it to, and named it accurately when asked. If that matters
+  in use, it is a wording question for her brief, not a missing feature.
+- **What is not done.** The theme author's guide (decision 6) — on the
+  ROADMAP with the outline above. Layout variants — on the ROADMAP, no
+  design. The `npm deprecate` commands (decision 5) are the human's.
+  `docker-test-plan.md` row 8.3 is restated but was not run against a
+  container.
+- **For a later reader:** the proposal is closed. Its open questions are
+  answered in `calliope-live.md` with the spec that settled each; nothing
+  about Calliope seeing the rendered app by herself is planned (decision 2),
+  and Spec J's notes on how it could be built are history.

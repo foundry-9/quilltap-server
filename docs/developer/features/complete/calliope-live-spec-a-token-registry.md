@@ -1,7 +1,7 @@
 # Calliope Live — Spec A: token registry and bundle format v2
 
 **Status:** ready to run, 2026-11-14 (design decisions confirmed by the human). Implements Phase 0b of
-[calliope-live.md](../calliope-live.md). Read that document and the audit,
+[calliope-live.md](calliope-live.md). Read that document and the audit,
 [calliope-live-audit.md](calliope-live-audit.md), before starting; this spec
 assumes both. The audit's variable table is
 [calliope-live-audit-matrix.csv](calliope-live-audit-matrix.csv).

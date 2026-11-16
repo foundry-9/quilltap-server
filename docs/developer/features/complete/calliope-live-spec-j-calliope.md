@@ -5,7 +5,7 @@
 [help/appearance-settings.md](../../../../help/appearance-settings.md); see
 [Implementation notes](#implementation-notes)). Design decisions confirmed by the human.
 Implements the LLM-assistance step of Phase 2 of
-[calliope-live.md](../calliope-live.md). Read, before starting:
+[calliope-live.md](calliope-live.md). Read, before starting:
 
 - Spec H's implementation notes, "What an assistant needs from the
   inspector's model"

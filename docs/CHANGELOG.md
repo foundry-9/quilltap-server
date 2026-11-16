@@ -4,6 +4,14 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live closed (Spec K)
+
+- `CLAUDE.md`: the `packages/` publish exception names only `packages/quilltap`; design docs are the specimen gallery; the Themes rules drop the generated Storybook CSS and point a qt-* change at `npm run generate:theme-styled-by`
+- `.claude/commands/`: removed the two packages' doc rows and the Storybook spec rows; checklists refer to the styled-by table and the specimen gallery
+- `calliope-live.md` and Spec K moved to `features/complete/`, with links fixed. The proposal's status, Storybook section, Phase 3 and open questions are updated; each question names the spec that answered it
+- ROADMAP: Calliope Live and the package retirement marked done; the theme author's guide (necessary) and layout variants added as open
+- Retirement notes on the two Storybook CSS refactor docs; a dated note in `DEAD-CODE-REPORT.md`
+
 #### Calliope and theme docs: no packages, and screenshots (Calliope Live, Spec K)
 
 - Calliope's prompt adds a paragraph on what she can see: not the app, only the draft. When the draft does not show what the author means, she asks for a screenshot if her model reads images (`profileCanReceiveAttachment`), and for a description if it does not. New `calliopeSightBrief`; snapshot updated

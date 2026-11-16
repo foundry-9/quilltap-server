@@ -2,7 +2,7 @@
 
 **Status:** implemented 4.14-dev, 2026-11-14 (design decisions confirmed by the human). User docs [help/theme-editor.md](../../../../help/theme-editor.md); authoring guide [THEME_DEVELOPMENT.md, Drafts and the Atelier](../../THEME_DEVELOPMENT.md#drafts-and-the-atelier); routes [API.md, Theme Drafts](../../API.md#theme-drafts).
 Implements the rest of Phase 1 and the first slice of Phase 2 of
-[calliope-live.md](../calliope-live.md). Read, before starting:
+[calliope-live.md](calliope-live.md). Read, before starting:
 
 - Spec A, [calliope-live-spec-a-token-registry.md](calliope-live-spec-a-token-registry.md)
   (the registry and the version 2 theme document);

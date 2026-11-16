@@ -1,7 +1,7 @@
 # Calliope Live — Spec F: fonts, images and the manifest
 
 **Status:** implemented 4.14-dev, 2026-11-15 (Stages 0–1 in `043bda42a`, Stage 2 documentation; user docs [help/theme-editor.md](../../../../help/theme-editor.md)).
-Implements the third slice of Phase 2 of [calliope-live.md](../calliope-live.md).
+Implements the third slice of Phase 2 of [calliope-live.md](calliope-live.md).
 Read, before starting:
 
 - Spec E, [calliope-live-spec-e-typed-controls.md](calliope-live-spec-e-typed-controls.md),

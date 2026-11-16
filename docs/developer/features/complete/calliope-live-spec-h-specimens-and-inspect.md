@@ -1,7 +1,7 @@
 # Calliope Live — Spec H: the specimen gallery and inspect mode
 
 **Status:** implemented 4.14-dev, 2026-11-16 (Stages 0–1 in `141df9f06`, Stage 2 in `68789c967`, Stage 3 documentation; user docs [help/theme-editor.md](../../../../help/theme-editor.md)).
-Implements the last slice of Phase 2 of [calliope-live.md](../calliope-live.md).
+Implements the last slice of Phase 2 of [calliope-live.md](calliope-live.md).
 Read, before starting:
 
 - Spec G, [calliope-live-spec-g-custom-css.md](calliope-live-spec-g-custom-css.md),

@@ -55,7 +55,7 @@ An inline, non-editable, selectable `DecoratorNode` (backspace deletes the whole
 }
 ```
 
-It renders `<span class="qt-doc-ref-chip">` with a document icon and the path. Clicking it opens the document in Document Mode when the composer is in a Salon chat. A reference whose document no longer resolves renders with a "Missing document" mark. New `qt-*` classes reach `packages/theme-storybook` by regenerating its CSS (`npm run generate:storybook-css`; see CLAUDE.md, Themes).
+It renders `<span class="qt-doc-ref-chip">` with a document icon and the path. Clicking it opens the document in Document Mode when the composer is in a Salon chat. A reference whose document no longer resolves renders with a "Missing document" mark. New `qt-*` classes are followed by `npm run generate:theme-styled-by` (see CLAUDE.md, Themes).
 
 ### Markdown transformer
 
@@ -109,4 +109,4 @@ It renders `<span class="qt-doc-ref-chip">` with a document icon and the path. C
 
 **New:** `components/chat/lexical/nodes/DocumentReferenceNode.tsx`, `components/chat/lexical/plugins/DocReferenceTypeaheadPlugin.tsx`, `components/chat/lexical/transformers/doc-reference-transformer.ts`, `lib/chat/parse-doc-references.ts`, `lib/chat/context/doc-references-section.ts`, plus tests for the parser, transformer round-trip, section builder (both capability branches) and search ordering.
 
-**Modified:** `components/chat/lexical/LexicalComposerWrapper.tsx` and `app/salon/[id]/components/DocumentPane.tsx` (register node, mount plugin); `MarkdownBridgePlugin.tsx` (transformer); `app/api/v1/mount-points/route.ts` (`search-files` action); `lib/chat/context/turn-trailing.ts` (new section slot); `lib/schemas/settings.types.ts` and the Chat-tab settings UI (`composerDocReferences`); `app/styles/qt-components/` and `packages/theme-storybook/src/css/qt-components.css` (chip and menu classes); `docs/developer/API.md`; `help/chat-settings-composer.md`; `docs/CHANGELOG.md`.
+**Modified:** `components/chat/lexical/LexicalComposerWrapper.tsx` and `app/salon/[id]/components/DocumentPane.tsx` (register node, mount plugin); `MarkdownBridgePlugin.tsx` (transformer); `app/api/v1/mount-points/route.ts` (`search-files` action); `lib/chat/context/turn-trailing.ts` (new section slot); `lib/schemas/settings.types.ts` and the Chat-tab settings UI (`composerDocReferences`); `app/styles/qt-components/` and `lib/themes/assist/styled-by.generated.json` (chip and menu classes); `docs/developer/API.md`; `help/chat-settings-composer.md`; `docs/CHANGELOG.md`.

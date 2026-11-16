@@ -107,6 +107,10 @@ This document tracks planned features and improvements for Quilltap.
 - [X] Deprecated and removed npm theme plugin directories
 - [X] Get theme-storybook to match the app for everything
 - [X] Generate the theme-storybook `qt-components.css` from the app's source instead of mirroring by hand (design: [refactor-4-12-storybook-css-generated.md](refactor-4-12-storybook-css-generated.md))
+- [X] Calliope Live — themes made in the app: the version 2 bundle and engine, the Atelier with live preview, typed controls, assets and manifest, custom CSS, specimens and inspect, and Calliope herself as the Atelier's assistant ([proposal](complete/calliope-live.md); last phase [Spec K](complete/calliope-live-spec-k-convergence.md))
+- [X] Retired `@quilltap/theme-storybook` and `create-quilltap-theme` (Spec K): the Atelier and its specimen gallery replace the Storybook preset; `quilltap themes create` writes the Atelier's blank bundle itself; the qt-* layer is compiled in memory for the styled-by table only. Both packages deprecated on npm, nothing unpublished
+- [ ] **The theme author's guide** — necessary; Calliope Live shipped without it. One help page that takes an author from a blank draft to an installed theme, with Calliope's part in it (including that she cannot see the app: attach a screenshot). Outline: [Spec K, appendix](complete/calliope-live-spec-k-convergence.md#appendix--outline-for-the-authors-guide-not-built-here)
+- [ ] Layout variants — themes that change layout, not only appearance (left open by the Calliope Live proposal; no design yet)
 
 ### Refactor programmes
 

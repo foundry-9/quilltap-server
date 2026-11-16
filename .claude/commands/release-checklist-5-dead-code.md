@@ -12,7 +12,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
    ```
    `knip` reports unused files, exports, dependencies, and types. Treat its output as **candidates**, not gospel — it has false positives here.
 2. For each candidate, verify it's truly unused before deleting:
-   - Dynamic imports, plugin entry points, migration scripts, CLI subcommands, Storybook stories, and anything referenced only by string/config can look dead but aren't.
+   - Dynamic imports, plugin entry points, migration scripts, CLI subcommands, theme specimens (`components/theme-specimens/specimens/`), and anything referenced only by string/config can look dead but aren't.
    - Confirm with a real search:
      ```bash
      grep -rn "theSymbolName" lib app packages plugins migrations --include='*.ts' --include='*.tsx'

@@ -7,7 +7,7 @@ in `cc5336495`, Stage 5 documentation; user docs
 [help/scriptorium.md](../../../../help/scriptorium.md); triage list
 [calliope-live-spec-i-catalogue-triage.md](calliope-live-spec-i-catalogue-triage.md)).
 A clean-up pass over what Specs E to H left behind, before LLM assistance
-(the next spec) and Phase 3 of [calliope-live.md](../calliope-live.md). Read,
+(the next spec) and Phase 3 of [calliope-live.md](calliope-live.md). Read,
 before starting, the implementation notes of:
 
 - Spec E, [calliope-live-spec-e-typed-controls.md](calliope-live-spec-e-typed-controls.md);

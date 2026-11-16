@@ -21,6 +21,12 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 ---
 
+## 2026-11-16 — Calliope Live Spec K: two theme packages retired (not a knip run)
+
+- **Removed — packages:** `packages/theme-storybook/` (`@quilltap/theme-storybook`) and `packages/create-quilltap-theme/`, with their generator, lint gate and release job. Both are deprecated on npm, not unpublished. The entries below that name either package (the 2026-05-17 dependency removal, the `knip.json` note about `npx create-quilltap-theme`) are history: `quilltap themes create` no longer shells out to `npx`, and `knip.json` carries no entry for either.
+- **Removed — scripts:** `scripts/generate-storybook-css.mjs`, `scripts/check-storybook-css.mjs`, `scripts/lib/storybook-css.mjs` (the compile step survives as `scripts/lib/qt-components-css.mjs`, whose one consumer is the styled-by table).
+- **Found, not removed:** about 40 `qt-*` classes are defined in CSS but written by no markup (the avatar size and badge-source variants, `qt-chat-message*`, `qt-dropdown*`, `qt-navbar*`, `qt-skeleton*`, `qt-terminal-popout-*` and others); only Storybook stories used them. Listed in the Spec K inventory ([calliope-live-spec-k-convergence.md](features/complete/calliope-live-spec-k-convergence.md), Stage 0) for the next CSS sweep.
+
 ## 2026-11-11 — Refactor 4.13: dead code knip cannot see, legacy shims
 
 Carried out [refactor-4-13-dead-code-and-leftovers.md](features/complete/refactor-4-13-dead-code-and-leftovers.md). knip's two blind spots were the target: it treats test files as entry points (so an export used only by its own test looks alive), and `knip.json` ignored `migrations/lib/**`. Every symbol below was re-checked with a whole-word `git grep` over tracked files immediately before it was removed.

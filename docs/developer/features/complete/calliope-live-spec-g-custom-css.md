@@ -1,7 +1,7 @@
 # Calliope Live — Spec G: custom CSS, highlighted source and import
 
 **Status:** implemented 4.14-dev, 2026-11-16 (Stages 0–1 in `eaa95272f`, Stage 2 in `c2ddd35ad`, Stage 3 in `cdd97d3b3`, Stage 4 documentation; user docs [help/theme-editor.md](../../../../help/theme-editor.md) and [help/scriptorium.md](../../../../help/scriptorium.md)).
-Implements the fourth slice of Phase 2 of [calliope-live.md](../calliope-live.md).
+Implements the fourth slice of Phase 2 of [calliope-live.md](calliope-live.md).
 Read, before starting:
 
 - Spec F, [calliope-live-spec-f-assets-and-manifest.md](calliope-live-spec-f-assets-and-manifest.md),

@@ -2,7 +2,7 @@
 
 **Status:** implemented 4.14-dev, 2026-11-14 (design decisions confirmed by the human).
 User docs: [help/theme-editor.md](../../../../help/theme-editor.md).
-Implements the second slice of Phase 2 of [calliope-live.md](../calliope-live.md).
+Implements the second slice of Phase 2 of [calliope-live.md](calliope-live.md).
 Read, before starting:
 
 - Spec D, [calliope-live-spec-d-live-preview.md](calliope-live-spec-d-live-preview.md),
