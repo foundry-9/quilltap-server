@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live Spec I complete
+
+- Spec I (loose ends) marked implemented, with implementation notes for all five stages, and moved with its catalogue triage to `docs/developer/features/complete/`; linked from `calliope-live.md`. The help pages took their brace-indentation text in Stage 1; `THEME_DEVELOPMENT.md` does not describe the probe and was not changed
+
 #### Theme hooks: 45 added (Calliope Live, Spec I Stage 4.2)
 
 - The hook catalogue grows from 174 to 219 hooks, still version 1 (adding a hook does not change the version). Salon: the chat layout, message list, message text, the four roleplay spans (`qt-chat-dialogue`, `-narration`, `-ooc`, `-inner-monologue`), composer actions, Stop button, attachment chip and picture, reasoning block, participant sidebar, Courier card, green room, Storyteller board and card, formatting toolbar and button, mention menu and option, mention chip, and Document Mode's pane and header. App shell: the footer. Dialogs: the floating dialog and slide-over panel. Shared: the empty state and its icon, description and action, loading state, tooltip, popover, entity card, field label, link, checkbox, radio, slider, rendered Markdown, code block, inline code, and progress bar and fill
@@ -13,7 +17,7 @@
 
 #### Docs: Calliope Live Spec I Stage 4.1 catalogue triage
 
-- Added `docs/developer/features/calliope-live-spec-i-catalogue-triage.md`: the 712 `qt-*` classes in app markup that are not theme hooks, sorted into proposed candidates (45), candidates worth considering, inner parts, modifiers, helpers and plumbing. Awaiting approval before Stage 4.2 adds any to the catalogue
+- Added `docs/developer/features/complete/calliope-live-spec-i-catalogue-triage.md`: the 712 `qt-*` classes in app markup that are not theme hooks, sorted into proposed candidates (45), candidates worth considering, inner parts, modifiers, helpers and plumbing. Awaiting approval before Stage 4.2 adds any to the catalogue
 
 #### UI: `qt-*` classes that resolved to nothing
 

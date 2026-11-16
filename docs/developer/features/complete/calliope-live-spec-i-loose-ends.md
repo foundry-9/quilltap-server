@@ -1,16 +1,21 @@
 # Calliope Live — Spec I: loose ends
 
-**Status:** ready to run, 2026-11-16 (design decisions confirmed by the human).
+**Status:** implemented 4.14-dev, 2026-11-16 (Stage 1 in `236d0b2fd`, Stage 2 in
+`5884f2d6f`, Stage 3 in `fb7f36687`, Stage 4.1 triage in `1389d312c`, Stage 4.2
+in `cc5336495`, Stage 5 documentation; user docs
+[help/theme-editor.md](../../../../help/theme-editor.md) and
+[help/scriptorium.md](../../../../help/scriptorium.md); triage list
+[calliope-live-spec-i-catalogue-triage.md](calliope-live-spec-i-catalogue-triage.md)).
 A clean-up pass over what Specs E to H left behind, before LLM assistance
-(the next spec) and Phase 3 of [calliope-live.md](calliope-live.md). Read,
+(the next spec) and Phase 3 of [calliope-live.md](../calliope-live.md). Read,
 before starting, the implementation notes of:
 
-- Spec E, [calliope-live-spec-e-typed-controls.md](complete/calliope-live-spec-e-typed-controls.md);
-- Spec F, [calliope-live-spec-f-assets-and-manifest.md](complete/calliope-live-spec-f-assets-and-manifest.md);
-- Spec G, [calliope-live-spec-g-custom-css.md](complete/calliope-live-spec-g-custom-css.md);
-- Spec H, [calliope-live-spec-h-specimens-and-inspect.md](complete/calliope-live-spec-h-specimens-and-inspect.md);
+- Spec E, [calliope-live-spec-e-typed-controls.md](calliope-live-spec-e-typed-controls.md);
+- Spec F, [calliope-live-spec-f-assets-and-manifest.md](calliope-live-spec-f-assets-and-manifest.md);
+- Spec G, [calliope-live-spec-g-custom-css.md](calliope-live-spec-g-custom-css.md);
+- Spec H, [calliope-live-spec-h-specimens-and-inspect.md](calliope-live-spec-h-specimens-and-inspect.md);
 
-and Spec B, [calliope-live-spec-b-hook-catalogue.md](complete/calliope-live-spec-b-hook-catalogue.md),
+and Spec B, [calliope-live-spec-b-hook-catalogue.md](calliope-live-spec-b-hook-catalogue.md),
 for the rules a hook must meet.
 
 **Scope:** `quilltap-server` only.
@@ -179,3 +184,78 @@ report any selector that was failing or excepted and now passes.
 At each stop: what was done, what differs from this spec and why, anything
 found that the spec did not foresee, and the commands run with their
 results. At the end, add an "Implementation notes" section to this file.
+
+## Implementation notes
+
+### Stage 1 — brace indentation (`236d0b2fd`)
+
+- `planEnter` and `planCloseBracket` in `components/code-editor/text.ts` are
+  the pure rules; the editor's `KEY_ENTER_COMMAND` handler and a `}` / `]`
+  key handler call them. Braces in strings and comments are told apart by the
+  editor's own highlight tokens (`$tokenTypeLookup`), not a second parser.
+- Not foreseen: Prism's CSS selector pattern could start at a quote, so
+  `content: "{";` read as a selector and a brace. The pattern may no longer
+  start at a quote. A brace after a space inside a CSS string (`"a {"`) is
+  still misread.
+- The closing-brace step-out needs a key press; text that arrives without one
+  (an on-screen keyboard, an input method, a paste) is left as typed.
+
+### Stage 2 — layout by container (`5884f2d6f`)
+
+- The editor's navigation and the gallery's switch at `@2xl` (42rem) rather
+  than the `@3xl` the Custom CSS section uses: at half of a 1680px window the
+  pane is about 750px, which `@3xl` put on the compact side.
+- Below that width the list becomes a select above the body,
+  `components/ui/SectionJump.tsx` ("Go to a section" / "Go to a surface"),
+  which moves focus to the chosen section.
+- The editor's field grids use container queries; the small control grids in
+  `controls.tsx` are their own containers, so they answer to the width of the
+  light or dark column they sit in. A grep-test
+  (`container-layout.test.ts`) keeps viewport breakpoints out of
+  `components/theme-editor/`.
+- The inspector panel floats over the whole window and is sized to it, which
+  is right for it; it was left alone.
+- The compact select is not sticky; in a narrow pane it is reached by
+  scrolling back up, as the stacked list was.
+
+### Stage 3 — the probe (`fb7f36687`)
+
+- Pages: the gallery, home, one Salon chat and the theme preview dialog.
+  `--character` is gone; `--chat` takes one id.
+- The gallery's instance items now carry `data-specimen-instance="<key>"`,
+  and the coverage test checks each instance on its own stage.
+- Not foreseen: the turn dot's opacity is animated, so two runs differed. In
+  gallery mode the probe holds every animation at its start
+  (`document.getAnimations()`). Live pages are left as before, so they still
+  compare with older runs.
+- Per theme and mode the gallery measured 415 of 415 instances with none
+  missing, against 193 hook selectors the seven old pages reached between
+  them (191 in Old School). The only selectors those pages measured that the
+  gallery does not are two live values of the open `data-tool` variant.
+
+### Stage 4 — the catalogue (`1389d312c`, `cc5336495`)
+
+- The triage found 712 uncatalogued classes and 32 composed prefixes. A split
+  the spec did not name — "inner parts, not proposed" (334 classes) — holds
+  pieces of a component that have a look but are too small to promise.
+- The human approved the 45 proposed candidates as proposed: Document Mode
+  under `salon`, kinds written as classes (`qt-mention-chip-thing`,
+  `qt-progress-fill-*`) as class states, and nothing from "worth
+  considering", the roleplay palette included.
+- The catalogue went from 174 to 219 hooks, still version 1, with 11 new
+  state classes. The real `EmptyState` draws the empty-state family; the rest
+  are markup. The probe now measures 471 instances per theme and mode, all
+  present, and the 415 from before are unchanged.
+- No bundled theme selector changed status: all five themes with custom CSS
+  were already clean against the catalogue.
+- Found along the way and fixed outside the spec (`1389d312c`): 13 `qt-*`
+  classes the markup used and no CSS defined (`qt-input-sm`,
+  `qt-button-danger` and others). `scripts/check-qt-classes.mjs` now fails on
+  a bare class in app markup that is neither defined, catalogued, nor one of
+  its listed markers, and runs under `tsx` to read the catalogue.
+
+### Stage 5 — documentation
+
+- The help pages took their brace-indentation sentences in Stage 1.
+  `THEME_DEVELOPMENT.md` does not describe the probe, so it was not changed.
+
