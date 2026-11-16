@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live Spec I
+
+- Added Spec I (loose ends from Specs E to H: brace indentation in the code editor, theme editor layout by pane width, the theme probe measuring the specimen gallery, and adding uncatalogued `qt-*` classes to the hook catalogue)
+
 #### Dependencies: OpenRouter SDK floor raised
 
 - `npm update` across root, packages and plugins. `@openrouter/sdk` is now `^1.5.105` in the root and the OpenRouter plugin (plugin 1.0.75), so a build no longer flips the bundled SDK between 1.5.103 and 1.5.105 depending on the machine; `@testing-library/user-event` to `^14.6.12`
