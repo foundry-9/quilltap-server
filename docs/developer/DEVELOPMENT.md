@@ -117,11 +117,10 @@ quilltap/
 ├── plugins/                  # Plugin source code
 │   ├── dist/                 # Built plugins (loaded at runtime)
 │   └── src/                  # Plugin source files
-├── packages/                 # Published npm packages for plugin development
+├── packages/                 # Published npm packages (plugin development, the CLI)
 │   ├── plugin-types/         # TypeScript types (@quilltap/plugin-types)
 │   ├── plugin-utils/         # Plugin utilities (@quilltap/plugin-utils)
-│   ├── theme-storybook/      # Storybook preset for theme development (@quilltap/theme-storybook)
-│   └── create-quilltap-theme/ # Scaffolding CLI for new themes
+│   └── quilltap/             # The quilltap CLI (npx quilltap)
 ├── themes/                   # Bundled and built themes
 │   └── bundled/              # 6 .qtap-theme bundles (art-deco, earl-grey, great-estate, madmans-box, old-school, rains)
 ├── hooks/                    # Custom React hooks
@@ -372,9 +371,11 @@ See [plugins/README.md](plugins/README.md) for the plugin developer guide.
 
 Themes are version 2 `.qtap-theme` bundles — a manifest, a tokens document, optional custom CSS, fonts, icons and images, zipped. No npm, esbuild, or TypeScript. Version 1 bundles and npm theme plugins are refused.
 
+Make one in Calliope's Atelier (**Settings → Appearance → Design a theme**, `/calliope`). For a text editor, the CLI writes the same blank theme the Atelier starts a draft from:
+
 ```bash
-# Scaffold a new theme bundle
-npx create-quilltap-theme my-theme
+# Write a blank theme bundle to ./my-theme/
+npx quilltap themes create "My Theme"
 ```
 
 Manage themes via CLI:

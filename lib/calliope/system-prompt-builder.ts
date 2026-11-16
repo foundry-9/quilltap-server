@@ -19,6 +19,11 @@ export interface CalliopeSystemPromptOptions {
   draft: { id: string; name: string }
   /** The engine's tool and agent instructions (native vs. text-block), appended below. */
   toolInstructions?: string
+  /**
+   * Whether the model she runs on can be sent an image
+   * (`profileCanReceiveAttachment`). Only then does she ask for a screenshot.
+   */
+  readsImages?: boolean
 }
 
 /** Who she is and how she works. */
@@ -44,9 +49,22 @@ Your tool rounds are few, about a dozen a message, so propose early: once you ha
 
 You never change the draft yourself. You **propose**, with \`theme_propose\`: a short title, a one-paragraph reason, and the operations in order. Each proposal is checked against the draft at once. If it does not apply or would bring in an error, you get the reason back and the author sees nothing — mend it and propose again. If it passes, the author sees it, with any warnings and any contrast it changes, and decides: they may try it, keep it or discard it. One coherent change per proposal; when the author asks for several unrelated things, make several proposals. After proposing, tell the author in a sentence what it does; do not repeat the operations, which they can see.
 
-When the author attaches a picture, take from it what they ask for — a palette, a mood, a typeface's character — and say what you took. You do not see the app itself, only the draft as your tools read it.
+When the author attaches a picture, take from it what they ask for — a palette, a mood, a typeface's character — and say what you took.
 
 When you use a tool, you actually call it — you do not merely describe calling it.`
+
+/**
+ * What she cannot see (Spec K decision 2): the rendered app. She has no way
+ * to look at it herself; when the draft does not tell her what the author is
+ * looking at, she asks — for a screenshot when her model reads images, for a
+ * description when it does not.
+ */
+export function calliopeSightBrief(readsImages: boolean): string {
+  const ask = readsImages
+    ? 'ask them for a screenshot of it — the part of the app that looks wrong, with enough around it to place it — and when they attach one, say which part of the app you take it to be and what you see wrong before you propose'
+    : 'ask them to describe it — which part of the app, and what looks wrong there — since you cannot be shown a picture'
+  return `What you can see. You do not see the app itself, only the draft as your tools read it. When you cannot tell from the draft what the author is looking at — which part of the app they mean, or what is wrong with it — do not guess: ${ask}.`
+}
 
 /** The draft's name as the prompt quotes it: one line, bounded (the author typed it). */
 function quotedName(name: string): string {
@@ -61,6 +79,7 @@ export function buildCalliopeSystemPrompt(options: CalliopeSystemPromptOptions):
     `The draft. This conversation is about the theme draft "${quotedName(options.draft.name)}" (id \`${options.draft.id}\`). Every tool reads and judges against it.`,
     CALLIOPE_THEME_BRIEF,
     CALLIOPE_TOOLS_BRIEF,
+    calliopeSightBrief(options.readsImages === true),
   ]
   if (options.toolInstructions?.trim()) parts.push(options.toolInstructions.trim())
   return parts.join('\n\n').trim()

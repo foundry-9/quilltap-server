@@ -25,6 +25,7 @@ import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { THEME_ASSIST_TOOL_DEFINITIONS } from '@/lib/tools/theme-assist-tools'
 import { CONSOLE_ATTACHMENT_FOLDERS } from '@/lib/console-engine/attachments'
 import { buildCalliopeSystemPrompt } from '@/lib/calliope/system-prompt-builder'
+import { profileCanReceiveAttachment } from '@/lib/llm/image-transport'
 import { readDraft } from '@/lib/themes/drafts'
 import { resolveConsoleConnectionProfile, runConsoleTurn, type ConsoleSendOptions } from '@/lib/services/console-engine/engine'
 import type { ConsolePersona, ConsoleRepos, ConsoleTurnPlanBase } from '@/lib/services/console-engine/persona'
@@ -141,9 +142,12 @@ export const CALLIOPE_PERSONA: ConsolePersona<ConsoleTurnPlanBase> = {
   // Not the operator surface: her tools read only her conversation's draft.
   toolContext: () => ({}),
 
-  buildSystemPrompt: async ({ chat, toolInstructions }) => {
+  buildSystemPrompt: async ({ chat, connectionProfile, toolInstructions }) => {
     const draftId = chat.themeDraftId ?? ''
-    return buildCalliopeSystemPrompt({ draft: { id: draftId, name: await draftName(draftId) }, toolInstructions })
+    // She asks for a screenshot only when this model can be sent one.
+    const readsImages = profileCanReceiveAttachment(connectionProfile, 'image/png')
+    logger.debug('Building Calliope\'s prompt', { chatId: chat.id, draftId, readsImages })
+    return buildCalliopeSystemPrompt({ draft: { id: draftId, name: await draftName(draftId) }, toolInstructions, readsImages })
   },
 
   salvageMessage: ({ maxAgentTurns, cause }) =>

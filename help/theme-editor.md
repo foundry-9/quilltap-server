@@ -203,6 +203,8 @@ She can change tokens, primitives, choices and the stylesheet, and use the fonts
 
 Attach a picture — a painting, a photograph, a swatch card — and tell her what to take from it; she will say what she took. Pictures you attach are kept in the **Calliope** folder of Quilltap General.
 
+She cannot see the app. She knows your draft to the last decimal, but not how it looks on the screen in front of you, and she has no means of looking. So to show her a problem, take a screenshot of what looks wrong — enough of the page around it that she can tell where it is — attach it, and say what you want changed. When she cannot tell from the draft what you are looking at, she will ask you for one. (An engine that cannot read pictures will ask you to describe it instead, and a screenshot sent to it would be wasted.)
+
 Her conversations belong to the draft: the menu at the top of her panel lists this draft's conversations, opening on the most recent; **+** begins a new one and the bin deletes the one in hand, with any pictures attached to it, after asking. Deleting a draft takes its conversations with it. What you kept stays in the draft whatever becomes of the conversation. Her conversations are kept out of the global search.
 
 The engine she works on is shown at the top of her panel; choose another there for this conversation alone.

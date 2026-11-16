@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.14.0--dev.39-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.14.0--dev.40-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
@@ -230,7 +230,7 @@ Switch themes live without reloading. Six ship with the application:
 
 Every bundled theme is checked against WCAG 2.2 AA in light and dark mode: contrast, focus rings, reduced motion, keyboard access and screen-reader names.
 
-Themes are `.qtap-theme` bundles — JSON design tokens, CSS, fonts, and images; no build tools. Create your own with `npx create-quilltap-theme my-theme`, manage them with `npx quilltap themes`, or install signed bundles from a registry in Settings.
+Themes are `.qtap-theme` bundles — JSON design tokens, CSS, fonts, and images; no build tools. Design your own in Calliope's Atelier (Settings → Appearance → Design a theme), where the whole app wears your draft as you work and Calliope proposes changes for you to try; manage them with `npx quilltap themes` (which can also write a blank bundle with `themes create`), or install signed bundles from a registry in Settings.
 
 ---
 

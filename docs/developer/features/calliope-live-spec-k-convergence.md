@@ -507,3 +507,65 @@ nowhere; both lines go. `DEAD-CODE-REPORT.md`'s claim that
   `calliope-live.md`.
 - **Checks:** `npm run lint` passes (CLI engine current), `npx tsc`
   passes, `npm run test:unit` 1,520 suites / 21,732 tests pass.
+
+### Stage 3 — documentation and Calliope's brief
+
+- **Her brief** (`lib/calliope/system-prompt-builder.ts`): a new last
+  paragraph, `calliopeSightBrief(readsImages)`, says she does not see the
+  app itself, only the draft as her tools read it, and that when she cannot
+  tell from the draft what the author is looking at she does not guess but
+  asks: for a screenshot (and, when one comes, says what part of the app she
+  takes it to be and what she sees wrong) when her model reads images, for
+  a description when it does not. The sentence "You do not see the app
+  itself…" moved out of the tools paragraph into it; nothing else changed.
+  `readsImages` is `profileCanReceiveAttachment(connectionProfile,
+  'image/png')`, decided per turn in the persona's `buildSystemPrompt`
+  (logged). Snapshot updated; a new test holds both forms.
+- **Live trial, V4test, 2026-11-16** (gpt-5 unless noted). A draft
+  `spec-k-trial` set `--theme-primary` to a deep navy with no dark value;
+  in dark mode the home greeting's "Local User!" and the "View all →" links
+  all but vanished. Screenshot taken from the app (the Atelier's preview
+  over the home tab), attached through `?action=upload`, sent with "This is
+  what I see with the theme on. That bit looks wrong to me — please fix
+  it." The log shows `readsImages: true` and the image `sent: 1`. She read
+  the draft, looked up the colour group and the three component tokens,
+  measured four pairs and proposed "Dark contrast fix: primary text and
+  links" (primary-foreground white in dark; `--qt-link-color` to the ring
+  colour in dark), which mends all four failing pairs (1.13:1 → 16.14:1 and
+  1.05–1.13:1 → 5.3–5.7:1). She did not, as the brief asks, say what she
+  saw before proposing; asked afterwards, she named "Local User!" in the
+  greeting and the "View all →" links, and the primary pills — so she read
+  the picture. Two further checks on a clean draft with "The thing in the
+  top corner looks off to me": gpt-5 asked for a screenshot with some
+  surrounding context; the DeepSeek profile (no image upload,
+  `readsImages: false`) said it could not see the screen and asked which
+  corner and what was wrong. Both trial drafts were deleted afterwards.
+  Without a picture and with a fault the contrast report names, she needs
+  no screenshot and asks for none (first turn of the trial).
+- **`help/theme-editor.md`** ("Pictures and conversations"): she cannot see
+  the app; to show her a problem, screenshot what looks wrong with a little
+  around it, attach it, say what you want changed; she will ask for one
+  when the draft does not tell her; an engine that cannot read pictures
+  asks for a description instead.
+- **`help/themes.md`**: the earlier-format note now sends you to the
+  Atelier; "Creating a theme" begins in the Atelier, with
+  `npx quilltap themes create "My Theme"` second (what it writes, validate,
+  zip, install or **Open a theme file**); the icon catalogue is the
+  Atelier's **Icons** section; the CLI block's `create` comment is
+  restated.
+- **`THEME_DEVELOPMENT.md`**: "Quick start" begins in the Atelier, the CLI
+  second, with `blankThemeBundle` / `themeIdFromName` named; the styled-by
+  paragraph says the qt-* layer is compiled in memory by
+  `scripts/lib/qt-components-css.mjs` (it still named the package's file).
+- **`README.md`** (Themes) and **`DEVELOPMENT.md`** (the `packages/` tree
+  now lists `quilltap/`; "Theme Development" starts in the Atelier and uses
+  `quilltap themes create`).
+- **Checked against V4test:** **Settings → Appearance → Design a theme**
+  (`ThemeSelector.tsx`), **Open a theme file**, the Atelier's **Icons**
+  section, a blank draft carrying `$schema` and keeping it through a
+  tokens save, and her two answers above.
+- **Left for Stage 4:** `CLAUDE.md`, `.claude/commands/`,
+  `DEAD-CODE-REPORT.md`, `calliope-live.md`, the storybook-CSS refactor
+  notes, ROADMAP.
+- **Checks:** `npm run lint` passes, `npx tsc` passes, `npm run test:unit`
+  1,520 suites / 21,733 tests pass.

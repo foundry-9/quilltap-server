@@ -204,6 +204,15 @@ describe('her prompt', () => {
     expect(prompt).not.toMatch(/\bAI\b|assistant product|language model|LLM|Claude|GPT|OpenAI|Anthropic|PostCSS|zod|JSON Schema/i)
     expect(prompt).toMatch(/semantic token before a component token/i)
   })
+
+  it('asks for a screenshot only when her model reads images, and otherwise for a description', () => {
+    const seeing = buildCalliopeSystemPrompt({ draft: { id: 'rains', name: 'Rains' }, readsImages: true })
+    expect(seeing).toMatch(/do not see the app itself/)
+    expect(seeing).toMatch(/ask them for a screenshot/)
+    expect(prompt).toMatch(/do not see the app itself/)
+    expect(prompt).not.toMatch(/screenshot/)
+    expect(prompt).toMatch(/ask them to describe it/)
+  })
 })
 
 // ============================================================================

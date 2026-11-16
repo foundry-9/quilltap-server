@@ -4,6 +4,12 @@
 
 ### 4.14-dev
 
+#### Calliope and theme docs: no packages, and screenshots (Calliope Live, Spec K)
+
+- Calliope's prompt adds a paragraph on what she can see: not the app, only the draft. When the draft does not show what the author means, she asks for a screenshot if her model reads images (`profileCanReceiveAttachment`), and for a description if it does not. New `calliopeSightBrief`; snapshot updated
+- `help/theme-editor.md`: she cannot see the app, so attach a screenshot of what looks wrong
+- `help/themes.md`, `THEME_DEVELOPMENT.md`, `DEVELOPMENT.md` and `README.md` point to the Atelier and `quilltap themes create` instead of `create-quilltap-theme`, and to the Atelier's Icons section instead of the Storybook story. `THEME_DEVELOPMENT.md` now says where the styled-by table's compiled CSS comes from
+
 #### Themes: `create-quilltap-theme` retired; `quilltap themes create` writes the bundle (Calliope Live, Spec K)
 
 - New `lib/themes/blank-bundle.ts`: `blankThemeBundle` (a blank theme's `theme.json` and `tokens.json`) and `themeIdFromName`. The Atelier's `createDraft` and the CLI both use it; `draftIdFromName` is now an alias

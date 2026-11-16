@@ -44,7 +44,7 @@ Neither is registered, and neither is deleted on your behalf. Instead each is li
 
 **If your chosen theme was one of these**, Quilltap returns quietly to the Default theme and says so once, in a notice at the corner of the screen. Pick another theme from the shelf whenever you please; your colour mode is untouched.
 
-**To wear such a theme again**, it must be remade in the current format — its author is the best person for the job. To start one of your own, `npx create-quilltap-theme my-theme` scaffolds a fresh bundle.
+**To wear such a theme again**, it must be remade in the current format — its author is the best person for the job. To start one of your own, open [Calliope's Atelier](theme-editor.md) (**Settings → Appearance → Design a theme**) and begin a new draft, or copy any theme you have.
 
 ### Theme Bundles (.qtap-theme)
 
@@ -315,13 +315,13 @@ The simplest way to install a custom theme:
 
 ### Creating Your Own Theme
 
-The gentlest way in is [Calliope's Atelier](theme-editor.md) (**Settings → Appearance → Design a theme**): start from a blank canvas or a copy of any theme you have, choose its colours while the whole of Quilltap wears the result, and install it with a press of a button. For everything the Atelier does not yet edit, or if you prefer a text editor, themes are made by hand in the `.qtap-theme` bundle format:
+The way in is [Calliope's Atelier](theme-editor.md) (**Settings → Appearance → Design a theme**): start from a blank canvas or a copy of any theme you have, choose its colours while the whole of Quilltap wears the result, ask Calliope herself for a hand, and install it with a press of a button. Should you prefer a text editor for some of the work, the same blank theme can be had at the command line:
 
 ```bash
-npx create-quilltap-theme my-theme
+npx quilltap themes create "My Theme"
 ```
 
-This scaffolds a directory holding `theme.json` (the particulars of the thing), `tokens.json` (its palette, its type and its proportions) and `styles.css` (for the flourishes no token covers), together with a short README — no build tools, no npm packages, no TypeScript. Both JSON files name their published schema, so any editor of modern habits will complete and correct each field as you type. Edit to taste, check your work with `npx quilltap themes validate ./my-theme`, then zip and install.
+This writes a directory, `./my-theme/`, holding `theme.json` (the particulars of the thing) and `tokens.json` (its palette, its type and its proportions) — precisely the pair a new draft in the Atelier begins with, and no build tools, npm packages or TypeScript anywhere about it. Both files name their published schema, so any editor of modern habits will complete and correct each field as you type; a `styles.css`, for the flourishes no token covers, may be added and named in `theme.json` as `stylesPath`. Check your work with `npx quilltap themes validate ./my-theme`, zip the directory's contents as `my-theme.qtap-theme`, and either install it or open it in the Atelier with **Open a theme file** to carry on there.
 
 A theme states only what it changes; everything it leaves unsaid keeps the house default. Your stylesheet is written without the theme's name — Quilltap confines every rule to your theme when it loads it — and it should address the hooks the house publishes for the purpose rather than whatever happens to be lying about in the markup, for the latter is apt to be moved without notice. The validator will point out, by file and line, any rule that has strayed. The full authoring guide, the catalogue of tokens and the catalogue of hooks are kept in the developer documentation as `THEME_DEVELOPMENT.md`, `THEME_TOKENS.md` and `THEME_HOOKS.md`.
 
@@ -346,7 +346,7 @@ In your `theme.json`, add an `icons` record mapping each icon's name to a bundle
 }
 ```
 
-Names must correspond to entries in Quilltap's canonical icon list — the complete catalogue appears in the **Icons** story of `@quilltap/theme-storybook`, and in the developer documentation's `ICON_INVENTORY.md`. Icons not declared in the map are left at their defaults; the entire list need not be addressed, only those whose default glyph the theme wishes to improve upon.
+Names must correspond to entries in Quilltap's canonical icon list — the complete catalogue appears in the Atelier's **Icons** section, searchable by name, and in the developer documentation's `ICON_INVENTORY.md`. Icons not declared in the map are left at their defaults; the entire list need not be addressed, only those whose default glyph the theme wishes to improve upon.
 
 #### Two Modes of Replacement
 
@@ -424,7 +424,7 @@ npx quilltap themes uninstall my-theme
 # Export any theme as a .qtap-theme file
 npx quilltap themes export earl-grey --output ./my-export.qtap-theme
 
-# Scaffold a new theme (delegates to create-quilltap-theme)
+# Write a blank theme bundle to ./sunset/
 npx quilltap themes create sunset
 ```
 
