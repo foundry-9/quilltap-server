@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Themes: `@quilltap/theme-storybook` retired (Calliope Live, Spec K)
+
+- Removed `packages/theme-storybook/` and its `publish-theme-storybook` release job. The specimen gallery and the theme editor replace it
+- The qt-* component layer is no longer compiled to a tracked file: `scripts/lib/qt-components-css.mjs` compiles it in memory for the styled-by table. Removed `generate:storybook-css`, `scripts/generate-storybook-css.mjs` and the `check-storybook-css` lint gate; `check-theme-references` now does the compile
+- `styled-by.generated.json` records its first source as `app/styles/qt-components`; every hook row is unchanged
+- Comments, the `check-qt-classes` message, the About page and `.dockerignore` no longer mention the package or Storybook
+
 #### Calliope: an assistant in the theme editor (Calliope Live, Spec J)
 
 - New chat type `calliope`: a conversation with Calliope about one theme draft, named by the new nullable column `chats.themeDraftId` (migration `add-calliope-theme-draft-field-v1`; DDL, export schema and both chat Zod schemas updated). Help-like: no memories, no Concierge, no auto-title fold, and kept out of global search (`isListedInGlobalSearch`). Deleting a draft deletes its conversations

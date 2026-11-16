@@ -14,7 +14,7 @@
  *   qt-green-room-character* — one character's consultation line
  *   qt-green-room-log*       — the activity log
  *
- * Plain CSS (no @apply) so the theme-storybook mirror is the same text.
+ * Plain CSS (no @apply).
  * Every colour reads a --qt-green-room-* hook with a token fallback.
  *
  * Component: app/salon/[id]/components/GreenRoomPanel.tsx

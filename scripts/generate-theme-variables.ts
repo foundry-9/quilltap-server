@@ -9,7 +9,8 @@
  *
  * `npm run lint` runs scripts/check-theme-variables.ts, which fails while the
  * committed file differs from what this writes. After regenerating, run
- * `npm run generate:storybook-css` too (the storybook mirror includes it).
+ * `npm run generate:theme-styled-by` too (Calliope's styled-by table reads
+ * the compiled qt-* layer, which includes it).
  */
 
 import { writeFileSync } from 'node:fs';

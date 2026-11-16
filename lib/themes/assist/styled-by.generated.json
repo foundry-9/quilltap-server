@@ -1,6 +1,6 @@
 {
  "catalogueVersion": 1,
- "sources": ["packages/theme-storybook/src/css/qt-components.css","app/globals.css"],
+ "sources": ["app/styles/qt-components","app/globals.css"],
  "hooks": {
   "qt-app-layout": [
    {"when":"","properties":[{"property":"background","vars":[],"literal":true},{"property":"background-color","vars":["--theme-background"]},{"property":"color","vars":["--theme-foreground"]},{"property":"display","vars":[],"literal":true},{"property":"height","vars":[],"literal":true}]}

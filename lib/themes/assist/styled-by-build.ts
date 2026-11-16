@@ -35,11 +35,15 @@ export const STYLED_BY_REGENERATE_COMMAND = 'npm run generate:theme-styled-by';
 
 /**
  * The stylesheets the table is read from, in order: the qt-* component layer
- * as Tailwind compiles it (the committed, lint-checked build that ships in
- * `@quilltap/theme-storybook`, so every `@apply` is already a declaration),
- * then the app's global sheet.
+ * (`app/styles/qt-components/`) as Tailwind compiles it — compiled in memory
+ * by `scripts/lib/qt-components-css.mjs`, so every `@apply` is already a
+ * declaration — then the app's global sheet, read as written. `path` is what
+ * the table records.
  */
-export const STYLED_BY_SOURCES: readonly string[] = ['packages/theme-storybook/src/css/qt-components.css', 'app/globals.css'];
+export const STYLED_BY_SOURCES: ReadonlyArray<{ path: string; compiled?: true }> = [
+  { path: 'app/styles/qt-components', compiled: true },
+  { path: 'app/globals.css' },
+];
 
 /** Interaction pseudo-classes, as the inspector groups them. */
 const INTERACTIONS: ReadonlyArray<[RegExp, string]> = [

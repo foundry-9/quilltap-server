@@ -27,29 +27,36 @@ interface Generated {
   command: string;
 }
 
-const files: Generated[] = [
-  ...GENERATED_THEME_SCHEMAS.map((s) => ({ path: s.path, expected: s.render(), command: THEME_SCHEMAS_REGENERATE_COMMAND })),
-  { path: THEME_TOKENS_DOC_PATH, expected: renderThemeTokensDoc(), command: THEME_TOKENS_DOC_REGENERATE_COMMAND },
-  { path: STYLED_BY_TABLE_PATH, expected: expectedStyledByTable(ROOT).text, command: STYLED_BY_REGENERATE_COMMAND },
-];
+async function main(): Promise<void> {
+  const files: Generated[] = [
+    ...GENERATED_THEME_SCHEMAS.map((s) => ({ path: s.path, expected: s.render(), command: THEME_SCHEMAS_REGENERATE_COMMAND })),
+    { path: THEME_TOKENS_DOC_PATH, expected: renderThemeTokensDoc(), command: THEME_TOKENS_DOC_REGENERATE_COMMAND },
+    { path: STYLED_BY_TABLE_PATH, expected: (await expectedStyledByTable(ROOT)).text, command: STYLED_BY_REGENERATE_COMMAND },
+  ];
 
-let failed = false;
-for (const file of files) {
-  const full = path.join(ROOT, file.path);
-  const committed = existsSync(full) ? readFileSync(full, 'utf8') : null;
-  if (committed === file.expected) {
-    console.log(`check-theme-references: ${file.path} is current.`);
-    continue;
+  let failed = false;
+  for (const file of files) {
+    const full = path.join(ROOT, file.path);
+    const committed = existsSync(full) ? readFileSync(full, 'utf8') : null;
+    if (committed === file.expected) {
+      console.log(`check-theme-references: ${file.path} is current.`);
+      continue;
+    }
+    failed = true;
+    if (committed === null) {
+      console.error(`check-theme-references: ${file.path} is missing: run \`${file.command}\`.`);
+      continue;
+    }
+    const a = committed.split('\n');
+    const b = file.expected.split('\n');
+    let line = 0;
+    while (line < a.length && line < b.length && a[line] === b[line]) line++;
+    console.error(`check-theme-references: ${file.path} is stale (first difference at line ${line + 1}): run \`${file.command}\`.`);
   }
-  failed = true;
-  if (committed === null) {
-    console.error(`check-theme-references: ${file.path} is missing: run \`${file.command}\`.`);
-    continue;
-  }
-  const a = committed.split('\n');
-  const b = file.expected.split('\n');
-  let line = 0;
-  while (line < a.length && line < b.length && a[line] === b[line]) line++;
-  console.error(`check-theme-references: ${file.path} is stale (first difference at line ${line + 1}): run \`${file.command}\`.`);
+  if (failed) process.exit(1);
 }
-if (failed) process.exit(1);
+
+main().catch((err: unknown) => {
+  console.error(err);
+  process.exit(1);
+});

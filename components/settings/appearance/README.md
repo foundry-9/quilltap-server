@@ -60,7 +60,7 @@ appearance/
 - `.svg` overrides use mask mode (tinted by `currentColor`); `.webp` and other non-SVG formats use image mode (full color as authored)
 - `brand` is always image mode regardless of extension
 - Overrides are injected into the same `<style>` block as tokens — no reload, live theme-switch applies them instantly
-- Canonical icon names and the override recipe are documented in `docs/developer/ICON_INVENTORY.md` and the `@quilltap/theme-storybook` Icons story
+- Canonical icon names and the override recipe are documented in `docs/developer/ICON_INVENTORY.md` and listed in full in the theme editor's Icons section
 
 ### Theme Browser (Registry)
 - Browse themes from configured remote registries

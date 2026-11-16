@@ -16,8 +16,7 @@
  *   qt-settings-advanced-divider — the "Advanced" rule inside a group
  *   qt-settings-provider-card    — one provider's card in Connections → Providers
  *
- * Plain CSS (no @apply) so the theme-storybook mirror is the same text. Every
- * colour reads a --qt-settings-* hook with a token fallback.
+ * Plain CSS (no @apply). Every colour reads a --qt-settings-* hook with a token fallback.
  *
  * Component: app/settings/SettingsView.tsx
  */

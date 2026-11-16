@@ -417,3 +417,48 @@ nowhere; both lines go. `DEAD-CODE-REPORT.md`'s claim that
   blank.
 - Baseline gate times: `check-storybook-css.mjs` 0.23 s,
   `check-theme-references.ts` 0.32 s.
+
+### Stage 1 — `theme-storybook` retired (2026-11-16)
+
+- **The compile step** is `scripts/lib/qt-components-css.mjs`
+  (`compileQtComponentsCss(root)`): the same Tailwind compile against
+  `app/styles/theme-tokens.css` and the same autoprefix, returning the text.
+  What existed only for readers of the shipped file is gone: the comment
+  markers that carried section banners through the compiler, the generated
+  header and the `@layer` order line. None of it reaches a rule's
+  declarations. The unit test is
+  `__tests__/unit/scripts/qt-components-css.test.ts`; it keeps the
+  compile-shape case and drops the comment-banner case.
+  `scripts/lib/compile-app-css.mjs` was considered and not used: it scans
+  markup for candidates, which would add utility rules to the table.
+- **The styled-by table.** `STYLED_BY_SOURCES` is now
+  `[{ path: 'app/styles/qt-components', compiled: true }, { path: 'app/globals.css' }]`;
+  `scripts/lib/styled-by-sources.ts` compiles the first in memory, so
+  `expectedStyledByTable` is async and its two callers
+  (`generate-theme-styled-by.ts`, `check-theme-references.ts`) run in an
+  async `main`. Regenerated: **every hook row is byte for byte the same**
+  (219 hooks, 194 selected, 171 reading a token); the one changed line is
+  the header, as foreseen in Stage 0 —
+  `"sources": ["app/styles/qt-components","app/globals.css"]`.
+- **Removed:** `scripts/generate-storybook-css.mjs`,
+  `scripts/check-storybook-css.mjs`, `scripts/lib/storybook-css.mjs`, the
+  `generate:storybook-css` script and its lint entry, `packages/theme-storybook/`,
+  and the `publish-theme-storybook` job in `release.yml` (nothing else
+  `needs` it).
+- **Lint time:** before, `check-storybook-css` 0.23 s +
+  `check-theme-references` 0.32 s; after, `check-theme-references` 0.53 s
+  alone. The whole `npm run lint` took 38 s.
+- **Decision 7:** nothing needed a home (Stage 0).
+- **Rewritten:** the comments in `app/globals.css`,
+  `app/styles/theme-tokens.css`, the four plain-CSS families
+  (`_green-room`, `_intervention`, `_settings`, `_storyteller`),
+  `components/chat/FormattingToolbar.tsx`,
+  `scripts/generate-theme-variables.ts` (now points at
+  `generate:theme-styled-by`); the message in `scripts/check-qt-classes.mjs`;
+  the About page's "Testing" line; `.dockerignore`;
+  `components/settings/appearance/README.md` and
+  `components/settings/chat-settings/README.md`.
+- **Left for later stages:** `CLAUDE.md`, `.claude/commands/`, and the
+  docs, as the spec orders them.
+- **Checks:** `npm run lint` passes, `npx tsc` passes, `npm run test:unit`
+  1,520 suites / 21,731 tests pass.

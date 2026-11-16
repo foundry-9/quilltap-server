@@ -82,7 +82,7 @@ interface CharPickerToolbarButtonProps {
  * `qt-formatting-button-emoji`: that class does nothing emoji-specific — it
  * sizes a GLYPH label the way the arrow-glyph buttons are sized, which is
  * exactly what Ω needs too. Renaming it to something neutral would be a `qt-*`
- * change and its theme-storybook mirror, for no rendered difference.
+ * change that every theme styling it must follow, for no rendered difference.
  */
 function CharPickerToolbarButton({
   profile,

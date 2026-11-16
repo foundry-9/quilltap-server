@@ -15,11 +15,19 @@ import { STYLED_BY_TABLE_PATH } from '../lib/themes/assist/styled-by-build';
 import { expectedStyledByTable } from './lib/styled-by-sources';
 
 const ROOT = path.resolve(__dirname, '..');
-const { table, text } = expectedStyledByTable(ROOT);
-writeFileSync(path.join(ROOT, STYLED_BY_TABLE_PATH), text);
 
-const withToken = Object.values(table.hooks).filter((rows) => rows.some((r) => r.properties.some((p) => p.vars.length > 0))).length;
-const covered = Object.keys(table.hooks).length;
-const total = HOOK_CATALOGUE.hooks.length;
-console.log(`generate-theme-styled-by: wrote ${STYLED_BY_TABLE_PATH}`);
-console.log(`  ${total} hooks: ${covered} selected by an app rule, ${withToken} of them reading at least one token; ${total - withToken} with none.`);
+async function main(): Promise<void> {
+  const { table, text } = await expectedStyledByTable(ROOT);
+  writeFileSync(path.join(ROOT, STYLED_BY_TABLE_PATH), text);
+
+  const withToken = Object.values(table.hooks).filter((rows) => rows.some((r) => r.properties.some((p) => p.vars.length > 0))).length;
+  const covered = Object.keys(table.hooks).length;
+  const total = HOOK_CATALOGUE.hooks.length;
+  console.log(`generate-theme-styled-by: wrote ${STYLED_BY_TABLE_PATH}`);
+  console.log(`  ${total} hooks: ${covered} selected by an app rule, ${withToken} of them reading at least one token; ${total - withToken} with none.`);
+}
+
+main().catch((err: unknown) => {
+  console.error(err);
+  process.exit(1);
+});

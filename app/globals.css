@@ -72,8 +72,8 @@
 
 /*
  * Tailwind token map (`@theme inline`) and the class-based dark variant.
- * They live in their own file so scripts/generate-storybook-css.mjs compiles
- * the qt-* layer for @quilltap/theme-storybook against exactly the same map.
+ * They live in their own file so scripts/lib/qt-components-css.mjs compiles
+ * the qt-* layer (for Calliope's styled-by table) against exactly the same map.
  */
 @import "./styles/theme-tokens.css";
 
@@ -100,8 +100,8 @@
  * lib/toast.tsx applies `animation: slideInUp 0.3s ease-out` inline, but the
  * keyframes lived nowhere (and the `animate-in …` classes it also named belong
  * to tailwindcss-animate, which this app doesn't load), so toasts appeared
- * instantly. Define the keyframes here as a plain app-level rule — no qt-*
- * class, so no theme-storybook mirror is owed. Combines the intended fade with
+ * instantly. Define the keyframes here as a plain app-level rule, not a qt-*
+ * class. Combines the intended fade with
  * a short slide up from below (slide-in-from-bottom-3 ≈ 0.75rem).
  */
 @keyframes slideInUp {
@@ -128,7 +128,7 @@
  * through the CSS Custom Highlight API (app/salon/[id]/hooks/useSearchHighlight.ts),
  * so no markup is injected into React-owned message DOM. Same tokens as the
  * search results' <mark class="qt-highlight">; a named highlight, not a qt-*
- * class, so no theme-storybook mirror is owed.
+ * class.
  */
 ::highlight(quilltap-conversation-search) {
   background-color: var(--qt-highlight-bg);

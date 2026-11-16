@@ -226,8 +226,8 @@ const total = missing.reduce((n, [, sites]) => n + sites.length, 0)
 console.error(
   `\ncheck-qt-classes: ${missing.length} qt-* class name(s) used in ${total} place(s) resolve to no CSS rule.\n` +
     `These render as nothing at all — no error, no warning, just an element that keeps\n` +
-    `whatever it inherited. Define them in app/styles/qt-components/_utilities.css (and\n` +
-    `mirror into packages/theme-storybook), or change the markup to a class that exists.\n` +
+    `whatever it inherited. Define them in app/styles/qt-components/_utilities.css,\n` +
+    `or change the markup to a class that exists.\n` +
     `A variant form (hover:, focus:, disabled:, …) needs its own hand-written escaped\n` +
     `selector — Tailwind generates none for classes declared in @layer utilities.\n`
 )
