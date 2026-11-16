@@ -1,16 +1,16 @@
 # Calliope Live — Spec G: custom CSS, highlighted source and import
 
-**Status:** ready to run, 2026-11-15 (design decisions confirmed by the human).
-Implements the fourth slice of Phase 2 of [calliope-live.md](calliope-live.md).
+**Status:** implemented 4.14-dev, 2026-11-16 (Stages 0–1 in `eaa95272f`, Stage 2 in `c2ddd35ad`, Stage 3 in `cdd97d3b3`, Stage 4 documentation; user docs [help/theme-editor.md](../../../../help/theme-editor.md) and [help/scriptorium.md](../../../../help/scriptorium.md)).
+Implements the fourth slice of Phase 2 of [calliope-live.md](../calliope-live.md).
 Read, before starting:
 
-- Spec F, [calliope-live-spec-f-assets-and-manifest.md](complete/calliope-live-spec-f-assets-and-manifest.md),
+- Spec F, [calliope-live-spec-f-assets-and-manifest.md](calliope-live-spec-f-assets-and-manifest.md),
   especially "For Spec G" in its implementation notes;
-- Spec E, [calliope-live-spec-e-typed-controls.md](complete/calliope-live-spec-e-typed-controls.md),
+- Spec E, [calliope-live-spec-e-typed-controls.md](calliope-live-spec-e-typed-controls.md),
   "For Specs F and G";
-- Spec B, [calliope-live-spec-b-hook-catalogue.md](complete/calliope-live-spec-b-hook-catalogue.md),
-  and the generated [THEME_HOOKS.md](../THEME_HOOKS.md);
-- [THEME_DEVELOPMENT.md](../THEME_DEVELOPMENT.md), the custom CSS rules;
+- Spec B, [calliope-live-spec-b-hook-catalogue.md](calliope-live-spec-b-hook-catalogue.md),
+  and the generated [THEME_HOOKS.md](../../THEME_HOOKS.md);
+- [THEME_DEVELOPMENT.md](../../THEME_DEVELOPMENT.md), the custom CSS rules;
 - `lib/themes/engine/scope.ts` and `app/salon/[id]/components/DocumentPane.tsx`.
 
 **Scope:** `quilltap-server` only.
@@ -307,3 +307,104 @@ found that the spec did not foresee, and the commands run with their
 results. At the end, add an "Implementation notes" section to this file,
 with what Spec H should know — in particular how inspect mode could hand a
 hook or a token to the CSS section and the token rows.
+
+## Implementation notes
+
+Done in four commits: Stages 0–1 (`eaa95272f`), Stage 2 (`c2ddd35ad`),
+Stage 3 (`cdd97d3b3`) and Stage 4 (documentation).
+
+### What differs from this spec
+
+- **A reusing tokenizer replaces Lexical's highlighter pass.**
+  `@lexical/code-prism` rebuilt every highlighted node on each keystroke
+  (about 62,000 nodes in a dense 2,000-line file, 159 ms a key).
+  `components/code-editor/tokenizer.ts` colours the same way but rebuilds
+  only the changed stretch: a realistic 2,000-line `tokens.json` types at
+  about 16 ms a key in Lexical's development build, 10 ms in production. The
+  package is still the dependency the proposal names; only its tokenizer
+  output is used.
+- **Prism loads in manual mode** (`prism-manual.ts`, imported first).
+  Otherwise Prism rewrites every `code[class*="language-"]` on the page on
+  load, including the Salon's Markdown code blocks, which React owns.
+- **Eight `--qt-code-token-*` theme tokens** carry the highlight colours,
+  each the theme's code text colour mixed with a hue, with contrast pairs.
+  Every bundled theme passes in light and dark (lowest: Art Deco's comment
+  colour in light, 5.30:1). The token count pinned in `model.test.ts` went
+  from 288 to 296.
+- **Mixed line endings.** Lexical drops the carriage return, so a file
+  mixing CRLF and LF cannot be kept exactly once edited: an edited mixed
+  file is saved with whichever ending it had more of. A file opened and not
+  edited is never sent back, so it is untouched (decision 5 holds for every
+  file that is not edited, and for every file with consistent endings).
+- **The stylesheet write lives in `operations.ts`, not the text-document
+  write.** Quilltap General stores a `.css` file as a binary upload, not a
+  native text document, so `writeDocument`'s own conflict check cannot save
+  it. `writeDraftStyles` runs on the per-draft queue the other operations
+  use, compares the revision, then writes the bytes. A write from outside
+  `lib/themes/drafts/` landing between the check and the write would not be
+  caught; nothing does that today.
+- **An import keeps the bundle's version**; a copy still starts at `0.1.0`.
+- **The whole last good compile is held, not only the custom part.** While a
+  draft has any error the server compiles nothing, font faces and icons
+  included, so holding only the custom CSS would have dropped fonts and
+  icons from the preview while the CSS was broken. A font removed while the
+  CSS is broken stays in the preview until the CSS is mended.
+- **Document Mode emits after 150 ms, the theme editor after 400 ms.** The
+  pane flushes on blur and on close; `doc_focus` scrolls to the line
+  (`revealLine(line, { focus: false })`) with no highlight overlay or gutter
+  eye, which belong to the Markdown editor.
+
+### Found along the way
+
+- **CSS in a database store is view-only in Document Mode.** Database stores
+  (Quilltap General among them) edit only native text — Markdown, text,
+  JSON, JSONL (`detectNativeText`) — and `viewTargetFor` shows every other
+  file in the viewer. So a draft's `styles.css` opens read-only there, while
+  CSS in a filesystem store is editable. The database store's write path
+  refuses it too (`writeDatabaseDocument`, "only accept text documents"), so
+  a character's `doc_write_file` / `doc_str_replace` cannot write a draft's
+  stylesheet either. The Custom CSS section is the one way to edit it. The
+  fix — `'css'` as a native text type (the `fileType` lists, the export
+  schema enum, `DDL.md`, a migration turning stored `.css` files into text
+  documents, and `writeDraftStyles` moving onto `writeDocument` with its
+  conflict check) — is deferred by the human's decision (2026-11-16) to the
+  LLM co-development of themes, which needs characters to write CSS.
+- **The Atelier usually sits in a narrow split pane**, so the CSS section
+  lays out side by side by container query (`@container` / `@3xl:`), not by
+  viewport. Spec E's navigation grid still keys off the viewport.
+- **Enter keeps the line's indent but does not add one after `{`.** That is
+  decision 4's "no feature beyond highlighting and line markers", and it is
+  noticeable when writing CSS.
+- No security finding: an archive's climbing paths, symlinks, oversized
+  contents and refused at-rules are turned away before anything is written.
+
+### For Spec H (specimen gallery, inspect mode)
+
+- **Handing a hook to the CSS section.** The reference panel's insert path is
+  the one to reuse: `StylesSection` holds a `CodeEditorHandle` and calls
+  `insertAtCursor(text)`. Inspect mode should not build selectors itself —
+  `hookSelectors(hook)` (`components/theme-editor/assets/styles-model.ts`)
+  lists every way a catalogued hook can be written (the class, each variant
+  value, each state), and `HOOKS` / `lib/themes/hooks/` maps an element's
+  `qt-*` class to its `HookDef`. A natural shape: inspect resolves the
+  element to a `HookDef` and the variant and state values present on it,
+  picks the matching selector from `hookSelectors`, opens the Custom CSS
+  section (`goToSection` in `DraftEditor.tsx`), and inserts through a small
+  imperative handle on `StylesSection` (an `insertRef` beside the existing
+  `flushRef`). With no stylesheet yet, it should offer **Begin a
+  stylesheet** (`set-styles-file`) first rather than create one silently.
+- **Handing a token to the token rows.** Token rows have no stable DOM id
+  today; the editor narrows by its search (`query` in `DraftEditor.tsx`) and
+  opens sections by id. Inspect mode can set the search to the token name
+  and open its section, or Spec H can give `TokenRow` an id from the token
+  name and scroll to it. The computed value in force for the current mode is
+  already in `ResolvedTheme` (`tokenEntries` in `styles-model.ts` reads it),
+  so an inspector panel can show "this colour is `--theme-card`, value …"
+  without measuring.
+- **Issues are located.** `DraftIssue` carries `file` and `line`; an
+  inspector that finds a rule from `styles.css` affecting an element can
+  jump to it with `revealLine`, as the issue list's **Line N** does.
+- **The preview boundary holds.** Everything the editor shows (and any
+  inspector overlay) should sit inside a nested element wearing another
+  theme, so the `@scope` boundary keeps custom CSS off it, as the Atelier
+  panel already does.

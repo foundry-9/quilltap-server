@@ -36,9 +36,10 @@ not a settled design.
   — third slice of Phase 2: font and image upload, icon overrides,
   subsystems and the rest of the manifest (implemented 4.14-dev; user docs
   [help/theme-editor.md](../../../help/theme-editor.md)).
-- [calliope-live-spec-g-custom-css.md](calliope-live-spec-g-custom-css.md)
+- [calliope-live-spec-g-custom-css.md](complete/calliope-live-spec-g-custom-css.md)
   — fourth slice of Phase 2: the custom CSS section, JSON and CSS
-  highlighting, and opening a theme file as a draft (ready to run).
+  highlighting, and opening a theme file as a draft (implemented 4.14-dev;
+  user docs [help/theme-editor.md](../../../help/theme-editor.md)).
 
 **Scope:** `quilltap-server` (v4) only. Porting to v5 is a separate concern and
 does not shape decisions here.
@@ -64,7 +65,7 @@ result. That is part of the project, not a side effect.
 |---|---|---|
 | In the main app, or a separate npm-installable utility? | **In the main app**, as a Calliope feature. | The only faithful preview is the real UI with real content. Electron and Docker users have no Node toolchain. The registry, bundle loader, installed-theme storage and font/asset routes already exist in-app. |
 | Use Storybook as the basis? | **No.** | Storybook is a developer tool needing a dev server; its controls are built for component props, not for authoring a theme document. Its stories are hand-written markup covering a fraction of the UI. |
-| What edits a theme's JSON and CSS as text? | **Lexical, with its own code highlighting switched on for JSON and CSS** (2026-11-14). Revisit if theme editing becomes common. | No new dependency. `@lexical/code` is already installed and its nodes are registered in Document Mode; today those files open in a plain textarea. A dedicated code editor would add completion and lint markers, which can wait. |
+| What edits a theme's JSON and CSS as text? | **Lexical, with its own code highlighting switched on for JSON and CSS** (2026-11-14). Revisit if theme editing becomes common. | Needed one package after all: `@lexical/code-prism` (0.53, MIT), where Lexical 0.53 keeps the Prism highlighter; `@lexical/code` alone has none. Built in Spec G as `components/code-editor/`, used by the theme editor's CSS section and by Document Mode for `.json` and `.css`. A dedicated code editor would add completion and lint markers, which can wait. |
 | Where does a theme being worked on live? | **In Quilltap General, under `Themes/<id>/`** (2026-11-14). Its images are kept as the author supplied them; an installed theme carries WebP. | A draft is the user's work, so it belongs with the user's files: visible in the Scriptorium, editable in Document Mode, reachable by characters, backed up with the store. |
 | What to keep from Storybook? | The **specimen-sheet idea**. | Build specimens as in-app components; Storybook may consume the same components so there is one copy of the markup. |
 | Where does the logic live? | A **framework-free engine** in `lib/themes/`, with the editor UI as a thin layer. | The `quilltap themes` CLI, the bundle loader and the editor then share one source of truth for model, validation, CSS emission and packing. |

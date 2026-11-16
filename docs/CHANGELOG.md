@@ -4,6 +4,14 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live Spec G complete (Stage 4)
+
+- `docs/developer/API.md`: `?action=import` on `/api/v1/theme-drafts`, the stylesheet `PUT` body, `set-styles-file` / `clear-styles-file`, located issues and `styles` in the draft detail
+- `THEME_DEVELOPMENT.md`: writing custom CSS in the editor, importing a `.qtap-theme`, and why a draft's `styles.css` is view-only in Document Mode
+- `CLAUDE.md`: `components/code-editor/` as the one highlighted source editor and its fidelity rule; the stylesheet's save pattern; import as a draft source
+- `help/theme-editor.md`: draft JSON files are highlighted in Document Mode; the stylesheet is edited in the Custom CSS section
+- Spec G marked implemented with implementation notes (including notes for Spec H) and moved to `features/complete/`; the proposal's text-editing decision notes the one package it needed
+
 #### Document Mode: code editor for JSON and CSS (Calliope Live, Spec G Stage 3)
 
 - Document Mode opens `.json` and `.css` files in the shared code editor (highlighting, line numbers, exact bytes). Other non-Markdown files, and JSON or CSS files over 100,000 characters, keep the textarea. The Markdown branch is unchanged

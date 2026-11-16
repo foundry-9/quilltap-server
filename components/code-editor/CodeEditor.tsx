@@ -4,7 +4,7 @@
  * CodeEditor — a plain-text Lexical editor for one JSON or CSS file, with
  * Prism highlighting, line numbers, problem markers and keyboard indentation.
  *
- * Decisions of record (docs/developer/features/calliope-live-spec-g-custom-css.md):
+ * Decisions of record (docs/developer/features/complete/calliope-live-spec-g-custom-css.md):
  *
  * - **It hands back exactly what it was given** (decision 5). Tabs, line
  *   endings and the final newline survive; mounting, or a refetch that
