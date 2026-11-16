@@ -7,7 +7,7 @@
 
 // Uses global jest (not @jest/globals) so the jest-dom matcher augmentation
 // resolves on the global `expect` under tsc.
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import React from 'react'
 import { ThemeEditorView } from '@/app/calliope/ThemeEditorView'
 import { createEditorStore, useEditorSelector } from '@/components/theme-editor/editor-store'
@@ -15,6 +15,7 @@ import { analyse, setTokenValue, tokenRowView, type EditorSnapshot } from '@/com
 import type { DraftDetail } from '@/lib/themes/drafts/service'
 import { THEME_TOKENS, type ThemeTokensDocument } from '@/lib/themes/engine/client'
 import { renderWithQuery } from '../../../helpers/renderWithQuery'
+import { editorToolbar, primitivesPanel, tokenRow, waitForCardRow } from '../../../helpers/theme-editor-queries'
 
 const mockSetPreview = jest.fn()
 
@@ -56,7 +57,6 @@ function detail(tokens: ThemeTokensDocument = EMPTY): DraftDetail {
     mountPointId: 'mp-general',
     updatedAt: '2026-11-14T12:00:00.000Z',
     version: '0.1.0',
-    images: [],
   }
 }
 
@@ -96,13 +96,13 @@ function lastPreviewCss(): string {
 async function openEditor(tokens: ThemeTokensDocument = EMPTY) {
   current = detail(tokens)
   renderWithQuery(<ThemeEditorView payload={{ draftId: 'my-theme' }} />)
-  await screen.findByLabelText('Card, light value')
+  await waitForCardRow()
 }
 
 const search = (text: string) => fireEvent.change(screen.getByLabelText('Search the tokens'), { target: { value: text } })
 
-function commit(label: string, value: string) {
-  const field = screen.getByLabelText(label)
+function commit(label: string, value: string, scope: Pick<typeof screen, 'getByLabelText'> = screen) {
+  const field = scope.getByLabelText(label)
   fireEvent.change(field, { target: { value } })
   fireEvent.blur(field)
 }
@@ -143,25 +143,25 @@ describe('the density choice', () => {
 describe('undo and redo', () => {
   it('undoes and redoes by button', async () => {
     await openEditor()
-    commit('Card, light value', '#123456')
+    commit('Card, light value', '#123456', tokenRow('--theme-card'))
     await waitFor(() => expect(lastPreviewCss()).toContain('#123456'))
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-    await waitFor(() => expect(screen.getByLabelText('Card, light value')).not.toHaveValue('#123456'))
+    fireEvent.click(editorToolbar().getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(tokenRow('--theme-card').getByLabelText('Card, light value')).not.toHaveValue('#123456'))
     expect(lastPreviewCss()).not.toContain('#123456')
-    fireEvent.click(screen.getByRole('button', { name: 'Redo' }))
-    await waitFor(() => expect(screen.getByLabelText('Card, light value')).toHaveValue('#123456'))
+    fireEvent.click(editorToolbar().getByRole('button', { name: 'Redo' }))
+    await waitFor(() => expect(tokenRow('--theme-card').getByLabelText('Card, light value')).toHaveValue('#123456'))
   })
 
   it('undoes by key outside a text field, and leaves a text field its own undo', async () => {
     await openEditor()
-    commit('Card, light value', '#123456')
+    commit('Card, light value', '#123456', tokenRow('--theme-card'))
     await waitFor(() => expect(lastPreviewCss()).toContain('#123456'))
-    fireEvent.keyDown(screen.getByLabelText('Card, light value'), { key: 'z', ctrlKey: true })
-    expect(screen.getByLabelText('Card, light value')).toHaveValue('#123456')
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Reset Card to the house default' }), { key: 'z', metaKey: true })
-    await waitFor(() => expect(screen.getByLabelText('Card, light value')).not.toHaveValue('#123456'))
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Reset Card to the house default' }), { key: 'z', metaKey: true, shiftKey: true })
-    await waitFor(() => expect(screen.getByLabelText('Card, light value')).toHaveValue('#123456'))
+    fireEvent.keyDown(tokenRow('--theme-card').getByLabelText('Card, light value'), { key: 'z', ctrlKey: true })
+    expect(tokenRow('--theme-card').getByLabelText('Card, light value')).toHaveValue('#123456')
+    fireEvent.keyDown(tokenRow('--theme-card').getByRole('button', { name: 'Reset Card to the house default' }), { key: 'z', metaKey: true })
+    await waitFor(() => expect(tokenRow('--theme-card').getByLabelText('Card, light value')).not.toHaveValue('#123456'))
+    fireEvent.keyDown(tokenRow('--theme-card').getByRole('button', { name: 'Reset Card to the house default' }), { key: 'z', metaKey: true, shiftKey: true })
+    await waitFor(() => expect(tokenRow('--theme-card').getByLabelText('Card, light value')).toHaveValue('#123456'))
   })
 })
 
@@ -205,21 +205,22 @@ describe('the primitives panel', () => {
 
   it('edits a value, and every token following it repaints', async () => {
     await openEditor(withInk)
-    commit('ink, light value', '#445566')
+    commit('ink, light value', '#445566', primitivesPanel())
     await waitFor(() => expect(lastPreviewCss()).toContain('--p-ink: #445566'))
   })
 
   it('adds one', async () => {
     await openEditor()
-    fireEvent.change(screen.getByLabelText('Name of the new primitive'), { target: { value: 'brass-ink' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Add the primitive' }))
-    expect(await screen.findByLabelText('Name of primitive brass-ink')).toBeInTheDocument()
+    const panel = primitivesPanel()
+    fireEvent.change(panel.getByLabelText('Name of the new primitive'), { target: { value: 'brass-ink' } })
+    fireEvent.click(panel.getByRole('button', { name: 'Add the primitive' }))
+    expect(await panel.findByLabelText('Name of primitive brass-ink')).toBeInTheDocument()
     await waitFor(() => expect(lastPreviewCss()).toContain('--p-brass-ink'))
   })
 
   it('refuses a name that is taken, and renames to a free one', async () => {
     await openEditor(withInk)
-    const name = screen.getByLabelText('Name of primitive ink')
+    const name = primitivesPanel().getByLabelText('Name of primitive ink')
     fireEvent.change(name, { target: { value: 'Bad Name' } })
     expect(screen.getByText(/kebab-case.*the old name stands/)).toBeInTheDocument()
     fireEvent.change(name, { target: { value: 'quill' } })
@@ -229,29 +230,30 @@ describe('the primitives panel', () => {
 
   it('confirms before removing, naming what follows it, and hands them its value', async () => {
     await openEditor(withInk)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove primitive ink' }))
+    fireEvent.click(primitivesPanel().getByRole('button', { name: 'Remove primitive ink' }))
     const dialog = await screen.findByRole('alertdialog')
     expect(dialog).toHaveTextContent('One value follows it')
     expect(dialog).toHaveTextContent('--theme-card')
-    fireEvent.click(screen.getByRole('button', { name: 'Remove the primitive' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove the primitive' }))
     await waitFor(() => expect(lastPreviewCss()).not.toContain('--p-ink'))
     expect(lastPreviewCss()).toContain('#112233')
   })
 
   it('gives dark a value apart', async () => {
     await openEditor(withInk)
-    fireEvent.click(screen.getByRole('button', { name: 'Give primitive ink a dark value of its own' }))
-    expect(await screen.findByLabelText('ink, dark value')).toHaveValue('#112233')
+    const panel = primitivesPanel()
+    fireEvent.click(panel.getByRole('button', { name: 'Give primitive ink a dark value of its own' }))
+    expect(await panel.findByLabelText('ink, dark value')).toHaveValue('#112233')
   })
 })
 
 describe('following a primitive', () => {
   it('points a token at a primitive of its type, and back', async () => {
     await openEditor({ ...EMPTY, primitives: { ink: { type: 'color', value: '#112233' } } })
-    const follows = screen.getAllByLabelText('Follows')[0]
-    fireEvent.change(follows, { target: { value: 'ink' } })
+    const card = tokenRow('--theme-card')
+    fireEvent.change(card.getAllByLabelText('Follows')[0], { target: { value: 'ink' } })
     await waitFor(() => expect(lastPreviewCss()).toContain('var(--p-ink)'))
-    fireEvent.change(screen.getAllByLabelText('Follows')[0], { target: { value: '' } })
+    fireEvent.change(card.getAllByLabelText('Follows')[0], { target: { value: '' } })
     await waitFor(() => expect(lastPreviewCss()).not.toContain('var(--p-ink)'))
   })
 })

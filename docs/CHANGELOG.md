@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Tests: theme editor suites no longer time out on CI
+
+- The theme editor component tests (`editor-structure`, `bundled-walk`, `theme-editor`) timed out on CI. In jsdom, each label-text or accessible-name query walks the whole document for every element it checks, and the editor mounts several hundred labelled rows. The tests now query inside the row, panel or toolbar they are about, using new helpers in `__tests__/helpers/theme-editor-queries.ts`. The theme-editor folder runs in 8 s instead of 85 s; the Rains walk takes about 2 s instead of 51 s
+- Removed a duplicated `images` key in the `editor-structure` fixture
+
 #### Themes: code editor, located issues, draft stylesheet and import (Calliope Live, Spec G Stages 0–1)
 
 - New shared code editor (`components/code-editor/`): Lexical plain text with Prism highlighting for JSON and CSS, line numbers, issue markers with tooltips, Tab / Shift+Tab indent and outdent, Escape-then-Tab to leave, auto-indent on Enter, and line endings kept as the file had them. A reusing tokenizer only rebuilds the changed stretch, so a 2,000-line file types at about 16 ms a key. Not yet mounted anywhere

@@ -15,6 +15,7 @@ import { ThemeEditorView } from '@/app/calliope/ThemeEditorView'
 import type { DraftDetail } from '@/lib/themes/drafts/service'
 import type { ThemeTokensDocument } from '@/lib/themes/engine/client'
 import { renderWithQuery } from '../../../helpers/renderWithQuery'
+import { editorToolbar } from '../../../helpers/theme-editor-queries'
 
 jest.mock('@/components/providers/theme-provider', () => ({
   useTheme: () => ({
@@ -74,10 +75,16 @@ describe.each(THEMES)('the bundled theme %s', (id) => {
     await act(async () => {
       await jest.advanceTimersByTimeAsync(10)
     })
-    await screen.findByRole('button', { name: 'Open all' })
+    // The toolbar's buttons are found by their text, inside the toolbar: an
+    // accessible-name query walks the document once per label (see
+    // theme-editor-queries), which with every section open is what timed this
+    // suite out on CI. The other suites query these buttons by role.
+    await screen.findByRole('toolbar')
+    const toolbar = editorToolbar()
+    const button = (text: string) => toolbar.getByText(text, { selector: 'button' })
     for (const level of ['Essentials', 'Components']) {
-      fireEvent.click(screen.getByRole('button', { name: level }))
-      fireEvent.click(screen.getByRole('button', { name: 'Open all' }))
+      fireEvent.click(button(level))
+      fireEvent.click(button('Open all'))
       for (const d of document.querySelectorAll('details')) {
         if (!d.open) fireEvent.click(d.querySelector('summary')!)
       }

@@ -19,6 +19,7 @@ import { buildPreview, setTokenValue } from '@/components/theme-editor/model'
 import type { DraftDetail, DraftSummary } from '@/lib/themes/drafts/service'
 import type { ThemeTokensDocument } from '@/lib/themes/engine/client'
 import { renderWithQuery } from '../../../helpers/renderWithQuery'
+import { tokenRow, waitForCardRow } from '../../../helpers/theme-editor-queries'
 
 const mockSetPreview = jest.fn()
 const mockRefreshThemes = jest.fn(async () => {})
@@ -126,7 +127,7 @@ function lastPreviewCss(): string {
 async function openEditor(d: DraftDetail = detail()) {
   current = d
   const utils = renderWithQuery(<ThemeEditorView payload={{ draftId: d.id }} />)
-  await screen.findByLabelText('Card, light value')
+  await waitForCardRow()
   return utils
 }
 
@@ -167,7 +168,7 @@ describe('a new theme', () => {
     fireEvent.change(from, { target: { value: 'earl-grey' } })
     fireEvent.click(screen.getByRole('button', { name: 'Begin' }))
 
-    await screen.findByLabelText('Card, light value')
+    await waitForCardRow()
     expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ name: 'Smoking Room', from: 'earl-grey' })
   })
 
@@ -176,7 +177,7 @@ describe('a new theme', () => {
     fireEvent.click(await screen.findByRole('button', { name: /New theme/ }))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Plain' } })
     fireEvent.click(screen.getByRole('button', { name: 'Begin' }))
-    await screen.findByLabelText('Card, light value')
+    await waitForCardRow()
     expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ name: 'Plain' })
   })
 })
@@ -187,7 +188,7 @@ describe('editing a colour', () => {
     await waitFor(() => expect(mockSetPreview).toHaveBeenCalled())
     expect(lastPreviewCss()).not.toContain('#123456')
 
-    const field = screen.getByLabelText('Card, light value')
+    const field = tokenRow('--theme-card').getByLabelText('Card, light value')
     fireEvent.change(field, { target: { value: '#123456' } })
     fireEvent.blur(field)
 
@@ -199,7 +200,7 @@ describe('editing a colour', () => {
 
   it('ignores text that is not a colour', async () => {
     await openEditor()
-    const field = screen.getByLabelText('Card, light value')
+    const field = tokenRow('--theme-card').getByLabelText('Card, light value')
     fireEvent.change(field, { target: { value: 'not a colour' } })
     fireEvent.blur(field)
     expect(screen.getByText(/Not a colour the atelier recognises/)).toBeInTheDocument()
@@ -209,14 +210,14 @@ describe('editing a colour', () => {
   it('resets a value the theme sets', async () => {
     await openEditor(detail({ tokens: setTokenValue(EMPTY, '--theme-card', 'light', '#abcdef') }))
     await waitFor(() => expect(lastPreviewCss()).toContain('#abcdef'))
-    fireEvent.click(screen.getByRole('button', { name: 'Reset Card to the house default' }))
+    fireEvent.click(tokenRow('--theme-card').getByRole('button', { name: 'Reset Card to the house default' }))
     await waitFor(() => expect(lastPreviewCss()).not.toContain('#abcdef'))
-    expect(screen.getByRole('button', { name: 'Reset Card to the house default' })).toBeDisabled()
+    expect(tokenRow('--theme-card').getByRole('button', { name: 'Reset Card to the house default' })).toBeDisabled()
   })
 
   it('writes a dark value into the dark block', async () => {
     await openEditor()
-    const field = screen.getByLabelText('Card, dark value')
+    const field = tokenRow('--theme-card').getByLabelText('Card, dark value')
     fireEvent.change(field, { target: { value: '#0a0b0c' } })
     fireEvent.blur(field)
     await waitFor(() => expect(lastPreviewCss()).toContain('#0a0b0c'))
@@ -232,12 +233,12 @@ describe('editing a colour', () => {
       return { status: 409, json: { error: 'stale', details: { currentRevision: 'rev-theirs' } } }
     }
     await openEditor()
-    const field = screen.getByLabelText('Card, light value')
+    const field = tokenRow('--theme-card').getByLabelText('Card, light value')
     fireEvent.change(field, { target: { value: '#123456' } })
     fireEvent.blur(field)
 
     await waitFor(() => expect(toast.showWarningToast).toHaveBeenCalled(), { timeout: 3000 })
-    await waitFor(() => expect(screen.getByLabelText('Card, light value')).toHaveValue('#fedcba'))
+    await waitFor(() => expect(tokenRow('--theme-card').getByLabelText('Card, light value')).toHaveValue('#fedcba'))
     await waitFor(() => expect(lastPreviewCss()).toContain('#fedcba'))
   })
 
