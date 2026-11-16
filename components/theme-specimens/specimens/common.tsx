@@ -17,6 +17,18 @@ import type { SpecimenDef, SpecimenTable } from '../types'
 
 type El = HookElementProps
 
+/** The real `EmptyState`: icon, title, description and action, from props alone. */
+function SpecimenEmptyState() {
+  return (
+    <EmptyState
+      title="Nothing here yet"
+      description="An empty state, invented and empty."
+      icon={<Icon name="sparkles" className="w-6 h-6" />}
+      action={{ label: 'Make something', onClick: () => undefined }}
+    />
+  )
+}
+
 const button = (label: string, extra = ''): SpecimenDef => ({
   render: ({ el }) => (
     <button type="button" {...el} className={`${el.className}${extra ? ` ${extra}` : ''}`}>
@@ -217,5 +229,98 @@ export const COMMON_SPECIMENS: SpecimenTable = {
           </button>
         </div>
       ),
+  },
+
+  // --- Added in Spec I
+  'qt-empty-state': { component: 'EmptyState', render: () => <SpecimenEmptyState /> },
+  'qt-empty-state-icon': { component: 'EmptyState', render: () => <SpecimenEmptyState /> },
+  'qt-empty-state-description': { component: 'EmptyState', render: () => <SpecimenEmptyState /> },
+  'qt-empty-state-action': { component: 'EmptyState', render: () => <SpecimenEmptyState /> },
+  'qt-loading-state': { render: ({ el }) => <div {...el}><p className="text-sm qt-text-secondary">Fetching the specimens…</p></div> },
+  'qt-tooltip': {
+    render: ({ el }) => (
+      <div {...el} role="tooltip" style={{ position: 'relative', display: 'inline-block' }}>
+        <p className="qt-tooltip-title">A tooltip</p>
+        <p className="qt-tooltip-body">It explains nothing, helpfully.</p>
+      </div>
+    ),
+    note: 'Drawn in place: in the app it appears on hover or focus.',
+  },
+  'qt-popover': {
+    render: ({ el }) => (
+      <div {...el} style={{ position: 'relative', maxWidth: '16rem' }}>
+        <p className="qt-text-small">Delete the specimen?</p>
+        <div className="flex gap-2 mt-2">
+          <button type="button" className="qt-button qt-button-destructive qt-button-sm">Delete</button>
+          <button type="button" className="qt-button qt-button-secondary qt-button-sm">Keep</button>
+        </div>
+      </div>
+    ),
+  },
+  'qt-entity-card': {
+    render: ({ el }) => (
+      <div {...el} style={{ maxWidth: '18rem' }}>
+        <p className="font-medium">Miss Specimen</p>
+        <p className="qt-text-xs qt-text-secondary">A character invented for the gallery.</p>
+      </div>
+    ),
+  },
+  'qt-label': {
+    render: ({ el }) => (
+      <div style={{ maxWidth: '18rem' }}>
+        <label {...el}>A field label
+          <input className="qt-input mt-1" defaultValue="" placeholder="Nothing to type here" />
+        </label>
+      </div>
+    ),
+  },
+  'qt-link': text('An ordinary link', 'span'),
+  'qt-checkbox': {
+    render: ({ el }) => (
+      <label className="inline-flex items-center gap-2 qt-text-small">
+        <input type="checkbox" {...el} defaultChecked /> A specimen checkbox
+      </label>
+    ),
+  },
+  'qt-radio': {
+    render: ({ el }) => (
+      <label className="inline-flex items-center gap-2 qt-text-small">
+        <input type="radio" {...el} defaultChecked /> A specimen choice
+      </label>
+    ),
+  },
+  'qt-range': {
+    render: ({ el }) => (
+      <label className="flex flex-col gap-1 qt-text-small" style={{ maxWidth: '18rem' }}>
+        A specimen slider
+        <input type="range" {...el} min={0} max={10} defaultValue={4} />
+      </label>
+    ),
+  },
+  'qt-prose': {
+    render: ({ el }) => (
+      <div {...el}>
+        <p>Rendered Markdown, with <strong>bold</strong>, <em>italics</em> and <code>code</code>.</p>
+        <ul><li>One invented point</li><li>Another</li></ul>
+      </div>
+    ),
+  },
+  'qt-code-block': {
+    render: ({ el }) => <pre {...el}>{'const specimen = "invented";\nconsole.log(specimen);'}</pre>,
+  },
+  'qt-code-inline': text('specimen.md', 'span'),
+  'qt-progress': {
+    render: ({ el }) => (
+      <div {...el} role="progressbar" aria-label="A specimen progress bar" aria-valuenow={40} aria-valuemin={0} aria-valuemax={100} style={{ maxWidth: '18rem' }}>
+        <div className="qt-progress-fill" style={{ width: '40%' }} />
+      </div>
+    ),
+  },
+  'qt-progress-fill': {
+    render: ({ el }) => (
+      <div className="qt-progress" role="progressbar" aria-label="A specimen progress bar" aria-valuenow={60} aria-valuemin={0} aria-valuemax={100} style={{ maxWidth: '18rem' }}>
+        <div {...el} style={{ width: '60%' }} />
+      </div>
+    ),
   },
 }

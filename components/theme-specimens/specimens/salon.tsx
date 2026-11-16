@@ -96,7 +96,7 @@ function ToolCall({ el, tool = 'generate_image' }: { el?: El; tool?: string }) {
   )
 }
 
-function Composer({ slot, el }: { slot?: 'composer' | 'input' | 'send'; el?: El }) {
+function Composer({ slot, el, actions }: { slot?: 'composer' | 'input' | 'send'; el?: El; actions?: El }) {
   return (
     <div {...(slot === 'composer' && el ? el : { className: 'qt-chat-composer' })}>
       <div className="qt-chat-composer-content"><div className="qt-chat-composer-inner flex items-end gap-2">
@@ -110,7 +110,7 @@ function Composer({ slot, el }: { slot?: 'composer' | 'input' | 'send'; el?: El 
         >
           Something the specimen meant to say…
         </div>
-        <div className="qt-chat-composer-actions">
+        <div {...(actions ?? { className: 'qt-chat-composer-actions' })}>
           <button type="button" {...(slot === 'send' && el ? el : { className: 'qt-chat-composer-send' })} aria-label="Send (a specimen; it sends nothing)">
             <Icon name="send" className="w-4 h-4" />
           </button>
@@ -131,6 +131,74 @@ function Participant({ slot, el }: { slot?: 'card' | 'dot' | 'name'; el?: El }) 
     </div>
   )
 }
+
+function Roleplay({ el }: { el: El }) {
+  return (
+    <Row>
+      <div className="chat-message qt-chat-message-assistant">
+        <div className="qt-chat-message-content">
+          <p>
+            {!el.className.includes('narration') && <><span className="qt-chat-narration">She set down the specimen cup.</span>{' '}</>}
+            <span {...el}>{el.className.includes('dialogue') ? '“Nothing happened,” she said.' : el.className.includes('ooc') ? '((an aside, out of character))' : el.className.includes('monologue') ? 'Did anything happen?' : 'The clock went on not ticking.'}</span>
+          </p>
+        </div>
+      </div>
+    </Row>
+  )
+}
+
+function Storyteller({ board, card }: { board?: El; card?: El }) {
+  return (
+    <section {...(board ?? { className: 'qt-storyteller-board' })} aria-label="A specimen storyteller's board">
+      <div className="qt-storyteller-board-header"><span>This round</span></div>
+      <div className="qt-storyteller-cards">
+        <div {...(card ?? { className: 'qt-storyteller-card qt-storyteller-card-selected' })}>
+          <div className="qt-storyteller-card-head">
+            <span className="qt-storyteller-card-order">1</span>
+            <span className="qt-storyteller-card-name">Miss Specimen</span>
+          </div>
+          <div className="qt-storyteller-plan">Means to say something invented.</div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function Formatting({ toolbar, button }: { toolbar?: El; button?: El }) {
+  return (
+    <div {...(toolbar ?? { className: 'qt-formatting-toolbar' })} role="toolbar" aria-label="Specimen formatting">
+      <div className="qt-formatting-toolbar-section">
+        <button type="button" {...(button ?? { className: 'qt-formatting-button' })} aria-label="Bold (a specimen)"><strong>B</strong></button>
+        <button type="button" className="qt-formatting-button" aria-label="Italic (a specimen)"><em>I</em></button>
+      </div>
+    </div>
+  )
+}
+
+function Typeahead({ menu, option }: { menu?: El; option?: El }) {
+  return (
+    <div {...(menu ?? { className: 'qt-typeahead-menu' })} role="listbox" aria-label="Specimen mentions" style={{ position: 'relative', maxWidth: '16rem' }}>
+      <div {...(option ?? { className: 'qt-typeahead-option qt-typeahead-option-active' })} role="option" aria-selected="true">
+        <span className="qt-typeahead-option-label">Miss Specimen</span>
+      </div>
+      <div className="qt-typeahead-option" role="option" aria-selected="false">
+        <span className="qt-typeahead-option-label">Mr Example</span>
+      </div>
+    </div>
+  )
+}
+
+function DocPane({ pane, header }: { pane?: El; header?: El }) {
+  return (
+    <div {...(pane ?? { className: 'qt-doc-pane' })} style={{ minHeight: '8rem' }}>
+      <div {...(header ?? { className: 'qt-doc-header' })}>
+        <span className="qt-doc-title">specimen-notes.md</span>
+      </div>
+      <div className="p-3"><p>A document invented for the gallery.</p></div>
+    </div>
+  )
+}
+
 
 export const SALON_SPECIMENS: SpecimenTable = {
   'qt-chat-message-row': { render: ({ el }) => <Row slot="row" el={el} side={el['data-role'] === 'user' ? 'user' : 'assistant'} /> },
@@ -316,4 +384,146 @@ export const SALON_SPECIMENS: SpecimenTable = {
   'qt-participant-card': { render: ({ el }) => <Participant slot="card" el={el} /> },
   'qt-participant-turn-dot': { render: ({ el }) => <Participant slot="dot" el={el} /> },
   'qt-participant-card-name': { render: ({ el }) => <Participant slot="name" el={el} /> },
+
+  // --- Added in Spec I
+  'qt-chat-layout': {
+    render: ({ el }) => (
+      <div {...el} style={{ display: 'flex', minHeight: '14rem' }}>
+        <div className="qt-chat-main" style={{ flex: 1, minWidth: 0 }}>
+          <div className="qt-chat-messages-list"><Row /></div>
+          <Composer />
+        </div>
+      </div>
+    ),
+    note: 'Drawn small: in the app it fills the pane.',
+  },
+  'qt-chat-messages-list': {
+    render: ({ el }) => (
+      <div className="qt-chat-messages">
+        <div {...el}>
+          <Row side="user" />
+          <Row />
+        </div>
+      </div>
+    ),
+  },
+  'qt-chat-message-content': {
+    render: ({ el }) => (
+      <Row>
+        <div className="chat-message qt-chat-message-assistant">
+          <div {...el}><p>{PROSE}</p></div>
+        </div>
+      </Row>
+    ),
+  },
+  'qt-chat-dialogue': { render: ({ el }) => <Roleplay el={el} /> },
+  'qt-chat-narration': { render: ({ el }) => <Roleplay el={el} /> },
+  'qt-chat-ooc': { render: ({ el }) => <Roleplay el={el} /> },
+  'qt-chat-inner-monologue': { render: ({ el }) => <Roleplay el={el} /> },
+  'qt-chat-composer-actions': { render: ({ el }) => <Composer actions={el} /> },
+  'qt-chat-stop-button': {
+    render: ({ el }) => (
+      <div className="qt-chat-composer-actions">
+        <button type="button" {...el} className={`qt-chat-composer-send ${el.className}`} aria-label="Stop (a specimen; it stops nothing)">
+          <Icon name="stop-sign" className="w-5 h-5" />
+        </button>
+      </div>
+    ),
+  },
+  'qt-chat-attachment-chip': {
+    render: ({ el }) => (
+      <div className="qt-chat-composer">
+        <div className="qt-chat-attachment-list">
+          <div {...el}>
+            <span className="qt-chat-attachment-chip-icon"><Icon name="file" className="w-4 h-4" /></span>
+            <span className="qt-text-xs">specimen-notes.txt</span>
+            <button type="button" className="qt-chat-attachment-chip-remove" aria-label="Remove the specimen file"><Icon name="close" className="w-3 h-3" /></button>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  'qt-chat-attachment-image': {
+    render: ({ el }) => (
+      <Row>
+        <div className="chat-message qt-chat-message-assistant">
+          <p>A picture, invented for the gallery:</p>
+          <span {...el} className={`${el.className} block w-20 h-20`} role="img" aria-label="A specimen picture" style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-accent))' }} />
+        </div>
+      </Row>
+    ),
+  },
+  'qt-chat-thinking': {
+    render: ({ el }) => (
+      <div {...el}>
+        <details className="qt-chat-thinking-details" open>
+          <summary className="qt-chat-thinking-summary">
+            <span className="qt-chat-thinking-label">Reasoning</span>
+          </summary>
+          <div className="qt-chat-thinking-body">
+            <p>First the specimen considered nothing, then it considered it again.</p>
+          </div>
+        </details>
+      </div>
+    ),
+  },
+  'qt-chat-sidebar': {
+    render: ({ el }) => (
+      <aside {...el} aria-label="Specimen participants" style={{ position: 'relative', width: el.className.includes('collapsed') ? '4rem' : '18rem' }}>
+        <div className="qt-chat-sidebar-header"><span className="qt-chat-sidebar-heading">Participants</span></div>
+        {el.className.includes('collapsed') ? (
+          <div className="qt-chat-sidebar-collapsed-avatars">
+            <span className="qt-avatar-image inline-flex items-center justify-center w-8 h-8 rounded-full qt-bg-muted">M</span>
+          </div>
+        ) : (
+          <Participant />
+        )}
+      </aside>
+    ),
+  },
+  'qt-courier-bubble': {
+    render: ({ el }) => (
+      <Row rowExtra="qt-chat-message-row-courier">
+        <div {...el}>
+          <div className="qt-courier-bubble-header"><span className="qt-courier-bubble-title">Courier: a manual turn</span></div>
+          <div className="qt-courier-bubble-prompt"><div className="qt-courier-bubble-prompt-body">Copy this invented prompt to another app.</div></div>
+          <p className="qt-courier-bubble-hint">Then paste the answer below.</p>
+          <textarea className="qt-courier-bubble-textarea" aria-label="The pasted answer (a specimen)" rows={2} readOnly value="" />
+        </div>
+      </Row>
+    ),
+  },
+  'qt-green-room': {
+    render: ({ el }) => (
+      <div {...el} className={`qt-card ${el.className}`}>
+        <div className="qt-green-room-header">
+          <div className="qt-green-room-headline" role="status">
+            <span className="qt-green-room-pulse" aria-hidden="true" />
+            <span className="qt-green-room-title">The green room</span>
+            <span className="qt-green-room-status">Setting the specimen stage…</span>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  'qt-storyteller-board': { render: ({ el }) => <Storyteller board={el} /> },
+  'qt-storyteller-card': { render: ({ el }) => <Storyteller card={el} /> },
+  'qt-formatting-toolbar': { render: ({ el }) => <Formatting toolbar={el} /> },
+  'qt-formatting-button': { render: ({ el }) => <Formatting button={el} /> },
+  'qt-typeahead-menu': { render: ({ el }) => <Typeahead menu={el} /> },
+  'qt-typeahead-option': { render: ({ el }) => <Typeahead option={el} /> },
+  'qt-mention-chip': {
+    render: ({ el }) => (
+      <Row>
+        <div className="chat-message qt-chat-message-assistant">
+          <p>
+            Ask <span {...el}>{el.className.includes('thing') ? 'the Specimen Lamp' : 'Mr Example'}</span> about it.
+          </p>
+        </div>
+      </Row>
+    ),
+    note: 'In the app a chip shows its card on hover.',
+  },
+  'qt-doc-pane': { render: ({ el }) => <DocPane pane={el} /> },
+  'qt-doc-header': { render: ({ el }) => <DocPane header={el} /> },
 }

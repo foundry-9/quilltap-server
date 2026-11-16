@@ -282,4 +282,219 @@ export const SALON_HOOKS: readonly HookDef[] = [
     within: ['qt-participant-card'],
     since: 1,
   },
+
+  // Added in Spec I (Calliope Live): the page, the message text, the composer's
+  // parts, Storyteller, Courier, the green room, mentions and Document Mode.
+  {
+    className: 'qt-chat-layout',
+    surface: 'salon',
+    label: 'Salon page',
+    description:
+      'The whole chat view: the message column, the composer, the participant sidebar and any Document or Terminal pane beside them. Its background shows behind the messages.',
+    since: 1,
+  },
+  {
+    className: 'qt-chat-messages-list',
+    surface: 'salon',
+    label: 'Message list',
+    description: 'The column of message rows, inside the scrolling viewport.',
+    within: ['qt-chat-layout'],
+    since: 1,
+  },
+  {
+    className: 'qt-chat-message-content',
+    surface: 'salon',
+    label: 'Message text',
+    description:
+      'The rendered prose inside a bubble. The roleplay spans (dialogue, narration and the rest) sit inside it.',
+    within: ['qt-chat-message-user', 'qt-chat-message-assistant'],
+    since: 1,
+  },
+  {
+    className: 'qt-chat-dialogue',
+    surface: 'salon',
+    label: 'Dialogue',
+    description:
+      'A roleplay span marking spoken words. The class name is stored in roleplay templates.',
+    within: ['qt-chat-message-content'],
+    since: 1,
+  },
+  {
+    className: 'qt-chat-narration',
+    surface: 'salon',
+    label: 'Narration',
+    description:
+      'A roleplay span marking narration. The class name is stored in roleplay templates.',
+    within: ['qt-chat-message-content'],
+    since: 1,
+  },
+  {
+    className: 'qt-chat-ooc',
+    surface: 'salon',
+    label: 'Out-of-character aside',
+    description:
+      'A roleplay span marking an out-of-character remark. The class name is stored in roleplay templates.',
+    within: ['qt-chat-message-content'],
+    since: 1,
+  },
+  {
+    className: 'qt-chat-inner-monologue',
+    surface: 'salon',
+    label: 'Inner monologue',
+    description:
+      'A roleplay span marking unspoken thought. The class name is stored in roleplay templates.',
+    within: ['qt-chat-message-content'],
+    since: 1,
+  },
+  {
+    className: 'qt-chat-composer-actions',
+    surface: 'salon',
+    label: 'Composer actions',
+    description:
+      'The cluster of buttons beside the composer input; Send and Stop sit in it.',
+    within: ['qt-chat-composer'],
+    since: 1,
+  },
+  {
+    className: 'qt-chat-stop-button',
+    surface: 'salon',
+    label: 'Stop button',
+    description: 'Takes the place of Send while a turn is being written.',
+    within: ['qt-chat-composer-actions'],
+    since: 1,
+  },
+  {
+    className: 'qt-chat-attachment-chip',
+    surface: 'salon',
+    label: 'Attachment chip',
+    description: 'A file waiting in the composer to be sent.',
+    within: ['qt-chat-composer'],
+    since: 1,
+  },
+  {
+    className: 'qt-chat-attachment-image',
+    surface: 'salon',
+    label: 'Attached picture',
+    description: 'A picture shown inside a sent message.',
+    since: 1,
+  },
+  {
+    className: 'qt-chat-thinking',
+    surface: 'salon',
+    label: 'Reasoning block',
+    description:
+      "A model's shown reasoning above its answer, opened and closed by its summary line.",
+    since: 1,
+  },
+  {
+    className: 'qt-chat-sidebar',
+    surface: 'salon',
+    label: 'Participant sidebar',
+    description: 'The panel of participant cards beside the chat.',
+    within: ['qt-chat-layout'],
+    states: [
+      { kind: 'class', className: 'qt-chat-sidebar-collapsed', label: 'Folded to a column of avatars' },
+    ],
+    since: 1,
+  },
+  {
+    className: 'qt-courier-bubble',
+    surface: 'salon',
+    label: 'Courier card',
+    description: 'The prompt-and-paste card of a manual (Courier) turn.',
+    within: ['qt-chat-message-row-courier'],
+    since: 1,
+  },
+  {
+    className: 'qt-green-room',
+    surface: 'salon',
+    label: 'Green room panel',
+    description: "The panel that narrates a chat's opening while the cast arrives.",
+    states: [
+      { kind: 'class', className: 'qt-green-room-docked', label: 'Docked above the composer' },
+    ],
+    since: 1,
+  },
+  {
+    className: 'qt-storyteller-board',
+    surface: 'salon',
+    label: 'Storyteller board',
+    description: 'The board of proposed turns in Storyteller mode.',
+    since: 1,
+  },
+  {
+    className: 'qt-storyteller-card',
+    surface: 'salon',
+    label: 'Storyteller card',
+    description: 'One proposed turn on the board.',
+    within: ['qt-storyteller-board'],
+    states: [
+      { kind: 'class', className: 'qt-storyteller-card-selected', label: 'Chosen to run' },
+      { kind: 'class', className: 'qt-storyteller-card-quiet', label: 'Holding back this round' },
+      { kind: 'class', className: 'qt-storyteller-card-dragging', label: 'Being dragged' },
+    ],
+    since: 1,
+  },
+  {
+    className: 'qt-formatting-toolbar',
+    surface: 'salon',
+    label: 'Formatting toolbar',
+    description:
+      "The composer's formatting row (bold, italics, roleplay marks); Document Mode's editor uses it too.",
+    since: 1,
+  },
+  {
+    className: 'qt-formatting-button',
+    surface: 'salon',
+    label: 'Formatting button',
+    description: 'One button in the formatting toolbar.',
+    within: ['qt-formatting-toolbar'],
+    states: [
+      { kind: 'class', className: 'qt-formatting-button-active', label: 'The format is on at the caret' },
+    ],
+    since: 1,
+  },
+  {
+    className: 'qt-typeahead-menu',
+    surface: 'salon',
+    label: 'Mention menu',
+    description: 'The menu that opens on @ in the composer.',
+    since: 1,
+  },
+  {
+    className: 'qt-typeahead-option',
+    surface: 'salon',
+    label: 'Mention menu option',
+    description: 'One choice in the mention menu.',
+    within: ['qt-typeahead-menu'],
+    states: [
+      { kind: 'class', className: 'qt-typeahead-option-active', label: 'Highlighted' },
+    ],
+    since: 1,
+  },
+  {
+    className: 'qt-mention-chip',
+    surface: 'salon',
+    label: 'Mention chip',
+    description: 'A named character or Atlas thing, chipped in a message.',
+    states: [
+      { kind: 'class', className: 'qt-mention-chip-thing', label: 'An Atlas thing rather than a character' },
+    ],
+    since: 1,
+  },
+  {
+    className: 'qt-doc-pane',
+    surface: 'salon',
+    label: 'Document pane',
+    description: "Document Mode's pane beside the chat.",
+    since: 1,
+  },
+  {
+    className: 'qt-doc-header',
+    surface: 'salon',
+    label: 'Document pane header',
+    description: "The pane's title row with its buttons.",
+    within: ['qt-doc-pane'],
+    since: 1,
+  },
 ]

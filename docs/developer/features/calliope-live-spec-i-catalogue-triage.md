@@ -1,8 +1,10 @@
 # Calliope Live — Spec I Stage 4.1: catalogue triage
 
-**Status:** awaiting the human's approval, 2026-11-16. Nothing here is in the
-catalogue yet. Approve, trim or extend the candidates; Stage 4.2 adds what is
-approved, each with a specimen, and nothing else.
+**Status:** approved 2026-11-16 — the 45 proposed candidates, as proposed:
+Document Mode under `salon` (question 1), kinds written as classes catalogued
+as class states (question 2). Nothing from "worth considering", the roleplay
+palette included (question 3), was added. Stage 4.2 added the 45 with their
+specimens.
 
 ## How the list was made
 

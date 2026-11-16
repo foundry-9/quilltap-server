@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE — DO NOT EDIT BY HAND. Source: lib/themes/hooks/. Regenerate with `npm run generate:theme-hooks-doc`. -->
 
-The structural hooks a theme's custom CSS may rely on — catalogue version **1**, 174 hooks. Anything not listed here is an implementation detail and may change without notice. The catalogue lives in `lib/themes/hooks/`; `npm run lint` fails when the markup and the catalogue drift apart.
+The structural hooks a theme's custom CSS may rely on — catalogue version **1**, 219 hooks. Anything not listed here is an implementation detail and may change without notice. The catalogue lives in `lib/themes/hooks/`; `npm run lint` fails when the markup and the catalogue drift apart.
 
 ## Conventions
 
@@ -29,6 +29,7 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-page-toolbar-left` | Page toolbar, left group | `.qt-page-toolbar` |  |  |
 | `.qt-page-toolbar-center` | Page toolbar, centre group | `.qt-page-toolbar` |  |  |
 | `.qt-page-toolbar-right` | Page toolbar, right group | `.qt-page-toolbar` |  |  |
+| `.qt-footer` | Footer. The line at the foot of the main column: version, data directory, copyright. | `.qt-app-main` |  |  |
 
 ## Workspace
 
@@ -119,6 +120,30 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-participant-card` | Participant card. One seat in the participant sidebar. |  |  | `.qt-participant-card-active` — Their turn<br>`.qt-participant-card-inactive` — Absent<br>`.qt-participant-card-silent` — Silent<br>`.qt-participant-card-dangerous` — The chat is Unmoderated |
 | `.qt-participant-turn-dot` | Turn dot. The small mark beside the seat whose turn it is. |  |  |  |
 | `.qt-participant-card-name` | Participant name | `.qt-participant-card` |  |  |
+| `.qt-chat-layout` | Salon page. The whole chat view: the message column, the composer, the participant sidebar and any Document or Terminal pane beside them. Its background shows behind the messages. |  |  |  |
+| `.qt-chat-messages-list` | Message list. The column of message rows, inside the scrolling viewport. | `.qt-chat-layout` |  |  |
+| `.qt-chat-message-content` | Message text. The rendered prose inside a bubble. The roleplay spans (dialogue, narration and the rest) sit inside it. | `.qt-chat-message-user`, `.qt-chat-message-assistant` |  |  |
+| `.qt-chat-dialogue` | Dialogue. A roleplay span marking spoken words. The class name is stored in roleplay templates. | `.qt-chat-message-content` |  |  |
+| `.qt-chat-narration` | Narration. A roleplay span marking narration. The class name is stored in roleplay templates. | `.qt-chat-message-content` |  |  |
+| `.qt-chat-ooc` | Out-of-character aside. A roleplay span marking an out-of-character remark. The class name is stored in roleplay templates. | `.qt-chat-message-content` |  |  |
+| `.qt-chat-inner-monologue` | Inner monologue. A roleplay span marking unspoken thought. The class name is stored in roleplay templates. | `.qt-chat-message-content` |  |  |
+| `.qt-chat-composer-actions` | Composer actions. The cluster of buttons beside the composer input; Send and Stop sit in it. | `.qt-chat-composer` |  |  |
+| `.qt-chat-stop-button` | Stop button. Takes the place of Send while a turn is being written. | `.qt-chat-composer-actions` |  |  |
+| `.qt-chat-attachment-chip` | Attachment chip. A file waiting in the composer to be sent. | `.qt-chat-composer` |  |  |
+| `.qt-chat-attachment-image` | Attached picture. A picture shown inside a sent message. |  |  |  |
+| `.qt-chat-thinking` | Reasoning block. A model's shown reasoning above its answer, opened and closed by its summary line. |  |  |  |
+| `.qt-chat-sidebar` | Participant sidebar. The panel of participant cards beside the chat. | `.qt-chat-layout` |  | `.qt-chat-sidebar-collapsed` — Folded to a column of avatars |
+| `.qt-courier-bubble` | Courier card. The prompt-and-paste card of a manual (Courier) turn. | `.qt-chat-message-row-courier` |  |  |
+| `.qt-green-room` | Green room panel. The panel that narrates a chat's opening while the cast arrives. |  |  | `.qt-green-room-docked` — Docked above the composer |
+| `.qt-storyteller-board` | Storyteller board. The board of proposed turns in Storyteller mode. |  |  |  |
+| `.qt-storyteller-card` | Storyteller card. One proposed turn on the board. | `.qt-storyteller-board` |  | `.qt-storyteller-card-selected` — Chosen to run<br>`.qt-storyteller-card-quiet` — Holding back this round<br>`.qt-storyteller-card-dragging` — Being dragged |
+| `.qt-formatting-toolbar` | Formatting toolbar. The composer's formatting row (bold, italics, roleplay marks); Document Mode's editor uses it too. |  |  |  |
+| `.qt-formatting-button` | Formatting button. One button in the formatting toolbar. | `.qt-formatting-toolbar` |  | `.qt-formatting-button-active` — The format is on at the caret |
+| `.qt-typeahead-menu` | Mention menu. The menu that opens on @ in the composer. |  |  |  |
+| `.qt-typeahead-option` | Mention menu option. One choice in the mention menu. | `.qt-typeahead-menu` |  | `.qt-typeahead-option-active` — Highlighted |
+| `.qt-mention-chip` | Mention chip. A named character or Atlas thing, chipped in a message. |  |  | `.qt-mention-chip-thing` — An Atlas thing rather than a character |
+| `.qt-doc-pane` | Document pane. Document Mode's pane beside the chat. |  |  |  |
+| `.qt-doc-header` | Document pane header. The pane's title row with its buttons. | `.qt-doc-pane` |  |  |
 
 ## Character page
 
@@ -148,6 +173,8 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-dialog-close` | Dialog close button | `.qt-dialog-header` |  |  |
 | `.qt-dialog-body` | Dialog body. Always present, and unstyled: the default padding is `qt-dialog-body-default`, which a dialog drops when it lays out its own body. | `.qt-dialog` |  | `.qt-dialog-body-default` — Default padding (the dialog lays out nothing of its own) |
 | `.qt-dialog-footer` | Dialog footer. Always present when there are actions, and unstyled: the default look is `qt-dialog-footer-default`. | `.qt-dialog` |  | `.qt-dialog-footer-default` — Default footer look |
+| `.qt-floating-dialog` | Floating dialog. A non-modal dialog that floats over the page (the Inform dialog, among others). Modal dialogs are `qt-dialog`. |  |  |  |
+| `.qt-slide-over-panel` | Slide-over panel. A panel that slides in from the edge of the window. |  |  |  |
 
 ## Settings
 
@@ -234,6 +261,24 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-avatar-title` | Avatar title | `.qt-avatar-labels` |  |  |
 | `.qt-tab-group` | In-page tab group. Entity-page tabs (a character, a project) and small view switchers. |  |  |  |
 | `.qt-tab` | Tab. Shared by the workspace tab strip (`.qt-tab-strip .qt-tab`) and the in-page tabs (`.qt-tab-group .qt-tab`): scope by the parent. Only workspace tabs carry `data-tab-kind`. | `.qt-tab-strip`, `.qt-tab-group` | `data-tab-kind`: `home`, `salon`, `salon-list`, `terminal`, `document`, `aurora`, `prospero`, `scriptorium`, `settings`, `files`, `photos`, `scenarios`, `brahma`, `wardrobe`, `inventory`, `atlas`, `profile`, `about`, `generate-image`, `document-standalone`, `character-new`, `character`, `settings-wizard`, `custom-tools`, `theme-editor`, `theme-specimens` | `.qt-tab-active` — The selected tab<br>`.qt-tab-dragging` — Being dragged (workspace) |
+| `.qt-empty-state` | Empty state. The "nothing here yet" block; its title is `qt-empty-state-title`. |  |  |  |
+| `.qt-empty-state-icon` | Empty state icon | `.qt-empty-state` |  |  |
+| `.qt-empty-state-description` | Empty state description | `.qt-empty-state` |  |  |
+| `.qt-empty-state-action` | Empty state action. The button or link under an empty state. | `.qt-empty-state` |  |  |
+| `.qt-loading-state` | Loading state. The block shown while a list or card is fetched. |  |  |  |
+| `.qt-tooltip` | Tooltip |  |  |  |
+| `.qt-popover` | Popover. A small anchored panel: a delete confirmation, the character picker. |  |  |  |
+| `.qt-entity-card` | Entity card. A character, chat, group or project in a list. |  |  |  |
+| `.qt-label` | Field label. A form field's label. |  |  |  |
+| `.qt-link` | Link. An ordinary text link. |  |  |  |
+| `.qt-checkbox` | Checkbox |  |  |  |
+| `.qt-radio` | Radio button |  |  |  |
+| `.qt-range` | Slider. A range input. |  |  |  |
+| `.qt-prose` | Rendered Markdown. Markdown rendered as prose: messages, previews, help. |  |  |  |
+| `.qt-code-block` | Code block. A fenced code block in rendered Markdown. |  |  |  |
+| `.qt-code-inline` | Inline code |  |  |  |
+| `.qt-progress` | Progress bar. The track. |  |  |  |
+| `.qt-progress-fill` | Progress bar fill. The filled part of a progress bar. | `.qt-progress` |  | `.qt-progress-fill-success` — Finished well<br>`.qt-progress-fill-danger` — Failed<br>`.qt-progress-fill-idle` — Waiting |
 
 ## Removed hooks
 

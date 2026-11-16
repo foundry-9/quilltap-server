@@ -71,4 +71,19 @@ export const DIALOG_HOOKS: readonly HookDef[] = [
     states: [{ kind: 'class', className: 'qt-dialog-footer-default', label: 'Default footer look' }],
     since: 1,
   },
+  {
+    className: 'qt-floating-dialog',
+    surface: 'dialog',
+    label: 'Floating dialog',
+    description:
+      'A non-modal dialog that floats over the page (the Inform dialog, among others). Modal dialogs are `qt-dialog`.',
+    since: 1,
+  },
+  {
+    className: 'qt-slide-over-panel',
+    surface: 'dialog',
+    label: 'Slide-over panel',
+    description: 'A panel that slides in from the edge of the window.',
+    since: 1,
+  },
 ]

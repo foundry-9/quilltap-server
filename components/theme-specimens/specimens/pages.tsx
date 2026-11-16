@@ -237,4 +237,31 @@ export const PAGE_SPECIMENS: SpecimenTable = {
   'qt-collapsible-card-icon': { render: ({ el }) => <CardMarkup slot="icon" el={el} /> },
   'qt-collapsible-card-chevron': { render: ({ el, instance }) => <CardMarkup slot="chevron" el={el} open={instance.kind === 'state'} /> },
   'qt-collapsible-card-body': { render: ({ el }) => <CardMarkup slot="body" el={el} open chevronOpen /> },
+
+  // --- Added in Spec I
+  'qt-floating-dialog': {
+    render: ({ el }) => (
+      <div {...el} role="dialog" aria-label="A specimen floating dialog" style={{ position: 'relative', maxWidth: '24rem' }}>
+        <div className="qt-floating-dialog-header">
+          <div className="qt-floating-dialog-title">A floating dialog</div>
+          <div className="qt-floating-dialog-actions">
+            <button type="button" className="qt-floating-dialog-close" aria-label="Close (a specimen)">
+              <Icon name="close" className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        <div className="qt-floating-dialog-body"><p>It floats, and asks nothing of anyone.</p></div>
+      </div>
+    ),
+    note: 'Drawn in place: in the app it floats over the page and can be dragged.',
+  },
+  'qt-slide-over-panel': {
+    render: ({ el }) => (
+      <div {...el} role="dialog" aria-label="A specimen slide-over panel" style={{ position: 'relative', width: '20rem', maxWidth: '100%', height: 'auto' }}>
+        <div className="qt-slide-over-header"><p className="qt-heading-4">A slide-over panel</p></div>
+        <div className="p-4"><p>It slid in from the edge, as panels do.</p></div>
+      </div>
+    ),
+    note: 'Drawn in place: in the app it slides in from the edge of the window.',
+  },
 }

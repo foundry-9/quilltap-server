@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Theme hooks: 45 added (Calliope Live, Spec I Stage 4.2)
+
+- The hook catalogue grows from 174 to 219 hooks, still version 1 (adding a hook does not change the version). Salon: the chat layout, message list, message text, the four roleplay spans (`qt-chat-dialogue`, `-narration`, `-ooc`, `-inner-monologue`), composer actions, Stop button, attachment chip and picture, reasoning block, participant sidebar, Courier card, green room, Storyteller board and card, formatting toolbar and button, mention menu and option, mention chip, and Document Mode's pane and header. App shell: the footer. Dialogs: the floating dialog and slide-over panel. Shared: the empty state and its icon, description and action, loading state, tooltip, popover, entity card, field label, link, checkbox, radio, slider, rendered Markdown, code block, inline code, and progress bar and fill
+- New class states: `qt-chat-sidebar-collapsed`, `qt-green-room-docked`, `qt-storyteller-card-selected` / `-quiet` / `-dragging`, `qt-formatting-button-active`, `qt-typeahead-option-active`, `qt-mention-chip-thing`, `qt-progress-fill-success` / `-danger` / `-idle`
+- Each has a specimen in Calliope's gallery (the real `EmptyState` for the empty-state family, markup for the rest). `docs/developer/THEME_HOOKS.md` regenerated. The theme probe measures 471 gallery instances per theme and mode (was 415); the existing 415 are unchanged
+- The bundled themes were already clean against the catalogue, so no excepted selector changes
+
 #### Docs: Calliope Live Spec I Stage 4.1 catalogue triage
 
 - Added `docs/developer/features/calliope-live-spec-i-catalogue-triage.md`: the 712 `qt-*` classes in app markup that are not theme hooks, sorted into proposed candidates (45), candidates worth considering, inner parts, modifiers, helpers and plumbing. Awaiting approval before Stage 4.2 adds any to the catalogue

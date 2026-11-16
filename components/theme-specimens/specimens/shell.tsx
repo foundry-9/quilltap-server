@@ -350,6 +350,20 @@ export const SHELL_SPECIMENS: SpecimenTable = {
       </div>
     ),
   },
+  // --- Added in Spec I
+  'qt-footer': {
+    render: ({ el }) => (
+      <footer {...el}>
+        <div className="qt-footer-container">
+          <span>v0.0.0-specimen</span>
+          <span className="qt-footer-separator">•</span>
+          <span className="qt-footer-path">/an/invented/data/directory</span>
+          <span className="qt-footer-separator">•</span>
+          <a href="#specimen" className="qt-footer-link">© A specimen year</a>
+        </div>
+      </footer>
+    ),
+  },
 }
 
 function HomeSection({ section = 'chats', part, el }: { section?: string; part?: 'header' | 'title' | 'link' | 'content' | 'row'; el?: Record<string, string> & { className: string } }) {

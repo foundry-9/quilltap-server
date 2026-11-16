@@ -76,4 +76,13 @@ export const APP_SHELL_HOOKS: readonly HookDef[] = [
     within: ['qt-page-toolbar'],
     since: 1,
   },
+  {
+    className: 'qt-footer',
+    surface: 'app-shell',
+    label: 'Footer',
+    description:
+      'The line at the foot of the main column: version, data directory, copyright.',
+    within: ['qt-app-main'],
+    since: 1,
+  },
 ]
