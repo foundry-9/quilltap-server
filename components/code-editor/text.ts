@@ -215,3 +215,111 @@ export function leadingIndentAt(text: string, offset: number): string {
   while (i < offset && (text.charCodeAt(i) === 32 || text.charCodeAt(i) === 9)) i++
   return text.slice(lineStart, i)
 }
+
+/**
+ * What kind of token the character at an offset belongs to, as the editor's
+ * highlighter has it (`'punctuation'`, `'string'`, `'comment'`, ...), or
+ * undefined for plain text. The brace planners ask this instead of parsing.
+ */
+export type TokenTypeAt = (offset: number) => string | undefined
+
+const CLOSER_OF: Record<string, string> = { '{': '}', '[': ']' }
+
+function isBlank(text: string, i: number): boolean {
+  const c = text.charCodeAt(i)
+  return c === 32 || c === 9
+}
+
+/** A `{` `[` `}` `]` that is structure: the highlighter calls it punctuation, so it is not in a string or a comment. */
+function isBracketAt(text: string, offset: number, brackets: string, typeAt: TokenTypeAt): boolean {
+  return offset >= 0 && offset < text.length && brackets.includes(text[offset]) && typeAt(offset) === 'punctuation'
+}
+
+/**
+ * Enter: a line break and the line's indentation, replacing any selection.
+ * After an opening `{` or `[` the new line is one unit deeper, and when the
+ * matching closing bracket follows the caret it goes to a line of its own
+ * below, at the line's indentation. Nothing else is touched, except the
+ * spaces between the caret and text that moves down with it.
+ */
+export function planEnter(text: string, anchor: number, focus: number, unit: string, typeAt: TokenTypeAt): IndentPlan {
+  const start = Math.min(anchor, focus)
+  const end = Math.max(anchor, focus)
+  const indent = leadingIndentAt(text, start)
+
+  let before = start - 1
+  while (before >= 0 && isBlank(text, before)) before--
+  if (!isBracketAt(text, before, '{[', typeAt)) {
+    const caret = start + 1 + indent.length
+    return { edits: [{ from: start, to: end, insert: '\n' + indent }], anchor: caret, focus: caret }
+  }
+
+  let after = end
+  while (after < text.length && isBlank(text, after)) after++
+  const followed = after < text.length && text[after] !== '\n'
+  const closes = followed && text[after] === CLOSER_OF[text[before]] && typeAt(after) === 'punctuation'
+  const head = '\n' + indent + unit
+  const caret = start + head.length
+  return {
+    edits: [{ from: start, to: followed ? after : end, insert: closes ? head + '\n' + indent : head }],
+    anchor: caret,
+    focus: caret,
+  }
+}
+
+/** The opening bracket that encloses an offset, or -1. Brackets in strings and comments do not count. */
+function enclosingOpener(text: string, offset: number, typeAt: TokenTypeAt): number {
+  let depth = 0
+  for (let i = offset - 1; i >= 0; i--) {
+    const ch = text[i]
+    if (ch !== '{' && ch !== '[' && ch !== '}' && ch !== ']') continue
+    if (typeAt(i) !== 'punctuation') continue
+    if (ch === '}' || ch === ']') depth++
+    else if (depth === 0) return i
+    else depth--
+  }
+  return -1
+}
+
+/**
+ * A closing `}` or `]` typed on a line that holds only indentation: the
+ * bracket goes in one unit shallower. Null when the line holds anything else,
+ * when the caret is in a string or a comment, or when the line is already no
+ * deeper than the line its opening bracket is on (so a bracket typed where it
+ * belongs stays there) — the bracket is then typed as any other character.
+ * A selection is replaced first.
+ */
+export function planCloseBracket(
+  text: string,
+  anchor: number,
+  focus: number,
+  unit: string,
+  bracket: string,
+  typeAt: TokenTypeAt,
+): IndentPlan | null {
+  const start = Math.min(anchor, focus)
+  const end = Math.max(anchor, focus)
+  const lineStart = text.lastIndexOf('\n', start - 1) + 1
+  if (start === lineStart) return null
+  for (let i = lineStart; i < start; i++) if (!isBlank(text, i)) return null
+  for (let i = end; i < text.length && text[i] !== '\n'; i++) if (!isBlank(text, i)) return null
+  const type = typeAt(start - 1)
+  if (type === 'comment' || type === 'string') return null
+
+  const opener = enclosingOpener(text, lineStart, typeAt)
+  if (opener === -1) return null
+  const openerLine = text.lastIndexOf('\n', opener - 1) + 1
+  let openerIndent = 0
+  while (isBlank(text, openerLine + openerIndent)) openerIndent++
+  if (start - lineStart <= openerIndent) return null
+
+  let n = 0
+  if (text.charCodeAt(start - 1) === 9) {
+    n = 1
+  } else {
+    const width = unit === '\t' ? 1 : unit.length
+    while (n < width && text.charCodeAt(start - 1 - n) === 32) n++
+  }
+  const caret = start - n + bracket.length
+  return { edits: [{ from: start - n, to: end, insert: bracket }], anchor: caret, focus: caret }
+}

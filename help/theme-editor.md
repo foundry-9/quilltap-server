@@ -126,7 +126,7 @@ Every icon in Quilltap, as this theme draws it, with a search by name; those the
 
 Tokens dress most of a theme. What they cannot say — a textured panel, a heading with its letters spaced just so, a lamp that flickers — is written as CSS of your own. A draft has no stylesheet until you press **Begin a stylesheet**.
 
-The stylesheet is edited as highlighted text. **Tab** indents and **Shift+Tab** outdents; to leave the editor by keyboard, press **Escape** and then **Tab**. Your writing is saved after a short pause, and the preview takes it up as each save returns. The rules, stated once above the editor:
+The stylesheet is edited as highlighted text. **Tab** indents and **Shift+Tab** outdents; **Enter** after an opening brace obligingly indents the line that follows, and a closing brace typed upon a line of mere indentation steps back out of its own accord. To leave the editor by keyboard, press **Escape** and then **Tab**. Your writing is saved after a short pause, and the preview takes it up as each save returns. The rules, stated once above the editor:
 
 - every rule is fitted to this theme alone, automatically;
 - keyframe names are made unique, so an animation never collides with the house's own;

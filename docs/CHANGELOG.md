@@ -4,6 +4,14 @@
 
 ### 4.14-dev
 
+#### Code editor: brace indentation (Calliope Live, Spec I Stage 1)
+
+- Enter after `{` or `[` adds one indent unit (the file's detected one). Enter between a brace pair puts the caret on an indented line and the closing brace on its own line below. `}` or `]` typed on a line holding only indentation removes one unit, unless the line is already no deeper than its opening brace's line. Applies to JSON and CSS, in the theme editor and Document Mode. Nothing is reformatted and no brace is inserted
+- Braces in strings and comments do not count; this is read from the editor's highlight tokens (`$tokenTypeLookup`). The rules are pure functions, `planEnter` and `planCloseBracket` in `components/code-editor/text.ts`
+- Prism's CSS selector pattern may no longer start at a quote, so `content: "{";` is highlighted as a string instead of a selector and a brace. A brace after a space inside a CSS string (`"a {"`) is still misread
+- The closing-brace step-out needs a key press; text inserted without one (on-screen keyboard, input method, paste) is left as typed
+- `help/theme-editor.md`, `help/scriptorium.md`: brace indentation
+
 #### Docs: Calliope Live Spec I
 
 - Added Spec I (loose ends from Specs E to H: brace indentation in the code editor, theme editor layout by pane width, the theme probe measuring the specimen gallery, and adding uncatalogued `qt-*` classes to the hook catalogue)

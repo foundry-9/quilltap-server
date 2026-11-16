@@ -15,6 +15,7 @@ import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  KEY_DOWN_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   KEY_TAB_COMMAND,
@@ -82,7 +83,7 @@ function typeAt(editor: LexicalEditor, offset: number, text: string) {
   })
 }
 
-function key(editor: LexicalEditor, command: typeof KEY_TAB_COMMAND, init: KeyboardEventInit): KeyboardEvent {
+function key(editor: LexicalEditor, command: typeof KEY_TAB_COMMAND | typeof KEY_DOWN_COMMAND, init: KeyboardEventInit): KeyboardEvent {
   const event = new KeyboardEvent('keydown', { cancelable: true, bubbles: true, ...init })
   act(() => {
     editor.update(() => {
@@ -280,6 +281,126 @@ describe('keyboard', () => {
     key(m.editor, KEY_ENTER_COMMAND, { key: 'Enter' })
     expect(editorText(m.editor)).toBe('a {\n  color: red;\n  \n}\n')
     expect(caret(m.editor)).toEqual({ anchor: 20, focus: 20 })
+    m.unmount()
+  })
+
+  it.each([
+    ['css', 'a {}\n', 3, 'a {\n  \n}\n', 6],
+    ['css', '\ta {}\n\tb {\n\t\tcolor: red;\n\t}\n', 4, '\ta {\n\t\t\n\t}\n\tb {\n\t\tcolor: red;\n\t}\n', 7],
+    ['json', '{\n    "a": []\n}\n', 12, '{\n    "a": [\n        \n    ]\n}\n', 21],
+    ['json', '{\n\t"a": {}\n}\n', 9, '{\n\t"a": {\n\t\t\n\t}\n}\n', 12],
+  ] as const)('Enter between a brace pair opens an indented line (%s, %#)', (language, text, at, after, caretAt) => {
+    const m = mount(text, language)
+    settle(m.editor)
+    update(m.editor, () => $selectOffsets($getCodeBlock()!, at))
+    const enter = key(m.editor, KEY_ENTER_COMMAND, { key: 'Enter' })
+    expect(enter.defaultPrevented).toBe(true)
+    expect(editorText(m.editor)).toBe(after)
+    expect(caret(m.editor)).toEqual({ anchor: caretAt, focus: caretAt })
+    m.unmount()
+  })
+
+  it('Enter after a brace inside a string keeps the indent and adds none', () => {
+    const css = mount('a {\n  content: "{";\n}\n')
+    settle(css.editor)
+    update(css.editor, () => $selectOffsets($getCodeBlock()!, 'a {\n  content: "{'.length))
+    key(css.editor, KEY_ENTER_COMMAND, { key: 'Enter' })
+    expect(editorText(css.editor)).toBe('a {\n  content: "{\n  ";\n}\n')
+    css.unmount()
+    const json = mount('{\n  "a": "[]"\n}\n', 'json')
+    settle(json.editor)
+    update(json.editor, () => $selectOffsets($getCodeBlock()!, '{\n  "a": "['.length))
+    key(json.editor, KEY_ENTER_COMMAND, { key: 'Enter' })
+    expect(editorText(json.editor)).toBe('{\n  "a": "[\n  ]"\n}\n')
+    json.unmount()
+  })
+
+  it('Enter over a selection replaces it, then indents after the brace', () => {
+    const m = mount('a {color: red;}\n')
+    settle(m.editor)
+    update(m.editor, () => $selectOffsets($getCodeBlock()!, 3, 14))
+    key(m.editor, KEY_ENTER_COMMAND, { key: 'Enter' })
+    expect(editorText(m.editor)).toBe('a {\n  \n}\n')
+    expect(caret(m.editor)).toEqual({ anchor: 6, focus: 6 })
+    m.unmount()
+  })
+
+  it('a closing brace typed on a line of indentation steps out one unit', () => {
+    const css = mount('a {\n\tcolor: red;\n\t\n')
+    settle(css.editor)
+    update(css.editor, () => $selectOffsets($getCodeBlock()!, 'a {\n\tcolor: red;\n\t'.length))
+    const brace = key(css.editor, KEY_DOWN_COMMAND, { key: '}' })
+    expect(brace.defaultPrevented).toBe(true)
+    expect(editorText(css.editor)).toBe('a {\n\tcolor: red;\n}\n')
+    expect(caret(css.editor)).toEqual({ anchor: 18, focus: 18 })
+    css.unmount()
+
+    const json = mount('{\n  "a": [\n    1\n    \n}\n', 'json')
+    settle(json.editor)
+    update(json.editor, () => $selectOffsets($getCodeBlock()!, '{\n  "a": [\n    1\n    '.length))
+    key(json.editor, KEY_DOWN_COMMAND, { key: ']' })
+    expect(editorText(json.editor)).toBe('{\n  "a": [\n    1\n  ]\n}\n')
+    json.unmount()
+  })
+
+  it('a closing brace anywhere else is left to ordinary typing', () => {
+    const m = mount('a {\n  color: red; \n  /* x\n    \n  */\n')
+    settle(m.editor)
+    update(m.editor, () => $selectOffsets($getCodeBlock()!, 'a {\n  color: red; '.length))
+    expect(key(m.editor, KEY_DOWN_COMMAND, { key: '}' }).defaultPrevented).toBe(false)
+    // Inside a comment.
+    update(m.editor, () => $selectOffsets($getCodeBlock()!, 'a {\n  color: red; \n  /* x\n    '.length))
+    expect(key(m.editor, KEY_DOWN_COMMAND, { key: '}' }).defaultPrevented).toBe(false)
+    expect(editorText(m.editor)).toBe('a {\n  color: red; \n  /* x\n    \n  */\n')
+    m.unmount()
+  })
+
+  it('a read-only editor does not step a brace out', () => {
+    const m = mount('a {\n  \n', 'css', { readOnly: true })
+    settle(m.editor)
+    update(m.editor, () => $selectOffsets($getCodeBlock()!, 6))
+    expect(key(m.editor, KEY_DOWN_COMMAND, { key: '}' }).defaultPrevented).toBe(false)
+    expect(editorText(m.editor)).toBe('a {\n  \n')
+    m.unmount()
+  })
+
+  it('undo takes back an Enter and its indentation in one step', () => {
+    const m = mount('a {}\n')
+    settle(m.editor)
+    typeAt(m.editor, 0, 'b')
+    act(() => {
+      jest.advanceTimersByTime(1500)
+    })
+    update(m.editor, () => $selectOffsets($getCodeBlock()!, 4))
+    key(m.editor, KEY_ENTER_COMMAND, { key: 'Enter' })
+    expect(editorText(m.editor)).toBe('ba {\n  \n}\n')
+    act(() => {
+      m.editor.dispatchCommand(UNDO_COMMAND, undefined)
+    })
+    settle(m.editor)
+    expect(editorText(m.editor)).toBe('ba {}\n')
+    m.unmount()
+  })
+
+  it('undo takes back a stepped-out brace and puts the indentation back', () => {
+    const m = mount('a {\n  color: red;\n\n')
+    settle(m.editor)
+    typeAt(m.editor, 18, '  ')
+    act(() => {
+      jest.advanceTimersByTime(1500)
+    })
+    // One update for the caret and the key: jsdom's own selection, left where the
+    // typing above put it, would otherwise be read back in place of the caret.
+    update(m.editor, () => {
+      $selectOffsets($getCodeBlock()!, 20)
+      m.editor.dispatchCommand(KEY_DOWN_COMMAND, new KeyboardEvent('keydown', { key: '}', cancelable: true }))
+    })
+    expect(editorText(m.editor)).toBe('a {\n  color: red;\n}\n')
+    act(() => {
+      m.editor.dispatchCommand(UNDO_COMMAND, undefined)
+    })
+    settle(m.editor)
+    expect(editorText(m.editor)).toBe('a {\n  color: red;\n  \n')
     m.unmount()
   })
 

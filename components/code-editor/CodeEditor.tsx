@@ -18,6 +18,10 @@
  *   the document.
  * - **Tab indents, Shift+Tab outdents, Escape then Tab leaves**, and the
  *   accessible description says so.
+ * - **Enter after `{` or `[` indents one unit, and a closing brace typed on
+ *   a line of indentation steps back out** (Spec I, decision 1). The rules
+ *   are `planEnter` / `planCloseBracket` in `./text.ts`; which braces are
+ *   structure is the highlighter's say (`$tokenTypeLookup`).
  *
  * @module components/code-editor/CodeEditor
  */
@@ -65,8 +69,9 @@ import {
   detectIndentUnit,
   detectLineEnding,
   fromEditorText,
-  leadingIndentAt,
   lineStarts,
+  planCloseBracket,
+  planEnter,
   planIndent,
   planOutdent,
   toEditorText,
@@ -82,6 +87,7 @@ import {
   $replaceDocument,
   $selectOffsets,
   $createCodeBlock,
+  $tokenTypeLookup,
 } from './lexical-text'
 
 export type CodeEditorLanguage = 'json' | 'css'
@@ -214,6 +220,31 @@ function CodeBehaviourPlugin({ shapeRef }: { shapeRef: React.RefObject<Shape> })
         COMMAND_PRIORITY_CRITICAL,
       ),
       editor.registerCommand(
+        KEY_DOWN_COMMAND,
+        (event) => {
+          // A closing brace typed on a line of indentation alone steps out one unit.
+          if (event.key !== '}' && event.key !== ']') return false
+          if (event.isComposing || event.metaKey || (event.ctrlKey && !event.altKey) || !editor.isEditable()) return false
+          const code = $getCodeBlock()
+          const offsets = code ? $getSelectionOffsets(code) : null
+          if (!code || !offsets) return false
+          const plan = planCloseBracket(
+            $getEditorText(),
+            offsets.anchor,
+            offsets.focus,
+            shapeRef.current.indentUnit,
+            event.key,
+            $tokenTypeLookup(code),
+          )
+          if (!plan) return false
+          event.preventDefault()
+          $applyEdits(code, plan.edits)
+          $selectOffsets(code, plan.anchor, plan.focus)
+          return true
+        },
+        COMMAND_PRIORITY_HIGH,
+      ),
+      editor.registerCommand(
         KEY_ESCAPE_COMMAND,
         () => {
           leaveArmed = true
@@ -253,9 +284,16 @@ function CodeBehaviourPlugin({ shapeRef }: { shapeRef: React.RefObject<Shape> })
           const offsets = code ? $getSelectionOffsets(code) : null
           if (!code || !offsets) return false
           event?.preventDefault()
-          const start = Math.min(offsets.anchor, offsets.focus)
-          // Keep the line's indentation on the new line.
-          $insertTextAt(code, offsets.anchor, offsets.focus, '\n' + leadingIndentAt($getEditorText(), start))
+          // Keep the line's indentation; one unit deeper after an opening brace.
+          const plan = planEnter(
+            $getEditorText(),
+            offsets.anchor,
+            offsets.focus,
+            shapeRef.current.indentUnit,
+            $tokenTypeLookup(code),
+          )
+          $applyEdits(code, plan.edits)
+          $selectOffsets(code, plan.anchor, plan.focus)
           return true
         },
         COMMAND_PRIORITY_HIGH,

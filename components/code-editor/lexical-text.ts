@@ -13,7 +13,7 @@
  * @module components/code-editor/lexical-text
  */
 
-import { $createCodeNode, $isCodeNode, type CodeNode } from '@lexical/code'
+import { $createCodeNode, $isCodeHighlightNode, $isCodeNode, type CodeNode } from '@lexical/code'
 import {
   $createRangeSelection,
   $generateNodesFromRawText,
@@ -25,7 +25,7 @@ import {
   $setSelection,
   type PointType,
 } from 'lexical'
-import type { TextEdit } from './text'
+import type { TextEdit, TokenTypeAt } from './text'
 
 /** The single code block, or null while the document is not in shape. */
 export function $getCodeBlock(): CodeNode | null {
@@ -36,6 +36,37 @@ export function $getCodeBlock(): CodeNode | null {
 /** The document's text, as the editor holds it (`\n` line breaks). */
 export function $getEditorText(): string {
   return $getRoot().getTextContent()
+}
+
+/**
+ * The highlighter's token type for the character at a text offset, read from
+ * the code block's own nodes as they stand (built on first use, so a key that
+ * asks nothing costs nothing). Valid for the current state only.
+ */
+export function $tokenTypeLookup(code: CodeNode): TokenTypeAt {
+  let ends: number[] | null = null
+  let types: (string | undefined)[] = []
+  return (offset) => {
+    if (ends === null) {
+      ends = []
+      types = []
+      let end = 0
+      for (const child of code.getChildren()) {
+        end += child.getTextContentSize()
+        ends.push(end)
+        types.push($isCodeHighlightNode(child) ? (child.getHighlightType() ?? undefined) : undefined)
+      }
+    }
+    if (offset < 0) return undefined
+    let lo = 0
+    let hi = ends.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (ends[mid] > offset) hi = mid
+      else lo = mid + 1
+    }
+    return types[lo]
+  }
 }
 
 /** A fresh code block holding exactly `text`. */
