@@ -758,11 +758,12 @@ CREATE TABLE "chats" (
   "characterAvatars" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { imageId, generatedAt, afterMessageCount } } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,
   "alertCharactersOfLanternImages" INTEGER DEFAULT NULL,
-  "chatType" TEXT DEFAULT 'salon',                  -- 'salon' | 'help' | 'autonomous' | 'brahma'
+  "chatType" TEXT DEFAULT 'salon',                  -- 'salon' | 'help' | 'autonomous' | 'brahma' | 'calliope'
   "helpPageUrl" TEXT DEFAULT NULL,
-  "consoleConnectionProfileId" TEXT DEFAULT NULL,   -- Brahma Console (chatType='brahma') active model; NULL on other chats
+  "consoleConnectionProfileId" TEXT DEFAULT NULL,   -- console chats (chatType='brahma' | 'calliope') active model; NULL on other chats
   "consoleMode" TEXT DEFAULT NULL,                  -- Brahma Console: 'writing' = Writing Assistant conversation (set at creation, never changed); NULL = ordinary Console
   "consoleContext" TEXT DEFAULT NULL,               -- Brahma Console Writing Assistant: JSON array of ConsoleContextRef ({kind:'chat'|'project'|'store', id} | {kind:'general'}); NULL/[] = none
+  "themeDraftId" TEXT DEFAULT NULL,                 -- Calliope (chatType='calliope'): the theme draft id (folder Themes/<id>/ in Quilltap General) the conversation is about; NULL on other chats. Deleted with the draft. Added by add-calliope-theme-draft-field-v1
   "scenarioText" TEXT DEFAULT NULL,
   "scenarioSource" TEXT DEFAULT NULL,                -- JSON { mountPointId, path, bodySha256 }: the scenario file the preset under scenarioText was read from, and its body hash at pick time. NULL = custom scene or pre-source chat. Written only beside scenarioText by resolveScenarioSelection's two callers. Added by add-chat-scenario-source-v1
   "scenarioNotes" TEXT DEFAULT NULL,                 -- free-text notes layered beneath the preset in scenarioText. Added by add-chat-scenario-source-v1

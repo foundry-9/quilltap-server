@@ -15,6 +15,7 @@ API reference for Quilltap v4.3 and later.
 > **Freshness note (v4.7-dev):** Additions since v4.3:
 >
 > - **Brahma Console** (`/api/v1/brahma-console`) — a character-less, memory-free generic-LLM surface with its own collection/item/messages endpoints (see [Brahma Console](#brahma-console)).
+> - **Calliope** (`/api/v1/calliope`, 4.14) — the theme editor's assistant: console conversations about one theme draft, whose proposals the editor tries, keeps or discards (see [Calliope](#calliope)); settings at `/api/v1/settings/calliope`.
 > - **The Post Office** — inter-character mail. Two new chat actions: `POST /api/v1/chats/[id]?action=send-mail` (post a letter as a player-character) and `GET /api/v1/chats/[id]?action=mailbox&characterId=…` (list a player-character's mailbox). New LLM tools `send_mail` and `list_email` (renamed `list_mail` in 4.10, alongside the new `read_mail` and `discard_mail`); deliveries are announced by the `suparna` Staff sender.
 > - **Carina** — inline LLM queries via `@Name:` / `@Name?` markup and the `ask_carina` tool; answers post as `systemSender: 'carina'` rendered with the answerer's own avatar. `@Brahma` reaches the Brahma Console as a Carina answerer.
 > - **New `systemSender` values** — `carina` (inline-query answers) and `suparna` (Post Office mail-delivery announcements).
@@ -72,6 +73,7 @@ API reference for Quilltap v4.3 and later.
   - [Character Photos](#character-photos)
   - [Chats](#chats)
   - [Brahma Console](#brahma-console)
+  - [Calliope](#calliope)
   - [Scenario Builder](#scenario-builder)
   - [Chat Announcements](#chat-announcements)
   - [Chat Photo Albums](#chat-photo-albums)
@@ -607,6 +609,21 @@ budget alone and vice versa.
   "inlineConnectionProfileId": "uuid-or-null"
 }
 ```
+
+#### `GET /api/v1/settings/calliope`
+
+Read Calliope's instance-wide settings (`instance_settings['calliope']`): `connectionProfileId`, the engine a new conversation starts on and a conversation falls back to when its pinned profile is gone (`null` = the default profile; a stale id falls through), and `maxAgentTurns`, her agent-turn budget (default 25, at least 1, no upper bound; the duplicate/stale-query guard still stops a self-repeating loop). Read by `CALLIOPE_PERSONA` (`lib/services/calliope/persona.ts`).
+
+```json
+{
+  "connectionProfileId": null,
+  "maxAgentTurns": 12
+}
+```
+
+#### `PUT /api/v1/settings/calliope`
+
+Update them. The body is merged over the stored value before validation, so a partial body is a partial update.
 
 #### `GET /api/v1/settings/taboo`
 
@@ -3939,6 +3956,62 @@ Send a message; returns an SSE stream (legacy frame shape; the `done` frame carr
 #### `GET /api/v1/brahma-console/[id]/messages`
 
 Load the chat's messages. Each message's `attachments` is resolved to `{ id, filename, mimeType, isImage, path, mountPointId, missing }`.
+
+---
+
+### Calliope
+
+The theme editor's assistant (`chatType: 'calliope'`, Calliope Live Spec J): a console conversation, run by the same engine as the Brahma Console (`lib/services/console-engine/`, persona `CALLIOPE_PERSONA`), about one theme draft named by `chats.themeDraftId`. Help-like (no memory, no Concierge, kept out of global search); deleted with its draft. Her tools are the five `theme_*` tools under `effectCeiling: 'read'`; she **proposes** with `theme_propose` and never writes the draft. A proposal is the stored `theme_propose` TOOL row; its decision (`kept` / `discarded`) is recorded on that row, and *stale* is derived on every read by re-judging it against the draft as it now is (`lib/calliope/proposals.ts`, `lib/themes/assist/`). Reference pictures are documents at `Calliope/<name>` in Quilltap General (`lib/console-engine/attachments.ts`).
+
+`ProposalView` is `{ id, createdAt, title, reason, state: 'offered' | 'kept' | 'discarded' | 'stale', draftChanged, review, staleReason, operations }`, where `review` (null when stale) carries the operations in words, the warnings it brings in, the issues it clears, and the contrast pairs it breaks and mends.
+
+#### `GET /api/v1/calliope?draftId=<id>`
+
+List the conversations about a draft (most recent first). Each row: `id`, `title`, `themeDraftId`, `createdAt`, `updatedAt`, `lastMessageAt`, `messageCount`, `consoleConnectionProfileId`, `attachmentCount`.
+
+#### `POST /api/v1/calliope`
+
+Open a conversation. Body (strict): `{ draftId, connectionProfileId? }`. The draft must exist (404); the profile defaults to her setting, then the user's default. **Response**: `201 Created` with `{ chat }`.
+
+#### `POST /api/v1/calliope?action=upload`
+
+Store a reference picture, as the Console's upload does but under `Calliope/` in Quilltap General. Not bound to a conversation. **Response**: `201 Created` with `{ id, filename, mimeType, size, path, isImage }`.
+
+#### `POST /api/v1/calliope?action=discard-upload`
+
+Body `{ fileId }`. Removes an upload dropped before sending, only while it is still directly under `Calliope/`. **Response**: `{ outcome: 'deleted' | 'kept-moved' | 'missing' }`.
+
+#### `GET /api/v1/calliope/[id]`
+
+Conversation details.
+
+#### `PATCH /api/v1/calliope/[id]`
+
+Rename: `{ title }`. With `?action=set-model`, `{ connectionProfileId }` switches the model and the same conversation continues. **Response**: `{ chat }`.
+
+#### `POST /api/v1/calliope/[id]?action=keep`
+
+Body `{ proposalId }`. Re-judges the proposal against the draft as it now is and records it kept; **does not write the draft**. The editor applies the returned operations through its own edit path (one undo step; CSS through the stylesheet's save). **Response**: `{ proposalId, operations, review, draftChanged, revision, stylesRevision }`. `409` when it was already decided or no longer applies.
+
+#### `POST /api/v1/calliope/[id]?action=try`
+
+Body `{ proposalId }`. The proposal's result for the live preview: `{ proposalId, tokens, custom }`, where `custom` is the result's custom CSS validated and scoped by the theme engine exactly as an install would (`previewProposal`). Records nothing. `409` when it no longer applies.
+
+#### `POST /api/v1/calliope/[id]?action=discard`
+
+Body `{ proposalId }`. Records it discarded. **Response**: `{ proposalId, state: 'discarded' }`; `409` if already decided.
+
+#### `DELETE /api/v1/calliope/[id]`
+
+Delete the conversation, with its attachments still directly under `Calliope/`. **Response**: `{ deleted, attachmentsDeleted, attachmentsKept }`.
+
+#### `POST /api/v1/calliope/[id]/messages`
+
+Send a message; returns the console engine's SSE stream (legacy frame shape). Body: `{ content, fileIds? }`; each `fileId` must be a link under `Calliope/` in General. `content` may be empty when `fileIds` is not.
+
+#### `GET /api/v1/calliope/[id]/messages`
+
+Load the messages, with attachments resolved, and `proposals: ProposalView[]` judged against the draft as it now is. `draftMissing` is true when the draft is gone.
 
 ---
 

@@ -179,6 +179,49 @@ The inspector tells you which hook the element wears (or, when it wears none, th
 
 Without a mouse: every specimen in the gallery has **Inspect this** and **Show on this page**, and every hook in the Custom CSS reference has **Inspect this**, which says so plainly when nothing on the page is wearing it just now.
 
+## Calliope herself
+
+The Atelier is named for its presiding muse, and she does attend in person. Press **Calliope** — the button wearing her portrait, at the top of an open draft — and her panel opens: beside the sections when the pane is wide enough to spare the room, in their place when it is not. Press it again, or the close button in her panel, to send her off.
+
+Tell her the look you are after — a mood, a palette, a period, a picture — or the one thing you would have different ("make the sidebar darker", "the card titles in small caps"), and she sets to work: she reads the draft, looks up the tokens and hooks she needs, measures a colour or two, and sets down **proposals**. She never touches the draft herself. Everything she suggests waits on a card for your decision.
+
+### Her proposals
+
+Each proposal is a card with a title, her reason in a sentence or two, and what it does in plain words — each token, primitive, choice and stretch of stylesheet it changes, with the value before and after. Every proposal is checked against your draft the moment she makes it; one that would not apply, or would bring in an error, goes back to her to mend and you never see it. What reaches you also says any **contrast it breaks** (with the ratio before and after), any **warnings** it brings in, and anything it **mends**.
+
+- **Try** — the whole of Quilltap wears the draft *as it would be* with the proposal kept, so you may judge it where it lives. The draft itself is untouched. **Stop trying** puts the draft back on; trying another proposal, keeping or discarding, or closing her panel does the same.
+- **Keep** — the proposal is written into the draft through the editor's own hands, exactly as though you had made the changes yourself: its tokens, primitives and choices together are **one step of Undo**, and anything for the stylesheet goes into your **Custom CSS** (a stylesheet is begun if the draft has none). Anything you had typed is saved first.
+- **Discard** — the card is set aside, marked so.
+
+Should the draft change under a proposal so that it no longer applies — you edited the very rule it meant to replace, say — the card says **No longer applies**, and why, and offers **Ask her again**, which begins the request in her composer. A proposal that still applies to a draft that has moved on simply says so.
+
+### What she can and cannot do
+
+She can change tokens, primitives, choices and the stylesheet, and use the fonts and images the draft already has. She cannot add, remove or change files, nor the theme's name, version or subsystem settings: a new typeface must be uploaded in **Fonts** (and then she will gladly set it), a picture in **Images**, and the particulars live under **Subsystems and details**. She will tell you so rather than pretend otherwise. Her stylesheet rules may select only the catalogued hooks, and they pass through precisely the same checks and scoping as your own.
+
+### Pictures and conversations
+
+Attach a picture — a painting, a photograph, a swatch card — and tell her what to take from it; she will say what she took. Pictures you attach are kept in the **Calliope** folder of Quilltap General.
+
+Her conversations belong to the draft: the menu at the top of her panel lists this draft's conversations, opening on the most recent; **+** begins a new one and the bin deletes the one in hand, with any pictures attached to it, after asking. Deleting a draft takes its conversations with it. What you kept stays in the draft whatever becomes of the conversation. Her conversations are kept out of the global search.
+
+The engine she works on is shown at the top of her panel; choose another there for this conversation alone.
+
+### Asking her about something
+
+Several places in the Atelier will hand a question to her, with the request already begun for you to finish and send — nothing goes to her until you press send:
+
+- **Ask Calliope about this** in the [inspector](#inspecting-what-you-see), naming the hook you picked and what styles it now;
+- **Ask Calliope** beside each error and warning the draft has;
+- **Ask Calliope** beside a contrast pair that falls short, in a token's row.
+
+### Her settings
+
+Two dials for her live on the **Calliope** card in **Settings → Appearance** ([open it](/settings?section=calliope)):
+
+- **Calliope's engine** — the connection profile a new conversation starts on (your default, unless you name another). She works through tools, so choose a profile that permits them. A reasoning model wants generous **max tokens** on its profile: should her reply run past its allowance she will say it came back empty, and ask you to ask again for less, or raise it.
+- **Let Calliope take up to … turns** — how many steps (reading, looking up, measuring, proposing) she may take on one request before she must stop and say where she got to. A whole new look takes more than a single change.
+
 ## Installing
 
 When the draft pleases you, press **Install**. The Atelier packs it into a proper bundle and installs it exactly as though you had uploaded a `.qtap-theme` file, with every check that implies — so an install that succeeds is one that will load. Quilltap puts it on at once (*Worn with pride.*).

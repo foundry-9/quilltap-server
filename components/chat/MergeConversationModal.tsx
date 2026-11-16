@@ -46,7 +46,7 @@ interface MergeChatRow {
   updatedAt: string
   lastMessageAt: string | null
   participants: MergeChatParticipant[]
-  chatType?: 'salon' | 'help' | 'autonomous' | 'brahma'
+  chatType?: 'salon' | 'help' | 'autonomous' | 'brahma' | 'calliope'
 }
 
 interface OutfitSummaryResponse {

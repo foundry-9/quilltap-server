@@ -20,6 +20,8 @@
 
 import { memo, useCallback, useId } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useCalliopeHandOff } from './calliope/context'
+import { contrastHandOffText } from './calliope/hand-off'
 import type { ThemeTokensDocument, TokenDef } from '@/lib/themes/engine/client'
 import { ValueControl } from './controls'
 import { useEditorSelector, type EditorStore } from './editor-store'
@@ -74,6 +76,7 @@ function sourceText(source: RowSource): string {
 }
 
 function ContrastLine({ finding, against, role }: ReturnType<typeof rowContrast>[number]) {
+  const handOff = useCalliopeHandOff()
   const kind = finding.pair.kind
   const relation = role === 'foreground' ? `on ${against}` : `under ${against}`
   if (finding.status === 'unchecked') {
@@ -89,6 +92,14 @@ function ContrastLine({ finding, against, role }: ReturnType<typeof rowContrast>
       <Icon name={pass ? 'check' : 'alert-triangle'} className="inline w-3 h-3 mr-1 align-[-2px]" />
       <span className="font-medium">{pass ? 'Passes' : 'Falls short'}</span>{' '}
       {finding.ratio?.toFixed(2)}:1 {relation}, needs {finding.threshold}:1 ({kind})
+      {!pass && handOff && (
+        <>
+          {' '}
+          <button type="button" className="underline qt-text-xs" onClick={() => handOff.ask(contrastHandOffText(finding))}>
+            Ask Calliope
+          </button>
+        </>
+      )}
     </li>
   )
 }

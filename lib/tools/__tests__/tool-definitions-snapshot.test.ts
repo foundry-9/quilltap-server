@@ -62,6 +62,11 @@ import { lookupCharacterToolDefinition } from '../lookup-character-tool'
 import { lookupMemoriesToolDefinition } from '../lookup-memories-tool'
 import { lookupMessagesToolDefinition } from '../lookup-messages-tool'
 import { readMessagesToolDefinition } from '../read-messages-tool'
+import { themeReadDraftToolDefinition } from '../theme-read-draft-tool'
+import { themeLookupTokensToolDefinition } from '../theme-lookup-tokens-tool'
+import { themeLookupHooksToolDefinition } from '../theme-lookup-hooks-tool'
+import { themeCheckContrastToolDefinition } from '../theme-check-contrast-tool'
+import { themeProposeToolDefinition } from '../theme-propose-tool'
 import {
   searchScriptoriumToolDefinition,
   searchScriptoriumBrahmaToolDefinition,
@@ -157,6 +162,11 @@ const ALL_TOOLS = {
   lookupMemories: lookupMemoriesToolDefinition,
   lookupMessages: lookupMessagesToolDefinition,
   readMessages: readMessagesToolDefinition,
+  themeReadDraft: themeReadDraftToolDefinition,
+  themeLookupTokens: themeLookupTokensToolDefinition,
+  themeLookupHooks: themeLookupHooksToolDefinition,
+  themeCheckContrast: themeCheckContrastToolDefinition,
+  themePropose: themeProposeToolDefinition,
   searchScriptorium: searchScriptoriumToolDefinition,
   searchScriptoriumBrahma: searchScriptoriumBrahmaToolDefinition,
   searchScriptoriumScenario: searchScriptoriumScenarioToolDefinition,

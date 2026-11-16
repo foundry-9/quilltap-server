@@ -74,6 +74,13 @@ describe('theme engine browser entry', () => {
     expect(findForbiddenChain('lib/themes/engine/client.ts')).toBeNull()
   })
 
+  it.each(['lib/themes/assist/change-set.ts', 'lib/themes/assist/styled-by.ts'])(
+    "Calliope's browser-safe module %s reaches no postcss, Node built-in or logger",
+    (entry) => {
+      expect(findForbiddenChain(entry)).toBeNull()
+    }
+  )
+
   it('the walker catches the server entry reaching postcss', () => {
     const chain = findForbiddenChain('lib/themes/engine/index.ts')
     expect(chain).not.toBeNull()

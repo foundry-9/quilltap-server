@@ -69,6 +69,11 @@ exports[`tool definitions: declared effects effects snapshot (static effect, or 
   "submit_final_response": "none",
   "terminal_list": "read",
   "terminal_read": "read",
+  "theme_check_contrast": "read",
+  "theme_lookup_hooks": "read",
+  "theme_lookup_tokens": "read",
+  "theme_propose": "none",
+  "theme_read_draft": "read",
   "upsert_annotation": "write",
   "wardrobe_archive": "write",
   "wardrobe_create": "write",
@@ -2446,6 +2451,453 @@ exports[`tool definitions: derived OpenAI parameters terminalRead: parameters sn
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters themeCheckContrast: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "background": {
+      "description": "The colour behind it, in the same forms.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "foreground": {
+      "description": "The colour in front: a token ("--theme-primary-foreground") or a colour ("#fdf6e3", "oklch(0.3 0.05 260)").",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "kind": {
+      "description": ""text" needs 4.5:1, "non-text" (focus rings, borders that carry meaning) 3:1. Defaults to the registry pair's kind, else text.",
+      "enum": [
+        "text",
+        "non-text",
+      ],
+      "type": "string",
+    },
+    "pair": {
+      "description": "A registry contrast pair by id: the two token names without "--", joined by "/", e.g. "theme-foreground/theme-background".",
+      "maxLength": 120,
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters themeLookupHooks: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "classes": {
+      "description": "Exact hook classes, e.g. ["qt-chat-message"].",
+      "items": {
+        "pattern": "^\\.?qt-[a-z0-9-]+$",
+        "type": "string",
+      },
+      "maxItems": 20,
+      "type": "array",
+    },
+    "query": {
+      "description": "Words matched against a hook's label, class and description, e.g. "message bubble" or "sidebar".",
+      "maxLength": 200,
+      "type": "string",
+    },
+    "surface": {
+      "description": "Only hooks on this part of the app.",
+      "enum": [
+        "app-shell",
+        "workspace",
+        "home",
+        "sidebar",
+        "salon",
+        "character",
+        "dialog",
+        "settings",
+        "common",
+      ],
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters themeLookupTokens: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "group": {
+      "description": "A token group id or a word in its label, e.g. "colors", "chat" or "typography".",
+      "maxLength": 80,
+      "type": "string",
+    },
+    "names": {
+      "description": "Exact registry names, e.g. ["--theme-primary", "--qt-chat-user-bg"].",
+      "items": {
+        "pattern": "^--[a-z0-9-]+$",
+        "type": "string",
+      },
+      "maxItems": 40,
+      "type": "array",
+    },
+    "query": {
+      "description": "Words matched against a token's label, name and description, e.g. "sidebar background" or "focus ring".",
+      "maxLength": 200,
+      "type": "string",
+    },
+    "setOnly": {
+      "description": "Only tokens the draft sets itself.",
+      "type": "boolean",
+    },
+    "type": {
+      "description": "Only tokens of this type.",
+      "enum": [
+        "color",
+        "radius",
+        "length",
+        "number",
+        "font-weight",
+        "shadow",
+        "duration",
+        "easing",
+        "opacity",
+        "font-family",
+        "transition",
+        "keyword",
+        "image",
+        "blur",
+        "raw",
+        "z-index",
+        "font-style",
+      ],
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters themePropose: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "operations": {
+      "items": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "dark": {
+                "description": "A dark-mode value apart from light",
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string",
+              },
+              "op": {
+                "const": "set-token",
+                "type": "string",
+              },
+              "token": {
+                "description": "A registry token, e.g. "--theme-primary"",
+                "pattern": "^--[a-z0-9-]+$",
+                "type": "string",
+              },
+              "value": {
+                "description": "The value for light mode; dark follows it unless the token has, or is given, a dark value of its own",
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "op",
+              "token",
+            ],
+            "type": "object",
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "op": {
+                "const": "reset-token",
+                "type": "string",
+              },
+              "token": {
+                "description": "Drop the theme's value in both modes, so the default is in force",
+                "pattern": "^--[a-z0-9-]+$",
+                "type": "string",
+              },
+            },
+            "required": [
+              "op",
+              "token",
+            ],
+            "type": "object",
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "dark": {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string",
+              },
+              "name": {
+                "description": "A primitive name in kebab-case, without the --p- prefix",
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "type": "string",
+              },
+              "op": {
+                "const": "add-primitive",
+                "type": "string",
+              },
+              "type": {
+                "enum": [
+                  "color",
+                  "length",
+                  "radius",
+                  "shadow",
+                  "font-family",
+                  "font-weight",
+                  "duration",
+                  "easing",
+                  "opacity",
+                  "image",
+                  "number",
+                  "raw",
+                ],
+                "type": "string",
+              },
+              "value": {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "op",
+              "name",
+              "type",
+              "value",
+            ],
+            "type": "object",
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "dark": {
+                "anyOf": [
+                  {
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "A dark value apart from light; null to let dark follow light again",
+              },
+              "name": {
+                "description": "A primitive name in kebab-case, without the --p- prefix",
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "type": "string",
+              },
+              "op": {
+                "const": "set-primitive",
+                "type": "string",
+              },
+              "type": {
+                "enum": [
+                  "color",
+                  "length",
+                  "radius",
+                  "shadow",
+                  "font-family",
+                  "font-weight",
+                  "duration",
+                  "easing",
+                  "opacity",
+                  "image",
+                  "number",
+                  "raw",
+                ],
+                "type": "string",
+              },
+              "value": {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "op",
+              "name",
+            ],
+            "type": "object",
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "description": "A primitive name in kebab-case, without the --p- prefix",
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "type": "string",
+              },
+              "op": {
+                "const": "rename-primitive",
+                "type": "string",
+              },
+              "to": {
+                "description": "A primitive name in kebab-case, without the --p- prefix",
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "type": "string",
+              },
+            },
+            "required": [
+              "op",
+              "from",
+              "to",
+            ],
+            "type": "object",
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "description": "Its value is written into everything that referred to it",
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "type": "string",
+              },
+              "op": {
+                "const": "remove-primitive",
+                "type": "string",
+              },
+            },
+            "required": [
+              "op",
+              "name",
+            ],
+            "type": "object",
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "choice": {
+                "minLength": 1,
+                "type": "string",
+              },
+              "op": {
+                "const": "set-choice",
+                "type": "string",
+              },
+              "option": {
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "op",
+              "choice",
+              "option",
+            ],
+            "type": "object",
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "find": {
+                "description": "A stretch of the stylesheet exactly as it is written, found exactly once",
+                "maxLength": 20000,
+                "minLength": 1,
+                "type": "string",
+              },
+              "op": {
+                "const": "replace-css",
+                "type": "string",
+              },
+              "replace": {
+                "description": "What it becomes (may be empty to delete it)",
+                "maxLength": 20000,
+                "type": "string",
+              },
+            },
+            "required": [
+              "op",
+              "find",
+              "replace",
+            ],
+            "type": "object",
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "css": {
+                "description": "The whole stylesheet; an empty string empties it",
+                "maxLength": 100000,
+                "type": "string",
+              },
+              "op": {
+                "const": "set-css",
+                "type": "string",
+              },
+            },
+            "required": [
+              "op",
+              "css",
+            ],
+            "type": "object",
+          },
+        ],
+      },
+      "maxItems": 200,
+      "minItems": 1,
+      "type": "array",
+    },
+    "reason": {
+      "description": "One paragraph: what it does and why",
+      "maxLength": 1500,
+      "minLength": 1,
+      "type": "string",
+    },
+    "title": {
+      "description": "A short name for the proposal",
+      "maxLength": 120,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "title",
+    "reason",
+    "operations",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters themeReadDraft: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "part": {
+      "default": "all",
+      "description": ""all" (the default) for the whole draft — name, choices, primitives, the tokens it sets, the stylesheet (clipped when long), images and issues; "css" for the stylesheet alone, in full up to a larger limit.",
+      "enum": [
+        "all",
+        "css",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "part",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters upsertAnnotation: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -2950,6 +3402,11 @@ exports[`tool definitions: the tool picker picker snapshot (listed category, or 
   "submit_final_response": "unlisted",
   "terminal_list": "utility",
   "terminal_read": "utility",
+  "theme_check_contrast": "unlisted",
+  "theme_lookup_hooks": "unlisted",
+  "theme_lookup_tokens": "unlisted",
+  "theme_propose": "unlisted",
+  "theme_read_draft": "unlisted",
   "upsert_annotation": "search",
   "wardrobe_archive": "wardrobe [canCreateOutfits]",
   "wardrobe_create": "wardrobe [canCreateOutfits]",

@@ -30,6 +30,7 @@ import type { SearchResult, SearchType, MatchPriority } from '@/components/searc
 import { ALL_SEARCH_TYPES } from '@/components/search/types';
 import { searchDocumentText } from '@/lib/mount-index/document-text-search';
 import { tokenizeLikeUnicode61 } from '@/lib/database/repositories/fts-query';
+import { isListedInGlobalSearch } from '@/lib/schemas/chat.types';
 
 /**
  * Accepted `types` values — the same ordered list the dialog renders chips
@@ -206,7 +207,11 @@ export const GET = createContextHandler(async (req, context) => {
 
     // Load chats if needed for chat title search or message content search
     const needChats = requestedTypes.includes('chats') || requestedTypes.includes('messages');
-    const chats = needChats ? await repos.chats.findByUserId(user.id) : [];
+    // Calliope's conversations belong to their theme draft, not to the list
+    // of chats: neither their titles nor their messages are search results.
+    const chats = needChats
+      ? (await repos.chats.findByUserId(user.id)).filter(c => isListedInGlobalSearch(c.chatType))
+      : [];
 
     // Build a chat lookup map for enriching message results
     const chatMap = new Map(chats.map(c => [c.id, c]));

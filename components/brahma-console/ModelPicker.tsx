@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Icon } from '@/components/ui/icon'
+import { Icon, type IconName } from '@/components/ui/icon'
 import type { BrahmaConnectionProfile } from '@/components/providers/brahma-console-provider'
 
 interface ModelPickerProps {
@@ -18,9 +18,11 @@ interface ModelPickerProps {
   activeId: string | null
   onSelect: (id: string) => void
   disabled?: boolean
+  /** The mark beside the model's name (default: the console's). */
+  icon?: IconName
 }
 
-export function ModelPicker({ profiles, activeId, onSelect, disabled }: ModelPickerProps) {
+export function ModelPicker({ profiles, activeId, onSelect, disabled, icon = 'brahma-console' }: ModelPickerProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -60,7 +62,7 @@ export function ModelPicker({ profiles, activeId, onSelect, disabled }: ModelPic
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <Icon name="brahma-console" className="w-3.5 h-3.5 flex-shrink-0" />
+        <Icon name={icon} className="w-3.5 h-3.5 flex-shrink-0" />
         <span className="truncate">{label}</span>
         <Icon name="chevron-down" className="w-3 h-3 flex-shrink-0" />
       </button>

@@ -413,6 +413,35 @@ export const BrahmaConsoleSettingsSchema = z.object({
 export type BrahmaConsoleSettings = z.infer<typeof BrahmaConsoleSettingsSchema>;
 
 // ============================================================================
+// CALLIOPE (the theme editor's assistant)
+// ============================================================================
+
+/** Calliope's agent-turn budget when the operator hasn't set one. */
+export const DEFAULT_CALLIOPE_MAX_AGENT_TURNS = 25;
+
+/**
+ * Calliope's settings (Calliope Live, Spec J decision 10), stored
+ * instance-wide in `instance_settings['calliope']` like the Brahma Console's.
+ * Accessors `getCalliopeSettings` / `setCalliopeSettings` in
+ * `lib/instance-settings`; resolved for her turns by
+ * `resolveCalliopeConnectionProfile` / `resolveCalliopeMaxAgentTurns`
+ * (`lib/services/calliope/settings.ts`).
+ */
+export const CalliopeSettingsSchema = z.object({
+  /**
+   * The engine a new conversation with Calliope starts on (and the one a
+   * conversation falls back to when the profile it pinned is gone).
+   * null/undefined = the user's default connection profile; a stale id falls
+   * through. A conversation's own picker overrides it for that conversation.
+   */
+  connectionProfileId: UUIDSchema.nullable().optional(),
+  /** Tool-use rounds per question before she must answer with what she has. */
+  maxAgentTurns: z.number().int().min(1).default(DEFAULT_CALLIOPE_MAX_AGENT_TURNS),
+});
+
+export type CalliopeSettings = z.infer<typeof CalliopeSettingsSchema>;
+
+// ============================================================================
 // TABOO (instance-wide forbidden phrases)
 // ============================================================================
 

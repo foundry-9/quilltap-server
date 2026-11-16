@@ -245,6 +245,10 @@ Some installations may show debug features:
 
 These are useful for developers and are usually hidden in production.
 
+## Calliope
+
+The **Calliope** card ([open it](/settings?section=calliope)) sets two things for the muse who attends the theme editor: **Calliope's engine**, the connection profile her conversations start on (your default unless you name another, and one that permits tool use), and **Let Calliope take up to … turns**, how many steps she may take on one request. What she does, and how her proposals are tried, kept and discarded, is in [Calliope's Atelier](theme-editor.md#calliope-herself).
+
 ## Preferences Are Saved Automatically
 
 All Appearance settings are saved automatically:

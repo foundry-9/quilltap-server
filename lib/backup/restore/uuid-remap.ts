@@ -91,26 +91,33 @@ const MOUNT_POINT_SETTING_KEYS = new Set([
 ]);
 
 /**
- * The Brahma Console instance setting is a JSON blob; its
- * `inlineConnectionProfileId` names a connection profile, which is remapped
- * like every other profile reference. Unparseable values pass through.
+ * Instance settings that are JSON blobs naming a connection profile, and the
+ * field that names it: the Brahma Console's `inlineConnectionProfileId` and
+ * Calliope's `connectionProfileId`. Each is remapped like every other profile
+ * reference. Unparseable values pass through.
  */
-const BRAHMA_CONSOLE_SETTING_KEY = 'brahmaConsole';
+const PROFILE_BEARING_JSON_SETTINGS: ReadonlyMap<string, string> = new Map([
+  ['brahmaConsole', 'inlineConnectionProfileId'],
+  ['calliope', 'connectionProfileId'],
+]);
 
-function remapBrahmaConsoleSetting(value: string, remapper: UuidRemapper): string {
+function remapProfileInJsonSetting(key: string, field: string, value: string, remapper: UuidRemapper): string {
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
-    if (parsed && typeof parsed.inlineConnectionProfileId === 'string') {
+    if (parsed && typeof parsed[field] === 'string') {
       // A profile the backup does not carry is cleared rather than minted.
-      const remapped = remapper.lookup(parsed.inlineConnectionProfileId) ?? null;
-      moduleLogger.debug('Remapped inline Brahma connection profile in instance settings', {
-        from: parsed.inlineConnectionProfileId,
+      const remapped = remapper.lookup(parsed[field] as string) ?? null;
+      moduleLogger.debug('Remapped connection profile in JSON instance setting', {
+        key,
+        field,
+        from: parsed[field],
         to: remapped,
       });
-      return JSON.stringify({ ...parsed, inlineConnectionProfileId: remapped });
+      return JSON.stringify({ ...parsed, [field]: remapped });
     }
   } catch (error) {
-    moduleLogger.warn('brahmaConsole instance setting is not valid JSON; leaving it as is', {
+    moduleLogger.warn('JSON instance setting is not valid JSON; leaving it as is', {
+      key,
       error: error instanceof Error ? error.message : String(error),
     });
   }
@@ -628,8 +635,9 @@ export function remapBackupData(
     if (MOUNT_POINT_SETTING_KEYS.has(row.key) && row.value) {
       return { key: row.key, value: remapper.lookup(row.value) ?? row.value };
     }
-    if (row.key === BRAHMA_CONSOLE_SETTING_KEY && row.value) {
-      return { key: row.key, value: remapBrahmaConsoleSetting(row.value, remapper) };
+    const profileField = PROFILE_BEARING_JSON_SETTINGS.get(row.key);
+    if (profileField && row.value) {
+      return { key: row.key, value: remapProfileInJsonSetting(row.key, profileField, row.value, remapper) };
     }
     return row;
   });

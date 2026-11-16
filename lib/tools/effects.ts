@@ -86,6 +86,11 @@ import { lookupCharacterToolEffect } from './lookup-character-tool';
 import { lookupMemoriesToolEffect } from './lookup-memories-tool';
 import { lookupMessagesToolEffect } from './lookup-messages-tool';
 import { readMessagesToolEffect } from './read-messages-tool';
+import { themeReadDraftToolEffect } from './theme-read-draft-tool';
+import { themeLookupTokensToolEffect } from './theme-lookup-tokens-tool';
+import { themeLookupHooksToolEffect } from './theme-lookup-hooks-tool';
+import { themeCheckContrastToolEffect } from './theme-check-contrast-tool';
+import { themeProposeToolEffect } from './theme-propose-tool';
 import { searchScriptoriumToolEffect } from './search-scriptorium-tool';
 import { selfInventoryToolEffect } from './self-inventory-tool';
 import { sendMailToolEffect } from './send-mail-tool';
@@ -169,6 +174,11 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
   lookup_memories: lookupMemoriesToolEffect,
   lookup_messages: lookupMessagesToolEffect,
   read_messages: readMessagesToolEffect,
+  theme_read_draft: themeReadDraftToolEffect,
+  theme_lookup_tokens: themeLookupTokensToolEffect,
+  theme_lookup_hooks: themeLookupHooksToolEffect,
+  theme_check_contrast: themeCheckContrastToolEffect,
+  theme_propose: themeProposeToolEffect,
   search: searchScriptoriumToolEffect,
   self_inventory: selfInventoryToolEffect,
   send_mail: sendMailToolEffect,

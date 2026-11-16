@@ -440,6 +440,40 @@ describe('handleBrahmaConsoleMessage — budget exhaustion (Bug 47)', () => {
     // The stream always signals completion — the client never hangs.
     expect(encodeDoneEvent).toHaveBeenCalledTimes(1)
   })
+
+  it('does not claim a spent budget when the model answers with nothing early', async () => {
+    // Budget of 12: turn 1 runs a tool, turn 2 comes back empty with no tool
+    // call (a reply cut off at its output allowance). Two turns, not twelve.
+    jest.mocked(resolveBrahmaMaxAgentTurns).mockResolvedValue(12)
+    jest.mocked(buildTools).mockResolvedValue({
+      tools: [{ name: 'run_sql' }],
+      modelSupportsNativeTools: true,
+      useNativeWebSearch: false,
+    } as never)
+    jest.mocked(streamMessage).mockImplementation(async function* () {
+      yield { content: '' }
+      yield { done: true, rawResponse: { status: 'incomplete' } }
+    } as never)
+    jest.mocked(detectToolCallsInResponse)
+      .mockReturnValueOnce([{ name: 'run_sql', arguments: { sql: 'SELECT 1' }, callId: 'c1' }] as never)
+      .mockReturnValue(null as never)
+    jest.mocked(processToolCalls).mockResolvedValue({
+      toolMessages: [{ toolName: 'run_sql', success: true, content: '{"rows":[7]}', callId: 'c1' }],
+      generatedImagePaths: [],
+    } as never)
+    jest.mocked(saveToolMessages).mockResolvedValue(undefined as never)
+
+    const repos = makeMockRepos()
+    const stream = await handleBrahmaConsoleMessage(repos as never, 'chat-1', 'user-1', { content: 'how many rows?' })
+    await drain(stream)
+
+    const saved = repos.chats.addMessage.mock.calls.map((c: unknown[]) => c[1] as { role: string; content: string })
+    const finalAssistant = saved.find(m => m.role === 'ASSISTANT' && m.content.includes('answered with nothing'))
+    expect(finalAssistant).toBeTruthy()
+    expect(finalAssistant?.content).not.toMatch(/turn budget/)
+    expect(finalAssistant?.content).toMatch(/max tokens/)
+    expect(encodeDoneEvent).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('resolveBrahmaConnectionProfile', () => {

@@ -11,6 +11,7 @@ import { WithChatSettings } from './with-chat-settings'
 
 export { default as AppearanceCard } from '@/components/settings/appearance-tab'
 export { default as TagsCard } from '@/components/settings/tags-tab'
+export { CalliopeSettings as CalliopeCard } from '@/components/settings/calliope/CalliopeSettings'
 
 export function AvatarSettingsCard() {
   return (

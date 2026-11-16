@@ -105,6 +105,8 @@ import {
   executeReadMessagesTool,
   type BrahmaLookupResult,
 } from '@/lib/tools/handlers/brahma-lookup-handler';
+import { THEME_ASSIST_HANDLERS } from '@/lib/tools/handlers/theme-assist-handler';
+import { THEME_ASSIST_TOOL_NAMES } from '@/lib/tools/theme-assist-tools';
 import {
   executeUpsertAnnotationTool,
   formatUpsertAnnotationResults,
@@ -318,6 +320,8 @@ const BUILT_IN_TOOLS = new Set<string>([
   // Brahma Console — read-only SQL access + lookup shortcuts (operator surface only)
   'run_sql',
   ...BRAHMA_LOOKUP_TOOL_NAMES,
+  // Calliope — the theme draft's references and proposals (her surface only)
+  ...THEME_ASSIST_TOOL_NAMES,
   // Wardrobe tools
   'wardrobe_list',
   'wardrobe_read',
@@ -1078,6 +1082,22 @@ export async function executeToolCallWithContext(
         toolName: toolCall.name,
         success: result.success,
         result: result.success ? result : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Calliope's theme tools. Offered only on her surface; each handler also
+    // refuses outside a Calliope conversation that names its draft.
+    const themeAssist = THEME_ASSIST_HANDLERS[toolCall.name]
+    if (themeAssist) {
+      const result = await themeAssist(toolCall.arguments, { chatId, userId });
+
+      return {
+        toolName: toolCall.name,
+        success: result.success,
+        result: result.success
+          ? { formattedText: result.formattedText, ...(result.proposal ? { proposal: result.proposal } : {}) }
+          : null,
         error: result.success ? undefined : result.error,
       };
     }

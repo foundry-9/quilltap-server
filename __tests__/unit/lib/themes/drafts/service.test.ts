@@ -24,6 +24,12 @@ jest.mock('@/lib/doc-edit/uri-producers', () => ({
   docStoreUriFor: async ({ relativePath }: { relativePath: string }) => `qtap://Quilltap General/${relativePath}`,
 }));
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }));
+/** Calliope's conversations, which leave with their draft (Spec J decision 9). */
+const mockCalliopeChats = {
+  findCalliopeByThemeDraft: jest.fn(async (draftId: string) => (draftId === 'doomed' ? [{ id: 'chat-a' }, { id: 'chat-b' }] : [])),
+  delete: jest.fn(async () => true),
+};
+jest.mock('@/lib/repositories/factory', () => ({ getRepositories: () => ({ chats: mockCalliopeChats }) }));
 /** The bytes each served response carried, captured on their way to the route helper. */
 const mockServedBytes: Uint8Array[] = [];
 jest.mock('@/lib/api/serve-stored-bytes', () => {
@@ -204,6 +210,9 @@ describe('save', () => {
     await createDraft({ name: 'Doomed', from: 'rains' });
     await deleteDraft('doomed');
     expect([...fake.files.keys()].filter((k) => k.startsWith('Themes/doomed/'))).toEqual([]);
+    // Its conversations with Calliope go with it, each through the chats repository's delete.
+    expect(mockCalliopeChats.findCalliopeByThemeDraft).toHaveBeenCalledWith('doomed');
+    expect(mockCalliopeChats.delete.mock.calls.map((c) => (c as unknown[])[0])).toEqual(['chat-a', 'chat-b']);
     await expect(readDraft('doomed')).rejects.toThrow('No theme draft');
   });
 });

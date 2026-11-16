@@ -23,6 +23,9 @@ import {
   BrahmaConsoleSettingsSchema,
   type BrahmaConsoleSettings,
   DEFAULT_BRAHMA_MAX_AGENT_TURNS,
+  CalliopeSettingsSchema,
+  type CalliopeSettings,
+  DEFAULT_CALLIOPE_MAX_AGENT_TURNS,
   DataRetentionSettingsSchema,
   type DataRetentionSettings,
   MemoryConsolidationSettingsSchema,
@@ -51,6 +54,7 @@ const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
 const KEY_LAST_MAINTENANCE_SWEEP_AT = 'lastMaintenanceSweepAt';
 const KEY_DATA_RETENTION = 'dataRetention';
 const KEY_BRAHMA_CONSOLE = 'brahmaConsole';
+const KEY_CALLIOPE = 'calliope';
 const KEY_TABOO = 'taboo';
 
 /** Key the version guard writes (see `lib/startup/version-guard.ts`). */
@@ -97,6 +101,9 @@ const DEFAULT_DATA_RETENTION_SETTINGS: DataRetentionSettings = {
 };
 const DEFAULT_BRAHMA_CONSOLE_SETTINGS: BrahmaConsoleSettings = {
   maxAgentTurns: DEFAULT_BRAHMA_MAX_AGENT_TURNS,
+};
+const DEFAULT_CALLIOPE_SETTINGS: CalliopeSettings = {
+  maxAgentTurns: DEFAULT_CALLIOPE_MAX_AGENT_TURNS,
 };
 const DEFAULT_TABOO_SETTINGS: TabooSettings = {
   phrases: [],
@@ -310,6 +317,16 @@ export async function getBrahmaConsoleSettings(): Promise<BrahmaConsoleSettings>
   return readJsonSetting(KEY_BRAHMA_CONSOLE, BrahmaConsoleSettingsSchema, DEFAULT_BRAHMA_CONSOLE_SETTINGS);
 }
 
+/** Calliope's settings: her default engine and her turn budget (defaults when unwritten). */
+export async function getCalliopeSettings(): Promise<CalliopeSettings> {
+  return readJsonSetting(KEY_CALLIOPE, CalliopeSettingsSchema, DEFAULT_CALLIOPE_SETTINGS);
+}
+
+/** Persist Calliope's settings; returns exactly what was stored. */
+export async function setCalliopeSettings(value: CalliopeSettings): Promise<CalliopeSettings> {
+  return writeJsonSetting(KEY_CALLIOPE, CalliopeSettingsSchema, value);
+}
+
 /** Persist the Brahma Console settings; returns exactly what was stored. */
 export async function setBrahmaConsoleSettings(
   value: BrahmaConsoleSettings,
@@ -479,6 +496,7 @@ export async function writeInstanceSetting(key: string, value: string): Promise<
 // Re-export the schema for callers that want to validate independently.
 export {
   BrahmaConsoleSettingsSchema,
+  CalliopeSettingsSchema,
   DataRetentionSettingsSchema,
   MemoryConsolidationSettingsSchema,
   MemoryExtractionLimitsSchema,
@@ -489,6 +507,7 @@ export {
 };
 export type {
   BrahmaConsoleSettings,
+  CalliopeSettings,
   DataRetentionSettings,
   MemoryConsolidationSettings,
   MemoryExtractionLimits,

@@ -45,7 +45,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { HOOK_CATALOGUE } from '../lib/themes/hooks/index.ts'
@@ -120,9 +120,10 @@ const BARE = /(?<![\w:/-])(qt-[a-z0-9]+(?:--?[a-z0-9]+)*)(-?\$\{|-\*|-(?![a-z0-9
 const HIGHLIGHT = /::highlight\((qt-[a-z0-9-]+)\)/g
 
 function tracked(globs) {
+  // A tracked file deleted in the working tree (not yet committed) is gone.
   return execFileSync('git', ['ls-files', ...globs], { cwd: REPO_ROOT, encoding: 'utf8' })
     .split('\n')
-    .filter(Boolean)
+    .filter((file) => file && existsSync(path.join(REPO_ROOT, file)))
 }
 
 /** Every `qt-*` class the app's own stylesheets define. */

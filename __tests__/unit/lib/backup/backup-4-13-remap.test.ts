@@ -162,3 +162,45 @@ describe('Atlas entries in a new-account restore', () => {
     expect(planAtlasImagePointerFixes(data, new UuidRemapper())).toEqual([])
   })
 })
+
+describe('Calliope in a new-account restore', () => {
+  const CHAT_ID = 'f6666666-6666-4666-8666-666666666666'
+
+  function withCalliope(): BackupData {
+    const data = backup()
+    data.instanceSettings = [
+      { key: 'calliope', value: JSON.stringify({ connectionProfileId: PROFILE_ID, maxAgentTurns: 9 }) },
+      { key: 'brahmaConsole', value: JSON.stringify({ inlineConnectionProfileId: OUTFIT_PROFILE_ID, maxAgentTurns: 10 }) },
+    ] as unknown as BackupData['instanceSettings']
+    data.chats = [
+      {
+        id: CHAT_ID,
+        userId: 'old-user',
+        participants: [],
+        title: 'A Word with the Muse',
+        chatType: 'calliope',
+        themeDraftId: 'rains',
+        consoleConnectionProfileId: PROFILE_ID,
+        messages: [],
+        createdAt: STAMP,
+        updatedAt: STAMP,
+      },
+    ] as unknown as BackupData['chats']
+    return data
+  }
+
+  it("her setting follows the profile's new id, as Brahma's does", () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(withCalliope(), 'target-user', remapper)
+    const mapping = remapper.getMapping()
+    const setting = (key: string) => JSON.parse(result.instanceSettings!.find((r) => r.key === key)!.value)
+    expect(setting('calliope')).toEqual({ connectionProfileId: mapping[PROFILE_ID], maxAgentTurns: 9 })
+    expect(setting('brahmaConsole').inlineConnectionProfileId).toBe(mapping[OUTFIT_PROFILE_ID])
+  })
+
+  it('a conversation keeps its type and its draft, which is a folder name, not a row id', () => {
+    const result = remapBackupData(withCalliope(), 'target-user', new UuidRemapper())
+    expect(result.chats[0]).toMatchObject({ chatType: 'calliope', themeDraftId: 'rains' })
+    expect(result.chats[0].id).not.toBe(CHAT_ID)
+  })
+})

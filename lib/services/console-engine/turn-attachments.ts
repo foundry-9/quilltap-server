@@ -1,5 +1,5 @@
 /**
- * Brahma Console — getting attachments to the model.
+ * Console engine — getting a conversation's attachments to the model.
  *
  * Every operator message that carries attachments has them loaded through the
  * Salon's own path (`loadChatFilesForLLM` → `prepareTurnAttachments`): images
@@ -9,23 +9,23 @@
  * rule. Nothing here checks capability, counts or bytes.
  *
  * Each such message also gains one model-facing line per attachment,
- * `[Attached: qtap://Quilltap General/Brahma/<file>]`, so the model can open
+ * `[Attached: qtap://Quilltap General/<folder>/<file>]`, so the model can open
  * the file with its document tools. The line is built per request and never
  * stored; it is carried on every turn (not only the current one) so the
  * history — and the prompt-cache prefix — stays the same from turn to turn.
  *
- * @module lib/services/brahma-console/turn-attachments
+ * @module lib/services/console-engine/turn-attachments
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import { prepareTurnAttachments } from '@/lib/services/chat-message/context-builder.service'
-import { consoleAttachmentUri } from '@/lib/brahma-console/attachments'
+import { consoleAttachmentUri } from '@/lib/console-engine/attachments'
 import { getErrorMessage } from '@/lib/error-utils'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { getRepositories } from '@/lib/repositories/factory'
 
-const logger = createServiceLogger('BrahmaConsoleTurnAttachments')
+const logger = createServiceLogger('ConsoleTurnAttachments')
 
 /** What one operator message carries to the model. */
 export interface MessageAttachmentPayload {

@@ -630,6 +630,11 @@ export const BUILT_IN_TOOL_PICKER: Readonly<Record<string, ToolPickerEntry>> = {
   read_messages: { listed: false, reason: "Brahma's Console only (operator surface)." },
   request_full_context: { listed: false, reason: "A safety valve: always offered, never switchable." },
   run_sql: { listed: false, reason: "Brahma's Console only (operator surface)." },
+  theme_check_contrast: { listed: false, reason: "Calliope's only, in a conversation about a theme draft." },
+  theme_lookup_hooks: { listed: false, reason: "Calliope's only, in a conversation about a theme draft." },
+  theme_lookup_tokens: { listed: false, reason: "Calliope's only, in a conversation about a theme draft." },
+  theme_propose: { listed: false, reason: "Calliope's only, in a conversation about a theme draft." },
+  theme_read_draft: { listed: false, reason: "Calliope's only, in a conversation about a theme draft." },
   submit_final_response: { listed: false, reason: "Agent mode's own closing call, not a tool an operator chooses." },
 };
 

@@ -27,6 +27,7 @@ import { parseColor } from '@/lib/themes/engine/client'
 import type { EditorBridge } from './InspectProvider'
 import type { CategoryGroup, TokenTrace } from './model'
 import type { InspectReport } from './report'
+import { inspectHandOffText } from '@/components/theme-editor/calliope/hand-off'
 
 interface InspectPanelProps {
   report: InspectReport
@@ -151,6 +152,12 @@ export function InspectPanel({ report, editor, canShowInGallery, onShowInGallery
     stepAside()
   }
 
+  const askCalliope = () => {
+    if (!editor) return
+    editor.askCalliope(inspectHandOffText(report))
+    stepAside()
+  }
+
   return (
     <aside
       aria-labelledby={headingId}
@@ -208,6 +215,11 @@ export function InspectPanel({ report, editor, canShowInGallery, onShowInGallery
               <button type="button" className="qt-button qt-button-primary qt-button-sm" onClick={() => void writeCss()} disabled={!editor || beginning}>
                 {beginning ? 'Beginning a stylesheet…' : editor && !editor.hasStylesheet ? 'Begin a stylesheet and write CSS for this' : 'Write CSS for this'}
               </button>
+              {editor && (
+                <button type="button" className="qt-button qt-button-secondary qt-button-sm" onClick={askCalliope}>
+                  Ask Calliope about this
+                </button>
+              )}
               {canShowInGallery && (
                 <button type="button" className="qt-button qt-button-secondary qt-button-sm" onClick={() => onShowInGallery(match.hook.className)}>
                   Show in the gallery

@@ -883,7 +883,24 @@ export async function deleteDraft(id: string): Promise<void> {
   const { store } = await loadDraft(id);
   const deleted = await deleteDraftFolder(store, id);
   servedCache.delete(id);
-  logger.info('Deleted theme draft', { draftId: id, files: deleted });
+  const conversations = await deleteDraftConversations(id);
+  logger.info('Deleted theme draft', { draftId: id, files: deleted, conversations });
+}
+
+/**
+ * A draft's conversations with Calliope leave with it (Spec J decision 3);
+ * each takes its own attachments through the chats repository's delete.
+ */
+async function deleteDraftConversations(id: string): Promise<number> {
+  const { getRepositories } = await import('@/lib/repositories/factory');
+  const repos = getRepositories();
+  const chats = await repos.chats.findCalliopeByThemeDraft(id);
+  let count = 0;
+  for (const chat of chats) {
+    if (await repos.chats.delete(chat.id)) count += 1;
+  }
+  logger.debug('Deleted the draft\'s conversations with Calliope', { draftId: id, found: chats.length, deleted: count });
+  return count;
 }
 
 // ============================================================================

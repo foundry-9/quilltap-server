@@ -1,0 +1,875 @@
+# Calliope Live — Spec J: Calliope herself
+
+**Status:** implemented 4.14-dev, 2026-11-16 (uncommitted at the time of writing; user docs
+[help/theme-editor.md](../../../../help/theme-editor.md) and
+[help/appearance-settings.md](../../../../help/appearance-settings.md); see
+[Implementation notes](#implementation-notes)). Design decisions confirmed by the human.
+Implements the LLM-assistance step of Phase 2 of
+[calliope-live.md](../calliope-live.md). Read, before starting:
+
+- Spec H's implementation notes, "What an assistant needs from the
+  inspector's model"
+  ([calliope-live-spec-h-specimens-and-inspect.md](calliope-live-spec-h-specimens-and-inspect.md));
+- Spec E's notes on the editor's edit path and Spec G's on the stylesheet
+  ([E](calliope-live-spec-e-typed-controls.md),
+  [G](calliope-live-spec-g-custom-css.md));
+- how Brahma works: `lib/services/brahma-console/` (the orchestrator and
+  the one-shot service), `lib/brahma-console/`,
+  `app/api/v1/brahma-console/`, `components/brahma-console/`, and the
+  Brahma row of the glossary in `CLAUDE.md`;
+- `lib/services/agent-loop/one-shot-loop.ts` and the tool rules in
+  `CLAUDE.md` (Zod input schemas, declared effects, `resolveToolPermit`).
+
+**Scope:** `quilltap-server` only.
+
+## Goal
+
+The author describes the look they want, and Calliope proposes it. At the
+end of this spec, inside the theme editor:
+
+- the author can talk to **Calliope** about the draft that is open: ask for
+  a look, a mood, a fix, an explanation;
+- Calliope reads the draft, the token registry and the hook catalogue, and
+  answers with **proposals**: named sets of changes to tokens, primitives,
+  choices and custom CSS;
+- every proposal has been checked by the theme engine before the author
+  sees it, and the author can try it in the live preview, keep it or
+  discard it;
+- nothing in the draft changes unless the author keeps a proposal.
+
+## Who Calliope is (decision 1)
+
+Calliope is the muse who already presides over appearance in the Foundry.
+Here she works the way Brahma does: a character-less, memory-free
+assistant with her own conversations, her own tools and her own engine
+setting. She is not a Salon character and has no seat in a chat. Unlike
+Brahma she takes no inline calls: `@Calliope` does nothing, she is never a
+Carina answerer, and `ask_carina` is not among her tools.
+
+Her manner: a little personality, in the house voice, and otherwise a
+plain, capable assistant bent on the work in front of her. She is brief,
+says what she changed and why, and does not perform.
+
+## Out of scope
+
+Letting Calliope see the rendered app (a screenshot loop); fonts, images,
+icons, subsystem overrides and manifest details as things she can change;
+generating images or fonts; any path by which she writes a draft without
+the author keeping a proposal; a Salon character's ability to write a
+draft's stylesheet, and with it `.css` as a native text type in database
+stores (still deferred: nothing here needs it); layout variants; Phase 3.
+
+## Where things stand
+
+- **Brahma is the model to follow.** A Brahma conversation is a `chats`
+  row of type `brahma`; `orchestrator.service.ts` runs a turn (system
+  prompt from `buildBrahmaSystemPrompt`, tools from `buildTools`, an
+  optional `effectCeiling`, frames through `legacyFrameEncoder`); the
+  Writing Assistant is a mode of it that runs under `effectCeiling: 'read'`
+  and marks its answers with a `systemKind`. Attachments live under
+  `Brahma/` in Quilltap General and leave with the conversation. The engine
+  is chosen by `resolveInlineBrahmaConnectionProfile`. About 65 places in
+  the code name the `brahma` chat type or ask one of the three chat-type
+  questions (`isHelpLikeChatType`, `isModerationExemptChatType`,
+  `operatorSpeaksWithoutSeat`).
+- **Calliope exists as a Foundry persona** (`lib/foundry/subsystem-defaults.ts`,
+  with a thumbnail and a background) and as the persona of the Appearance
+  settings. She is not a `systemSender` and has no avatar under
+  `public/images/avatars/`.
+- **Edits to a draft are pure functions.** Tokens, primitives and choices
+  change through functions from a tokens document to a tokens document
+  (`components/theme-editor/model.ts`, `lib/themes/engine/primitives.ts`),
+  applied in the editor through `edit(key, fn)`, which gives undo, the
+  preview and the debounced save. The stylesheet is a second file with its
+  own revision and save (`writeDraftStyles`).
+- **The engine can judge a change before it is made.** Validation, the type
+  check, contrast (`checkContrast`, 69 pairs) and the hook lint all run on
+  a document in memory.
+- **The registry and catalogue are data.** 704 tokens with labels, types
+  and groups; 219 hooks with labels, surfaces, variants and states.
+- **What styles a hook is known only in a browser.** Spec H's inspector
+  reads stylesheets at run time. Its notes propose a static table for an
+  assistant, generated by a browser pass over the gallery; this repo has no
+  browser driver as a dependency, so such a table could not be checked in
+  lint.
+
+## Decisions
+
+| # | Decision | Status |
+|---|---|---|
+| 1 | **The assistant is Calliope**, working as Brahma does, with no inline (Carina) calls, as described above. | decided by the human 2026-11-16 |
+| 2 | **Calliope gets her own chat type on an engine shared with Brahma.** The parts of Brahma's orchestrator that are not about Brahma — running a turn, the tool loop, persistence, frames, attachments, the model picker — become a console engine taking a persona (system prompt, tool set, effect ceiling, attachment folder, engine setting). Brahma becomes its first caller with no change in behaviour, and Calliope its second, as chat type `calliope`. The alternative is a third mode of the Brahma console (`consoleMode: 'theme'`), which needs no new chat type but makes Calliope a face on Brahma and puts theme tools inside Brahma's code. | confirmed 2026-11-16 |
+| 3 | **Calliope proposes; the author keeps.** Her tools read, and one records a proposal. None writes the draft. A kept proposal is applied by the editor through its own edit path, so it is undoable like any other edit. The alternative is to let her write the draft directly and rely on undo and the revision history. | confirmed 2026-11-16 |
+| 4 | **She can change tokens, primitives, choices and custom CSS.** She can use the draft's existing fonts and images by name but cannot add, remove or alter files, and cannot change the manifest. The alternative is to include manifest fields and subsystem names, which are plain text and cheap, at the cost of a wider proposal format in the first version. | confirmed 2026-11-16 |
+| 5 | **She takes reference images but does not look at the app.** The author can attach pictures ("make it feel like this") when the chosen model reads images; they are kept under `Calliope/` in Quilltap General and leave with the conversation, as Brahma's do. She is not shown screenshots of the result. The alternative is text only. | confirmed 2026-11-16 |
+| 6 | What styles a hook comes from a table generated from the app's own CSS with PostCSS — for each hook class, the properties and custom properties of every rule that names it — committed and checked for staleness in lint. It is less exact than the inspector's browser reading, and it needs no browser. | settled |
+| 7 | A proposal is a list of named operations, not a document: set or reset a token (with an optional dark value), add, change, rename or remove a primitive, set a choice, and replace a stretch of the stylesheet or the whole of it. Operations are applied with the engine's and the editor's existing pure functions. | settled |
+| 8 | A proposal is checked on the server when Calliope makes it, and the result goes back to her in the same turn, so she can mend an invalid proposal before the author sees it. It is checked again when the author keeps it, against the draft as it then is. | settled |
+| 9 | A conversation belongs to one draft and is deleted with it. | settled |
+| 10 | Calliope's engine is a setting of her own, resolved the way Brahma's is, with a picker in her panel. | settled |
+
+## Constraints that apply throughout
+
+- Commit nothing. Stop and report at the end of each stage.
+- The dev server on port 3000 is the human's; do not kill it. Try things in
+  the V4test instance on port 3005, which has real providers.
+- Every tool follows the tool rules: a Zod input schema as the single
+  source of truth, `parameters` derived from it, a declared effect, an
+  entry in the definitions snapshot test, and a permit through
+  `resolveToolPermit` with the turn's offered set.
+- Calliope's tool loop is the shared one (`runOneShotToolLoop` or the
+  console engine built on what Brahma's orchestrator uses). No second copy
+  of a loop.
+- No model-facing text is hand-assembled from the registry at a call site:
+  one module renders what she is told about tokens, hooks and the draft.
+- A new chat type is a data-model change: the `chats` column and its Zod
+  enum, `DDL.md`, the export schema, backup and restore, import, and every
+  place that asks what kind of chat this is. Calliope's conversations must
+  not appear among Salon chats, in global search results as chats, or in
+  memory extraction.
+- Stream frames: follow what Brahma's routes do today
+  (`legacyFrameEncoder`); do not hand-spell a frame.
+- The draft is written only through `lib/themes/drafts/`, and only on the
+  author's action.
+- Nothing she is told, and nothing she returns, is trusted as markup: her
+  text is rendered as the app renders any assistant text, and her CSS goes
+  through the same scoper as the author's.
+- UI: `qt-*` classes for anything themed, `BaseModal` for dialogs, an
+  accessible name on every control, WCAG 2.2 AA. Her panel sits inside the
+  editor's default-theme boundary.
+- User-facing copy, and her own voice, are in the house voice;
+  `docs/CHANGELOG.md` is plain.
+- No stubs or `TODO` code. Debug logging on every new backend path.
+- If anything here turns up a way for a model's output to harm the draft,
+  the app or the author, put it in
+  `.claude/plans/calliope-live-css-safety.md` and tell the human; do not
+  write it into a tracked file.
+
+## Stage 0 — what she works from
+
+In `lib/themes/assist/`, pure and unit-tested, no model involved.
+
+### 0.1 Styled-by table (decision 6)
+
+A script reads the app's stylesheets with PostCSS and writes, for each
+catalogued hook, each variant value and each state: the CSS properties set
+by rules that name it, and for each the custom properties its value reads.
+Generated into a committed file, with a lint check for staleness in the
+manner of the other generated theme files. Report how many hooks have at
+least one token and how many have none.
+
+### 0.2 Change sets (decision 7)
+
+- A Zod schema for a change set: a title, a one-paragraph reason, and the
+  operations.
+- `applyChangeSet(tokens, css, changeSet)`: the new tokens document and
+  stylesheet, or the first operation that cannot be applied and why (an
+  unknown token, a primitive that does not exist, a stretch of CSS that is
+  not in the stylesheet or is there more than once).
+- `judgeChangeSet`: apply, then run validation, the type check, the
+  scoper, the hook lint and contrast on the result, and return the issues
+  **the change introduces** — those present after and not before — beside
+  those it removes.
+- `describeChangeSet`: the operations as plain lines for the author, each
+  with the value before and after.
+
+### 0.3 What she is told
+
+One module renders, as text of bounded size: the draft (what it sets, its
+primitives, its choices, its stylesheet, its fonts and images by name, its
+issues and failing contrast pairs); a token lookup result; a hook lookup
+result with its styled-by rows joined to the draft's values. Measure the
+size of each against a blank draft and against a copy of the largest
+bundled theme, and report them.
+
+**Stop.** Report.
+
+## Stage 1 — the console engine (decision 2)
+
+- Draw out of `lib/services/brahma-console/` what a second persona needs,
+  into a console engine that takes a persona definition. Brahma supplies
+  his: prompt builder, tool set, the Writing Assistant's ceiling, the
+  `Brahma/` folder, his engine setting.
+- **No behaviour change for Brahma.** His tests pass untouched, apart from
+  imports. His routes, frames, stored rows and settings are as they were.
+- Attachments: the folder is a persona's property; the rules in
+  `lib/brahma-console/attachments.ts` are shared, not copied.
+- If the extraction turns out to need a change in Brahma's behaviour or
+  stored data, stop and report instead of making it.
+
+**Stop.** Report, with the diff's shape: what moved, what stayed.
+
+## Stage 2 — Calliope on the server
+
+### 2.1 The chat type
+
+`calliope`, with everything the constraints list. Answer each of the three
+chat-type questions for her, in the predicates, not at call sites: she is
+help-like, moderation-exempt, and the operator speaks without a seat. Go
+through every place that names `brahma` and decide whether `calliope`
+belongs beside it; list the decisions in the report.
+
+A conversation records its draft (decision 9). Put the draft's id where
+the least schema change holds it, say where, and delete a draft's
+conversations in `deleteDraft`.
+
+### 2.2 Her tools
+
+| Tool | Effect | Does |
+|---|---|---|
+| `theme_read_draft` | read | the draft as 0.3 renders it |
+| `theme_lookup_tokens` | read | registry tokens by name, label, group or type, with the draft's value in force |
+| `theme_lookup_hooks` | read | catalogue hooks by label, class or surface, with variants, states and styled-by rows |
+| `theme_check_contrast` | read | the contrast of two colours, or of a named pair, in light and dark |
+| `theme_propose` | none | judge a change set (0.2) against the draft; return the issues to her; record the proposal on the conversation when it applies |
+
+Her turns run under `effectCeiling: 'read'`. `theme_propose` writes
+nothing to the draft; what it records is part of the conversation. A
+proposal that does not apply, or that introduces an error, is returned to
+her as a failure with the reason and is not shown to the author as a
+proposal. One that introduces only warnings (a contrast pair, a hook
+finding) is shown with them.
+
+She has none of Brahma's other tools: no SQL, no `doc_*`, no search, no
+`ask_carina`.
+
+### 2.3 Her prompt
+
+One builder, in the manner of `buildBrahmaSystemPrompt`: who she is (the
+section above, in second person), what a theme is made of in a paragraph,
+the order of preference — a semantic token before a component token, a
+token before custom CSS, a catalogued hook before any other selector, and
+contrast kept — how to use her tools, and that she proposes and the author
+decides. No model-facing string calls her an AI assistant product or
+mentions the implementation.
+
+### 2.4 Persistence and API
+
+- A proposal and its state (offered, kept, discarded, or stale) are stored
+  with the conversation. Look at how the Writing Assistant's output and
+  Pascal's roll record are stored and use the lightest fit; any schema
+  change follows the data-model rules.
+- `/api/v1/calliope`: list and create conversations for a draft; send a
+  message and stream the reply; `?action=keep` and `?action=discard` on a
+  proposal. Keep re-judges the proposal against the current draft
+  (decision 8) and returns the operations for the editor to apply; it does
+  not write the draft itself.
+- Her engine setting (decision 10), with a resolver beside Brahma's and a
+  card in the settings registry under her persona.
+
+### 2.5 Tests
+
+Each tool; a proposal that applies cleanly, one with an unknown token, one
+whose CSS is refused by the scoper, one that fails a contrast pair, one
+against a draft that changed since; the permit refusing a write tool under
+her ceiling; her conversations absent from the Salon list, search and
+memory extraction; export, backup and restore of a conversation; deletion
+with the draft.
+
+**Stop.** Report.
+
+## Stage 3 — Calliope in the editor
+
+- **Her panel** in the theme editor, opened from a control that shows her
+  picture. The human is supplying her avatar at
+  `public/images/avatars/calliope-avatar.webp` (WebP, like the other staff
+  avatars). If the file is not there when this stage starts, use her
+  Foundry thumbnail, say so in the report, and write the code so that the
+  avatar takes over when the file arrives. Generate no artwork. In a
+  wide pane the panel sits beside the sections; in a narrow one it takes
+  the body's place (container queries, as Spec I left the editor).
+- A conversation list for the draft, a composer with attachments
+  (decision 5), the model picker, and the messages, reusing the Brahma
+  console's components where they are not about Brahma.
+- **A proposal card** for each proposal: its title and reason, the
+  operations from `describeChangeSet`, any warnings, and three actions:
+  - **Try** puts the proposal's result into the live preview without
+    touching the draft, and marks the card as being tried; trying another,
+    or "stop trying", restores the preview of the draft as it is;
+  - **Keep** applies the token, primitive and choice operations through
+    `edit(...)` as one undo step, and the stylesheet change through the
+    stylesheet's save; then marks the card kept;
+  - **Discard** marks it discarded.
+  A card whose proposal no longer applies says so and offers to ask her
+  again.
+- **From the inspector:** "Ask Calliope about this" on the inspect panel
+  opens her panel with the hook and what styles it already in the message
+  being composed.
+- **From an issue:** the same for a validation issue or a failing contrast
+  pair.
+- Tests: the card's three actions and their effect on the preview and the
+  edit path; a stale proposal; the inspector and issue hand-offs.
+- In V4test, with a real model, on a blank draft and on a copy of a
+  bundled theme: ask for a whole look from a sentence; ask for a named
+  change ("make the sidebar darker"); ask for something that needs custom
+  CSS; ask her to fix a failing contrast pair; attach a reference image;
+  ask for something she cannot do (a new font) and confirm she says so.
+  Record what she proposed, what the engine refused, and how many tool
+  turns each took, and put that in the report with the model used.
+- `npm run lint`, `npx tsc` and the unit suite pass.
+
+**Stop.** This stop is the human's hands-on review.
+
+## Stage 4 — documentation
+
+- `help/theme-editor.md`: Calliope, proposals, try, keep and discard; a
+  help page or section for her settings card.
+- `CLAUDE.md`: Calliope's row in the glossary (what she is, that she takes
+  no inline calls, where her code lives); the console engine and its two
+  personas; `lib/themes/assist/` as the one place a change set is applied
+  and judged; the rule that she proposes and never writes.
+- `docs/developer/API.md`, `DDL.md` and the export schema as changed.
+- `docs/developer/THEME_DEVELOPMENT.md`: the styled-by table and how it is
+  generated.
+- `docs/CHANGELOG.md`.
+- Mark this spec implemented, link it from the proposal, and move it to
+  `features/complete/`.
+
+## Report back
+
+At each stop: what was done, what differs from this spec and why, anything
+found that the spec did not foresee, and the commands run with their
+results. At the end, add an "Implementation notes" section to this file,
+with what a later step would need in order to let her see the rendered
+app, and what Phase 3's author documentation should say about her.
+
+## Progress
+
+### Stage 0 — done 2026-11-16 (uncommitted)
+
+All in `lib/themes/assist/`, pure, no model involved.
+
+**0.1 Styled-by table.** `styled-by-build.ts` (PostCSS) builds it;
+`styled-by.ts` reads the committed `styled-by.generated.json` (browser-safe).
+`npm run generate:theme-styled-by` writes it
+(`scripts/generate-theme-styled-by.ts`, sources read by
+`scripts/lib/styled-by-sources.ts`), and `scripts/check-theme-references.ts`
+fails `npm run lint` while it is stale.
+
+- **Source:** the qt-* layer *as Tailwind compiles it* — the committed,
+  lint-checked `packages/theme-storybook/src/css/qt-components.css` — plus
+  `app/globals.css`. The raw `app/styles/qt-components/*.css` are written with
+  `@apply` (≈820 uses), which PostCSS alone cannot read as declarations; the
+  compiled file already has them expanded, and its own lint keeps it current,
+  so the table follows any change to the families in two steps
+  (`generate:storybook-css`, then `generate:theme-styled-by`).
+- **Attribution:** a rule styles the hook whose class is in its *subject*
+  (last compound) — `.qt-a:hover .qt-b` is `qt-b`, inside `qt-a`, never
+  `qt-a`. Nested rules are resolved against their parents (the compiled file
+  keeps native nesting, 87 `&`); classes inside `:not()` and rules inside
+  `@keyframes` do not count. Each row is keyed by its condition: variant value
+  (`[data-section="chats"]`), state (class or ARIA, by the catalogue's label),
+  `:hover` / `:focus` / `:active` / `:disabled`, pseudo-element, `dark mode`
+  (a `.dark` or `[data-color-mode="dark"]` ancestor), and `inside .<hook>`.
+- **Tailwind's plumbing** (`--tw-*`, `--default-*`) is not reported as a token:
+  a property reading `--tw-shadow` is credited with whatever the same rule sets
+  `--tw-shadow` to (so `shadow-[var(--qt-x)]` comes through as `--qt-x`), and is
+  otherwise a literal. Tailwind's own theme variables (`--spacing`, `--text-sm`)
+  are kept and rendered as "the app's own, not a theme token".
+- **Counts:** 219 hooks; 194 selected by at least one app rule; **171 read at
+  least one token; 48 none** — 25 selected by no rule at all (their look comes
+  from utilities in the markup or what they contain: `qt-app-content`,
+  `qt-homepage-welcome`, `qt-chat-message-streaming`, `qt-chat-tool-call`,
+  `qt-character-page`, …) and 23 selected only by literal rules (`qt-app-main`,
+  `qt-tab-label`, `qt-chat-message-row-user`, …). The file is 114 KB (one
+  row per line, so diffs read).
+
+**0.2 Change sets.** `change-set.ts` (browser-safe; a test walks its imports):
+`ChangeSetSchema` (title, reason, 1–200 operations: `set-token` with `value`
+and/or `dark`, `reset-token`, `add-primitive`, `set-primitive` (type, value,
+dark or `dark: null`), `rename-primitive`, `remove-primitive`, `set-choice`,
+`replace-css` (`find` must occur exactly once), `set-css`);
+`applyChangeSet({ tokens, css }, set)` through the editor's
+`setTokenValue` / `resetToken` / `setChoice` and the engine's primitive edits,
+returning the result or the first operation that cannot be applied and why
+(unknown token with the nearest name, reset of a token the draft does not set,
+missing or taken primitive, unknown choice or option, a CSS stretch absent or
+found more than once, `replace-css` on a draft with no stylesheet);
+`describeChangeSet` (one line per operation with before and after, each read
+against the draft as the earlier operations leave it) and `changeLineText`.
+`judge.ts` (server): `judgeChangeSet(draft, set)` applies, then evaluates the
+draft before and after — `validateThemeDocument` (schemas, names, the type
+check, references and cycles, the scoper) and `lintThemeSelectors` — and
+returns `introducedErrors`, `introducedWarnings`, `removed`, and contrast
+**pair by pair** (`contrastWorse`, `contrastFixed`) rather than as messages;
+`acceptable` is "no error introduced".
+
+**0.3 What she is told.** `render.ts`: `assistDraftFrom(detail)`,
+`renderDraft(draft, { part })` (choices, primitives, the tokens it sets, fonts
+and images by name, issues, failing contrast pairs, stylesheet; `part: 'css'`
+for the stylesheet alone), `lookupTokens` / `renderTokenLookup` (words, group,
+type, names, set-only; value in force in each mode, its literal and where it
+comes from; internal tokens only by name), `lookupHooks` /
+`renderHookLookup` (words, classes, surface; variants, states and styled-by
+rows joined to the draft's values, Tailwind names read as their semantic
+token). Bounded by `RENDER_LIMITS`; each list says how many more there are.
+
+| Rendering | Blank draft | Rains (largest bundled) | Earl Grey |
+|---|---|---|---|
+| Draft overview | 537 ch (~130 tokens) | 30,901 ch (~7.7k) | 28,336 ch (~7.1k) |
+| Tokens, "primary" | 2,171 ch | 2,101 ch | 2,081 ch |
+| Tokens, group colors | 4,054 ch | 5,113 ch | 5,421 ch |
+| Hook `qt-chat-message-assistant` | 1,985 ch | 2,215 ch | 1,795 ch |
+| Hooks, surface salon (6 in full + names) | 4,795 ch | 4,795 ch | 4,795 ch |
+
+Rains's overview is mostly its 62 primitives and ~200 set tokens; the
+stylesheet is capped at 6,000 characters in the overview and 60,000 alone.
+
+**Differs from the spec / found:**
+
+- `render.ts` is pure but not browser-safe: the hook catalogue it reads
+  imports `SystemSenderEnum` from the chat schemas, which reach the logger.
+  Nothing on the client needs the renderer; `change-set.ts` and
+  `styled-by.ts` are the browser-safe pair.
+- Issues are compared by message with line numbers removed, so a passage that
+  moves down the stylesheet is not counted as new.
+- `packages/quilltap/lib/theme-engine.generated.js` was already stale at
+  `HEAD` (the 45 hooks of cc5336495 never reached the CLI bundle), so
+  `npm run lint` failed before this work began; regenerated with
+  `npm run build:cli-theme-engine`.
+
+**Commands:** `npx tsc` clean; `npm run lint` clean (after the CLI bundle
+rebuild); `npx jest __tests__/unit/lib/themes __tests__/unit/components/theme-*`
+41 suites / 1,015 tests passed, including the new
+`__tests__/unit/lib/themes/assist.test.ts` (styled-by builder, apply,
+describe, judge: clean, unknown token, wrong type, scoper refusal, hook
+warning, moved line, contrast worse and fixed; bounded renderings against a
+blank draft and Rains).
+
+### Stage 1 — done 2026-11-16 (uncommitted)
+
+The console engine takes a persona; Brahma is its first caller, unchanged in
+behaviour, routes, frames, stored rows and settings.
+
+**What moved**
+
+- `lib/services/console-engine/engine.ts` (new) — `runConsoleTurn(persona, repos,
+  chatId, userId, options)`: the user message, the model
+  (`resolveConsoleConnectionProfile`: the chat's pinned profile, else the
+  persona's fallback), API key, tool instructions (native or text-block), the
+  agent budget and instructions, history through `buildConversationMessages`,
+  attachments and the image transport budget, the streaming agent loop with
+  reasoning, `submit_final_response`, both stuck-loop signals, tool-call
+  threading, tool execution and persistence, budget salvage, the final message,
+  cost and token tracking, the done / error frames (`legacyFrameEncoder`), and
+  the context-summary check (never memory extraction). This is
+  `processBrahmaResponse` and the stream wrapper of `handleBrahmaConsoleMessage`,
+  moved whole; every Brahma-specific line became a persona call.
+- `lib/services/console-engine/persona.ts` (new) — `ConsolePersona<Plan>`:
+  `chatType`, `label`, `surface`, `attachmentFolder`, `defaultConnectionProfile`
+  (the engine setting), `maxAgentTurns`, `planTurn` (a `ConsoleTurnPlanBase`:
+  `effectCeiling`, `agentKind`, `stuckNudge`, plus the persona's own fields),
+  `buildTools`, `textBlockToolOptions`, `toolContext` (the surface the tools
+  act for), `buildSystemPrompt`, `salvageMessage`, `finishAnswer` (content and
+  an optional `systemKind`).
+- `lib/services/console-engine/loop-guard.ts` — `normalizeToolCallSignature`,
+  out of Brahma's orchestrator; `runOneShotToolLoop` now imports it from here
+  (Brahma's orchestrator re-exports it).
+- `lib/services/console-engine/turn-attachments.ts` — moved from
+  `lib/services/brahma-console/` unchanged apart from its address import.
+- `lib/console-engine/attachments.ts` — the attachment rules (store, free
+  names, pasted names, lookup, describe, discard, delete-with-chat), moved from
+  `lib/brahma-console/attachments.ts` with the folder as an argument
+  (`isDirectlyUnderFolder(folder, path)`, `storeConsoleAttachment({ folder, … })`,
+  `findConsoleAttachmentLink(folder, id)`, `discardConsoleAttachment(folder, id)`,
+  `deleteConsoleAttachmentsForChat(folder, repos, chatId)`). The owner-store
+  context is `<folder>-attachments` (`brahma-attachments`, as before).
+
+**What stayed**
+
+- `lib/services/brahma-console/orchestrator.service.ts` is now Brahma's persona:
+  `BRAHMA_CONSOLE_PERSONA` (his `buildTools` flags, text-block options,
+  operator surface, prompt with the SQL section and Writing Assistant manifest,
+  salvage wording, Writing Assistant output mark), plus `ConsoleTurnPlan`
+  (extends the base with `writing` and `docToolsMode`), `buildConsoleTurnPlan`,
+  `resolveBrahmaConnectionProfile` and `handleBrahmaConsoleMessage`, with their
+  old names and signatures. `BrahmaConsoleSendOptions` is the engine's
+  `ConsoleSendOptions`.
+- `lib/brahma-console/attachments.ts` is a binding: `BRAHMA_ATTACHMENT_FOLDER`,
+  `isDirectlyUnderBrahma` and the four folder-bound functions with their old
+  signatures, delegating; the pure helpers re-exported. The routes and
+  `chats.repository.ts`'s delete hook import it as before.
+- The one-shot `@Brahma` path, the inline profile resolver, the turn budget,
+  the prompt builder, Writing Assistant context and output, the routes and the
+  client are untouched.
+
+**Tests:** Brahma's own assertions are untouched. Changed lines are module
+paths only: `orchestrator.writing.test.ts` mocks
+`@/lib/services/console-engine/turn-attachments`; `one-shot.service.test.ts`
+and `one-shot-loop.test.ts` mock `@/lib/services/console-engine/loop-guard`;
+`tool-permit-chokepoint.test.ts`'s list of known tool-context builders names
+`lib/services/console-engine/engine.ts` where it named Brahma's orchestrator
+(the engine sets `toolOffer`, as the test requires).
+
+**Differs / found:** no behaviour change was needed. Log lines from the turn
+now come from the `ConsoleEngine` logger with the persona's label in the
+context, rather than `BrahmaConsoleOrchestrator`; messages, frames, stored
+rows and the "Not a Brahma Console chat" error are as they were. Routes are
+not shared yet: Calliope's will be her own under `/api/v1/calliope` (Stage
+2.4) and call the same engine and attachment rules.
+
+**Commands:** `npx tsc` clean; `npm run lint` clean; `npm run test:unit`
+1,516 suites passed (1 skipped), 21,668 tests passed (2 skipped).
+
+### Stage 2 — Calliope on the server (done, 2026-11-16)
+
+**2.1 The chat type.** `calliope` joins `ChatTypeEnum`; she is help-like
+(`isHelpLikeChatType`: no memory extraction, no auto-title or summary
+fold), moderation-exempt (`isModerationExemptChatType`), and the operator
+speaks without a seat (`operatorSpeaksWithoutSeat` already true for every
+non-Salon type). A new predicate, `isListedInGlobalSearch`, keeps her
+conversations out of global search, titles and messages alike
+(`app/api/v1/ui/search/route.ts`). The draft is recorded in one new nullable
+column, `chats.themeDraftId` (migration `add-calliope-theme-draft-field-v1`,
+DDL.md, export schema, both chat Zod schemas, with the draft-id pattern).
+`deleteDraft` deletes the draft's conversations through
+`chats.findCalliopeByThemeDraft` and `chats.delete`.
+
+Per-site decisions on every place that names `brahma`:
+
+- *Added beside it:* the chatType unions (`chat-utils.ts`,
+  `chat-enrichment.service.ts`, `app/salon/[id]/types.ts`,
+  `MergeConversationModal.tsx`, `chats.repository.ts` `findByType`); the
+  recent-conversations `$nin` in `findRecentSummarizedByCharacter`; the
+  delete hook in `chats.repository.ts`, now a chat-type → folder map
+  (`CONSOLE_ATTACHMENT_FOLDERS` / `consoleAttachmentFolderFor`,
+  `lib/console-engine/attachments.ts`); the restore remap of a JSON
+  instance setting naming a profile (`PROFILE_BEARING_JSON_SETTINGS`,
+  `uuid-remap.ts`, now covering `brahmaConsole` and `calliope`).
+- *Already excluded, unchanged:* the Salon list and home data (Salon /
+  autonomous only), memory catch-up (help-like), Writing Assistant
+  `CONTEXT_CHAT_TYPES` and the lookup tools' `CONVERSATION_CHAT_TYPES`
+  (Salon / autonomous only).
+- *Left alone:* the workspace `brahma` tab kind and sidebar hooks, Foundry
+  persona tables and the Almanack (not chat-type questions).
+- *Import / backup:* `themeDraftId` is a folder name, not a UUID, so it
+  travels verbatim and needs no `ID_FIELDS` entry (the guard walks UUID
+  fields); drafts themselves ride in Quilltap General.
+
+**2.2 Her tools.** `theme_read_draft`, `theme_lookup_tokens`,
+`theme_lookup_hooks`, `theme_check_contrast` (all `read`) and
+`theme_propose` (`none`), each with its Zod schema, derived `parameters`, a
+validate delegate, an effect in `effects.ts`, a picker entry (unlisted) and
+a snapshot; dispatched from `THEME_ASSIST_HANDLERS`
+(`lib/tools/handlers/theme-assist-handler.ts`), listed once in
+`lib/tools/theme-assist-tools.ts`. Each handler answers only in a `calliope`
+conversation that names its draft, and reads the draft fresh through
+`readDraft`. The contrast check's lookup and text are in
+`lib/themes/assist/render.ts` (`checkDraftContrast`, `renderContrastCheck`),
+measured by the engine's `checkContrast` (a literal is placed in the
+resolved theme under a name of its own, so no ratio logic is copied). A
+proposal is judged by `assessProposal` (`lib/themes/assist/proposal.ts`):
+offered when it applies, changes something and introduces no error;
+otherwise refused, returned to her as a failed tool row, and shown to nobody.
+Her slate is built by a new `onlyTools` option on `buildToolsForProvider`
+(threaded through `streaming.buildTools`): exactly those definitions plus
+`submit_final_response`, every other flag and plugin tool ignored.
+
+**2.3 Her prompt.** `buildCalliopeSystemPrompt`
+(`lib/calliope/system-prompt-builder.ts`): who she is, the draft by name and
+id (one line, bounded), what a theme is made of, the order of preference,
+how to use the tools, and that she proposes while the author decides.
+Snapshot-tested, and tested to name no product and no implementation.
+
+**2.4 Persistence and API.**
+- *Proposal storage (no schema change):* a proposal is the persisted
+  `theme_propose` TOOL row of a successful call. Its arguments are the
+  change set, and its result carries `{ draftId, draftRevision }` (tokens +
+  stylesheet hashes). The author's decision is `proposalState: 'kept' |
+  'discarded'` in the row's content, beside the result, so the model never
+  reads it. Offered is the absence of a decision. Stale is derived: an
+  offered proposal is re-judged against the draft each time it is read or
+  kept (`lib/calliope/proposals.ts`).
+- *Persona:* `CALLIOPE_PERSONA` (`lib/services/calliope/persona.ts`) runs
+  under `effectCeiling: 'read'`, with research-style agent instructions. She
+  is not the operator surface; her attachments live under `Calliope/`. Her
+  engine is the pinned profile, then her setting, then the default; her turn
+  budget is her setting (default 12; raised to 25 after the live trials).
+- *Routes:* `/api/v1/calliope` — list by `?draftId=`, create,
+  `?action=upload` and `?action=discard-upload`. `/api/v1/calliope/[id]` —
+  GET; PATCH to rename or `?action=set-model`; POST `?action=keep` and
+  `?action=discard`; DELETE. `/api/v1/calliope/[id]/messages` — GET returns
+  the messages plus `proposals` (each judged now: state, `draftChanged`,
+  review or `staleReason`); POST streams through `runConsoleTurn` with
+  `legacyFrameEncoder`. Keep re-judges the proposal, refuses a stale one
+  with 409, records `kept` and returns the operations with the current
+  revisions; it never writes the draft.
+- *Setting:* `instance_settings['calliope']` (`CalliopeSettingsSchema`:
+  `connectionProfileId`, `maxAgentTurns`), `/api/v1/settings/calliope`, and a
+  `calliope` card in the Appearance group under her persona
+  (`components/settings/calliope/CalliopeSettings.tsx`, reusing the console's
+  profile select), with query keys `settings.calliope` and `calliope.*`.
+
+**2.5 Tests.** `__tests__/unit/lib/calliope/calliope.test.ts` covers:
+- proposals: clean, unknown token, scoper refusal, contrast failure,
+  no-op, stale after the draft changed, and decided;
+- the contrast check;
+- the slate (exactly hers, whatever else is flagged);
+- the permit (her tools pass under `read`; an offered write tool is refused
+  `above-ceiling`; her tools are refused where they were not offered);
+- the prompt;
+- the chat type's predicates and schema.
+
+Elsewhere:
+- `theme-assist-handler.test.ts` covers each tool, the surface gate, a
+  missing draft, and that a proposal writes nothing.
+- The search route test shows her conversations absent from chat and message
+  results.
+- `backup-4-13-remap.test.ts` covers her setting following its profile, and a
+  conversation keeping its type and draft through restore.
+- The drafts service test covers deletion with the draft.
+- The migration has its own test.
+
+The Salon list and memory extraction need no new test: they key on chat
+type, and the predicate tests cover that.
+
+**Differs / found:**
+- Her tool results follow the house `{ formattedText }` convention, so the
+  model reads them JSON-encoded like every other tool's.
+- In text-block mode (a model without native tool calls) she has no tools,
+  the same limit as Brahma's `run_sql`. Her settings copy asks for a profile
+  that permits tool use.
+- `scripts/check-qt-classes.mjs` now skips tracked files deleted in the
+  working tree; it crashed on Stage 1's uncommitted move.
+- `docs/developer/THEME_HOOKS.md` was regenerated because the new settings
+  card adds a `data-card` value.
+- The CLI theme-engine bundle was rebuilt.
+- The human supplied her avatar during this stage. It is converted to
+  `public/images/avatars/calliope-avatar.webp`, ready for Stage 3.
+- Nothing turned up for `.claude/plans/calliope-live-css-safety.md`: a
+  proposal's CSS is judged by the same scoper as the author's, and nothing
+  she returns reaches the draft without the author keeping it.
+
+**Commands:** `npx tsc` clean; `npm run lint` clean; `npm run test:unit`
+1,519 suites passed (1 skipped), 21,711 tests passed (2 skipped).
+
+### Stage 3 — Calliope in the editor (done, 2026-11-16; awaiting hands-on review)
+
+**3.1 The panel.** `components/theme-editor/calliope/`: `CalliopePanel` (her
+conversations about the draft, opening on the latest; new and delete, the
+delete confirm on `BaseModal` as an `alertdialog`; the model picker; the
+messages; the composer with attachments), `CalliopeMessages` (the author's
+and her bubbles, a quiet line per tool, a card where she proposed; a refused
+proposal is only "did not pass her checks"), `ProposalCard`, `CalliopeAvatar`
+(its own module), `api.ts` (one read hook each for conversations by draft and
+one conversation's messages and proposals; `keepProposal` / `tryProposal` /
+`discardProposal`), `context.ts` (the hand-off context) and `hand-off.ts`
+(pure hand-off texts). Brahma's pieces are reused where they were not
+Brahma's: `useBrahmaConsoleStreaming` and `useConsoleAttachments` take an
+`apiBase`, `ModelPicker` an `icon`, and `HelpChatComposer` a `seed`
+(`{ text, nonce }`; a new nonce replaces the content, focuses, and puts the
+caret at the end). `DraftEditor` loads the panel with `React.lazy`, so the
+markdown renderer comes only when she is called for. Its button wears her
+picture. With the panel open the page widens to `max-w-7xl` and a container
+query sets the panel beside the sections at `@4xl`, or in their place below
+it.
+
+**3.2 Try, Keep, Discard.**
+
+- **Try:** `POST /api/v1/calliope/[id]?action=try` re-judges the proposal
+  against the saved draft. It returns the result's tokens and its compiled
+  custom CSS (`previewProposal` → `compileKeptCustomCss`, the same validator
+  and scoper as an install), records nothing, and is a 409 when stale. The
+  editor flushes the author's typing first. The preview then wears
+  `buildPreview({ …compiled, custom }, tokens)` until the author stops
+  trying, tries another, keeps, discards, or closes the panel. The draft is
+  untouched.
+- **Keep:** after a flush, `?action=keep` marks the card and returns the
+  operations. The editor re-applies them with the pure `applyChangeSet`
+  against its own current state. Token, primitive and choice operations go
+  through one `edit('calliope:<id>', …)`, so they are one undo step. CSS
+  goes through `onCssChange`, the stylesheet's own save (`beginStylesheet`
+  first when the draft has none).
+- **Discard:** marks the card discarded and stops a try of it.
+- **Stale:** the card says why and offers "Ask her again", which begins a
+  message in the composer.
+
+**3.3 Hand-offs.**
+
+- The inspector's "Ask Calliope about this" (`EditorBridge.askCalliope`)
+  begins a message naming the hook, its variants, the surface and mode, and
+  what styles it.
+- Each validation error and warning in the editor has "Ask Calliope".
+- Each failing contrast line in a token row has "Ask Calliope".
+
+Nothing is sent on the author's behalf.
+
+**3.4 Tests.**
+
+- `__tests__/unit/components/theme-editor/calliope.test.tsx`: the card's
+  three actions, trying, busy, what it breaks and mends, stale, and
+  decided. In the editor, opening on her latest conversation; Try changing
+  the preview's CSS, tokens and custom, with Undo still disabled; Stop
+  trying restoring it; Keep as one undoable step; Discard; Ask her again;
+  and an issue's hand-off opening the panel with the request begun. Also
+  the pure hand-off texts.
+- `inspect-mode.test.tsx`: the inspector's hand-off, and no hand-off
+  without a draft.
+- A Brahma orchestrator test for the salvage cause (below).
+
+`npx tsc`, `npm run lint` and the unit suite pass (1520 suites, 21727 tests
+on the run before the salvage change; the touched suites again after it).
+
+**3.5 Changed by the live trials.**
+
+- **Salvage cause.** `salvageMessage` takes a `cause`: `'budget'` when every
+  turn was spent, `'empty'` when the model answered with nothing sooner.
+  Before this, a gpt-5 reply cut off at its output cap made her say "I ran
+  through my 12 turns" after four. Brahma's wording follows the same rule,
+  and the engine's warning says which case it was.
+- **Her tools brief.**
+  - Gather in few calls, by group or several names.
+  - Need not measure every pair first: a proposal is measured against every
+    contrast pair, and she is told what it breaks.
+  - Rounds are few, so propose early; a proposal described in prose is not
+    a proposal.
+  - The editor's real section names for what she cannot do: **Fonts** (as
+    files; there is no web-font import), **Images**, **Subsystems and
+    details**.
+  - Do not set a typeface the draft lacks.
+
+  The prompt snapshot was updated.
+
+**3.6 Live trials** (V4test, :3005; drafts `calliope-trial-blank`, new
+blank, and `calliope-trial-earl-grey`, a copy of Earl Grey; trial 4 on
+`spec-g-cabinet`).
+
+| # | Ask | Model | Tool calls | Outcome |
+|---|---|---|---|---|
+| 1a | Whole look from a sentence ("moonlit Venetian library…"), blank | gpt-5 (OpenAI) | read, lookup ×2, then an empty reply | The fourth call ended `max_output_tokens` at 4096 (the provider's default when the profile sets none; reasoning used it all). Nothing proposed. Led to the salvage cause. Repeated after the prompt change, with the same result and the new honest message. |
+| 1b | Same | Claude Sonnet 4.6 | read, lookup ×10, contrast ×12 | No proposal: 12 rounds spent checking, then the look described in prose on the forced final turn. Led to the brief change. |
+| 1c | Same, after the brief change | Claude Sonnet 4.6 | read, lookup ×7, contrast ×9, propose, lookup ×3 | **Offered**, "Moonlit Venetian Library": 47 operations (17 primitives for teal, parchment, brass and ink, then semantic and component tokens). The engine reported 20 contrast pairs broken, mostly muted and badge text. She said she would mend them but ran out of rounds before a second proposal. |
+| 2 | "Make the sidebar darker", Earl Grey copy | Sonnet 4.6 | read, lookup, contrast, propose | **Offered**, one `set-primitive` (`bg-sidebar` light 98% → 88%), no contrast broken. She noted that dark mode is already black. |
+| 3 | A double rule on card tops and small-caps card titles (custom CSS) | Sonnet 4.6 | read, hooks ×2, propose | **Offered**, one `replace-css` on `.qt-card-header` and `.qt-card-title`, both catalogued. `?action=try` returned it scoped (`:scope .qt-card-header` inside the theme's boundary). |
+| 4 | The contrast hand-off text for `--theme-muted-foreground` on `--theme-card`, light, 4.17:1 | Sonnet 4.6 | read, lookup, contrast ×2, propose | **Offered**, one `set-token` (42% → 39% lightness, same hue), mending 1 pair to 4.66:1. |
+| 5 | A reference picture (`lantern.webp`): background, cards, primary, accent | Sonnet 4.6 | read, lookup, contrast ×4, propose | **Offered**: primitives named for what she saw (dark timber, brass, stained-glass crimson), with foregrounds checked. |
+| 6a | "Switch the headings to Playfair Display — add the font" | Sonnet 4.6 | read, lookup ×2, propose | Offered a primitive naming a family the draft lacks, and pointed to a "Google Fonts import" that does not exist. Led to the brief change. |
+| 6b/c | Same, after the brief change | Sonnet 4.6 | read only | Said she cannot add the file, named the **Fonts** section, and offered to set the heading token once the file is uploaded. No proposal. |
+
+The engine refused nothing in these runs: every `theme_propose` passed on
+its first attempt.
+
+**Browser check** (built-in pane, :3005, `spec-g-cabinet`): the narrow pane
+shows the panel in place of the sections. The trial-4 card reads
+"Proposed" and "Mends 1 contrast pair". Try put the proposed value into the
+page's preview stylesheet and turned the badge to "Trying"; Stop trying
+took it out again. No console errors.
+
+**Left for the human** (all three since decided; see the implementation notes):
+
+- The OpenAI provider's 4096 default `max_output_tokens` starves reasoning
+  models on her turns. Either the gpt-5 profile sets max tokens, or she
+  asks for a floor of her own; this is a decision, not done here.
+- `extractFinishReason` reads an OpenAI Responses cut-off as `incomplete`,
+  which `isTruncatedFinishReason` does not recognise, so the Salon's tool
+  loop misses that truncation too. It is a separate defect, not changed
+  here.
+- With twelve rounds, a whole look leaves little room for the mending
+  proposal she means to make. Raising her default budget is a decision for
+  the human.
+
+### Stage 4 — documentation (done, 2026-11-16)
+
+- `help/theme-editor.md`: a new section, "Calliope herself", covering
+  opening her, proposals, Try / Keep / Discard, stale cards, what she can
+  and cannot do, pictures and conversations, the hand-offs and her
+  settings (`/settings?section=calliope`). `help/appearance-settings.md`:
+  the Calliope card.
+- `CLAUDE.md`: her glossary row (a console persona, not a Carina answerer,
+  and where her code lives), and a rule covering the console engine and
+  its two personas, `lib/themes/assist/` as the one place a change set is
+  applied and judged, and that she proposes and never writes.
+- `docs/developer/API.md`: the `/api/v1/calliope` routes and
+  `/api/v1/settings/calliope`. `DDL.md` and the export schema were
+  already updated in Stage 2.
+- `docs/developer/THEME_DEVELOPMENT.md`: Calliope and the styled-by table
+  (what it records, how it is built, how it is regenerated and checked).
+- `docs/CHANGELOG.md`.
+- This spec is marked implemented, linked from `calliope-live.md`, and
+  moved to `features/complete/`.
+
+## Implementation notes
+
+**What exists.**
+
+- A console engine (`lib/services/console-engine/`) runs both of
+  Quilltap's consoles. Each console is a persona, and Calliope is the
+  second.
+- She has five `theme_*` tools under a `read` ceiling.
+- A change-set language of nine operations is applied by one pure
+  function (`applyChangeSet`) and judged by one assessor
+  (`assessProposal`). The assessor runs the engine's own validation and
+  compile and compares the result with the draft.
+- Proposals are her stored tool rows. Their decision is recorded on the
+  row; stale is derived on every read.
+- The editor tries, keeps and discards proposals. Keep goes through the
+  editor's own edit path, so the author can undo it. The server never
+  writes a draft for her.
+
+**Where it differs from the plan.**
+
+- `try` is a server action rather than a client compile. Custom CSS must
+  be scoped by PostCSS, which the browser never loads, so the browser
+  never scopes her CSS. The tokens could be applied client-side, but one
+  round trip keeps the result exactly what Keep would produce.
+- The panel is loaded lazily. Loading it eagerly put the markdown renderer
+  (an ES module Jest does not transform) under every editor test, and
+  into the editor's first load.
+- `salvageMessage` gained a `cause`. The live trials showed an empty
+  answer, cut off at a model's output cap, being reported as an exhausted
+  turn budget.
+
+**Found in the live trials, and what became of it.**
+
+1. Output allowance. The OpenAI provider defaults `max_output_tokens` to
+   4096 when a profile sets none, and a reasoning model (gpt-5) can spend
+   all of it on a whole-look proposal and return nothing. Every bundled
+   provider plugin has the same default. **Decided:** no floor for
+   Calliope; a profile that needs more sets max tokens. When she comes
+   back empty she says so and asks for that (the salvage `cause`). If it
+   proves too tight in use, the allowance is to be expanded, not given a
+   new restriction.
+2. Truncation not recognised. Responses-API cut-offs are not recognised
+   as truncation: the plugins report `max_output_tokens`, which
+   `isTruncatedFinishReason` does not match, and they report `tool_calls`
+   ahead of a cut-off. **Filed** as foundry-9/quilltap-server#228.
+3. Turn budget. Twelve rounds was tight for a whole look. **Done:** her
+   default is now 25 (`DEFAULT_CALLIOPE_MAX_AGENT_TURNS`). The prompt also
+   tells her to propose early.
+
+**What a later step needs in order to let her see the rendered app.**
+
+She sees only the draft as her tools render it. To let her see the app:
+
+- The inspector's report (`components/theme-inspect/report.ts`) is already
+  the right shape, and it reads classes and styles, never text. A
+  `theme_inspect` tool could ask the client for it with a hook class:
+  - the editor holds the bridge, so the request would go server →
+    client, through the stream as a new frame kind and a reply on the next
+    request, or through a short-lived realtime topic;
+  - nothing on the server can compute it, because it needs a browser's
+    cascade.
+- For pixels, render the specimen gallery for a hook in a headless browser
+  (the theme probe already drives one: `scripts/theme-probe/`) and attach
+  the screenshot as an image to the tool result. Use the image transport
+  budget (`applyImageTransportBudget`) as any image to a model does. The
+  gallery draws invented content, so no real chat or character would
+  reach the model; that property must be kept.
+- Either way the result is a read, and the effect ceiling stays `read`.
+
+**What Phase 3's author documentation should say about her.**
+
+- She is an assistant, not an author: she proposes and you decide.
+- Nothing she suggests changes the draft until you keep it, and a kept
+  proposal is one Undo.
+- Try is free. It changes only what the window wears, until you stop
+  trying.
+- Her rules for custom CSS are the same as yours: catalogued hooks only,
+  scoped on install.
+- She cannot add files or change the manifest. Fonts and images are
+  uploaded by you, and then she can use them by name.
+- She is only as good as her engine. Choose a tool-capable model with a
+  generous output allowance, and ask for one thing at a time when a whole
+  look is too much for her turn budget.
+- A theme made with her help is an ordinary theme. Nothing records that
+  she was involved, and nothing about it differs on install.

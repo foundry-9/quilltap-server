@@ -19,7 +19,7 @@
  * @module components/theme-editor/DraftEditor
  */
 
-import { memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
+import { lazy, memo, Suspense, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { useTheme } from '@/components/providers/theme-provider'
@@ -81,6 +81,15 @@ import {
   type ThemeDraftSave,
 } from './use-theme-drafts'
 import { CHANGED_ELSEWHERE } from './assets/use-draft-operations'
+import { applyChangeSet } from '@/lib/themes/assist/change-set'
+import type { CalliopeProposalActions } from './calliope/CalliopePanel'
+import { CalliopeAvatar } from './calliope/CalliopeAvatar'
+import { CalliopeHandOffContext, type CalliopeHandOff } from './calliope/context'
+import { issueHandOffText } from './calliope/hand-off'
+import { keepProposal, tryProposal, type TriedProposal } from './calliope/api'
+
+// Her panel (and the markdown it renders) loads only when she is first called for.
+const CalliopePanel = lazy(() => import('./calliope/CalliopePanel').then((m) => ({ default: m.CalliopePanel })))
 
 const SAVE_DELAY_MS = 700
 
@@ -553,12 +562,17 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
   const [goodCompiled, setGoodCompiled] = useState(detail.compiled)
   if (!draftHasErrors && detail.compiled !== goodCompiled) setGoodCompiled(detail.compiled)
   const compiled = draftHasErrors ? goodCompiled : detail.compiled
+  // A proposal being tried (Spec J Stage 3): the preview wears its result — its
+  // tokens and its stylesheet as the server scoped it — and the draft is untouched.
+  const [tried, setTried] = useState<TriedProposal | null>(null)
   const preview = useMemo(
     () =>
       detail.tokens
-        ? buildPreview({ id: detail.id, version: detail.version, compiled, subsystems: detail.subsystems }, deferredTokens)
+        ? tried
+          ? buildPreview({ id: detail.id, version: detail.version, compiled: { ...compiled, custom: tried.custom }, subsystems: detail.subsystems }, tried.tokens)
+          : buildPreview({ id: detail.id, version: detail.version, compiled, subsystems: detail.subsystems }, deferredTokens)
         : null,
-    [detail.id, detail.version, compiled, detail.subsystems, detail.tokens, deferredTokens],
+    [detail.id, detail.version, compiled, detail.subsystems, detail.tokens, deferredTokens, tried],
   )
 
   useEffect(() => {
@@ -681,9 +695,74 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
     return result.ok
   }, [operations])
   const hasStylesheet = Boolean(detail.styles)
+
+  // Calliope (Spec J Stage 3): her panel, what is handed to her, and what her proposals do to the draft.
+  const [calliopeOpen, setCalliopeOpen] = useState(false)
+  const [calliopeSeed, setCalliopeSeed] = useState<{ text: string; nonce: number } | null>(null)
+  const askCalliope = useCallback(
+    (text: string) => {
+      bringForward()
+      setCalliopeOpen(true)
+      setCalliopeSeed({ text, nonce: Date.now() })
+    },
+    [bringForward, setCalliopeOpen, setCalliopeSeed],
+  )
+  const handOff = useMemo<CalliopeHandOff>(() => ({ ask: askCalliope }), [askCalliope])
+  const stopTrying = useCallback(() => setTried(null), [])
+  const proposalActions = useMemo<CalliopeProposalActions>(
+    () => ({
+      tryingId: tried?.proposalId ?? null,
+      onStopTrying: stopTrying,
+      onTry: async (chatId, proposal) => {
+        // She judged the saved draft: send what is typed first.
+        await flushAll()
+        try {
+          setTried(await tryProposal(chatId, proposal.id))
+          setPreviewing(true)
+        } catch (err) {
+          showErrorToast(apiErrorMessage(err, 'The proposal could not be tried.'))
+        }
+      },
+      onKeep: async (chatId, proposal) => {
+        await flushAll()
+        let operations
+        try {
+          operations = (await keepProposal(chatId, proposal.id)).operations
+        } catch (err) {
+          showErrorToast(apiErrorMessage(err, 'The proposal could not be kept.'))
+          return
+        }
+        setTried(null)
+        const css = hasStylesheet ? cssRef.current : null
+        const applied = applyChangeSet({ tokens: editing.store.get().tokens, css }, { operations })
+        if (!applied.ok) {
+          showErrorToast(`The proposal could not be applied: ${applied.reason}`)
+          return
+        }
+        // Tokens, primitives and choices: one edit, so one undo step.
+        if (applied.tokensChanged) {
+          edit(`calliope:${proposal.id}`, (snapshot) => {
+            const again = applyChangeSet({ tokens: snapshot.tokens, css }, { operations })
+            return again.ok ? again.tokens : snapshot.tokens
+          })
+        }
+        // The stylesheet: through its own save (begun first when the draft has none).
+        if (applied.cssChanged && applied.css !== null) {
+          if (!hasStylesheet && !(await beginStylesheet())) {
+            showErrorToast('The proposal\u2019s stylesheet could not be begun; its tokens were kept.')
+            return
+          }
+          onCssChange(applied.css)
+        }
+        showSuccessToast(`Kept \u201c${proposal.title}\u201d.`)
+      },
+    }),
+    [tried, stopTrying, flushAll, hasStylesheet, editing.store, edit, beginStylesheet, onCssChange],
+  )
+
   const bridge = useMemo<EditorBridge>(
-    () => ({ draftName: manifestName, resolved: editing.resolved, goToToken: goToTokenFromInspector, hasStylesheet, writeCss, beginStylesheet, openGallery }),
-    [manifestName, editing.resolved, goToTokenFromInspector, hasStylesheet, writeCss, beginStylesheet, openGallery],
+    () => ({ draftName: manifestName, resolved: editing.resolved, goToToken: goToTokenFromInspector, hasStylesheet, writeCss, beginStylesheet, openGallery, askCalliope }),
+    [manifestName, editing.resolved, goToTokenFromInspector, hasStylesheet, writeCss, beginStylesheet, openGallery, askCalliope],
   )
   useEffect(() => registerEditor?.(bridge), [registerEditor, bridge])
 
@@ -806,7 +885,8 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
   return (
     <DraftOperationsContext.Provider value={operations}>
     <DraftResourcesContext.Provider value={resources}>
-      <div className="max-w-5xl mx-auto p-4 space-y-4">
+    <CalliopeHandOffContext.Provider value={handOff}>
+      <div className={`${calliopeOpen ? 'max-w-7xl' : 'max-w-5xl'} mx-auto p-4 space-y-4`}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={back}>
             <Icon name="arrow-left" className="w-4 h-4" />
@@ -843,6 +923,15 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
             </button>
             <OpenGalleryButton />
             <InspectToggle />
+            <button
+              type="button"
+              aria-pressed={calliopeOpen}
+              className={`qt-button qt-button-sm ${calliopeOpen ? 'qt-button-primary' : 'qt-button-secondary'}`}
+              onClick={() => setCalliopeOpen((o) => !o)}
+            >
+              <CalliopeAvatar className="w-5 h-5" />
+              <span className="ml-1">Calliope</span>
+            </button>
             <button
               type="button"
               className="qt-button qt-button-primary qt-button-sm"
@@ -902,10 +991,32 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
             <p className="font-medium">Install waits until these are mended:</p>
             <ul className="list-disc pl-5 mt-1 qt-text-small">
               {errors.map((e, i) => (
-                <li key={i}>{e.message}</li>
+                <li key={i}>
+                  {e.message}{' '}
+                  <button type="button" className="underline qt-text-xs" onClick={() => askCalliope(issueHandOffText(e))}>
+                    Ask Calliope
+                  </button>
+                </li>
               ))}
             </ul>
           </div>
+        )}
+        {warnings.length > 0 && (
+          <details className="qt-card p-3">
+            <summary className="qt-text-small cursor-pointer">
+              {warnings.length} {warnings.length === 1 ? 'warning' : 'warnings'} at the last save
+            </summary>
+            <ul className="list-disc pl-5 mt-2 qt-text-small space-y-1">
+              {warnings.map((w, i) => (
+                <li key={i} className="break-words">
+                  {w.message}{' '}
+                  <button type="button" className="underline qt-text-xs" onClick={() => askCalliope(issueHandOffText(w))}>
+                    Ask Calliope
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
         {installErrors && (
           <div className="qt-alert-error" role="alert">
@@ -1008,7 +1119,10 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
 
         <ChoicesCard tokens={tokens} edit={edit} />
 
+        {/* With Calliope open: beside the sections when the pane is wide, in their place when it is narrow. */}
         <div className="@container">
+        <div className={calliopeOpen ? 'grid gap-4 @4xl:grid-cols-[minmax(0,1fr)_26rem] items-start' : undefined}>
+        <div className={calliopeOpen ? 'hidden @4xl:block min-w-0 @container' : '@container'}>
         <div className="grid gap-4 @2xl:grid-cols-[13rem_minmax(0,1fr)] items-start">
           <SectionJump
             className="qt-card p-2 @2xl:hidden"
@@ -1099,7 +1213,21 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
           </div>
         </div>
         </div>
+        {calliopeOpen && (
+          <Suspense fallback={<div className="qt-card p-4 qt-text-small qt-text-secondary" role="status">Summoning Calliope…</div>}>
+            <CalliopePanel
+              draftId={detail.id}
+              draftName={name.trim() || manifestName}
+              seed={calliopeSeed}
+              actions={proposalActions}
+              onClose={() => setCalliopeOpen(false)}
+            />
+          </Suspense>
+        )}
+        </div>
+        </div>
       </div>
+    </CalliopeHandOffContext.Provider>
     </DraftResourcesContext.Provider>
     </DraftOperationsContext.Provider>
   )

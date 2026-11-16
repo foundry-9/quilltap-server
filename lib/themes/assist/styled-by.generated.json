@@ -1,0 +1,695 @@
+{
+ "catalogueVersion": 1,
+ "sources": ["packages/theme-storybook/src/css/qt-components.css","app/globals.css"],
+ "hooks": {
+  "qt-app-layout": [
+   {"when":"","properties":[{"property":"background","vars":[],"literal":true},{"property":"background-color","vars":["--theme-background"]},{"property":"color","vars":["--theme-foreground"]},{"property":"display","vars":[],"literal":true},{"property":"height","vars":[],"literal":true}]}
+  ],
+  "qt-skip-link": [
+   {"when":"","properties":[{"property":"background","vars":["--color-primary"]},{"property":"border-radius","vars":[],"literal":true},{"property":"color","vars":["--color-primary-foreground"]},{"property":"font-size","vars":[],"literal":true},{"property":"font-weight","vars":[],"literal":true},{"property":"left","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"text-decoration","vars":[],"literal":true},{"property":"top","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"outline","vars":["--color-ring"]},{"property":"outline-offset","vars":[],"literal":true},{"property":"top","vars":[],"literal":true}]}
+  ],
+  "qt-app-main": [
+   {"when":"","properties":[{"property":"background","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true}]}
+  ],
+  "qt-page-toolbar": [
+   {"when":"","properties":[{"property":"-webkit-backdrop-filter","vars":["--qt-app-header-blur"]},{"property":"align-items","vars":[],"literal":true},{"property":"backdrop-filter","vars":["--qt-app-header-blur"]},{"property":"background","vars":["--qt-app-header-bg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-wrap","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"position","vars":[],"literal":true},{"property":"row-gap","vars":[],"literal":true},{"property":"top","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-page-toolbar-left": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true}]}
+  ],
+  "qt-page-toolbar-center": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"flex","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"max-width","vars":[],"literal":true},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-page-toolbar-right": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-basis","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true}]}
+  ],
+  "qt-footer": [
+   {"when":"","properties":[{"property":"-webkit-backdrop-filter","vars":["--qt-app-header-blur"]},{"property":"backdrop-filter","vars":["--qt-app-header-blur"]},{"property":"background","vars":["--qt-app-header-bg"]},{"property":"border-color","vars":["--qt-footer-border"]},{"property":"border-top-style","vars":[],"literal":true},{"property":"border-top-width","vars":[],"literal":true},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-workspace": [
+   {"when":"","properties":[{"property":"background","vars":["--color-background","--qt-workspace-bg"]},{"property":"display","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"isolation","vars":[],"literal":true},{"property":"min-height","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-workspace-backdrop": [
+   {"when":"","properties":[{"property":"inset","vars":[],"literal":true},{"property":"overflow","vars":[],"literal":true},{"property":"pointer-events","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-workspace-backdrop-layer": [
+   {"when":"","properties":[{"property":"background-position","vars":[],"literal":true},{"property":"background-repeat","vars":[],"literal":true},{"property":"background-size","vars":[],"literal":true},{"property":"inset","vars":[],"literal":true},{"property":"opacity","vars":["--qt-workspace-backdrop-opacity"]},{"property":"position","vars":[],"literal":true}]}
+  ],
+  "qt-workspace-pane-chrome": [
+   {"when":"","properties":[{"property":"background","vars":["--color-background","--color-card","--qt-panel-bg","--qt-workspace-chrome-bg"]},{"property":"border-bottom","vars":["--color-border","--qt-workspace-chrome-border"]},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-tab-strip": [
+   {"when":"","properties":[{"property":"--qt-tab-active-bg","vars":["--color-primary","--qt-workspace-accent","--qt-workspace-tab-active-bg"]},{"property":"--qt-tab-active-border","vars":["--color-primary","--qt-workspace-accent","--qt-workspace-tab-active-border"]},{"property":"--qt-tab-active-fg","vars":["--color-foreground","--qt-workspace-tab-active-fg"]},{"property":"--qt-tab-bg","vars":["--color-muted","--qt-workspace-tab-bg"]},{"property":"--qt-tab-border","vars":["--color-foreground","--qt-workspace-tab-border"]},{"property":"--qt-tab-fg","vars":["--color-foreground","--qt-workspace-tab-fg"]},{"property":"--qt-tab-hover-bg","vars":["--color-muted","--qt-workspace-tab-hover-bg"]},{"property":"--qt-tab-hover-fg","vars":["--color-foreground","--qt-workspace-tab-hover-fg"]},{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"gap","vars":["--qt-tab-group-gap"]},{"property":"overflow-x","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"scrollbar-width","vars":[],"literal":true}]}
+  ],
+  "qt-tab-select": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":[],"literal":true},{"property":"border","vars":[],"literal":true},{"property":"color","vars":[],"literal":true},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"outline","vars":[],"literal":true}]},
+   {"when":":focus, inside .qt-tab-strip","properties":[{"property":"outline","vars":["--color-ring"]},{"property":"outline-offset","vars":[],"literal":true}]}
+  ],
+  "qt-tab-icon": [
+   {"when":"","properties":[{"property":"flex-shrink","vars":[],"literal":true}]}
+  ],
+  "qt-tab-label": [
+   {"when":"","properties":[{"property":"max-width","vars":[],"literal":true},{"property":"overflow","vars":[],"literal":true},{"property":"text-overflow","vars":[],"literal":true},{"property":"white-space","vars":[],"literal":true}]}
+  ],
+  "qt-tab-close": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"margin","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true},{"property":"transition","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--color-muted-foreground","--qt-tab-close-hover-bg"]},{"property":"opacity","vars":[],"literal":true}]}
+  ],
+  "qt-tab-pane": [
+   {"when":"","properties":[{"property":"min-height","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true},{"property":"overflow-y","vars":[],"literal":true},{"property":"position","vars":[],"literal":true}]}
+  ],
+  "qt-workspace-divider": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--color-border","--qt-workspace-divider-bg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"transition","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"background","vars":["--color-primary","--qt-workspace-accent","--qt-workspace-divider-active-bg"]},{"property":"outline","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--color-primary","--qt-workspace-accent","--qt-workspace-divider-active-bg"]},{"property":"outline","vars":[],"literal":true}]}
+  ],
+  "qt-workspace-divider-grip": [
+   {"when":"","properties":[{"property":"background","vars":["--color-muted-foreground","--qt-workspace-divider-grip"]},{"property":"border-radius","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-workspace-empty": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"text-align","vars":[],"literal":true}]}
+  ],
+  "qt-tab-drop-zone": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--color-primary","--qt-tab-drop-zone-bg","--qt-workspace-accent"]},{"property":"border-left","vars":["--color-primary","--qt-tab-drop-zone-border","--qt-workspace-accent"]},{"property":"bottom","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"right","vars":[],"literal":true},{"property":"top","vars":[],"literal":true},{"property":"width","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-homepage-container": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"margin-inline","vars":[],"literal":true},{"property":"max-width","vars":["--qt-page-max-width"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-quick-actions": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"flex-wrap","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true}]}
+  ],
+  "qt-homepage-grid": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"flex","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"grid-template-columns","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"min-height","vars":[],"literal":true}]}
+  ],
+  "qt-homepage-section": [
+   {"when":"","properties":[{"property":"background","vars":["--color-card","--qt-card-bg"]},{"property":"border","vars":["--qt-card-border"]},{"property":"border-radius","vars":["--theme-radius-lg"]},{"property":"box-shadow","vars":["--qt-card-shadow"]},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"min-height","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true},{"property":"overflow","vars":[],"literal":true},{"property":"padding","vars":["--spacing"]}]}
+  ],
+  "qt-homepage-section-header": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"margin-bottom","vars":["--spacing"]}]}
+  ],
+  "qt-homepage-section-title": [
+   {"when":"","properties":[{"property":"color","vars":["--color-foreground","--qt-heading-color"]},{"property":"font-family","vars":["--qt-heading-font"]},{"property":"font-size","vars":["--text-lg"]},{"property":"font-weight","vars":["--font-weight-semibold","--qt-heading-font-weight"]},{"property":"letter-spacing","vars":["--qt-heading-letter-spacing"]},{"property":"line-height","vars":["--text-lg--line-height"]},{"property":"text-transform","vars":["--qt-heading-text-transform"]}]}
+  ],
+  "qt-homepage-section-link": [
+   {"when":"","properties":[{"property":"color","vars":["--theme-muted-foreground"]},{"property":"font-size","vars":["--text-sm"]},{"property":"font-weight","vars":["--font-weight-normal"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]}
+  ],
+  "qt-homepage-section-content": [
+   {"when":"","properties":[{"property":"flex","vars":[],"literal":true},{"property":"margin","vars":["--spacing"]},{"property":"margin-block-end","vars":["--spacing"]},{"property":"margin-block-start","vars":["--spacing"]},{"property":"min-height","vars":[],"literal":true},{"property":"overflow","vars":[],"literal":true},{"property":"padding","vars":["--spacing"]}]}
+  ],
+  "qt-characters-grid": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"grid-template-columns","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true}]}
+  ],
+  "qt-character-card": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-card-bg"]},{"property":"border","vars":["--qt-card-border"]},{"property":"border-radius","vars":["--theme-radius-lg"]},{"property":"box-shadow","vars":["--qt-card-shadow"]},{"property":"color","vars":["--qt-card-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"height","vars":[],"literal":true},{"property":"padding","vars":["--qt-character-card-padding"]},{"property":"transition","vars":["--qt-card-transition"]}]},
+   {"when":":hover","properties":[{"property":"border-color","vars":["--color-primary"]},{"property":"box-shadow","vars":["--qt-card-shadow-hover"]}]}
+  ],
+  "qt-left-sidebar": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-left-sidebar-bg"]},{"property":"border-color","vars":["--qt-left-sidebar-border"]},{"property":"border-right-style","vars":[],"literal":true},{"property":"border-right-width","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"transition","vars":["--qt-left-sidebar-transition"]},{"property":"width","vars":["--qt-left-sidebar-width"]},{"property":"z-index","vars":["--qt-left-sidebar-z"]}]}
+  ],
+  "qt-left-sidebar-content": [
+   {"when":"","properties":[{"property":"flex","vars":[],"literal":true},{"property":"min-height","vars":[],"literal":true},{"property":"overflow-y","vars":[],"literal":true}]}
+  ],
+  "qt-collapsed-nav": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-collapsed-nav-button": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":["--theme-radius-md"]},{"property":"color","vars":["--color-foreground"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"height","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true},{"property":"width","vars":["--spacing"]}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-sidebar-item-hover-bg"]}]}
+  ],
+  "qt-left-sidebar-footer": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-color","vars":["--qt-left-sidebar-border"]},{"property":"border-top","vars":[],"literal":true},{"property":"border-top-style","vars":[],"literal":true},{"property":"border-top-width","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"padding","vars":["--spacing"]}]}
+  ],
+  "qt-left-sidebar-footer-actions": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]}]}
+  ],
+  "qt-left-sidebar-item": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":["--theme-radius-md"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--text-sm"]},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-sidebar-item-padding-x","--qt-sidebar-item-padding-y"]},{"property":"padding-inline","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-sidebar-item-hover-bg"]}]}
+  ],
+  "qt-left-sidebar-item-icon": [
+   {"when":"","properties":[{"property":"color","vars":["--color-foreground"]},{"property":"flex-shrink","vars":[],"literal":true},{"property":"height","vars":["--qt-left-sidebar-item-icon-size"]},{"property":"width","vars":["--qt-left-sidebar-item-icon-size"]}]}
+  ],
+  "qt-left-sidebar-profile": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":["--theme-radius-md"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"padding","vars":["--spacing"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-sidebar-item-hover-bg"]}]}
+  ],
+  "qt-left-sidebar-profile-avatar": [
+   {"when":"","properties":[{"property":"background-color","vars":["--theme-muted"]},{"property":"border-radius","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"height","vars":["--spacing"]},{"property":"width","vars":["--spacing"]}]}
+  ],
+  "qt-chat-message-row": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"isolation","vars":[],"literal":true},{"property":"max-width","vars":["--qt-chat-message-row-max-width"]},{"property":"position","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-chat-message-row-user": [
+   {"when":"","properties":[{"property":"justify-content","vars":[],"literal":true},{"property":"margin-left","vars":[],"literal":true},{"property":"margin-top","vars":[],"literal":true}]}
+  ],
+  "qt-chat-message-row-assistant": [
+   {"when":"","properties":[{"property":"justify-content","vars":[],"literal":true},{"property":"margin-top","vars":[],"literal":true}]}
+  ],
+  "qt-chat-established-fact-row": [
+   {"when":"","properties":[{"property":"max-width","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-chat-message-row-tool": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"isolation","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"margin-bottom","vars":[],"literal":true},{"property":"margin-top","vars":[],"literal":true},{"property":"max-width","vars":["--qt-chat-message-row-max-width"]},{"property":"position","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-chat-desktop-avatar": [
+   {"when":"","properties":[{"property":"align-self","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-chat-message-body": [
+   {"when":"","properties":[{"property":"flex","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-chat-message-user": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-chat-user-bg"]},{"property":"border","vars":["--qt-chat-user-border"]},{"property":"border-radius","vars":["--qt-chat-message-radius"]},{"property":"box-shadow","vars":["--qt-chat-message-shadow"]},{"property":"color","vars":["--qt-chat-user-fg"]},{"property":"font-family","vars":["--qt-chat-user-font"]},{"property":"max-width","vars":[],"literal":true},{"property":"overflow-wrap","vars":[],"literal":true},{"property":"padding","vars":["--qt-chat-message-padding"]},{"property":"position","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true},{"property":"word-break","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"box-shadow","vars":[],"literal":true}]}
+  ],
+  "qt-chat-message-assistant": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-chat-assistant-bg"]},{"property":"border","vars":["--qt-chat-assistant-border"]},{"property":"border-radius","vars":["--qt-chat-message-radius"]},{"property":"box-shadow","vars":["--qt-chat-message-shadow"]},{"property":"color","vars":["--qt-chat-assistant-fg"]},{"property":"font-family","vars":["--qt-chat-assistant-font"]},{"property":"font-weight","vars":["--qt-chat-assistant-font-weight"]},{"property":"max-width","vars":[],"literal":true},{"property":"overflow-wrap","vars":[],"literal":true},{"property":"padding","vars":["--qt-chat-message-padding"]},{"property":"position","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true},{"property":"word-break","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"box-shadow","vars":[],"literal":true}]}
+  ],
+  "qt-chat-whisper-label": [
+   {"when":"","properties":[{"property":"color","vars":["--qt-chat-whisper-label-fg"]},{"property":"font-size","vars":[],"literal":true},{"property":"font-style","vars":[],"literal":true},{"property":"margin-bottom","vars":[],"literal":true}]}
+  ],
+  "qt-chat-silent-label": [
+   {"when":"","properties":[{"property":"color","vars":["--qt-chat-silent-label-fg"]},{"property":"font-size","vars":[],"literal":true},{"property":"font-style","vars":[],"literal":true},{"property":"margin-bottom","vars":[],"literal":true}]}
+  ],
+  "qt-chat-message-established-fact": [
+   {"when":"","properties":[{"property":"color","vars":[],"literal":true},{"property":"font-size","vars":[],"literal":true},{"property":"font-variant-caps","vars":[],"literal":true},{"property":"font-weight","vars":[],"literal":true},{"property":"letter-spacing","vars":[],"literal":true},{"property":"margin-bottom","vars":[],"literal":true}]}
+  ],
+  "qt-chat-established-fact-band": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-alert-info-bg"]},{"property":"border","vars":["--qt-alert-info-border"]},{"property":"border-left","vars":["--color-ring"]},{"property":"box-shadow","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-chat-system-bar": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-chat-system-bar-bg"]},{"property":"border","vars":["--qt-chat-system-bar-border"]},{"property":"border-left-color","vars":["--color-ring","--qt-alert-error-border","--qt-alert-info-border","--qt-alert-success-border","--qt-alert-warning-border"]},{"property":"border-left-width","vars":[],"literal":true},{"property":"border-radius","vars":["--radius-sm"]},{"property":"color","vars":["--qt-chat-system-bar-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"line-height","vars":[],"literal":true},{"property":"margin","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"padding-left","vars":[],"literal":true},{"property":"text-align","vars":[],"literal":true},{"property":"transition","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"background","vars":["--qt-chat-system-bar-hover-bg"]},{"property":"outline","vars":["--color-ring"],"literal":true},{"property":"outline-offset","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-chat-system-bar-hover-bg"]},{"property":"outline","vars":[],"literal":true}]}
+  ],
+  "qt-chat-announcement-group": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-wrap","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"margin","vars":[],"literal":true},{"property":"max-width","vars":["--qt-chat-message-row-max-width"]},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-chat-announcement-chip": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-chat-system-bar-bg"]},{"property":"border","vars":["--qt-chat-system-bar-border"]},{"property":"border-left-color","vars":["--color-ring","--qt-alert-error-border","--qt-alert-info-border","--qt-alert-success-border","--qt-alert-warning-border"]},{"property":"border-left-width","vars":[],"literal":true},{"property":"border-radius","vars":["--radius-sm"]},{"property":"color","vars":["--qt-chat-system-bar-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex","vars":[],"literal":true},{"property":"font-size","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"line-height","vars":[],"literal":true},{"property":"max-width","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"padding-left","vars":[],"literal":true},{"property":"text-align","vars":[],"literal":true},{"property":"transition","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"background","vars":["--qt-chat-system-bar-hover-bg"]},{"property":"outline","vars":["--color-ring"],"literal":true},{"property":"outline-offset","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-chat-system-bar-hover-bg"]},{"property":"outline","vars":[],"literal":true}]}
+  ],
+  "qt-chat-message-action-bar": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-top","vars":["--color-border"]},{"property":"display","vars":[],"literal":true},{"property":"flex-wrap","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"margin-top","vars":["--spacing"]},{"property":"max-width","vars":[],"literal":true},{"property":"padding-top","vars":["--spacing"]}]},
+   {"when":"inside .qt-chat-message-user","properties":[{"property":"border-top-color","vars":["--qt-chat-user-fg"]}]}
+  ],
+  "qt-chat-message-tools": [
+   {"when":"","properties":[{"property":"margin-block-end","vars":["--spacing"]},{"property":"margin-block-start","vars":["--spacing"]},{"property":"margin-top","vars":["--spacing"]}]}
+  ],
+  "qt-chat-tool-embedded": [
+   {"when":"","properties":[{"property":"font-family","vars":["--font-sans"]}]}
+  ],
+  "qt-chat-composer": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-chat-composer-bg"]},{"property":"border-top","vars":["--qt-chat-composer-border"]},{"property":"padding","vars":["--qt-chat-composer-padding-x","--qt-chat-composer-padding-y"]},{"property":"padding-bottom","vars":[],"literal":true},{"property":"padding-top","vars":[],"literal":true}]}
+  ],
+  "qt-chat-composer-input": [
+   {"when":"","properties":[{"property":"align-self","vars":[],"literal":true},{"property":"background","vars":["--qt-input-bg"]},{"property":"background-image","vars":["--qt-alert-info-bg"]},{"property":"border","vars":["--qt-input-border"]},{"property":"border-color","vars":["--color-ring"]},{"property":"border-radius","vars":["--qt-chat-composer-radius"]},{"property":"box-shadow","vars":["--color-ring"]},{"property":"color","vars":["--qt-input-fg"]},{"property":"flex","vars":[],"literal":true},{"property":"font-family","vars":["--qt-chat-user-font"]},{"property":"font-size","vars":["--text-sm"]},{"property":"height","vars":[],"literal":true},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"max-height","vars":["--spacing"]},{"property":"min-height","vars":["--spacing"]},{"property":"overflow-y","vars":[],"literal":true},{"property":"padding","vars":["--qt-input-padding-x","--qt-input-padding-y"]},{"property":"position","vars":[],"literal":true},{"property":"resize","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]},
+   {"when":"::-moz-placeholder","properties":[{"property":"color","vars":["--theme-muted-foreground"]}]},
+   {"when":"::placeholder","properties":[{"property":"color","vars":["--theme-muted-foreground"]}]},
+   {"when":":disabled","properties":[{"property":"background-color","vars":["--theme-muted"]},{"property":"cursor","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"border-color","vars":["--qt-input-focus-ring"]},{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]}
+  ],
+  "qt-chat-composer-send": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-button-primary-bg"]},{"property":"border-radius","vars":[],"literal":true},{"property":"box-shadow","vars":["--qt-button-primary-shadow"]},{"property":"color","vars":["--qt-button-primary-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"height","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true},{"property":"width","vars":["--spacing"]}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-button-primary-hover-bg"]}]},
+   {"when":"inside .qt-chat-composer-actions","properties":[{"property":"height","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-chat-toolbar": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"gap","vars":["--qt-chat-toolbar-gap"]}]}
+  ],
+  "qt-chat-toolbar-button": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-chat-toolbar-button-bg"]},{"property":"border","vars":["--qt-chat-toolbar-button-border"]},{"property":"border-radius","vars":["--qt-button-radius"]},{"property":"color","vars":["--qt-chat-toolbar-button-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"transition","vars":["--qt-button-transition"]},{"property":"width","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true},{"property":"pointer-events","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-chat-toolbar-button-hover-bg"]}]}
+  ],
+  "qt-participant-card": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-participant-card-bg"]},{"property":"border","vars":["--qt-participant-card-border"]},{"property":"border-radius","vars":["--qt-participant-card-radius"]},{"property":"padding","vars":["--spacing"]},{"property":"position","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background-color","vars":["--theme-muted"]}]}
+  ],
+  "qt-participant-turn-dot": [
+   {"when":"","properties":[{"property":"animation","vars":["--animate-pulse"]},{"property":"background","vars":["--qt-status-success-fg"]},{"property":"border-radius","vars":[],"literal":true},{"property":"box-shadow","vars":["--qt-status-success-fg"]},{"property":"height","vars":[],"literal":true},{"property":"left","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"top","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-participant-card-name": [
+   {"when":"","properties":[{"property":"font-size","vars":["--text-sm"]},{"property":"font-weight","vars":["--font-weight-medium"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"overflow","vars":[],"literal":true},{"property":"text-overflow","vars":[],"literal":true},{"property":"white-space","vars":[],"literal":true}]}
+  ],
+  "qt-chat-layout": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-content-bg"]},{"property":"display","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"overflow","vars":[],"literal":true},{"property":"position","vars":[],"literal":true}]},
+   {"when":"::before","properties":[{"property":"background","vars":["--story-background-url"]},{"property":"content","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"inset","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true},{"property":"pointer-events","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-chat-messages-list": [
+   {"when":"","properties":[{"property":"margin-block-end","vars":["--spacing"]},{"property":"margin-block-start","vars":["--spacing"]},{"property":"margin-inline","vars":[],"literal":true},{"property":"max-width","vars":["--qt-chat-message-row-max-width"]}]}
+  ],
+  "qt-chat-message-content": [
+   {"when":"","properties":[{"property":"color","vars":["--color-foreground","--color-primary-foreground"]},{"property":"max-width","vars":[],"literal":true},{"property":"overflow-x","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]},
+   {"when":"inside .qt-chat-message-user","properties":[{"property":"color","vars":["--qt-chat-user-fg"]}]}
+  ],
+  "qt-chat-dialogue": [
+   {"when":"inside .qt-chat-message-content","properties":[{"property":"--qt-rp-bg","vars":["--qt-rp-dialogue-bg"]},{"property":"--qt-rp-fg","vars":["--qt-rp-dialogue-color"]},{"property":"background","vars":["--qt-rp-bg"]},{"property":"color","vars":["--qt-rp-fg"]}]},
+   {"when":"inside .qt-chat-message-user .qt-chat-message-content","properties":[{"property":"--qt-rp-fg","vars":["--qt-chat-user-fg","--qt-rp-user-dialogue-color"]}]}
+  ],
+  "qt-chat-narration": [
+   {"when":"inside .qt-chat-message-content","properties":[{"property":"--qt-rp-bg","vars":["--qt-rp-narration-bg"]},{"property":"--qt-rp-fg","vars":["--qt-rp-narration-color"]},{"property":"background","vars":["--qt-rp-bg"]},{"property":"border-radius","vars":["--qt-rp-narration-radius"]},{"property":"color","vars":["--qt-rp-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-style","vars":["--qt-rp-narration-style"]},{"property":"padding","vars":["--qt-rp-narration-padding"]}]}
+  ],
+  "qt-chat-ooc": [
+   {"when":"inside .qt-chat-message-content","properties":[{"property":"--qt-rp-bg","vars":["--qt-rp-ooc-bg"]},{"property":"--qt-rp-fg","vars":["--qt-rp-ooc-color"]},{"property":"background","vars":["--qt-rp-bg"]},{"property":"border-radius","vars":["--qt-rp-ooc-radius"]},{"property":"color","vars":["--qt-rp-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-family","vars":["--qt-rp-ooc-font"]},{"property":"padding","vars":["--qt-rp-ooc-padding"]}]}
+  ],
+  "qt-chat-inner-monologue": [
+   {"when":"inside .qt-chat-message-content","properties":[{"property":"--qt-rp-bg","vars":["--qt-rp-inner-monologue-bg"]},{"property":"--qt-rp-fg","vars":["--qt-rp-inner-monologue-color"]},{"property":"background","vars":["--qt-rp-bg"]},{"property":"border-radius","vars":["--qt-rp-inner-monologue-radius"]},{"property":"color","vars":["--qt-rp-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-style","vars":["--qt-rp-inner-monologue-style"]},{"property":"padding","vars":["--qt-rp-inner-monologue-padding"]}]}
+  ],
+  "qt-chat-composer-actions": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true}]}
+  ],
+  "qt-chat-stop-button": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-status-danger-bg"]},{"property":"border","vars":["--qt-status-danger-border"]},{"property":"color","vars":["--qt-status-danger-fg"]}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-status-danger-bg"]}]}
+  ],
+  "qt-chat-attachment-chip": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--color-muted"]},{"property":"border-radius","vars":["--theme-radius-lg"]},{"property":"color","vars":["--color-foreground"]},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--text-sm"]},{"property":"gap","vars":["--spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":[],"literal":true}]}
+  ],
+  "qt-chat-attachment-image": [
+   {"when":"","properties":[{"property":"-o-object-fit","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"object-fit","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-chat-thinking": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"margin","vars":[],"literal":true}]}
+  ],
+  "qt-chat-sidebar": [
+   {"when":"","properties":[{"property":"--qt-card-padding","vars":[],"literal":true},{"property":"background","vars":["--qt-chat-sidebar-bg"]},{"property":"border-left","vars":["--qt-chat-sidebar-border"]},{"property":"bottom","vars":[],"literal":true},{"property":"box-shadow","vars":["--color-foreground","--qt-chat-sidebar-overlay-shadow"]},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"max-width","vars":[],"literal":true},{"property":"overflow","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"right","vars":[],"literal":true},{"property":"top","vars":[],"literal":true},{"property":"width","vars":["--qt-chat-sidebar-width"]},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-courier-bubble": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-green-room": [
+   {"when":"","properties":[{"property":"margin","vars":[],"literal":true},{"property":"max-width","vars":["--qt-green-room-max-width"]},{"property":"padding","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-storyteller-board": [
+   {"when":"","properties":[{"property":"background","vars":["--color-card","--qt-storyteller-board-bg"]},{"property":"border","vars":["--color-border","--qt-storyteller-board-border"]},{"property":"border-radius","vars":["--qt-storyteller-board-radius"]},{"property":"color","vars":["--color-card-foreground","--qt-storyteller-board-fg"]},{"property":"margin-bottom","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true}]}
+  ],
+  "qt-storyteller-card": [
+   {"when":"","properties":[{"property":"background","vars":["--color-background","--qt-storyteller-card-bg"]},{"property":"border","vars":["--color-border","--qt-storyteller-card-border"]},{"property":"border-radius","vars":["--qt-storyteller-card-radius"]},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"font-size","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true}]}
+  ],
+  "qt-formatting-toolbar": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--color-muted"]},{"property":"border-radius","vars":["--radius-md"]},{"property":"display","vars":[],"literal":true},{"property":"flex-wrap","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"margin-bottom","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true}]}
+  ],
+  "qt-formatting-button": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-content-bg"]},{"property":"border","vars":["--color-border"]},{"property":"border-radius","vars":["--radius-sm"]},{"property":"color","vars":["--color-foreground"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--text-xs"]},{"property":"font-weight","vars":["--font-weight-medium"]},{"property":"height","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"line-height","vars":["--text-xs--line-height"]},{"property":"min-width","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--color-muted","--qt-content-bg-hover"]},{"property":"border-color","vars":["--color-foreground"]}]}
+  ],
+  "qt-typeahead-menu": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-popover-bg"]},{"property":"border","vars":["--qt-popover-border"]},{"property":"border-radius","vars":["--qt-popover-radius"]},{"property":"bottom","vars":[],"literal":true},{"property":"box-shadow","vars":["--qt-popover-shadow"]},{"property":"color","vars":["--qt-popover-fg"]},{"property":"left","vars":[],"literal":true},{"property":"max-height","vars":[],"literal":true},{"property":"max-width","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true},{"property":"overflow-y","vars":[],"literal":true},{"property":"padding","vars":["--spacing"]},{"property":"position","vars":[],"literal":true},{"property":"right","vars":[],"literal":true},{"property":"top","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-typeahead-option": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":["--theme-radius-md"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--text-sm"]},{"property":"gap","vars":["--spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background-color","vars":["--theme-muted"]}]}
+  ],
+  "qt-mention-chip": [
+   {"when":"","properties":[{"property":"-webkit-box-decoration-break","vars":[],"literal":true},{"property":"background","vars":["--color-primary"]},{"property":"border-bottom","vars":["--color-primary"]},{"property":"border-radius","vars":[],"literal":true},{"property":"box-decoration-break","vars":[],"literal":true},{"property":"color","vars":[],"literal":true},{"property":"cursor","vars":[],"literal":true},{"property":"font-size","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"background","vars":["--color-primary"]},{"property":"outline","vars":["--color-ring"],"literal":true},{"property":"outline-offset","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--color-primary"]},{"property":"outline","vars":[],"literal":true}]}
+  ],
+  "qt-doc-pane": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-content-bg"]},{"property":"border-left","vars":["--color-border"]},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true},{"property":"overflow","vars":[],"literal":true}]}
+  ],
+  "qt-doc-header": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-content-bg"]},{"property":"border-bottom","vars":["--color-border"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-dialog-overlay": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-dialog-backdrop"]},{"property":"display","vars":[],"literal":true},{"property":"inset","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-dialog": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-dialog-bg"]},{"property":"border","vars":["--qt-dialog-border","--qt-dialog-border-width"]},{"property":"border-radius","vars":["--qt-dialog-radius"]},{"property":"box-shadow","vars":["--qt-dialog-shadow"]},{"property":"max-width","vars":["--container-lg"]},{"property":"position","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-dialog-header": [
+   {"when":"","properties":[{"property":"border-bottom","vars":["--qt-dialog-border"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-dialog-title": [
+   {"when":"","properties":[{"property":"color","vars":["--theme-foreground"]},{"property":"font-size","vars":["--text-lg"]},{"property":"font-weight","vars":["--font-weight-semibold"]},{"property":"line-height","vars":["--text-lg--line-height"]}]}
+  ],
+  "qt-dialog-description": [
+   {"when":"","properties":[{"property":"color","vars":["--theme-muted-foreground"]},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"margin-top","vars":["--spacing"]}]}
+  ],
+  "qt-floating-dialog": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-dialog-bg"]},{"property":"border","vars":["--qt-dialog-border"]},{"property":"border-radius","vars":["--qt-dialog-radius"]},{"property":"box-shadow","vars":["--qt-dialog-shadow"]},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"overflow","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"resize","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-slide-over-panel": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-dialog-bg"]},{"property":"border-left","vars":["--qt-dialog-border"]},{"property":"box-shadow","vars":["--qt-dialog-shadow"]},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"right","vars":[],"literal":true},{"property":"top","vars":[],"literal":true},{"property":"transform","vars":[],"literal":true},{"property":"transition","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-settings-header": [
+   {"when":"inside .qt-page-container","properties":[{"property":"-webkit-backdrop-filter","vars":[],"literal":true},{"property":"backdrop-filter","vars":[],"literal":true},{"property":"background","vars":["--color-background"]},{"property":"border-radius","vars":["--theme-radius-lg"]},{"property":"margin-inline","vars":["--spacing"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-settings-persona-row": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"flex-wrap","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true}]}
+  ],
+  "qt-settings-persona-chip": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--color-background","--qt-settings-chip-bg"]},{"property":"border","vars":["--color-border","--qt-settings-chip-border"]},{"property":"border-radius","vars":[],"literal":true},{"property":"color","vars":["--color-foreground","--qt-settings-chip-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"outline","vars":["--color-ring"]},{"property":"outline-offset","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--color-accent","--qt-settings-chip-hover-bg"]},{"property":"color","vars":["--color-accent-foreground","--qt-settings-chip-hover-fg"]}]},
+   {"when":"state: The lens in use (aria-pressed=\"true\")","properties":[{"property":"background","vars":["--color-primary","--qt-settings-chip-active-bg"]},{"property":"border-color","vars":["--color-primary","--qt-settings-chip-active-border"]},{"property":"color","vars":["--color-primary-foreground","--qt-settings-chip-active-fg"]}]}
+  ],
+  "qt-settings-search": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"position","vars":[],"literal":true}]}
+  ],
+  "qt-settings-lens-banner": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--color-background","--qt-settings-lens-bg"]},{"property":"border","vars":["--color-primary","--qt-settings-lens-border"]},{"property":"border-radius","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true}]}
+  ],
+  "qt-settings-layout": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"grid-template-columns","vars":[],"literal":true}]}
+  ],
+  "qt-settings-rail": [
+   {"when":"","properties":[{"property":"-webkit-backdrop-filter","vars":[],"literal":true},{"property":"backdrop-filter","vars":[],"literal":true},{"property":"background","vars":["--color-background","--qt-settings-rail-bg"]},{"property":"border","vars":["--color-border","--qt-settings-rail-border"]},{"property":"border-radius","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"top","vars":[],"literal":true}]}
+  ],
+  "qt-settings-rail-item": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":[],"literal":true},{"property":"border","vars":[],"literal":true},{"property":"border-radius","vars":[],"literal":true},{"property":"color","vars":["--color-foreground","--qt-settings-rail-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"text-align","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"outline","vars":["--color-ring"]},{"property":"outline-offset","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--color-accent","--qt-settings-rail-hover-bg"]},{"property":"color","vars":["--color-accent-foreground","--qt-settings-rail-hover-fg"]}]},
+   {"when":"state: The group on show (aria-current=\"page\")","properties":[{"property":"background","vars":["--color-primary","--qt-settings-rail-active-bg"]},{"property":"color","vars":["--color-primary-foreground","--qt-settings-rail-active-fg"]},{"property":"font-weight","vars":[],"literal":true}]},
+   {"when":"state: The group on show (aria-current=\"page\"), :hover","properties":[{"property":"background","vars":["--color-primary","--qt-settings-rail-active-bg"]},{"property":"color","vars":["--color-primary-foreground","--qt-settings-rail-active-fg"]}]}
+  ],
+  "qt-settings-rail-count": [
+   {"when":"","properties":[{"property":"background","vars":["--color-muted","--qt-settings-rail-count-bg"]},{"property":"border-radius","vars":[],"literal":true},{"property":"color","vars":["--color-foreground","--qt-settings-rail-count-fg"]},{"property":"font-size","vars":[],"literal":true},{"property":"margin-left","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"text-align","vars":[],"literal":true}]}
+  ],
+  "qt-settings-panel": [
+   {"when":"inside .qt-page-container","properties":[{"property":"-webkit-backdrop-filter","vars":[],"literal":true},{"property":"backdrop-filter","vars":[],"literal":true},{"property":"background","vars":["--color-background"]},{"property":"border","vars":["--color-border"]},{"property":"border-bottom-left-radius","vars":["--theme-radius-lg"]},{"property":"border-bottom-right-radius","vars":["--theme-radius-lg"]},{"property":"border-top","vars":["--color-border"]},{"property":"margin-inline","vars":["--spacing"]},{"property":"min-height","vars":[],"literal":true},{"property":"padding-bottom","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"padding-top","vars":["--spacing"]}]}
+  ],
+  "qt-settings-advanced-divider": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"color","vars":["--color-muted-foreground"]},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true},{"property":"letter-spacing","vars":[],"literal":true},{"property":"margin","vars":[],"literal":true},{"property":"text-transform","vars":[],"literal":true}]},
+   {"when":"::after","properties":[{"property":"border-top","vars":["--color-border"]},{"property":"content","vars":[],"literal":true},{"property":"flex","vars":[],"literal":true}]},
+   {"when":"::before","properties":[{"property":"border-top","vars":["--color-border"]},{"property":"content","vars":[],"literal":true},{"property":"flex","vars":[],"literal":true}]}
+  ],
+  "qt-collapsible-card": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-card-bg"]},{"property":"border","vars":["--qt-card-border"]},{"property":"border-radius","vars":["--qt-card-radius"]},{"property":"box-shadow","vars":["--qt-card-shadow"]},{"property":"color","vars":["--qt-card-fg"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]}
+  ],
+  "qt-collapsible-card-header": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":[],"literal":true},{"property":"border","vars":[],"literal":true},{"property":"color","vars":[],"literal":true},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-card-padding"]},{"property":"text-align","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background-color","vars":["--theme-muted"]},{"property":"border-radius","vars":["--qt-card-radius"]}]}
+  ],
+  "qt-collapsible-card-icon": [
+   {"when":"","properties":[{"property":"color","vars":["--theme-muted-foreground"]},{"property":"flex-shrink","vars":[],"literal":true}]}
+  ],
+  "qt-collapsible-card-chevron": [
+   {"when":"","properties":[{"property":"color","vars":["--theme-muted-foreground"]},{"property":"flex-shrink","vars":[],"literal":true},{"property":"height","vars":["--spacing"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true},{"property":"width","vars":["--spacing"]}]}
+  ],
+  "qt-collapsible-card-body": [
+   {"when":"","properties":[{"property":"padding","vars":["--qt-card-padding"]}]}
+  ],
+  "qt-page-container": [
+   {"when":"","properties":[{"property":"background","vars":[],"literal":true},{"property":"margin-inline","vars":[],"literal":true},{"property":"max-width","vars":["--qt-page-max-width"]},{"property":"min-height","vars":[],"literal":true},{"property":"padding-bottom","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"padding-top","vars":["--spacing"]},{"property":"position","vars":[],"literal":true},{"property":"transition","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]},
+   {"when":"::before","properties":[{"property":"background","vars":["--story-background-position","--story-background-url"]},{"property":"content","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"inset","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true},{"property":"pointer-events","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]},
+   {"when":"::before, inside .qt-workspace","properties":[{"property":"display","vars":[],"literal":true}]}
+  ],
+  "qt-card": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-card-bg"]},{"property":"border","vars":["--qt-card-border"]},{"property":"border-radius","vars":["--qt-card-radius"]},{"property":"box-shadow","vars":["--qt-card-shadow"]},{"property":"color","vars":["--qt-card-fg"]},{"property":"padding","vars":["--qt-card-padding"]},{"property":"position","vars":[],"literal":true},{"property":"transition","vars":["--qt-card-transition"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true},{"property":"translate","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-card-header": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"margin-bottom","vars":["--spacing"]}]}
+  ],
+  "qt-card-title": [
+   {"when":"","properties":[{"property":"color","vars":["--color-foreground","--theme-foreground"]},{"property":"font-family","vars":["--qt-heading-font"]},{"property":"font-size","vars":["--text-base","--text-lg"]},{"property":"font-weight","vars":["--font-weight-medium","--font-weight-semibold"]},{"property":"line-height","vars":["--text-base--line-height","--text-lg--line-height"]}]}
+  ],
+  "qt-card-subtitle": [
+   {"when":"","properties":[{"property":"color","vars":["--color-muted-foreground"]},{"property":"font-size","vars":["--text-sm"]},{"property":"font-weight","vars":["--font-weight-normal"]},{"property":"line-height","vars":["--text-sm--line-height"]}]}
+  ],
+  "qt-card-description": [
+   {"when":"","properties":[{"property":"color","vars":["--theme-muted-foreground"]},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]}]}
+  ],
+  "qt-card-interactive": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-card-bg"]},{"property":"border","vars":["--qt-card-border"]},{"property":"border-radius","vars":["--qt-card-radius"]},{"property":"box-shadow","vars":["--qt-card-shadow"]},{"property":"color","vars":["--qt-card-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"padding","vars":["--qt-card-padding"]},{"property":"position","vars":[],"literal":true},{"property":"transition","vars":["--qt-card-transition"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true},{"property":"translate","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"border-color","vars":["--color-primary"]},{"property":"box-shadow","vars":["--qt-card-shadow-hover"]},{"property":"translate","vars":["--spacing"]}]}
+  ],
+  "qt-button": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":["--qt-button-radius"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--qt-button-font-size","--text-sm"]},{"property":"font-weight","vars":["--font-weight-medium","--qt-button-font-weight"]},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"letter-spacing","vars":["--qt-button-letter-spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-button-padding-x","--qt-button-padding-y"]},{"property":"text-transform","vars":["--qt-button-text-transform"]},{"property":"transition","vars":["--qt-button-transition"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]}
+  ],
+  "qt-button-primary": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-button-primary-bg"]},{"property":"border-radius","vars":["--qt-button-radius"]},{"property":"box-shadow","vars":["--qt-button-primary-shadow"]},{"property":"color","vars":["--qt-button-primary-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--qt-button-font-size","--text-sm"]},{"property":"font-weight","vars":["--font-weight-medium","--qt-button-font-weight"]},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"letter-spacing","vars":["--qt-button-letter-spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-button-padding-x","--qt-button-padding-y"]},{"property":"text-transform","vars":["--qt-button-text-transform"]},{"property":"transition","vars":["--qt-button-transition"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":active","properties":[{"property":"transform","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-button-primary-hover-bg"]}]}
+  ],
+  "qt-button-secondary": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-button-secondary-bg"]},{"property":"border","vars":["--qt-button-secondary-border"]},{"property":"border-radius","vars":["--qt-button-radius"]},{"property":"color","vars":["--qt-button-secondary-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--qt-button-font-size","--text-sm"]},{"property":"font-weight","vars":["--font-weight-medium","--qt-button-font-weight"]},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"letter-spacing","vars":["--qt-button-letter-spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-button-padding-x","--qt-button-padding-y"]},{"property":"text-transform","vars":["--qt-button-text-transform"]},{"property":"transition","vars":["--qt-button-transition"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-button-secondary-hover-bg"]}]}
+  ],
+  "qt-button-ghost": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-button-ghost-bg"]},{"property":"border-radius","vars":["--qt-button-radius"]},{"property":"color","vars":["--qt-button-ghost-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--qt-button-font-size","--text-sm"]},{"property":"font-weight","vars":["--font-weight-medium","--qt-button-font-weight"]},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"letter-spacing","vars":["--qt-button-letter-spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-button-padding-x","--qt-button-padding-y"]},{"property":"text-transform","vars":["--qt-button-text-transform"]},{"property":"transition","vars":["--qt-button-transition"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-button-ghost-hover-bg"]}]}
+  ],
+  "qt-button-destructive": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-button-destructive-bg"]},{"property":"border-radius","vars":["--qt-button-radius"]},{"property":"color","vars":["--qt-button-destructive-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--qt-button-font-size","--text-sm"]},{"property":"font-weight","vars":["--font-weight-medium","--qt-button-font-weight"]},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"letter-spacing","vars":["--qt-button-letter-spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-button-padding-x","--qt-button-padding-y"]},{"property":"text-transform","vars":["--qt-button-text-transform"]},{"property":"transition","vars":["--qt-button-transition"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-button-destructive-hover-bg"]}]}
+  ],
+  "qt-button-success": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-button-success-bg"]},{"property":"border-radius","vars":["--qt-button-radius"]},{"property":"box-shadow","vars":["--qt-button-primary-shadow"]},{"property":"color","vars":["--qt-button-success-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--qt-button-font-size","--text-sm"]},{"property":"font-weight","vars":["--font-weight-medium","--qt-button-font-weight"]},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"letter-spacing","vars":["--qt-button-letter-spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-button-padding-x","--qt-button-padding-y"]},{"property":"text-transform","vars":["--qt-button-text-transform"]},{"property":"transition","vars":["--qt-button-transition"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-button-success-hover-bg"]}]}
+  ],
+  "qt-button-warning": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-button-warning-bg"]},{"property":"border-radius","vars":["--qt-button-radius"]},{"property":"color","vars":["--qt-button-warning-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--qt-button-font-size","--text-sm"]},{"property":"font-weight","vars":["--font-weight-medium","--qt-button-font-weight"]},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"letter-spacing","vars":["--qt-button-letter-spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-button-padding-x","--qt-button-padding-y"]},{"property":"text-transform","vars":["--qt-button-text-transform"]},{"property":"transition","vars":["--qt-button-transition"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-button-warning-hover-bg"]}]}
+  ],
+  "qt-button-sm": [
+   {"when":"","properties":[{"property":"font-size","vars":["--text-xs"]},{"property":"line-height","vars":["--text-xs--line-height"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-button-icon": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"aspect-ratio","vars":[],"literal":true},{"property":"border-radius","vars":["--qt-button-radius"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--qt-button-font-size","--text-sm"]},{"property":"font-weight","vars":["--font-weight-medium","--qt-button-font-weight"]},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"letter-spacing","vars":["--qt-button-letter-spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-button-padding-x","--qt-button-padding-y","--spacing"]},{"property":"text-transform","vars":["--qt-button-text-transform"]},{"property":"transition","vars":["--qt-button-transition"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]}
+  ],
+  "qt-input": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-input-bg"]},{"property":"border","vars":["--qt-input-border"]},{"property":"border-radius","vars":["--qt-input-radius"]},{"property":"color","vars":["--qt-input-fg"]},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-input-padding-x","--qt-input-padding-y"]},{"property":"transition","vars":["--qt-input-transition"]},{"property":"width","vars":[],"literal":true}]},
+   {"when":"::-moz-placeholder","properties":[{"property":"color","vars":["--theme-muted-foreground"]}]},
+   {"when":"::placeholder","properties":[{"property":"color","vars":["--theme-muted-foreground"]}]},
+   {"when":":disabled","properties":[{"property":"background-color","vars":["--theme-muted"]},{"property":"cursor","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"border-color","vars":["--qt-input-focus-ring"]},{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]}
+  ],
+  "qt-textarea": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-input-bg"]},{"property":"border","vars":["--qt-input-border"]},{"property":"border-radius","vars":["--qt-input-radius"]},{"property":"color","vars":["--qt-input-fg"]},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"min-height","vars":["--spacing"]},{"property":"padding","vars":["--qt-input-padding-x","--qt-input-padding-y"]},{"property":"resize","vars":[],"literal":true},{"property":"transition","vars":["--qt-input-transition"]},{"property":"width","vars":[],"literal":true}]},
+   {"when":"::-moz-placeholder","properties":[{"property":"color","vars":["--theme-muted-foreground"]}]},
+   {"when":"::placeholder","properties":[{"property":"color","vars":["--theme-muted-foreground"]}]},
+   {"when":":disabled","properties":[{"property":"background-color","vars":["--theme-muted"]},{"property":"cursor","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"border-color","vars":["--qt-input-focus-ring"]},{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]}
+  ],
+  "qt-select": [
+   {"when":"","properties":[{"property":"-moz-appearance","vars":[],"literal":true},{"property":"-webkit-appearance","vars":[],"literal":true},{"property":"appearance","vars":[],"literal":true},{"property":"background","vars":["--qt-input-bg"]},{"property":"background-image","vars":["--qt-select-arrow"]},{"property":"background-position","vars":[],"literal":true},{"property":"background-repeat","vars":[],"literal":true},{"property":"background-size","vars":[],"literal":true},{"property":"border","vars":["--qt-input-border"]},{"property":"border-radius","vars":["--qt-input-radius"]},{"property":"color","vars":["--qt-input-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-input-padding-x","--qt-input-padding-y"]},{"property":"padding-right","vars":[],"literal":true},{"property":"transition","vars":["--qt-input-transition"]},{"property":"width","vars":[],"literal":true}]},
+   {"when":"::-moz-placeholder","properties":[{"property":"color","vars":["--theme-muted-foreground"]}]},
+   {"when":"::placeholder","properties":[{"property":"color","vars":["--theme-muted-foreground"]}]},
+   {"when":":disabled","properties":[{"property":"background-color","vars":["--theme-muted"]},{"property":"cursor","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"border-color","vars":["--qt-input-focus-ring"]},{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]}
+  ],
+  "qt-select-sm": [
+   {"when":"","properties":[{"property":"background-position","vars":[],"literal":true},{"property":"background-size","vars":[],"literal":true},{"property":"font-size","vars":["--text-xs"]},{"property":"line-height","vars":["--text-xs--line-height"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"padding-right","vars":[],"literal":true}]}
+  ],
+  "qt-badge": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-primary": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-badge-primary-bg"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-badge-primary-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-secondary": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-badge-secondary-bg"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-badge-secondary-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-success": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-status-success-bg"]},{"property":"border","vars":["--qt-status-success-border"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-status-success-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-warning": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-status-warning-bg"]},{"property":"border","vars":["--qt-status-warning-border"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-status-warning-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-info": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-status-info-bg"]},{"property":"border","vars":["--qt-status-info-border"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-status-info-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-destructive": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-status-danger-bg"]},{"property":"border","vars":["--qt-status-danger-border"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-status-danger-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-outline": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-badge-outline-bg"]},{"property":"border","vars":["--qt-badge-outline-border"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-badge-outline-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-character": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background-color","vars":["--qt-badge-character-bg"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-badge-character-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-user-character": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background-color","vars":["--qt-badge-user-character-bg"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-badge-user-character-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-chat": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background-color","vars":["--qt-badge-chat-bg"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-badge-chat-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-tag": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background-color","vars":["--qt-badge-tag-bg"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-badge-tag-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-memory": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background-color","vars":["--qt-badge-memory-bg"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-badge-memory-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-badge-project": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background-color","vars":["--qt-badge-project-bg"]},{"property":"border-radius","vars":["--qt-badge-radius"]},{"property":"color","vars":["--qt-badge-project-fg"]},{"property":"display","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"font-size","vars":["--qt-badge-font-size"]},{"property":"font-weight","vars":["--qt-badge-font-weight"]},{"property":"justify-content","vars":[],"literal":true},{"property":"padding","vars":["--qt-badge-padding-x","--qt-badge-padding-y"]}]}
+  ],
+  "qt-alert": [
+   {"when":"","properties":[{"property":"border-radius","vars":["--theme-radius-lg"]},{"property":"border-style","vars":[],"literal":true},{"property":"border-width","vars":[],"literal":true},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-alert-info": [
+   {"when":"","properties":[{"property":"background-color","vars":["--qt-alert-info-bg"]},{"property":"border-color","vars":["--qt-alert-info-border"]},{"property":"border-radius","vars":["--theme-radius-lg"]},{"property":"border-style","vars":[],"literal":true},{"property":"border-width","vars":[],"literal":true},{"property":"color","vars":["--qt-alert-info-fg"]},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-alert-success": [
+   {"when":"","properties":[{"property":"background-color","vars":["--qt-alert-success-bg"]},{"property":"border-color","vars":["--qt-alert-success-border"]},{"property":"border-radius","vars":["--theme-radius-lg"]},{"property":"border-style","vars":[],"literal":true},{"property":"border-width","vars":[],"literal":true},{"property":"color","vars":["--qt-alert-success-fg"]},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-alert-warning": [
+   {"when":"","properties":[{"property":"background-color","vars":["--qt-alert-warning-bg"]},{"property":"border-color","vars":["--qt-alert-warning-border"]},{"property":"border-radius","vars":["--theme-radius-lg"]},{"property":"border-style","vars":[],"literal":true},{"property":"border-width","vars":[],"literal":true},{"property":"color","vars":["--qt-alert-warning-fg"]},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-alert-error": [
+   {"when":"","properties":[{"property":"background-color","vars":["--qt-alert-error-bg"]},{"property":"border-color","vars":["--qt-alert-error-border"]},{"property":"border-radius","vars":["--theme-radius-lg"]},{"property":"border-style","vars":[],"literal":true},{"property":"border-width","vars":[],"literal":true},{"property":"color","vars":["--qt-alert-error-fg"]},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-heading-1": [
+   {"when":"","properties":[{"property":"color","vars":["--qt-heading-color"]},{"property":"font-family","vars":["--qt-heading-font"]},{"property":"font-size","vars":["--text-3xl"]},{"property":"font-weight","vars":["--qt-heading-font-weight"]},{"property":"letter-spacing","vars":["--qt-heading-letter-spacing"]},{"property":"line-height","vars":["--text-3xl--line-height"]},{"property":"text-transform","vars":["--qt-heading-text-transform"]}]}
+  ],
+  "qt-heading-2": [
+   {"when":"","properties":[{"property":"color","vars":["--qt-heading-color"]},{"property":"font-family","vars":["--qt-heading-font"]},{"property":"font-size","vars":["--text-2xl"]},{"property":"font-weight","vars":["--qt-heading-font-weight"]},{"property":"letter-spacing","vars":["--qt-heading-letter-spacing"]},{"property":"line-height","vars":["--text-2xl--line-height"]},{"property":"text-transform","vars":["--qt-heading-text-transform"]}]}
+  ],
+  "qt-heading-3": [
+   {"when":"","properties":[{"property":"color","vars":["--qt-heading-color"]},{"property":"font-family","vars":["--qt-heading-font"]},{"property":"font-size","vars":["--text-xl"]},{"property":"font-weight","vars":["--qt-heading-font-weight"]},{"property":"letter-spacing","vars":["--qt-heading-letter-spacing"]},{"property":"line-height","vars":["--text-xl--line-height"]},{"property":"text-transform","vars":["--qt-heading-text-transform"]}]}
+  ],
+  "qt-heading-4": [
+   {"when":"","properties":[{"property":"color","vars":["--qt-heading-color"]},{"property":"font-family","vars":["--qt-heading-font"]},{"property":"font-size","vars":["--text-lg"]},{"property":"font-weight","vars":["--qt-heading-font-weight"]},{"property":"letter-spacing","vars":["--qt-heading-letter-spacing"]},{"property":"line-height","vars":["--text-lg--line-height"]},{"property":"text-transform","vars":["--qt-heading-text-transform"]}]}
+  ],
+  "qt-page-title": [
+   {"when":"","properties":[{"property":"color","vars":["--color-foreground","--qt-heading-color","--theme-foreground"]},{"property":"font-family","vars":["--qt-heading-font"]},{"property":"font-size","vars":["--text-2xl","--text-3xl"]},{"property":"font-weight","vars":["--font-weight-bold","--font-weight-semibold","--qt-heading-font-weight"]},{"property":"letter-spacing","vars":["--qt-heading-letter-spacing"]},{"property":"line-height","vars":["--leading-tight","--text-2xl--line-height","--text-3xl--line-height"]},{"property":"text-transform","vars":["--qt-heading-text-transform"]}]}
+  ],
+  "qt-section-title": [
+   {"when":"","properties":[{"property":"color","vars":["--color-foreground","--qt-heading-color"]},{"property":"font-family","vars":["--qt-heading-font"]},{"property":"font-size","vars":["--text-lg"]},{"property":"font-weight","vars":["--font-weight-semibold","--qt-heading-font-weight"]},{"property":"letter-spacing","vars":["--qt-heading-letter-spacing"]},{"property":"line-height","vars":["--text-lg--line-height"]},{"property":"text-transform","vars":["--qt-heading-text-transform"]}]}
+  ],
+  "qt-text-section": [
+   {"when":"","properties":[{"property":"color","vars":["--color-foreground","--qt-heading-color","--qt-text-primary-fg"]},{"property":"font-family","vars":["--qt-heading-font"]},{"property":"font-size","vars":["--text-lg"]},{"property":"font-weight","vars":["--font-weight-medium","--qt-heading-font-weight"]},{"property":"letter-spacing","vars":["--qt-heading-letter-spacing"]},{"property":"line-height","vars":["--text-lg--line-height"]},{"property":"text-transform","vars":["--qt-heading-text-transform"]}]}
+  ],
+  "qt-text-brand": [
+   {"when":"","properties":[{"property":"color","vars":["--color-primary"]}]}
+  ],
+  "qt-font-brand": [
+   {"when":"","properties":[{"property":"color","vars":["--color-foreground","--qt-brand-fg"]},{"property":"font-family","vars":[],"literal":true},{"property":"font-size","vars":[],"literal":true},{"property":"font-weight","vars":[],"literal":true}]}
+  ],
+  "qt-spinner": [
+   {"when":"","properties":[{"property":"animation","vars":["--animate-spin"]},{"property":"border","vars":["--color-primary","--qt-spinner-track"]},{"property":"border-color","vars":[],"literal":true},{"property":"border-radius","vars":[],"literal":true},{"property":"border-right-color","vars":["--color-primary","--qt-spinner-indicator"]},{"property":"border-style","vars":[],"literal":true},{"property":"border-top-color","vars":[],"literal":true},{"property":"border-width","vars":[],"literal":true},{"property":"height","vars":["--spacing"]},{"property":"width","vars":["--spacing"]}]}
+  ],
+  "qt-thinking-indicator": [
+   {"when":"","properties":[{"property":"animation","vars":["--qt-thinking-duration","--qt-thinking-easing"],"literal":true},{"property":"transform","vars":["--qt-thinking-angle-rest"]},{"property":"transform-origin","vars":["--qt-thinking-origin"]}]}
+  ],
+  "qt-empty-state-title": [
+   {"when":"","properties":[{"property":"color","vars":["--color-foreground"]},{"property":"font-size","vars":["--text-lg"]},{"property":"font-weight","vars":["--font-weight-semibold"]},{"property":"line-height","vars":["--text-lg--line-height"]},{"property":"margin-bottom","vars":["--spacing"]}]}
+  ],
+  "qt-wikilink": [
+   {"when":"","properties":[{"property":"background","vars":["--color-primary"]},{"property":"border-radius","vars":[],"literal":true},{"property":"color","vars":["--theme-primary"]},{"property":"font-weight","vars":["--font-weight-medium"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"text-decoration-line","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--color-primary"]},{"property":"text-decoration-line","vars":[],"literal":true}]}
+  ],
+  "qt-file-preview-panel": [
+   {"when":"","properties":[{"property":"background","vars":["--color-muted","--qt-file-preview-panel-bg"]},{"property":"border-radius","vars":["--theme-radius-lg"]},{"property":"padding","vars":["--spacing"]}]}
+  ],
+  "qt-diagram": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-diagram-bg"]},{"property":"border","vars":["--qt-diagram-border"]},{"property":"border-radius","vars":["--qt-diagram-radius"]},{"property":"box-sizing","vars":[],"literal":true},{"property":"color","vars":["--qt-diagram-fg"]},{"property":"margin","vars":[],"literal":true},{"property":"max-width","vars":[],"literal":true},{"property":"padding","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-avatar-image": [
+   {"when":"","properties":[{"property":"-o-object-fit","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"object-fit","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]}
+  ],
+  "qt-avatar-labels": [
+   {"when":"","properties":[{"property":"margin-top","vars":["--spacing"]},{"property":"text-align","vars":[],"literal":true}]}
+  ],
+  "qt-avatar-name": [
+   {"when":"","properties":[{"property":"-webkit-box-orient","vars":[],"literal":true},{"property":"-webkit-line-clamp","vars":[],"literal":true},{"property":"color","vars":["--color-foreground","--qt-avatar-name-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--text-sm"]},{"property":"font-weight","vars":["--font-weight-semibold"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"overflow","vars":[],"literal":true}]}
+  ],
+  "qt-avatar-title": [
+   {"when":"","properties":[{"property":"-webkit-box-orient","vars":[],"literal":true},{"property":"-webkit-line-clamp","vars":[],"literal":true},{"property":"color","vars":["--color-muted-foreground","--qt-avatar-title-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--text-xs"]},{"property":"font-style","vars":[],"literal":true},{"property":"line-height","vars":["--text-xs--line-height"]},{"property":"overflow","vars":[],"literal":true}]}
+  ],
+  "qt-tab-group": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"flex-wrap","vars":[],"literal":true},{"property":"gap","vars":["--qt-tab-group-gap"]}]},
+   {"when":"inside .qt-page-container","properties":[{"property":"margin-bottom","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-tab": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"background","vars":["--qt-tab-bg"]},{"property":"border-bottom-style","vars":[],"literal":true},{"property":"border-bottom-width","vars":[],"literal":true},{"property":"border-color","vars":["--qt-tab-border"]},{"property":"border-radius","vars":["--qt-tab-radius"]},{"property":"border-style","vars":[],"literal":true},{"property":"border-width","vars":[],"literal":true},{"property":"color","vars":["--qt-tab-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--qt-tab-font-size"]},{"property":"font-weight","vars":["--qt-tab-font-weight"]},{"property":"gap","vars":["--spacing"]},{"property":"min-width","vars":[],"literal":true},{"property":"padding","vars":["--qt-tab-padding-x","--qt-tab-padding-y"]},{"property":"transition","vars":["--qt-tab-transition"]}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]},
+   {"when":":focus, inside .qt-tab-strip","properties":[{"property":"outline","vars":["--color-ring"]},{"property":"outline-offset","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-tab-hover-bg"]},{"property":"color","vars":["--qt-tab-hover-fg"]}]},
+   {"when":":hover, inside .qt-page-container .qt-tab-group","properties":[{"property":"background","vars":["--color-background"]}]},
+   {"when":":hover, inside .qt-tab-strip","properties":[{"property":"border-color","vars":["--color-foreground","--qt-workspace-tab-hover-border"]}]},
+   {"when":"inside .qt-page-container .qt-tab-group","properties":[{"property":"background","vars":["--color-background"]},{"property":"border-color","vars":["--color-border"]}]},
+   {"when":"inside .qt-tab-strip","properties":[{"property":"-moz-user-select","vars":[],"literal":true},{"property":"-webkit-user-select","vars":[],"literal":true},{"property":"border-bottom-width","vars":[],"literal":true},{"property":"border-style","vars":[],"literal":true},{"property":"border-width","vars":["--qt-workspace-tab-border-width"]},{"property":"font-weight","vars":[],"literal":true},{"property":"user-select","vars":[],"literal":true}]},
+   {"when":"state: The selected tab","properties":[{"property":"background","vars":["--qt-tab-active-bg"]},{"property":"border-color","vars":["--qt-tab-active-border"]},{"property":"color","vars":["--qt-tab-active-fg"]},{"property":"position","vars":[],"literal":true}]},
+   {"when":"state: The selected tab, ::after","properties":[{"property":"background","vars":["--qt-tab-active-bg"]},{"property":"bottom","vars":[],"literal":true},{"property":"content","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"left","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"right","vars":[],"literal":true}]},
+   {"when":"state: The selected tab, ::after, inside .qt-page-container .qt-tab-group","properties":[{"property":"background","vars":["--color-background"]}]},
+   {"when":"state: The selected tab, inside .qt-page-container .qt-tab-group","properties":[{"property":"background","vars":["--color-background"]},{"property":"border-color","vars":["--color-border"]}]}
+  ],
+  "qt-empty-state": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"text-align","vars":[],"literal":true}]}
+  ],
+  "qt-empty-state-icon": [
+   {"when":"","properties":[{"property":"color","vars":["--theme-muted-foreground"]},{"property":"height","vars":["--spacing"]},{"property":"margin-bottom","vars":["--spacing"]},{"property":"width","vars":["--spacing"]}]}
+  ],
+  "qt-empty-state-description": [
+   {"when":"","properties":[{"property":"color","vars":["--color-muted-foreground"]},{"property":"font-size","vars":["--text-sm"]},{"property":"font-weight","vars":["--font-weight-normal"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"max-width","vars":["--container-sm"]}]}
+  ],
+  "qt-empty-state-action": [
+   {"when":"","properties":[{"property":"margin-top","vars":["--spacing"]}]}
+  ],
+  "qt-loading-state": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"justify-content","vars":[],"literal":true},{"property":"padding-block","vars":["--spacing"]}]}
+  ],
+  "qt-tooltip": [
+   {"when":"","properties":[{"property":"background","vars":["--color-foreground"]},{"property":"border","vars":["--color-background"]},{"property":"border-color","vars":["--color-background"]},{"property":"border-radius","vars":["--qt-popover-radius"]},{"property":"box-shadow","vars":["--qt-popover-shadow"]},{"property":"color","vars":["--color-background"]},{"property":"font-size","vars":["--text-xs"]},{"property":"line-height","vars":["--text-xs--line-height"],"literal":true},{"property":"max-width","vars":[],"literal":true},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"pointer-events","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"text-align","vars":[],"literal":true},{"property":"white-space","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-popover": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-popover-bg"]},{"property":"border","vars":["--qt-popover-border"]},{"property":"border-radius","vars":["--qt-popover-radius"]},{"property":"box-shadow","vars":["--qt-popover-shadow"]},{"property":"color","vars":["--qt-popover-fg"]},{"property":"min-width","vars":["--spacing"]},{"property":"padding","vars":["--spacing"]},{"property":"z-index","vars":[],"literal":true}]}
+  ],
+  "qt-entity-card": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-card-bg","--qt-entity-card-bg"]},{"property":"border","vars":["--qt-card-border"]},{"property":"border-radius","vars":["--qt-card-radius","--qt-entity-card-radius"]},{"property":"box-shadow","vars":["--qt-card-shadow"]},{"property":"color","vars":["--qt-card-fg"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"height","vars":[],"literal":true},{"property":"padding","vars":["--qt-card-padding"]},{"property":"transition","vars":["--qt-card-transition"]}]},
+   {"when":":hover","properties":[{"property":"border-color","vars":["--color-primary"]},{"property":"box-shadow","vars":["--qt-card-shadow-hover"]},{"property":"translate","vars":["--spacing"]}]}
+  ],
+  "qt-label": [
+   {"when":"","properties":[{"property":"color","vars":["--color-foreground","--qt-label-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--text-sm"]},{"property":"font-weight","vars":["--font-weight-medium"]},{"property":"line-height","vars":["--text-sm--line-height"]}]}
+  ],
+  "qt-link": [
+   {"when":"","properties":[{"property":"-webkit-text-decoration","vars":["--qt-link-decoration"]},{"property":"color","vars":["--qt-link-color","--theme-muted-foreground"]},{"property":"font-size","vars":["--text-sm"]},{"property":"font-weight","vars":["--font-weight-normal"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"text-decoration","vars":["--qt-link-decoration"]},{"property":"transition","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"-webkit-text-decoration","vars":["--qt-link-decoration-hover"]},{"property":"color","vars":["--qt-link-hover-color"]},{"property":"text-decoration","vars":["--qt-link-decoration-hover"]}]},
+   {"when":":hover, inside .qt-chat-message-content","properties":[{"property":"color","vars":["--color-primary","--qt-link-hover-color"]},{"property":"text-decoration","vars":[],"literal":true}]},
+   {"when":"inside .qt-chat-message-content","properties":[{"property":"color","vars":["--color-primary","--qt-link-color"]},{"property":"text-decoration","vars":[],"literal":true},{"property":"text-underline-offset","vars":[],"literal":true}]}
+  ],
+  "qt-checkbox": [
+   {"when":"","properties":[{"property":"accent-color","vars":["--qt-checkbox-accent"]},{"property":"border","vars":["--qt-checkbox-border"]},{"property":"border-radius","vars":["--qt-checkbox-radius"]},{"property":"height","vars":["--qt-checkbox-size"]},{"property":"width","vars":["--qt-checkbox-size"]}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true}]}
+  ],
+  "qt-radio": [
+   {"when":"","properties":[{"property":"accent-color","vars":["--qt-radio-accent"]},{"property":"border","vars":["--qt-radio-border"]},{"property":"border-radius","vars":[],"literal":true},{"property":"height","vars":["--qt-radio-size"]},{"property":"width","vars":["--qt-radio-size"]}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true}]}
+  ],
+  "qt-range": [
+   {"when":"","properties":[{"property":"accent-color","vars":["--qt-range-accent"]},{"property":"cursor","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"box-shadow","vars":[],"literal":true},{"property":"outline-style","vars":[],"literal":true}]}
+  ],
+  "qt-prose": [
+   {"when":"","properties":[{"property":"max-width","vars":[],"literal":true}]}
+  ],
+  "qt-code-block": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-code-bg"]},{"property":"border","vars":["--qt-code-border"]},{"property":"border-radius","vars":["--qt-code-radius"]},{"property":"color","vars":["--qt-code-fg"]},{"property":"font-family","vars":["--qt-code-font"]},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"overflow-x","vars":[],"literal":true},{"property":"padding","vars":["--spacing"]}]}
+  ],
+  "qt-code-inline": [
+   {"when":"","properties":[{"property":"background","vars":["--qt-code-bg"]},{"property":"border-radius","vars":["--qt-code-radius"]},{"property":"color","vars":["--qt-code-fg"]},{"property":"font-family","vars":["--qt-code-font"]},{"property":"font-size","vars":["--text-sm"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]}]}
+  ],
+  "qt-progress": [
+   {"when":"","properties":[{"property":"background-color","vars":["--color-muted","--qt-progress-track"]},{"property":"border-radius","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"overflow","vars":[],"literal":true}]}
+  ],
+  "qt-progress-fill": [
+   {"when":"","properties":[{"property":"background-color","vars":["--color-primary","--qt-progress-indicator"]},{"property":"border-radius","vars":[],"literal":true},{"property":"height","vars":[],"literal":true},{"property":"transition","vars":[],"literal":true}]}
+  ]
+ }
+}

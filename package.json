@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.14.0-dev.33",
+  "version": "4.14.0-dev.36",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -32,6 +32,7 @@
     "build:cli-theme-engine": "node scripts/build-cli-theme-engine.mjs",
     "generate:theme-hooks-doc": "tsx scripts/generate-theme-hooks-doc.ts",
     "generate:theme-schemas": "tsx scripts/generate-theme-schemas.ts",
+    "generate:theme-styled-by": "tsx scripts/generate-theme-styled-by.ts",
     "generate:theme-tokens-doc": "tsx scripts/generate-theme-tokens-doc.ts",
     "generate:theme-variables": "tsx scripts/generate-theme-variables.ts",
     "generate:unicode-index": "tsx scripts/generate-unicode-index.ts",

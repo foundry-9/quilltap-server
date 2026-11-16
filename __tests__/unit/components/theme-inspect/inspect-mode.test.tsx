@@ -43,6 +43,7 @@ function editorBridge(overrides: Partial<EditorBridge> = {}): EditorBridge {
     writeCss: jest.fn(),
     beginStylesheet: jest.fn(async () => true),
     openGallery: jest.fn(),
+    askCalliope: jest.fn(),
     ...overrides,
   }
 }
@@ -183,6 +184,23 @@ describe('the inspector panel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Write CSS for this' }))
     await waitFor(() => expect(bridge.writeCss).toHaveBeenCalledWith('.qt-card'))
     expect(bridge.beginStylesheet).not.toHaveBeenCalled()
+  })
+
+  it('asks Calliope about the hook, with what styles it, from the panel', () => {
+    const report = reportFor('<div class="qt-card"></div>', '.qt-card { background-color: var(--color-card); }', '.qt-card')
+    const bridge = editorBridge()
+    render(<InspectPanel report={report} editor={bridge} canShowInGallery={false} onShowInGallery={jest.fn()} onClose={jest.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Calliope about this' }))
+    expect(bridge.askCalliope).toHaveBeenCalledTimes(1)
+    const text = (bridge.askCalliope as jest.Mock).mock.calls[0][0] as string
+    expect(text).toMatch(/^About the .* \(\.qt-card\)/)
+    expect(text).toMatch(/What styles it now:\n- background-color: --theme-card/)
+  })
+
+  it('offers no hand-off to Calliope without a draft', () => {
+    const report = reportFor('<div class="qt-card"></div>', '.qt-card { background-color: var(--color-card); }', '.qt-card')
+    render(<InspectPanel report={report} editor={null} canShowInGallery={false} onShowInGallery={jest.fn()} onClose={jest.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Ask Calliope about this' })).toBeNull()
   })
 
   it('begins a stylesheet first when the draft has none', async () => {

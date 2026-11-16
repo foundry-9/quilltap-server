@@ -56,13 +56,20 @@ export interface ConsoleAttachmentsApi {
 
 let keyCounter = 0
 
-async function uploadFile(file: File): Promise<UploadResponse> {
+/** The Brahma Console's collection route; a persona with its own (Calliope) passes its own. */
+const BRAHMA_CONSOLE_API = '/api/v1/brahma-console'
+
+async function uploadFile(apiBase: string, file: File): Promise<UploadResponse> {
   const form = new FormData()
   form.append('file', file, file.name)
-  return apiFetch<UploadResponse>('/api/v1/brahma-console?action=upload', { method: 'POST', body: form })
+  return apiFetch<UploadResponse>(`${apiBase}?action=upload`, { method: 'POST', body: form })
 }
 
-export function useConsoleAttachments(): ConsoleAttachmentsApi {
+/**
+ * `apiBase` is the console's collection route, which answers `?action=upload`
+ * and `?action=discard-upload` (default: the Brahma Console's).
+ */
+export function useConsoleAttachments(apiBase: string = BRAHMA_CONSOLE_API): ConsoleAttachmentsApi {
   const [pending, setPending] = useState<PendingConsoleAttachment[]>([])
   const pendingRef = useRef(pending)
   useEffect(() => { pendingRef.current = pending }, [pending])
@@ -73,7 +80,7 @@ export function useConsoleAttachments(): ConsoleAttachmentsApi {
   }, [])
 
   const uploadMutation = useMutation({
-    mutationFn: ({ file }: { key: string; file: File }) => uploadFile(file),
+    mutationFn: ({ file }: { key: string; file: File }) => uploadFile(apiBase, file),
     onSuccess: (data, { key }) => {
       setPending(prev => prev.map(p => (p.key === key
         ? { ...p, status: 'ready', id: data.id, filename: data.filename, mimeType: data.mimeType, size: data.size }
@@ -87,7 +94,7 @@ export function useConsoleAttachments(): ConsoleAttachmentsApi {
   })
 
   const discardMutation = useMutation({
-    mutationFn: (fileId: string) => apiFetch<{ outcome: string }>('/api/v1/brahma-console?action=discard-upload', {
+    mutationFn: (fileId: string) => apiFetch<{ outcome: string }>(`${apiBase}?action=discard-upload`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fileId }),

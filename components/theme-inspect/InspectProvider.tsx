@@ -47,6 +47,8 @@ export interface EditorBridge {
   beginStylesheet: () => Promise<boolean>
   /** Open the specimen gallery tab beside the editor. */
   openGallery: () => void
+  /** Open Calliope's panel with `text` begun in her composer (Spec J Stage 3). */
+  askCalliope: (text: string) => void
 }
 
 /** What an open specimen gallery offers the inspector. */

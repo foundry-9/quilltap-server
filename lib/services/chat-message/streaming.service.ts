@@ -20,6 +20,7 @@ import { currentTurnStopSignal } from '@/lib/chat/turn-control'
 import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
 import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
+import type { UniversalTool } from '@/lib/plugins/interfaces'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
 import type { StorytellerBid, StorytellerRound } from '@/lib/schemas/storyteller.types'
@@ -275,6 +276,11 @@ export interface BuildToolsOptions {
    * guarantee; this only spares the model offers it can't use.
    */
   effectCeiling?: ToolEffect
+  /**
+   * A surface's whole slate (Calliope's `theme_*` tools): exactly these, plus
+   * `submit_final_response` under agent mode; every flag above is ignored.
+   */
+  onlyTools?: readonly UniversalTool[]
 }
 
 export interface BuiltTools {
@@ -323,6 +329,7 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     documentsOnlySearch,
     webSearch,
     effectCeiling,
+    onlyTools,
   } = options
   const customToolEffects = new Map<string, ToolEffect>()
   let pluginToolEffects = new Map<string, ToolEffect>()
@@ -423,6 +430,7 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     // contents: an empty table is exactly when a first tool needs writing.
     editCustomTool: !!customToolContext,
     toolConfigs,
+    onlyTools,
   })
 
   // Filter out disabled tools (individual IDs and group patterns)

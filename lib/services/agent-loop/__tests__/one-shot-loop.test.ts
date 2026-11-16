@@ -35,13 +35,13 @@ jest.mock('@/lib/services/chat-message/agent-mode-resolver.service', () => ({
   buildForceFinalMessage: jest.fn(() => 'FORCE FINAL'),
   extractSubmitFinalResponseFromText: jest.fn((s: string) => s),
 }))
-jest.mock('@/lib/services/brahma-console/orchestrator.service', () => ({
+jest.mock('@/lib/services/console-engine/loop-guard', () => ({
   normalizeToolCallSignature: jest.fn(() => 'sig'),
 }))
 
 import { streamMessage } from '@/lib/services/chat-message/streaming.service'
 import { processToolCalls, detectToolCallsInResponse } from '@/lib/services/chat-message/tool-execution.service'
-import { normalizeToolCallSignature } from '@/lib/services/brahma-console/orchestrator.service'
+import { normalizeToolCallSignature } from '@/lib/services/console-engine/loop-guard'
 
 const MOCK_PROFILE = {
   id: 'conn-1',

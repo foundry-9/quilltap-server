@@ -519,6 +519,14 @@ export {
   type RunSqlResult,
 } from './handlers/run-sql-handler';
 
+// Calliope's theme tools (her surface only)
+export { THEME_ASSIST_TOOL_DEFINITIONS, THEME_ASSIST_TOOL_NAMES } from './theme-assist-tools';
+export { themeReadDraftToolDefinition, validateThemeReadDraftInput } from './theme-read-draft-tool';
+export { themeLookupTokensToolDefinition, validateThemeLookupTokensInput } from './theme-lookup-tokens-tool';
+export { themeLookupHooksToolDefinition, validateThemeLookupHooksInput } from './theme-lookup-hooks-tool';
+export { themeCheckContrastToolDefinition, validateThemeCheckContrastInput } from './theme-check-contrast-tool';
+export { themeProposeToolDefinition, validateThemeProposeInput } from './theme-propose-tool';
+
 // Brahma Console lookup shortcuts (operator surface only)
 export { lookupCharacterToolDefinition, validateLookupCharacterInput } from './lookup-character-tool';
 export { lookupMemoriesToolDefinition, validateLookupMemoriesInput } from './lookup-memories-tool';

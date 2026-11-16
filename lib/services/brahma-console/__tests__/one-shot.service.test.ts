@@ -42,7 +42,7 @@ jest.mock('@/lib/services/chat-message/agent-mode-resolver.service', () => ({
 jest.mock('@/lib/brahma-console/system-prompt-builder', () => ({
   buildBrahmaSystemPrompt: jest.fn(() => 'BRAHMA_SYS'),
 }))
-jest.mock('../orchestrator.service', () => ({
+jest.mock('@/lib/services/console-engine/loop-guard', () => ({
   normalizeToolCallSignature: jest.fn(() => 'sig'),
 }))
 jest.mock('../inline-profile', () => ({

@@ -477,6 +477,7 @@ import { backfillDeadJobCompletedAtMigration } from './backfill-dead-job-complet
 import { symmetrizeMemoryLinksMigration } from './symmetrize-memory-links-v1';
 // Brahma Console Writing Assistant: consoleMode + consoleContext on chats
 import { addConsoleWritingAssistantFieldsMigration } from './add-console-writing-assistant-fields';
+import { addCalliopeThemeDraftFieldMigration } from './add-calliope-theme-draft-field';
 
 /**
  * All available migrations.
@@ -986,6 +987,8 @@ export const migrations: Migration[] = [
   addConsoleWritingAssistantFieldsMigration,
   // Files: mimeType / size realigned after the 4.10 blob re-encode left them stale
   repairFilesMimeAndSizeFromMountBlobV2Migration,
+  // Calliope: chats.themeDraftId (a theme conversation belongs to one draft)
+  addCalliopeThemeDraftFieldMigration,
 ];
 
 export {
@@ -1459,5 +1462,6 @@ export {
   symmetrizeMemoryLinksMigration,
   addConsoleWritingAssistantFieldsMigration,
   repairFilesMimeAndSizeFromMountBlobV2Migration,
+  addCalliopeThemeDraftFieldMigration,
 };
 

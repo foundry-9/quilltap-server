@@ -345,6 +345,15 @@ export interface BuildToolsOptions extends InventoryToolFlags {
    * Defaults to `false`.
    */
   sqlAccess?: boolean;
+
+  /**
+   * A surface's whole slate: exactly these definitions (plus
+   * `submit_final_response` when `agentMode` is on) and nothing else — every
+   * other flag here is ignored, plugin tools included. For a surface whose
+   * tools are its own (Calliope's `theme_*` tools), so nothing the flags
+   * default on can leak into it.
+   */
+  onlyTools?: readonly UniversalTool[];
 }
 
 /**
@@ -411,6 +420,13 @@ export async function buildToolsForProvider(
       sqlAccess: options.sqlAccess,
     },
   });
+
+  if (options.onlyTools) {
+    const slate: UniversalTool[] = [...options.onlyTools];
+    if (options.agentMode) slate.push(submitFinalResponseToolDefinition as UniversalTool);
+    logger_.debug('Building a surface-only tool slate', { tools: slate.map((t) => t.function.name) });
+    return formatUniversalTools(providerName, slate, options, logger_);
+  }
 
   // Step 1: Build array of universal tools based on enabled options
   const universalTools: UniversalTool[] = [];
@@ -648,6 +664,19 @@ export async function buildToolsForProvider(
     }
   }
 
+  return formatUniversalTools(providerName, universalTools, options, logger_);
+}
+
+/**
+ * Canonicalize the slate and hand it to the provider plugin's `formatTools`
+ * (OpenAI format when the provider is unknown or has none).
+ */
+function formatUniversalTools(
+  providerName: string,
+  universalTools: UniversalTool[],
+  options: Pick<BuildToolsOptions, 'imageProviderType'>,
+  logger_: ReturnType<typeof logger.child>,
+): unknown[] {
   // If no tools are enabled, return empty array
   if (universalTools.length === 0) {
     return [];

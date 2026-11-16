@@ -55,7 +55,7 @@ import {
   extractSubmitFinalResponseFromText,
 } from '@/lib/services/chat-message/agent-mode-resolver.service'
 // The duplicate-call signature is the streaming Brahma console's; one rule for both loops.
-import { normalizeToolCallSignature } from '@/lib/services/brahma-console/orchestrator.service'
+import { normalizeToolCallSignature } from '@/lib/services/console-engine/loop-guard'
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
 import { profileParams } from '@/lib/llm/cheap-llm'
 

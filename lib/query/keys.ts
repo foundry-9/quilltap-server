@@ -202,6 +202,7 @@ export const queryKeys = {
     taboo: ['settings', 'taboo'] as const,
     dataRetention: ['settings', 'data-retention'] as const,
     brahmaConsole: ['settings', 'brahma-console'] as const,
+    calliope: ['settings', 'calliope'] as const,
   },
   connectionProfiles: {
     all: ['connection-profiles'] as const,
@@ -521,6 +522,12 @@ export const queryKeys = {
     all: ['brahma-console'] as const,
     entity: (apiUrl: string) => ['brahma-console', 'entity', apiUrl] as const,
     pastChats: ['brahma-console', 'past-chats'] as const,
+  },
+  /** Calliope's conversations about a theme draft (`/api/v1/calliope`). */
+  calliope: {
+    all: ['calliope'] as const,
+    byDraft: (draftId: string) => ['calliope', 'draft', draftId] as const,
+    messages: (chatId: string) => ['calliope', 'messages', chatId] as const,
   },
   /**
    * The global search dialog (`GET /api/v1/ui/search`), paged as an infinite

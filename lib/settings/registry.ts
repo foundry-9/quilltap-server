@@ -595,6 +595,15 @@ export const SETTINGS_CARDS: readonly SettingsCard[] = [
     help: 'appearance-settings',
   },
   {
+    id: 'calliope',
+    group: 'appearance',
+    title: 'Calliope',
+    description: 'The engine Calliope works on in the theme editor, and how many turns she may take',
+    persona: 'calliope',
+    keywords: ['calliope', 'theme assistant', 'theme editor', 'muse', 'model', 'tool turns'],
+    help: 'theme-editor',
+  },
+  {
     id: 'tags',
     group: 'appearance',
     title: 'Tags',
