@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live Spec H
+
+- Added Spec H (a specimen gallery showing every catalogued hook in the draft theme, and an inspect mode that names an element's hook and the tokens that style it)
+
 #### Docs: Calliope Live Spec G complete (Stage 4)
 
 - `docs/developer/API.md`: `?action=import` on `/api/v1/theme-drafts`, the stylesheet `PUT` body, `set-styles-file` / `clear-styles-file`, located issues and `styles` in the draft detail
