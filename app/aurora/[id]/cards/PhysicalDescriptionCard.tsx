@@ -181,7 +181,7 @@ export function PhysicalDescriptionCard() {
           checked={humanoid}
           disabled={readOnly}
           onChange={(e) => void setHumanoid(e.target.checked)}
-          className="h-5 w-5 qt-accent-primary"
+          className="qt-checkbox h-5 w-5"
         />
       </div>
 

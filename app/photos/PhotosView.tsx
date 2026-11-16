@@ -555,7 +555,7 @@ function PhotoDetailModal({
             <Section title="Tags">
               <div className="flex flex-wrap gap-1.5">
                 {entry.tags.map((t) => (
-                  <span key={t} className="qt-badge qt-badge-muted">{t}</span>
+                  <span key={t} className="qt-badge qt-badge-secondary">{t}</span>
                 ))}
               </div>
             </Section>
@@ -574,7 +574,7 @@ function PhotoDetailModal({
                     <span className="truncate font-medium qt-text">
                       {linker.linkedBy ?? linker.mountPointName}
                     </span>
-                    <span className="qt-badge qt-badge-muted whitespace-nowrap text-[10px] uppercase">
+                    <span className="qt-badge qt-badge-secondary whitespace-nowrap text-[10px] uppercase">
                       {linker.mountStoreType === 'character' ? 'Vault' : 'Album'}
                     </span>
                   </div>

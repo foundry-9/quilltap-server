@@ -86,7 +86,7 @@ export function DataDirectorySection() {
         <div className="qt-card-header">
           <h2 className="text-xl font-semibold">Data Directory</h2>
         </div>
-        <div className="qt-card-content">
+        <div className="qt-card-body">
           <div className="qt-text-muted text-sm">Loading...</div>
         </div>
       </div>
@@ -99,7 +99,7 @@ export function DataDirectorySection() {
         <div className="qt-card-header">
           <h2 className="text-xl font-semibold">Data Directory</h2>
         </div>
-        <div className="qt-card-content">
+        <div className="qt-card-body">
           <div className="qt-text-destructive text-sm">
             {error || 'Unable to load data directory information'}
           </div>
@@ -116,7 +116,7 @@ export function DataDirectorySection() {
           Where Quilltap stores your data, files, and logs
         </p>
       </div>
-      <div className="qt-card-content space-y-4">
+      <div className="qt-card-body space-y-4">
         {/* Path display */}
         <div>
           <div className="qt-text-label text-sm mb-1">Location</div>

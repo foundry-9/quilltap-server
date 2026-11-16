@@ -1668,6 +1668,17 @@
     background-size: 1.5em 1.5em;
     padding-right: 2.5rem;
   }
+  /**
+   * Small text input — the compact size used in browser toolbars and inline
+   * editors (Atlas, Inventory, Wardrobe, document browser), to sit beside
+   * `qt-select-sm` and `qt-button-sm`.
+   */
+  .qt-input-sm {
+    padding-inline: calc(var(--spacing, 0.25rem) * 2);
+    padding-block: var(--spacing, 0.25rem);
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+  }
   .qt-select-sm {
     padding-inline: calc(var(--spacing, 0.25rem) * 2);
     padding-block: var(--spacing, 0.25rem);

@@ -46,7 +46,7 @@ export function ConvertToDatabaseDialog({ store, onClose, onConfirm }: ConvertTo
           <li><strong>Your files on disk are left exactly where they are.</strong> You may delete them afterwards if you wish.</li>
         </ul>
 
-        <div className="qt-callout">
+        <div className="qt-alert-info">
           <p className="text-xs">
             <strong>Image caveat:</strong> images are transcoded to WebP on storage. A later Deconvert
             will round-trip them as <code>.webp</code>, not their original format.

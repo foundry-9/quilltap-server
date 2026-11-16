@@ -271,7 +271,7 @@ export function SaveImageDialog({
       <div className="space-y-4">
         {imageAttachments.length > 1 && (
           <div>
-            <label className="qt-form-label">Image</label>
+            <label className="qt-label">Image</label>
             <div className="flex gap-2 flex-wrap">
               {imageAttachments.map((attachment) => (
                 <button
@@ -315,7 +315,7 @@ export function SaveImageDialog({
         )}
 
         <div>
-          <label htmlFor="save-image-album" className="qt-form-label">Album</label>
+          <label htmlFor="save-image-album" className="qt-label">Album</label>
           {loadingAlbums && (
             <div className="text-sm opacity-70">Loading albums…</div>
           )}
@@ -352,7 +352,7 @@ export function SaveImageDialog({
         </div>
 
         <div>
-          <label htmlFor="save-image-caption" className="qt-form-label">
+          <label htmlFor="save-image-caption" className="qt-label">
             Caption <span className="opacity-60">(optional)</span>
           </label>
           <input

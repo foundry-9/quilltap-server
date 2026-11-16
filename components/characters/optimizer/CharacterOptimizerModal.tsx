@@ -380,7 +380,7 @@ export function CharacterOptimizerModal({
                     <span className="qt-helper">
                       In lieu of applying amendments directly, the proceedings shall be inscribed as a
                       markdown dossier in the character&rsquo;s vault &mdash; at
-                      <code className="qt-code text-[11px] mx-1">Suggestions/refinement-&lt;timestamp&gt;.md</code>
+                      <code className="qt-code-inline text-[11px] mx-1">Suggestions/refinement-&lt;timestamp&gt;.md</code>
                       &mdash; so that author and character may review and debate the proposals at leisure before any are commissioned.
                     </span>
                   </span>

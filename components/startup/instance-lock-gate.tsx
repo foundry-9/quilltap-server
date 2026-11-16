@@ -47,13 +47,13 @@ export function InstanceLockGate() {
             </li>
             <li>
               If the other process is gone but left a stale lock, run:<br />
-              <code className="qt-code text-xs mt-1 inline-block">
+              <code className="qt-code-inline text-xs mt-1 inline-block">
                 npx quilltap db --lock-clean
               </code>
             </li>
             <li>
               If you need to force access (use with caution):<br />
-              <code className="qt-code text-xs mt-1 inline-block">
+              <code className="qt-code-inline text-xs mt-1 inline-block">
                 npx quilltap db --lock-override
               </code>
             </li>

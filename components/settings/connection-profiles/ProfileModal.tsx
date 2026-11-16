@@ -680,7 +680,7 @@ export function ProfileModal({
               )}
 
               {operations.connectError && (
-                <div className="text-sm qt-alert-destructive">
+                <div className="qt-alert-error">
                   ✗ {operations.connectError}
                 </div>
               )}

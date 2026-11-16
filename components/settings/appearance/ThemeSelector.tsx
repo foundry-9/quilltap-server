@@ -291,7 +291,7 @@ export function ThemeSelector({
             <div>
               <p className="qt-text-small">
                 Additional themes can be added by uploading{' '}
-                <code className="qt-code">.qtap-theme</code> bundle files, or from a theme registry below.
+                <code className="qt-code-inline">.qtap-theme</code> bundle files, or from a theme registry below.
               </p>
             </div>
           </div>

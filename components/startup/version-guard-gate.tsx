@@ -30,11 +30,11 @@ export function VersionGuardGate() {
         <div className="qt-bg-surface-alt rounded-lg p-4 text-left text-sm mb-6 space-y-1">
           <div>
             <span className="qt-text-secondary">Running version:</span>{' '}
-            <code className="qt-code">{versionBlock.currentVersion}</code>
+            <code className="qt-code-inline">{versionBlock.currentVersion}</code>
           </div>
           <div>
             <span className="qt-text-secondary">Database version:</span>{' '}
-            <code className="qt-code">{versionBlock.highestVersion}</code>
+            <code className="qt-code-inline">{versionBlock.highestVersion}</code>
           </div>
         </div>
 
@@ -48,7 +48,7 @@ export function VersionGuardGate() {
             <li>
               If you are quite certain you know what you are doing and have a backup,
               you may adjust the stored version via the CLI:<br />
-              <code className="qt-code text-xs mt-1 inline-block">
+              <code className="qt-code-inline text-xs mt-1 inline-block">
                 npx quilltap db &quot;UPDATE instance_settings SET value = &apos;{versionBlock.currentVersion}&apos; WHERE key = &apos;highest_app_version&apos;;&quot;
               </code>
             </li>

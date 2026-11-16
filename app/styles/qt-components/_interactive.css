@@ -197,6 +197,15 @@
     padding-right: 2.5rem;
   }
 
+  /**
+   * Small text input — the compact size used in browser toolbars and inline
+   * editors (Atlas, Inventory, Wardrobe, document browser), to sit beside
+   * `qt-select-sm` and `qt-button-sm`.
+   */
+  .qt-input-sm {
+    @apply py-1 px-2 text-xs;
+  }
+
   .qt-select-sm {
     @apply py-1 px-2 text-xs;
     background-size: 1em 1em;

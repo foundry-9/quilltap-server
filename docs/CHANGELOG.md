@@ -4,6 +4,16 @@
 
 ### 4.14-dev
 
+#### Docs: Calliope Live Spec I Stage 4.1 catalogue triage
+
+- Added `docs/developer/features/calliope-live-spec-i-catalogue-triage.md`: the 712 `qt-*` classes in app markup that are not theme hooks, sorted into proposed candidates (45), candidates worth considering, inner parts, modifiers, helpers and plumbing. Awaiting approval before Stage 4.2 adds any to the catalogue
+
+#### UI: `qt-*` classes that resolved to nothing
+
+- 13 `qt-*` classes were used in markup but defined by no CSS, so they had no effect. `qt-input-sm` (20 uses in the Atlas, Inventory, Wardrobe and document browsers) is now defined beside `qt-select-sm`. The rest now use classes that exist: `qt-button-danger` → `qt-button-destructive` (State editor, memory regenerate card), `qt-button-danger-outline` → `qt-button-secondary qt-text-destructive`, `qt-alert-destructive` → `qt-alert-error`, `qt-callout` → `qt-alert-info`, `qt-card-content` → `qt-card-body`, `qt-card-selected` → `qt-option-selected`, `qt-form-label` → `qt-label`, `qt-badge-muted` → `qt-badge-secondary`, `qt-accent-primary` → `qt-checkbox`, `qt-code` → `qt-code-inline` (startup gates, theme selector, optimizer), `qt-divider` → `qt-border-default`; `qt-list-row` dropped
+- `scripts/check-qt-classes.mjs` now also fails on a bare `qt-*` class in `app/` / `components/` markup that is not defined in app CSS (`::highlight()` names count), not a catalogued theme hook or state, and not in its `MARKERS` list (31 anchors, each with a reason). A stale marker fails too. It reads the hook catalogue, so `npm run lint` runs it with `tsx`
+- `@quilltap/theme-storybook` 1.0.124 (regenerated CSS)
+
 #### Theme probe: measures the specimen gallery (Calliope Live, Spec I Stage 3)
 
 - `scripts/theme-probe/run.ts` now probes Calliope's specimen gallery for how every hook looks, plus three live pages for layout: home, one Salon chat and the theme preview dialog. The character, Settings, Appearance and second Salon pages are gone, and so is `--character`; `--chat` takes one id

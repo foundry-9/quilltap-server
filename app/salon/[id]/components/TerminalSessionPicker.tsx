@@ -49,7 +49,7 @@ export default function TerminalSessionPicker({
               <button
                 type="button"
                 onClick={() => onAttach(session.id)}
-                className="qt-list-row w-full text-left flex flex-col gap-0.5 px-3 py-2 rounded border qt-border-default hover:qt-bg-muted"
+                className="w-full text-left flex flex-col gap-0.5 px-3 py-2 rounded border qt-border-default hover:qt-bg-muted"
               >
                 <span className="text-sm font-medium truncate">
                   {session.label || `Terminal — ${session.shell}`}
@@ -68,7 +68,7 @@ export default function TerminalSessionPicker({
             <button
               type="button"
               onClick={onSpawnNew}
-              className="qt-list-row w-full text-left flex items-center gap-2 px-3 py-2 rounded border qt-border-default hover:qt-bg-muted"
+              className="w-full text-left flex items-center gap-2 px-3 py-2 rounded border qt-border-default hover:qt-bg-muted"
             >
               <Icon name="plus" className="w-4 h-4" />
               <span className="text-sm font-medium">New terminal</span>

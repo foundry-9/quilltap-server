@@ -263,9 +263,14 @@ utility families (`qt-bg-`, `qt-text-`, `qt-border-`, `qt-shadow-`) plus any
 on hover" but an undefined class name, since Tailwind generates variants only for
 utilities it knows about and anything declared inside `@layer utilities` is
 invisible to it. Every state form has to be written out by hand in
-`app/styles/qt-components/_utilities.css`. Bare component classes (`qt-card` and friends) are
-deliberately out of scope: plenty of those exist purely as hooks for themes to
-target. `lint:fix` does not run this check — use `npm run lint` before committing.
+`app/styles/qt-components/_utilities.css`. A bare class in `app/` or
+`components/` markup (`qt-card` and friends) must be defined by the app's CSS (a
+`::highlight(qt-…)` name counts), be a catalogued theme hook or state class
+(`lib/themes/hooks/`), or be listed in the script's `MARKERS` with a reason — an
+anchor with no look of its own. A marker that is no longer written, or has since
+been defined or catalogued, fails too. The script reads the hook catalogue, so it
+runs under `tsx`. `lint:fix` does not run this check — use `npm run lint` before
+committing.
 
 ### Building Plugins
 
