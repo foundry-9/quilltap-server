@@ -4,6 +4,15 @@
 
 ### 4.14-dev
 
+#### Avatar refreshes wait for the next turn
+
+- Automatic avatar refreshes (wardrobe changes, Inventory changes, seat arrivals) are no longer started at once. `triggerAvatarGenerationIfEnabled` now enqueues the `CHARACTER_AVATAR_GENERATION` job held: payload `awaitingTurn: true`, `scheduledAt` at the sentinel `HELD_UNTIL_NEXT_TURN` (`lib/schemas/job.types.ts`). Later changes for the same character collapse into the held job, so several changes between turns cost one avatar per character
+- `releaseHeldAvatarRefreshes(chatId)` (`queue-service.ts`) sets every held job's `scheduledAt` to now and wakes the processor. Called at the start of every `processMessage` turn (operator send, continue, chained turns, storyteller turns, the opening; not storyteller bids) and of a swipe regeneration. The released jobs run concurrently under the normal job cap and post as they finish
+- The dedup key separates held and immediate jobs (`characterId:held` / `characterId:now`), so the manual Regenerate Avatar button is never absorbed into a held job. Turning avatar generation on still enqueues immediately
+- The handler skips a held job if the chat had avatar generation turned off (or is autonomous) by the time it runs
+- Held jobs are excluded from the activity counts (`getActiveCountsByKind` / `getActiveCountsByType`) and show "Waiting for the next turn" in the Tasks queue. Deleting a chat cancels its held jobs (`cancelHeldAvatarRefreshes`, from the chat DELETE handler and cascade delete)
+- `help/chat-settings-ai-services.md`, `help/chat-participants.md`
+
 #### Atlas as a lorebook in the Commonplace Book whisper
 
 - Atlas knowledge is now delivered as a `lore` part of the Commonplace Book whisper (`CommonplaceParts.lore`, rendered ahead of `knowledge`) instead of the trailing `## What is being spoken of` section. `TrailingSections.atlas` and `buildAtlasSection` are removed; the operator now sees the lore in the whisper

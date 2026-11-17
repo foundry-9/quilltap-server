@@ -286,3 +286,34 @@ describe('character-avatar handler — Salon avatar timeline', () => {
     })
   })
 })
+
+describe('character-avatar handler — refresh held for the next turn', () => {
+  function heldJob() {
+    const job = makeJob()
+    job.payload.awaitingTurn = true
+    return job
+  }
+
+  it('skips a held refresh when the chat stopped auto-updating avatars while it waited', async () => {
+    await handleCharacterAvatarGeneration(heldJob())
+
+    expect(mockCreateImageProvider).not.toHaveBeenCalled()
+    expect(avatarTimelineRecord).not.toHaveBeenCalled()
+  })
+
+  it('draws a held refresh when the chat still auto-updates avatars', async () => {
+    const repos = mockGetRepositories() as any
+    repos.chats.findById.mockResolvedValue({
+      id: CHAT_ID,
+      projectId: null,
+      characterAvatars: {},
+      messageCount: 0,
+      title: 'A Chat',
+      avatarGenerationEnabled: true,
+    })
+
+    await handleCharacterAvatarGeneration(heldJob())
+
+    expect(avatarTimelineRecord).toHaveBeenCalledTimes(1)
+  })
+})

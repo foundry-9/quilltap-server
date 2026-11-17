@@ -7,6 +7,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory';
 import { BackgroundJobType, type BackgroundJob, type BackgroundJobStatus } from '@/lib/schemas/types';
+import { HELD_UNTIL_NEXT_TURN, isHeldForNextTurn } from '@/lib/schemas/job.types';
 import { logger } from '@/lib/logger';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { MAINTENANCE_PHASES, type MaintenancePhase, type MaintenanceReason, type MaintenanceRunSettings } from '@/lib/memory/maintenance/types';
@@ -285,6 +286,14 @@ export interface CharacterAvatarGenerationPayload {
    * configuration that has already been drawn costs nothing to re-enter.
    */
   force?: boolean;
+  /**
+   * An automatic refresh held until the chat's next turn: the job is enqueued
+   * with `scheduledAt` at `HELD_UNTIL_NEXT_TURN` and released by
+   * {@link releaseHeldAvatarRefreshes} when a turn is triggered. Every later
+   * wardrobe or Inventory change for the character collapses into the one held
+   * job (the handler reads the outfit when it runs).
+   */
+  awaitingTurn?: boolean;
 }
 
 /**
@@ -1355,25 +1364,104 @@ export async function getPendingJobsForChat(chatId: string) {
  * runs, so one queued job covers any later change. A PROCESSING job has
  * already built its prompt, so a change made after that point needs a fresh
  * job.
+ *
+ * An automatic refresh (`awaitingTurn`) is held until the chat's next turn
+ * and collapses only onto another held one; a manual regenerate is never
+ * absorbed by a held job, which would park the button's request.
  */
 export async function enqueueCharacterAvatarGeneration(
   userId: string,
   payload: CharacterAvatarGenerationPayload,
   options?: EnqueueJobOptions
 ): Promise<DedupedEnqueueResult> {
+  const held = payload.awaitingTurn === true;
   const result = await enqueueDeduped(userId, 'CHARACTER_AVATAR_GENERATION', payload, {
-    key: p => p.characterId,
+    key: p => `${p.characterId}:${p.awaitingTurn === true ? 'held' : 'now'}`,
     absorbs: 'pending',
     scope: 'chatId',
     label: 'CharacterAvatar',
-  }, options);
+  }, held ? { ...options, scheduledAt: new Date(HELD_UNTIL_NEXT_TURN) } : options);
   logger.info(result.isNew ? '[CharacterAvatar] Avatar generation job enqueued' : '[CharacterAvatar] Reusing existing pending job', {
     context: 'background-jobs.queue',
     chatId: payload.chatId,
     characterId: payload.characterId,
     jobId: result.jobId,
+    awaitingTurn: held,
   });
   return result;
+}
+
+/** The chat's avatar refreshes still held for its next turn. */
+async function findHeldAvatarRefreshes(chatId: string): Promise<BackgroundJob[]> {
+  const jobs = await getRepositories().backgroundJobs.findAbsorbers(
+    'CHARACTER_AVATAR_GENERATION',
+    ['PENDING'],
+    { payloadField: 'chatId', payloadValue: chatId },
+  );
+  return jobs.filter(isHeldForNextTurn);
+}
+
+/**
+ * A turn was triggered in this chat: release every avatar refresh held for it
+ * so they run now, side by side, and land in the conversation as they finish.
+ * Returns how many were released. Never throws.
+ */
+export async function releaseHeldAvatarRefreshes(chatId: string): Promise<number> {
+  try {
+    const held = await findHeldAvatarRefreshes(chatId);
+    if (held.length === 0) return 0;
+    const now = new Date().toISOString();
+    const repos = getRepositories();
+    for (const job of held) {
+      await repos.backgroundJobs.update(job.id, { scheduledAt: now });
+    }
+    logger.info('[CharacterAvatar] Released avatar refreshes held for the next turn', {
+      context: 'background-jobs.queue',
+      chatId,
+      released: held.length,
+      characterIds: held.map(job => (job.payload as { characterId?: string }).characterId),
+    });
+    publishRealtime('jobs');
+    ensureProcessorRunning();
+    return held.length;
+  } catch (error) {
+    logger.warn('[CharacterAvatar] Failed to release held avatar refreshes', {
+      context: 'background-jobs.queue',
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return 0;
+  }
+}
+
+/**
+ * The chat is going away: cancel the avatar refreshes held for a turn that
+ * will never come. Returns how many were cancelled. Never throws.
+ */
+export async function cancelHeldAvatarRefreshes(chatId: string): Promise<number> {
+  try {
+    const held = await findHeldAvatarRefreshes(chatId);
+    let cancelled = 0;
+    for (const job of held) {
+      if (await getRepositories().backgroundJobs.cancel(job.id)) cancelled++;
+    }
+    if (cancelled > 0) {
+      logger.info('[CharacterAvatar] Cancelled held avatar refreshes for a deleted chat', {
+        context: 'background-jobs.queue',
+        chatId,
+        cancelled,
+      });
+      publishRealtime('jobs');
+    }
+    return cancelled;
+  } catch (error) {
+    logger.warn('[CharacterAvatar] Failed to cancel held avatar refreshes', {
+      context: 'background-jobs.queue',
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return 0;
+  }
 }
 
 /**

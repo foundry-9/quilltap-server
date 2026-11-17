@@ -14,6 +14,7 @@ import type { RequestContext } from '@/lib/api/middleware';
 import { serverError, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import type { BackgroundJob } from '@/lib/schemas/types';
+import { isHeldForNextTurn } from '@/lib/schemas/job.types';
 import { startProcessor, stopProcessor, getProcessorStatus, wakeProcessor } from '@/lib/background-jobs/processor';
 import { getMaxConcurrentJobs, setMaxConcurrentJobs } from '@/lib/instance-settings';
 
@@ -178,6 +179,8 @@ export async function handleTasksQueue(_req: NextRequest, context: RequestContex
         estimatedTokens,
         chatId: payload.chatId as string | undefined,
         characterName,
+        // An avatar refresh held until the chat's next turn (scheduledAt is a sentinel).
+        awaitingTurn: isHeldForNextTurn(job),
       };
     });
 

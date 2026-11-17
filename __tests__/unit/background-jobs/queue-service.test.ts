@@ -13,7 +13,10 @@ import {
   getPendingJobsForChat,
   cleanupOldJobs,
   cleanupFinishedJobs,
+  releaseHeldAvatarRefreshes,
+  cancelHeldAvatarRefreshes,
 } from '@/lib/background-jobs/queue-service';
+import { HELD_UNTIL_NEXT_TURN } from '@/lib/schemas/job.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { ensureProcessorRunning } from '@/lib/background-jobs/processor';
 
@@ -51,6 +54,7 @@ type MockBackgroundJobRepo = {
   cancel: jest.Mock;
   findPendingForChat: jest.Mock;
   findAbsorbers: jest.Mock;
+  update: jest.Mock;
   cleanupOldJobs: jest.Mock;
   cleanupOldJobsByStatus: jest.Mock;
 };
@@ -60,7 +64,7 @@ const mockEnsureProcessorRunning = ensureProcessorRunning as jest.MockedFunction
 
 let backgroundJobs: MockBackgroundJobRepo;
 /** The queue `findAbsorbers` reads: filtered by type and status, as the repository does. */
-let queued: Array<{ id: string; type: string; status: string; payload: Record<string, unknown> }>;
+let queued: Array<{ id: string; type: string; status: string; payload: Record<string, unknown>; scheduledAt?: string }>;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -75,6 +79,7 @@ beforeEach(() => {
     findPendingForChat: jest.fn().mockResolvedValue([{ id: 'job-77' }]),
     findAbsorbers: jest.fn(async (type: string, statuses: string[]) =>
       queued.filter(j => j.type === type && statuses.includes(j.status))),
+    update: jest.fn().mockResolvedValue({}),
     cleanupOldJobs: jest.fn().mockResolvedValue(5),
     cleanupOldJobsByStatus: jest.fn().mockResolvedValue({ completed: 3, dead: 1 }),
   };
@@ -262,6 +267,85 @@ describe('enqueueCharacterAvatarGeneration', () => {
     expect(result.isNew).toBe(true);
     expect(result.jobId).toBe('job-123');
     expect(backgroundJobs.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds an automatic refresh until the next turn', async () => {
+    await enqueueCharacterAvatarGeneration('user-1', { ...payload, awaitingTurn: true });
+
+    expect(backgroundJobs.create).toHaveBeenCalledWith(expect.objectContaining({
+      scheduledAt: HELD_UNTIL_NEXT_TURN,
+      payload: expect.objectContaining({ awaitingTurn: true }),
+    }));
+  });
+
+  it('collapses later automatic refreshes onto the held job', async () => {
+    const held = { ...payload, awaitingTurn: true };
+    queued = [{ id: 'avatar-held', type: 'CHARACTER_AVATAR_GENERATION', status: 'PENDING', payload: held, scheduledAt: HELD_UNTIL_NEXT_TURN }];
+
+    const result = await enqueueCharacterAvatarGeneration('user-1', held);
+
+    expect(result).toEqual({ jobId: 'avatar-held', isNew: false });
+    expect(backgroundJobs.create).not.toHaveBeenCalled();
+  });
+
+  it('never parks a manual regenerate inside a held job', async () => {
+    queued = [{ id: 'avatar-held', type: 'CHARACTER_AVATAR_GENERATION', status: 'PENDING', payload: { ...payload, awaitingTurn: true }, scheduledAt: HELD_UNTIL_NEXT_TURN }];
+
+    const result = await enqueueCharacterAvatarGeneration('user-1', { ...payload, force: true });
+
+    expect(result.isNew).toBe(true);
+    const created = backgroundJobs.create.mock.calls[0][0];
+    expect(created.scheduledAt).not.toBe(HELD_UNTIL_NEXT_TURN);
+  });
+});
+
+describe('held avatar refreshes', () => {
+  const heldJob = (id: string, characterId: string) => ({
+    id,
+    type: 'CHARACTER_AVATAR_GENERATION',
+    status: 'PENDING',
+    payload: { chatId: 'chat-1', characterId, awaitingTurn: true },
+    scheduledAt: HELD_UNTIL_NEXT_TURN,
+  });
+
+  it('releases every held refresh for the chat at once', async () => {
+    queued = [
+      heldJob('held-a', 'char-a'),
+      heldJob('held-b', 'char-b'),
+      // Already released: not touched again.
+      { ...heldJob('released', 'char-c'), scheduledAt: '2026-01-01T00:00:00.000Z' },
+      // A manual job: never held.
+      { id: 'manual', type: 'CHARACTER_AVATAR_GENERATION', status: 'PENDING', payload: { chatId: 'chat-1', characterId: 'char-d' }, scheduledAt: '2026-01-01T00:00:00.000Z' },
+    ];
+
+    const released = await releaseHeldAvatarRefreshes('chat-1');
+
+    expect(released).toBe(2);
+    expect(backgroundJobs.findAbsorbers).toHaveBeenCalledWith('CHARACTER_AVATAR_GENERATION', ['PENDING'], {
+      payloadField: 'chatId', payloadValue: 'chat-1',
+    });
+    expect(backgroundJobs.update.mock.calls.map(c => c[0])).toEqual(['held-a', 'held-b']);
+    for (const [, patch] of backgroundJobs.update.mock.calls) {
+      expect(patch.scheduledAt < HELD_UNTIL_NEXT_TURN).toBe(true);
+    }
+    expect(mockEnsureProcessorRunning).toHaveBeenCalled();
+  });
+
+  it('does nothing when nothing is held', async () => {
+    expect(await releaseHeldAvatarRefreshes('chat-1')).toBe(0);
+    expect(backgroundJobs.update).not.toHaveBeenCalled();
+    expect(mockEnsureProcessorRunning).not.toHaveBeenCalled();
+  });
+
+  it('never throws on a failed read', async () => {
+    backgroundJobs.findAbsorbers.mockRejectedValueOnce(new Error('db down'));
+    await expect(releaseHeldAvatarRefreshes('chat-1')).resolves.toBe(0);
+  });
+
+  it('cancels held refreshes when the chat is deleted', async () => {
+    queued = [heldJob('held-a', 'char-a')];
+    expect(await cancelHeldAvatarRefreshes('chat-1')).toBe(1);
+    expect(backgroundJobs.cancel).toHaveBeenCalledWith('held-a');
   });
 });
 

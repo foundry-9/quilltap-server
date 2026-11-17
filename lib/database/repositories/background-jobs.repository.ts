@@ -8,6 +8,7 @@
  */
 
 import { BackgroundJob, BackgroundJobSchema, BackgroundJobType, BackgroundJobStatus } from '@/lib/schemas/types';
+import { HELD_UNTIL_NEXT_TURN } from '@/lib/schemas/job.types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
 import { QueryFilter, TypedQueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
@@ -528,9 +529,11 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           );
           if (types.length === 0) continue;
 
+          // A job held for its chat's next turn is waiting, not working.
           const filter: TypedQueryFilter<BackgroundJob> = {
             status: { $in: ['PENDING', 'PROCESSING'] },
             type: { $in: types },
+            scheduledAt: { $lt: HELD_UNTIL_NEXT_TURN },
           } as TypedQueryFilter<BackgroundJob>;
           if (userId) {
             filter.userId = userId;
@@ -553,9 +556,11 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   async getActiveCountsByType(userId?: string): Promise<Record<string, number>> {
     return this.safeQuery(
       async () => {
+        // A job held for its chat's next turn is waiting, not working.
         const filter: TypedQueryFilter<BackgroundJob> = {
           status: { $in: ['PENDING', 'PROCESSING'] },
-        };
+          scheduledAt: { $lt: HELD_UNTIL_NEXT_TURN },
+        } as TypedQueryFilter<BackgroundJob>;
         if (userId) {
           filter.userId = userId;
         }
