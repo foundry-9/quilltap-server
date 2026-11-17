@@ -381,6 +381,7 @@ For more information, see:
 - [Themes](themes.md) — Complete guide to themes and color modes
 - [Theme Quick-Switcher](theme-quick-switcher.md) — Sidebar quick-switcher details
 - [Calliope's Atelier](theme-editor.md) — Designing a theme with a live preview
+- [Making a Theme](making-a-theme.md) — A guided tour from a blank draft to a finished theme
 - [Sidebar](sidebar.md) — Information about the left sidebar
 - [Width Toggle](width-toggle.md) — Content width toggle button
 

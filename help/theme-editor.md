@@ -10,6 +10,8 @@ There comes a moment in every household when the wallpaper, however splendid, is
 
 Find it by pressing **Design a theme** on the Theme card in **Settings → Appearance**, or by asking a help-enabled character to take you there. It opens as a tab in the workspace, like any other room of the house.
 
+This page is the reference: every section and every control, in the order the Atelier presents them. If you have never made a theme and would like to be walked through one from first colour to finished bundle, begin with [Making a Theme](making-a-theme.md).
+
 ## Drafts
 
 A theme in the Atelier is a **draft** — a work in progress, kept quite apart from the themes you have installed. Nothing you do to a draft touches a theme you are wearing until you choose to install it.
@@ -246,6 +248,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Help
 
+- [Making a Theme](making-a-theme.md) — a guided tour, from a blank draft to a theme you can share
 - [Themes](themes.md) — themes, bundles and color modes
 - [Appearance Settings](appearance-settings.md) — choosing the theme you wear
 - [The Scriptorium](scriptorium.md) — where Quilltap General and its `Themes/` folder live

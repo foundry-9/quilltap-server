@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Docs: theme author's guide
+
+- New help page `help/making-a-theme.md`: a start-to-finish walk through making a theme in the Atelier (palette, colours, contrast, fonts, images, the gallery and inspector, custom CSS, Calliope, install, export, the CLI path), linking to `help/theme-editor.md` for detail
+- `help/theme-editor.md`, `help/themes.md` and `help/appearance-settings.md` link to it; ROADMAP item closed
+
 #### Fix: Responses-API output-token cut-offs read as truncation (#228)
 
 - `isTruncatedFinishReason` now matches `max_output_tokens`, the reason OpenAI and Grok (Responses API) report in `incomplete_details.reason`. The Salon tool loop's truncation guard, the AI Wizard's truncated-field check and the image-description fallback's reasoning-model message now see these cut-offs

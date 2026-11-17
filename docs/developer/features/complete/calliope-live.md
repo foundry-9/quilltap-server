@@ -1,8 +1,8 @@
 # Calliope Live — a graphic theme editor
 
-**Status:** complete (2026-11-16), but for the theme author's guide, which is
-necessary and outstanding ([ROADMAP](../ROADMAP.md); outline in
-[Spec K's appendix](calliope-live-spec-k-convergence.md#appendix--outline-for-the-authors-guide-not-built-here)).
+**Status:** complete (2026-11-16). The theme author's guide, left out of the
+feature's release by decision, followed the same day as
+[help/making-a-theme.md](../../../../help/making-a-theme.md).
 Phases 0 to 3 were carried out by Specs A to K below. This document began as
 the record of a planning conversation (2026-11-14); "Proposed shape" and
 "Next steps" are kept as written then, with notes where the work decided
@@ -330,8 +330,8 @@ Settle Storybook's role; write the help documentation for theme authors.
 
 **Done** (Spec K), but for the author's guide: Storybook and the scaffolder
 are retired and the existing help pages are true without them. The guide
-itself is necessary and was left out of this release by decision; it is on
-the ROADMAP with an outline.
+itself is necessary and was left out of this release by decision; it was
+written afterwards as [help/making-a-theme.md](../../../../help/making-a-theme.md).
 
 ## Open questions
 
