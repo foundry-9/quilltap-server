@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Markdown editor toolbar stays in view
+
+- `MarkdownLexicalEditor`'s formatting toolbar is now sticky (`qt-doc-toolbar-sticky`): on text longer than the scrolling surface it pins to the top of that surface instead of scrolling away. The editor frame uses `overflow-clip` instead of `overflow-hidden` so it does not become the scroll container. Opaque background plus an upward shadow covers the scroller's top padding strip
+- `help/character-editing.md` mentions it
+
 #### New default `thinking` icon
 
 - `public/images/icons/thinking.svg` redrawn: a feathered quill with its nib, in the same 24×24 stroke style. Themes that override `thinking` are unaffected

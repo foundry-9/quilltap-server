@@ -2554,6 +2554,23 @@
   }
 
   /**
+   * The Markdown editor's toolbar stays in reach on long text: it sticks to
+   * the top of whatever surface scrolls the editor (a dialog body, a card
+   * page). Its frame clips with `overflow: clip`, not `hidden`, so the frame
+   * does not become the scroll container and pin the toolbar to itself.
+   * Opaque, so the text it rides over does not show through. Sticky stops
+   * at the scroller's padding edge, so the upward shadow covers that strip
+   * of padding; at rest the frame's clip hides it.
+   */
+  .qt-doc-toolbar-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--qt-content-bg);
+    box-shadow: 0 -2rem 0 0 var(--qt-content-bg);
+  }
+
+  /**
    * Document editor area
    * Fills available vertical space, independently scrollable
    */

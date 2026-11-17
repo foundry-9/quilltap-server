@@ -124,6 +124,8 @@ The assembled system prompt addresses the character directly throughout, and eac
 
 Six Markdown editors, and the editors *are* the view: a filled field reads as handsome prose, an empty one shows its hint as an invitation. Inside them, `{{char}}` and `{{user}}` tokens — and the character's own name and their default partner's — are tinted, so you can see at a glance where a token stands or might stand.
 
+Should a field run longer than the window, its formatting toolbar declines to be left behind: scroll down through a long passage and the row of buttons clings to the top of whatever you are scrolling, so bold, headings and the rest are always within reach. The same courtesy is extended by every Markdown editor in Quilltap — the Atlas, the wardrobe, scenarios, prompts and the like.
+
 **Identity**
 
 - The shallow first impression — what a stranger could know on sight or by reputation. Name, station, occupation, public reputation, the signifying outward facts
