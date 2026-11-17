@@ -22,7 +22,7 @@ The pictures are set edge to edge with no gaps between them. Each keeps roughly 
 
 A collage needs **at least three different pictures**. With fewer, the page shows whatever it showed before: a project its own background setting, a character and the home parlour the theme's walls. A small pool is repeated to fill the wall, though never with the same picture twice in a row.
 
-On a project page, a collage wins over the project's own **Story Backgrounds** display mode whenever there is one to show; switch Dynamic Backgrounds off, and the project's own choice is in charge again. A conversation with a background of its own still wins the whole screen when it sits beside one of these pages in a split workspace.
+On a project page, a collage wins over the project's own **Story Backgrounds** display mode whenever there is one to show; switch Dynamic Backgrounds off, and the project's own choice is in charge again. The same courtesy is extended to the theme: should the theme you are wearing paper the whole house with a background of its own, the collage takes precedence over it on the home parlour, a project and a character alike, and the theme's paper returns the moment there is no collage to hang. A conversation with a background of its own still wins the whole screen when it sits beside one of these pages in a split workspace.
 
 Only the page you are looking at is rehung. A tab tucked away behind another keeps its walls as they were until you return to it.
 

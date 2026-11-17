@@ -139,7 +139,7 @@ export const PAGE_TOKENS: readonly TokenDef[] = [
     type: 'image',
     group: 'page',
     label: "Page background image",
-    description: "An image (or a list with gradients) painted behind the whole app. While it is set the theme provider marks <html> with data-qt-page-background, and the app makes its page surfaces transparent over it — except while a story background is showing, which takes precedence. Per mode: set a dark value for dark mode.",
+    description: "An image (or a list with gradients) painted behind the whole app. While it is set the theme provider marks <html> with data-qt-page-background, and the app makes its page surfaces transparent over it — except while a story background or a dynamic-backgrounds collage is showing on the visible page, which takes precedence. Per mode: set a dark value for dark mode.",
     default: "none",
     visibility: 'standard',
   },

@@ -116,10 +116,13 @@
    data-qt-page-background: the image is painted on body and the page surfaces
    go transparent over it. A story background takes precedence — while one is
    showing (the app marks it with --story-background-url inline, as _content.css
-   reads it), none of this applies. Unlayered, so the transparency beats the
-   Tailwind bg-background utility on the shell.
+   reads it), none of this applies — that includes a dynamic-backgrounds
+   collage, which home, project and character pages mark the same way. A
+   kept-alive workspace tab that is not on screen (aria-hidden) does not
+   count. Unlayered, so the transparency beats the Tailwind bg-background
+   utility on the shell.
    ============================================================================ */
-:root[data-qt-page-background] body:not(:has([style*="--story-background-url"])) {
+:root[data-qt-page-background] body:not(:has([style*="--story-background-url"]:not(.qt-tab-pane[aria-hidden="true"] *))) {
   background-image: var(--qt-page-background-image);
   background-size: var(--qt-page-background-size);
   background-position: var(--qt-page-background-position);
@@ -127,7 +130,7 @@
   background-repeat: var(--qt-page-background-repeat);
 }
 
-:root[data-qt-page-background] body:not(:has([style*="--story-background-url"])) :is(
+:root[data-qt-page-background] body:not(:has([style*="--story-background-url"]:not(.qt-tab-pane[aria-hidden="true"] *))) :is(
   .bg-background,
   .qt-app-layout,
   .qt-app-main,
@@ -143,7 +146,7 @@
 
 /* The texture over the page background (--qt-page-background-texture), shown
    under the same condition as the image. */
-:root[data-qt-page-background] body:not(:has([style*="--story-background-url"]))::after {
+:root[data-qt-page-background] body:not(:has([style*="--story-background-url"]:not(.qt-tab-pane[aria-hidden="true"] *)))::after {
   content: "";
   position: fixed;
   inset: 0;

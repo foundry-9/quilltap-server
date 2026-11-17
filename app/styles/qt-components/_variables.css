@@ -226,7 +226,7 @@
   /* An optional box-shadow added to the focus ring, e.g. 0 0 0 4px color-mix(in srgb, var(--color-ring) 30%, transparent). */
   --qt-focus-ring-glow: none;
 
-  /* An image (or a list with gradients) painted behind the whole app. While it is set the theme provider marks <html> with data-qt-page-background, and the app makes its page surfaces transparent over it — except while a story background is showing, which takes precedence. Per mode: set a dark value for dark mode. */
+  /* An image (or a list with gradients) painted behind the whole app. While it is set the theme provider marks <html> with data-qt-page-background, and the app makes its page surfaces transparent over it — except while a story background or a dynamic-backgrounds collage is showing on the visible page, which takes precedence. Per mode: set a dark value for dark mode. */
   --qt-page-background-image: none;
   --qt-page-background-size: cover;
   --qt-page-background-position: center center;

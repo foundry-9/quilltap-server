@@ -11,6 +11,8 @@
 - New module `lib/dynamic-backgrounds/` (settings, pools, eligibility, layout, compose, seed). Rows layout for home/project, columns for characters; tiles cover the 1920×1080 / 1080×1920 canvas exactly with no gaps and no picture next to itself
 - Uncensored filter (`filterForCollage`): out if the bytes carry an uncensored `generationModeration`; in if `moderated`; for `null` rows, out if a linked chat is Unmoderated or has `isDangerousChat` (the one sanctioned read, held by a grep-test)
 - New route `GET /api/v1/system/dynamic-backgrounds` (status JSON with a fresh seeded image URL; `?action=image` serves the WebP through `serveStoredBytes`, 404 when off or below the floor). Strict query schema; the uncensored rule is never a query parameter. Added to the CSP-exempt pattern in `next.config.js`. Last 8 collages cached in process
+- A collage now takes precedence over a theme's page background (`--qt-page-background-image`) on the home tab too: `HomeView` takes a `backgroundUrl` and marks its root with `--story-background-url`, as project and character pages already did
+- Fix: the page-background rule in `app/styles/qt-components/_base.css` ignores a `--story-background-url` inside a hidden workspace tab (`.qt-tab-pane[aria-hidden="true"]`). Before, any kept-alive tab with a story or subsystem background hid the theme's page background on every other tab
 - New hook `useDynamicBackground` (`hooks/`): only the visible workspace tab rotates; a new collage is preloaded before it replaces the old one
 - `isStoryBackgroundFile` / `isAvatarFile` moved to `lib/photos/generated-image-kind.ts`; `findRollsForCharacter` exported; new `FilesRepository.findGeneratedImages()`
 - Almanack feature config and `help_settings` (`appearance`) report the setting

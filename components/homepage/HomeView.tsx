@@ -11,6 +11,7 @@
  * @module components/homepage/HomeView
  */
 
+import type { CSSProperties } from 'react'
 import {
   WelcomeSection,
   QuickActionsRow,
@@ -26,6 +27,13 @@ export interface HomeViewProps {
   recentChats: RecentChat[]
   projects: HomepageProject[]
   characters: HomepageCharacter[]
+  /**
+   * A dynamic-background collage URL. Marking the root with
+   * `--story-background-url` is what tells the theme's page background
+   * (`--qt-page-background-image`) to stand aside, as it does for a story
+   * background; the workspace backdrop paints the picture itself.
+   */
+  backgroundUrl?: string | null
 }
 
 export function HomeView({
@@ -34,9 +42,13 @@ export function HomeView({
   recentChats,
   projects,
   characters,
+  backgroundUrl,
 }: HomeViewProps) {
   return (
-    <div className="qt-homepage-container">
+    <div
+      className="qt-homepage-container"
+      style={backgroundUrl ? { '--story-background-url': `url('${backgroundUrl}')` } as CSSProperties : undefined}
+    >
       {/* Welcome section */}
       <WelcomeSection displayName={displayName} firstVisit={recentChats.length === 0} />
 

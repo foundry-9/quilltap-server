@@ -28,7 +28,8 @@ export function HomeViewContainer() {
   })
 
   // The home tab has no background of its own; with dynamic backgrounds on,
-  // the workspace backdrop paints the collage behind it.
+  // the workspace backdrop paints the collage behind it, and HomeView marks
+  // its root so the collage takes precedence over a theme's page background.
   const dynamicUrl = useDynamicBackground('home')
   useReportWorkspaceBackdrop(dynamicUrl, false)
 
@@ -57,6 +58,7 @@ export function HomeViewContainer() {
       recentChats={data.recentChats}
       projects={data.projects}
       characters={data.characters}
+      backgroundUrl={dynamicUrl}
     />
   )
 }
