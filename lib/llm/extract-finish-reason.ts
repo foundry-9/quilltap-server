@@ -49,10 +49,12 @@ export function extractFinishReason(raw: unknown): string | null {
 /**
  * Provider finish-reason strings that mean "the output was cut off because it
  * hit the token ceiling." Compared case-insensitively so Google's `MAX_TOKENS`,
- * Anthropic's `max_tokens`, and OpenAI/OpenAI-compatible `length` all match.
+ * Anthropic's `max_tokens`, OpenAI/OpenAI-compatible `length`, and the
+ * Responses API's `max_output_tokens` (OpenAI and Grok, from
+ * `incomplete_details.reason`) all match (#228).
  */
 export function isTruncatedFinishReason(reason: string | null | undefined): boolean {
   if (!reason) return false;
   const r = reason.toLowerCase();
-  return r === 'max_tokens' || r === 'length' || r === 'model_length';
+  return r === 'max_tokens' || r === 'max_output_tokens' || r === 'length' || r === 'model_length';
 }

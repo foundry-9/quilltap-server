@@ -46,6 +46,7 @@ describe('isTruncatedFinishReason', () => {
     expect(isTruncatedFinishReason('MAX_TOKENS')).toBe(true);
     expect(isTruncatedFinishReason('length')).toBe(true);
     expect(isTruncatedFinishReason('model_length')).toBe(true);
+    expect(isTruncatedFinishReason('max_output_tokens')).toBe(true); // Responses API (#228)
   });
 
   it('does not match a natural stop or a missing reason', () => {

@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Fix: Responses-API output-token cut-offs read as truncation (#228)
+
+- `isTruncatedFinishReason` now matches `max_output_tokens`, the reason OpenAI and Grok (Responses API) report in `incomplete_details.reason`. The Salon tool loop's truncation guard, the AI Wizard's truncated-field check and the image-description fallback's reasoning-model message now see these cut-offs
+- OpenAI (1.0.74) and Grok (1.0.63) plugins: `getFinishReason` checks `status === 'incomplete'` before `function_call`, so a tool call cut off mid-arguments reports `max_output_tokens` instead of `tool_calls` and is rejected and re-prompted rather than run with half-parsed arguments
+- `lib/chat/file-attachment-fallback.ts` uses the shared predicate instead of comparing to `'length'`
+- Tests for the predicate, both plugins' raw responses and the tool loop's truncation branch
+
 #### Docs: Calliope Live closed (Spec K)
 
 - `CLAUDE.md`: the `packages/` publish exception names only `packages/quilltap`; design docs are the specimen gallery; the Themes rules drop the generated Storybook CSS and point a qt-* change at `npm run generate:theme-styled-by`

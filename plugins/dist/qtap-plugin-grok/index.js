@@ -24681,6 +24681,7 @@ ${textContent}`
    * Determine finish reason from response
    */
   getFinishReason(response) {
+    if (response.status === "incomplete") return response.incomplete_details?.reason || "length";
     for (const item of response.output) {
       if (item.type === "function_call") {
         return "tool_calls";
@@ -24688,7 +24689,6 @@ ${textContent}`
     }
     if (this.hasRefusal(response)) return "refusal";
     if (response.status === "completed") return "stop";
-    if (response.status === "incomplete") return response.incomplete_details?.reason || "length";
     if (response.status === "failed") return "error";
     return "stop";
   }

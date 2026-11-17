@@ -338,6 +338,11 @@ export class GrokProvider implements TextProvider {
    * Determine finish reason from response
    */
   private getFinishReason(response: ResponsesResponse): string {
+    // An incomplete response outranks a function_call in its output: a tool
+    // call cut off mid-arguments must read as truncated, never as `tool_calls`,
+    // or the host executes half-parsed arguments (#228).
+    if (response.status === 'incomplete') return response.incomplete_details?.reason || 'length';
+
     for (const item of response.output) {
       if (item.type === 'function_call') {
         return 'tool_calls';
@@ -347,7 +352,6 @@ export class GrokProvider implements TextProvider {
     if (this.hasRefusal(response)) return 'refusal';
 
     if (response.status === 'completed') return 'stop';
-    if (response.status === 'incomplete') return response.incomplete_details?.reason || 'length';
     if (response.status === 'failed') return 'error';
 
     return 'stop';
