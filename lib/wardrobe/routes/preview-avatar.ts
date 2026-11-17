@@ -203,6 +203,7 @@ const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestCon
         model: failover.profile.modelName,
         revisedPrompt: decoded.revisedPrompt,
       },
+      generationModeration: failover.moderation,
     });
 
     logger.info('[Avatar Preview] Preview saved', {

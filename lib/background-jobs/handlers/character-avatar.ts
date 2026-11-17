@@ -493,6 +493,8 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       // for this character in this outfit. Keyed on the requested profile, not
       // the rerouted one.
       generationKey: cacheKeys.key,
+      // Moderated, uncensored by choice, sent to the desk, or the understudy's.
+      generationModeration: failover.moderation,
     });
 
     logger.info('[CharacterAvatar] Avatar image saved', {

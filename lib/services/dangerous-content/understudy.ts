@@ -96,7 +96,7 @@ async function decryptKey(
  * profile wrongly marked so still has the post-hoc failover behind it.
  */
 export function isUncensoredImageProfile(
-  profile: Pick<ImageProfile, 'id' | 'isDangerousCompatible'> | null | undefined,
+  profile: { id: string; isDangerousCompatible?: boolean | null } | null | undefined,
   conciergePolicy: ResolvedConciergePolicy,
 ): boolean {
   if (!profile) return false

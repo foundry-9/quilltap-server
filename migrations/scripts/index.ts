@@ -478,6 +478,8 @@ import { symmetrizeMemoryLinksMigration } from './symmetrize-memory-links-v1';
 // Brahma Console Writing Assistant: consoleMode + consoleContext on chats
 import { addConsoleWritingAssistantFieldsMigration } from './add-console-writing-assistant-fields';
 import { addCalliopeThemeDraftFieldMigration } from './add-calliope-theme-draft-field';
+// Files: generationModeration (how a generated picture's provider came to draw it)
+import { addFileGenerationModerationColumnMigration } from './add-file-generation-moderation-column-v1';
 
 /**
  * All available migrations.
@@ -989,6 +991,8 @@ export const migrations: Migration[] = [
   repairFilesMimeAndSizeFromMountBlobV2Migration,
   // Calliope: chats.themeDraftId (a theme conversation belongs to one draft)
   addCalliopeThemeDraftFieldMigration,
+  // Files: generationModeration (moderated / uncensored-profile / -routed / -failover)
+  addFileGenerationModerationColumnMigration,
 ];
 
 export {
@@ -1463,5 +1467,6 @@ export {
   addConsoleWritingAssistantFieldsMigration,
   repairFilesMimeAndSizeFromMountBlobV2Migration,
   addCalliopeThemeDraftFieldMigration,
+  addFileGenerationModerationColumnMigration,
 };
 

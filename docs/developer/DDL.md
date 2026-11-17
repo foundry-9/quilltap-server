@@ -1432,6 +1432,13 @@ CREATE TABLE "files" (
   -- picture (prompt + provider + profile + built image-gen params). Nullable
   -- because only cached-avatar rows ever carry one.
   "generationKey" TEXT,
+  -- How a generated picture's provider came to draw it, moderation-wise:
+  -- 'moderated' | 'uncensored-profile' | 'uncensored-routed' |
+  -- 'uncensored-failover' (GenerationModerationEnum, lib/schemas/file.types.ts).
+  -- Set only on generated avatars (job + wardrobe preview), story backgrounds
+  -- and image-tool / image-dialog pictures; null on every other file and on
+  -- pictures made before 4.14. Added by add-file-generation-moderation-column-v1.
+  "generationModeration" TEXT,
   "description" TEXT,
   "tags" TEXT DEFAULT '[]',
   "projectId" TEXT,
@@ -1455,6 +1462,8 @@ CREATE INDEX "idx_files_userId" ON "files" ("userId");
 `mimeType`/`size` were brought into line by `repair-files-mime-and-size-from-mount-blob-v1`, which deliberately left `sha256` alone on the grounds that it was load-bearing for dedup; that carve-out was bug 117, and `realign-file-entry-sha256-v1` closes it by reading each row's hash back out of the mount blob its `storageKey` names. `recompress-oversized-mount-blobs-v1` (4.10) originally rewrote only `sha256` after re-encoding a blob, which left rows claiming PNG/JPEG at the old size; it now writes all three, and `repair-files-mime-and-size-from-mount-blob-v2` mends instances that ran the first version.
 
 `generationKey` is the avatar configuration cache key: one image per character per configuration, looked up before the avatar job spends a Concierge classification call or an image call. It hashes the generation prompt (itself already the canonical serialization of the character's appearance, resolved outfit and art direction, since `buildCharacterAvatarPrompt` is pure) together with the provider-side shape the prompt does not carry — provider, image profile id and the full `buildImageGenParams` output. `lib/image-gen/avatar-cache.ts` is the only thing that derives or looks up a key; a call site that computes its own is a second format, and the two drift. Binding is last-write-wins, which is what makes the regenerate button a reroll for that configuration. Rows predating the cache carry a lower-fidelity `v: 0` key over `(generationModel, generationPrompt)` alone, assigned by `collapse-duplicate-avatar-rolls-v1`; the `v` discriminator inside the hashed payload keeps the two formats from ever colliding. Null on every file that is not a cached avatar. Design of record: [avatar-configuration-cache](features/complete/avatar-configuration-cache.md).
+
+`generationModeration` records whether a generated picture came from an uncensored provider, and how it got there. `moderated`: an ordinary profile drew it. `uncensored-profile`: the profile chosen was itself uncensored (marked uncensored-compatible, or the Concierge's image desk). `uncensored-routed`: the Concierge sent the call to an uncensored profile before it ran (an Unmoderated chat, a pre-screen verdict, a "retry uncensored"). `uncensored-failover`: an ordinary profile refused and the uncensored understudy drew it. It is derived only by `generationModerationOf` (`lib/services/dangerous-content/image-failover.ts`), which every `generateImageWithConciergeFailover` outcome carries as `moderation`; callers pass it to `createGeneratedFileRow`. Only avatars, story backgrounds and the image tool / dialog record it — wardrobe, Inventory and Atlas pictures leave it null. `isUncensoredGeneration` (`file.types.ts`) is the yes/no reading. Not backfilled: the route an older picture took was never recorded.
 
 ### folders
 

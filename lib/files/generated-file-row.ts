@@ -29,7 +29,7 @@
 
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
-import type { FileEntry, FileSource } from '@/lib/schemas/file.types';
+import type { FileEntry, FileSource, GenerationModeration } from '@/lib/schemas/file.types';
 
 const LOG_CONTEXT = 'files.generated-file-row';
 
@@ -62,6 +62,12 @@ export interface GeneratedFileRowInput {
   };
   /** The avatar configuration cache key; null on every other picture. */
   generationKey?: string | null;
+  /**
+   * How the picture's provider came to draw it (`generationModerationOf`).
+   * Passed only by avatars, story backgrounds and the image tool; every other
+   * picture leaves it null.
+   */
+  generationModeration?: GenerationModeration | null;
   /** A real description only — never a label (bug 132). Default null. */
   description?: string | null;
   projectId?: string | null;
@@ -105,6 +111,7 @@ export async function createGeneratedFileRow(
       generationModel: input.generation?.model ?? null,
       generationRevisedPrompt: input.generation?.revisedPrompt ?? null,
       generationKey: input.generationKey ?? null,
+      generationModeration: input.generationModeration ?? null,
       description: input.description ?? null,
       tags: input.tags ?? [],
       storageKey: input.stored.storageKey,
@@ -122,6 +129,7 @@ export async function createGeneratedFileRow(
     sizeBytes: input.stored.sizeBytes,
     linkedTo: input.linkedTo,
     hasGenerationKey: !!input.generationKey,
+    generationModeration: input.generationModeration ?? null,
   });
 
   return file;

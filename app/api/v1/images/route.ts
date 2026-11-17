@@ -541,6 +541,8 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
         generationPrompt: prompt,
         generationModel: profile.modelName,
         generationRevisedPrompt: generatedImage.revisedPrompt || null,
+        // Moderated, uncensored by choice, sent to the desk, or the understudy's.
+        generationModeration: failover.moderation,
         tags: inheritedTags,
         storageKey,
       }, { id: fileId });
@@ -564,6 +566,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
   logger.info('[Images v1] Image generation complete', {
     userId: user.id,
     generatedCount: savedImages.length,
+    generationModeration: failover.moderation,
   });
 
   return successResponse({

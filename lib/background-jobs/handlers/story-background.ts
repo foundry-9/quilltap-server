@@ -951,6 +951,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       },
       projectId: folderProjectId,
       folderPath: fileFolderPath,
+      generationModeration: failover.moderation,
     });
 
     logger.info('[StoryBackground] Image saved successfully', {

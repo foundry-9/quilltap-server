@@ -1925,6 +1925,11 @@
         },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "description": { "type": ["string", "null"] },
+        "generationModeration": {
+          "type": ["string", "null"],
+          "enum": ["moderated", "uncensored-profile", "uncensored-routed", "uncensored-failover", null],
+          "description": "How a generated picture's provider came to draw it, moderation-wise: an ordinary profile ('moderated'), a profile that is itself uncensored ('uncensored-profile'), one the Concierge sent the call to before it ran ('uncensored-routed'), or the uncensored understudy after an ordinary profile refused ('uncensored-failover'). Set only on generated avatars, story backgrounds and image-tool / dialog pictures; null on every other file, and on pictures made before 4.14."
+        },
         "generationKey": {
           "type": ["string", "null"],
           "description": "Avatar configuration cache key — the hash of everything deterministic about the generation that produced this image (prompt, provider, image profile, model, built params). Travels as-is. It folds in the exporting instance's image-profile id, so on a receiving instance the key is simply inert until that same profile id derives it again: nothing on the target will ever compute a matching key by accident, and a round trip back to the origin still hits. Only avatar rows carry one."

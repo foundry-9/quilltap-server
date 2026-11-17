@@ -4,6 +4,15 @@
 
 ### 4.14-dev
 
+#### Generated images record whether they were made uncensored
+
+- New `files.generationModeration` column (migration `add-file-generation-moderation-column-v1`): `moderated`, `uncensored-profile` (the chosen profile is itself uncensored: `isDangerousCompatible` or the Concierge's image desk), `uncensored-routed` (the Concierge sent the call to an uncensored profile before it ran: Unmoderated chat, pre-screen verdict, retry uncensored) or `uncensored-failover` (an ordinary profile refused and the understudy drew it)
+- Derived only by `generationModerationOf` (`image-failover.ts`); `generateImageWithConciergeFailover` now returns it as `moderation` on every outcome. `isUncensoredImageProfile` accepts any `{ id, isDangerousCompatible? }`
+- Recorded on character avatars (job and wardrobe preview), story backgrounds, `generate_image` / the image-profile Generate page, and the legacy `/api/v1/images` dialog. Wardrobe, Inventory, Atlas and uploaded/imported files leave it null. Existing rows are not backfilled
+- `isUncensoredGeneration(value)` (`lib/schemas/file.types.ts`) is the yes/no reading
+- Rides in `.qtap` exports and backups with the rest of the file row; added to `qtap-export.schema.json` and DDL.md
+- No UI yet
+
 #### Avatar refreshes wait for the next turn
 
 - Automatic avatar refreshes (wardrobe changes, Inventory changes, seat arrivals) are no longer started at once. `triggerAvatarGenerationIfEnabled` now enqueues the `CHARACTER_AVATAR_GENERATION` job held: payload `awaitingTurn: true`, `scheduledAt` at the sentinel `HELD_UNTIL_NEXT_TURN` (`lib/schemas/job.types.ts`). Later changes for the same character collapse into the held job, so several changes between turns cost one avatar per character

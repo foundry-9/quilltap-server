@@ -23,6 +23,7 @@ describe('createGeneratedFileRow', () => {
       tags: ['char-1'],
       generation: { prompt: 'the prompt', model: 'gpt-image-1', revisedPrompt: null },
       generationKey: 'key-1',
+      generationModeration: 'uncensored-failover',
     })
 
     expect(create).toHaveBeenCalledWith(
@@ -41,6 +42,7 @@ describe('createGeneratedFileRow', () => {
         generationModel: 'gpt-image-1',
         generationRevisedPrompt: null,
         generationKey: 'key-1',
+        generationModeration: 'uncensored-failover',
         description: null,
         tags: ['char-1'],
         storageKey: 'mount-blob:m:b',
@@ -64,6 +66,8 @@ describe('createGeneratedFileRow', () => {
     })
     const [data, options] = create.mock.calls[0]
     expect(options?.id).toMatch(/^[0-9a-f-]{36}$/)
-    expect(data).toEqual(expect.objectContaining({ source: 'IMPORTED', width: null, height: null, generationPrompt: null }))
+    expect(data).toEqual(expect.objectContaining({
+      source: 'IMPORTED', width: null, height: null, generationPrompt: null, generationModeration: null,
+    }))
   })
 })
