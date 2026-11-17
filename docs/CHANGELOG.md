@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Dynamic backgrounds spec
+
+- New spec `docs/developer/features/dynamic-backgrounds.md`: an Appearance setting that paints a server-composed collage of generated pictures behind the home, project and character pages, with an uncensored filter and a refresh interval. Not implemented yet
+- CLAUDE.md names the one sanctioned read of `isDangerousChat` for a display decision (the collage filter's guess for pictures with no `generationModeration`)
+
 #### Uncensored badge in every gallery
 
 - New `UncensoredBadge` (`components/images/UncensoredBadge.tsx`, class `qt-uncensored-badge`, overridable via `--qt-uncensored-badge-bg` / `-fg`) shown on tiles whose picture an uncensored profile drew, with a tooltip per `generationModeration` value
