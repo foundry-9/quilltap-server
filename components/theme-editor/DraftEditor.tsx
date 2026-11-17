@@ -1138,7 +1138,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
             ]}
             onJump={goToSection}
           />
-          <nav aria-label="Sections" className="qt-card p-2 hidden @2xl:block @2xl:sticky @2xl:top-20 @2xl:max-h-[calc(100vh-8rem)] @2xl:overflow-y-auto">
+          <nav aria-label="Sections" className="qt-card p-2 hidden @2xl:block @2xl:sticky @2xl:top-20 @2xl:max-h-[calc(100cqh-6rem)] @2xl:overflow-y-auto">
             {sections.length === 0 && assetSections.length === 0 ? (
               <p className="qt-text-xs qt-text-muted p-2">No section answers.</p>
             ) : (

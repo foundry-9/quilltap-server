@@ -1440,4 +1440,14 @@
   .qt-dot-info {
     background-color: var(--qt-status-info-fg, var(--color-info));
   }
+
+  /**
+   * A scroll area whose height descendants may measure with `cqh`.
+   * Use on a full-height scroller (the Atelier, the specimen gallery) so a
+   * sticky panel inside it can size to the visible area, not the window.
+   * Usage: <div class="h-full overflow-y-auto qt-scroll-container" />
+   */
+  .qt-scroll-container {
+    container-type: size;
+  }
 }

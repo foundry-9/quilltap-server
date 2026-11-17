@@ -83,7 +83,7 @@ At the head of the tokens sits **Choices**, where the theme's broad switches liv
 
 ### Primitives
 
-**Primitives** are the theme's own named values — its palette, its radii, its favourite shadow — which tokens may follow, so that one change ripples through every token that follows it. The Primitives panel lets you:
+**Primitives** are the theme's own named values — its palette, its radii, its favourite shadow — which tokens may follow, so that one change ripples through every token that follows it. They live on a folded **Primitives** card of their own, below every section of tokens and above Fonts and Images; it is not in the list of sections, so scroll down to it (or search for a primitive's name, which opens it). The card lets you:
 
 - **Add a primitive** — a name in lower case with hyphens (`brass-ink`, say), a kind, and a starting value;
 - edit its value, and give it a dark value with **Dark apart**;

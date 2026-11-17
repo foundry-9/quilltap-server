@@ -32,7 +32,9 @@ More: [Drafts](theme-editor.md#drafts) and [The live preview](theme-editor.md#th
 
 Resist, for a moment, the urge to start colouring things. First decide what your colours *are*.
 
-Open the **Primitives** panel and add the handful of values the theme is built from, each with a plain name of your own: `parchment`, `ink`, `brass`, `oxblood`. Five or six colours is plenty. A primitive is a value with a name, and tokens may **follow** it — so when you later decide the brass wants to be a shade warmer, you change it once and every surface that follows it changes too.
+The primitives keep a card of their own, and it is not in the list of sections down the left. Choose **Colours**, the first section in that list, if it is not chosen already (the eager will have clicked about by now), then scroll down the right-hand side, past every section of tokens, until you reach the folded card marked **Primitives**, and open it.
+
+There, add the handful of values the theme is built from, each with a plain name of your own: `parchment`, `ink`, `brass`, `oxblood`. Five or six colours is plenty. A primitive is a value with a name, and tokens may **follow** it — so when you later decide the brass wants to be a shade warmer, you change it once and every surface that follows it changes too.
 
 If you began from a copy, the primitives are already there. Read down them, and change their values before you change anything else; you will be astonished how much of the room repaints.
 

@@ -109,7 +109,7 @@ export function SpecimenGalleryView() {
   }
 
   return (
-    <div data-theme="default" className={`${windowMode} h-full overflow-y-auto qt-bg-default qt-text`} data-testid="theme-specimens-panel" data-inspect-ignore="">
+    <div data-theme="default" className={`${windowMode} h-full overflow-y-auto qt-scroll-container qt-bg-default qt-text`} data-testid="theme-specimens-panel" data-inspect-ignore="">
       <div className="max-w-6xl mx-auto p-4 space-y-4 @container">
         <header className="space-y-1">
           <h1 className="qt-heading-2">Calliope&rsquo;s Specimens</h1>
@@ -158,7 +158,7 @@ export function SpecimenGalleryView() {
             options={groups.map((g) => ({ id: g.surface, label: g.title, note: `${g.hooks.length} hooks` }))}
             onJump={goTo}
           />
-          <nav aria-label="Surfaces" className="qt-card p-2 hidden @2xl:block @2xl:sticky @2xl:top-20 @2xl:max-h-[calc(100vh-8rem)] @2xl:overflow-y-auto">
+          <nav aria-label="Surfaces" className="qt-card p-2 hidden @2xl:block @2xl:sticky @2xl:top-20 @2xl:max-h-[calc(100cqh-6rem)] @2xl:overflow-y-auto">
             {groups.length === 0 ? (
               <p className="qt-text-xs qt-text-muted p-2">No surface answers.</p>
             ) : (

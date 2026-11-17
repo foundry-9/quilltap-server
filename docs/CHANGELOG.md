@@ -4,6 +4,15 @@
 
 ### 4.14-dev
 
+#### New default `thinking` icon
+
+- `public/images/icons/thinking.svg` redrawn: a feathered quill with its nib, in the same 24×24 stroke style. Themes that override `thinking` are unaffected
+
+#### Fix: Calliope's composer hidden under the footer; theme guide corrections
+
+- Calliope's panel and the Atelier's and gallery's section lists were sized from the viewport (`100vh`), but the Atelier scrolls inside the workspace pane between the header and the footer, so their bottom ~3rem always sat under the footer at any window height. The two scroll containers wear a new `qt-scroll-container` utility (`container-type: size`) and the panels use `100cqh`
+- `help/making-a-theme.md` step 2 and `help/theme-editor.md`: Primitives is a folded card below the token sections, not an entry in the section list; say where to find it
+
 #### Docs: theme author's guide
 
 - New help page `help/making-a-theme.md`: a start-to-finish walk through making a theme in the Atelier (palette, colours, contrast, fonts, images, the gallery and inspector, custom CSS, Calliope, install, export, the CLI path), linking to `help/theme-editor.md` for detail

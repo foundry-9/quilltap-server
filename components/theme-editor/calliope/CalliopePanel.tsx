@@ -193,7 +193,7 @@ export function CalliopePanel({ draftId, draftName, seed, actions, onClose }: Ca
 
   const data = messages.data
   return (
-    <section aria-labelledby={headingId} className="qt-card flex flex-col min-h-0 h-[calc(100vh-8rem)] @4xl:sticky @4xl:top-20">
+    <section aria-labelledby={headingId} className="qt-card flex flex-col min-h-0 h-[calc(100cqh-6rem)] @4xl:sticky @4xl:top-20">
       <header className="flex items-center gap-2 p-3 border-b qt-border-default">
         <CalliopeAvatar className="w-9 h-9" />
         <div className="min-w-0 flex-1">
