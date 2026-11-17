@@ -25,6 +25,14 @@
  *     the file body is too large, when the file is a derived blob (PDF,
  *     DOCX), or when the inline form would exceed the remaining budget.
  *
+ * **Lore.** When the caller passes an `atlas` source, each tier's `Atlas/`
+ * folder is searched with the same embedding, and every hit the source
+ * resolves to an entry of the character's pool joins the same greedy pack —
+ * one budget, ranked by score with Knowledge, but held to its own higher
+ * floor (`ATLAS_RECALL_MIN_SCORE`). Lore is returned apart
+ * (`lore`), as the entry's own block or, for a long entry, the passage that
+ * matched: characters have no tools for `Atlas/`, so there is no pointer form.
+ *
  * Errors are converted to warnings by the caller — never throw mid-turn.
  *
  * @module chat/context/knowledge-injector
@@ -39,6 +47,7 @@ import { formatSelfUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
 import { estimateTokens } from '@/lib/tokens/token-counter';
 import { getRepositories } from '@/lib/repositories/factory';
 import { createServiceLogger } from '@/lib/logging/create-logger';
+import { ATLAS_RECALL_MIN_SCORE, ATLAS_RECALL_PATH_PREFIX, type AtlasRecallSource } from '@/lib/atlas/prompt-section';
 
 const logger = createServiceLogger('KnowledgeInjector');
 
@@ -84,6 +93,11 @@ export interface KnowledgeRetrievalParams {
   candidateLimit?: number;
   /** Override default 500-token inline threshold */
   inlineTokenThreshold?: number;
+  /**
+   * Resolves `Atlas/` hits to entries the character can reach and has not
+   * already been told of this turn. Absent or null: no lore is searched.
+   */
+  atlas?: AtlasRecallSource | null;
 }
 
 export interface KnowledgeDebugEntry {
@@ -99,6 +113,10 @@ export interface KnowledgeRetrievalResult {
   content: string;
   /** Estimated token count of `content` for the caller's accounting. */
   tokenCount: number;
+  /** Recalled lore blocks, ready to join the named ones — empty string if none fit. */
+  lore: string;
+  /** Estimated token count of `lore`; spent from the same budget as `content`. */
+  loreTokenCount: number;
   debug: KnowledgeDebugEntry[];
 }
 
@@ -117,12 +135,14 @@ interface Candidate {
   body: string | null;
   /** Tags/topics extracted from frontmatter when present. */
   fmTags: string | null;
+  /** Set for a lore candidate: the entry, rendered whole and as its matched passage. */
+  lore?: { entryId: string; full: string; excerpt: string | null };
 }
 
 export async function retrieveKnowledgeForTurn(
   params: KnowledgeRetrievalParams,
 ): Promise<KnowledgeRetrievalResult> {
-  const empty: KnowledgeRetrievalResult = { content: '', tokenCount: 0, debug: [] };
+  const empty: KnowledgeRetrievalResult = { content: '', tokenCount: 0, lore: '', loreTokenCount: 0, debug: [] };
 
   if (params.budgetTokens <= 0) return empty;
   if (!params.query.trim()) return empty;
@@ -185,6 +205,35 @@ export async function retrieveKnowledgeForTurn(
       }
     }),
   );
+
+  // 2b. The same tiers' `Atlas/` folders, when the caller wants lore.
+  const atlas = params.atlas ?? null;
+  const loreMinScore = Math.max(minScore, ATLAS_RECALL_MIN_SCORE);
+  const loreHits: Array<{ tier: KnowledgeTier; hits: DocumentSearchResult[] }> = atlas
+    ? await Promise.all(
+        tiers.map(async ({ tier, mountPointIds, boost }) => {
+          try {
+            const hits = await searchDocumentChunks(embeddingResult.embedding, {
+              mountPointIds,
+              pathPrefix: ATLAS_RECALL_PATH_PREFIX,
+              limit: candidateLimit,
+              minScore: loreMinScore,
+              query: params.query,
+              applyLiteralPhraseBoost: true,
+              literalBoostFraction: boost,
+            });
+            return { tier, hits };
+          } catch (error) {
+            logger.warn('Lore tier search failed, skipping tier', {
+              tier,
+              characterId: params.characterId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return { tier, hits: [] };
+          }
+        }),
+      )
+    : [];
 
   const repos = getRepositories();
 
@@ -276,14 +325,63 @@ export async function retrieveKnowledgeForTurn(
     }
   }
 
-  if (candidatesByChunkId.size === 0) return empty;
+  // 4b. Lore candidates: one per entry (its best-scoring passage). A hit the
+  // source does not resolve — a note, a shadowed or archived entry, one
+  // already named this turn — is dropped here.
+  const loreByEntryId = new Map<string, Candidate>();
+  if (atlas) {
+    for (const { tier, hits } of loreHits) {
+      for (const hit of hits) {
+        try {
+          const block = atlas.resolve(hit);
+          if (!block) continue;
+          const existing = loreByEntryId.get(block.entryId);
+          if (existing && existing.score >= hit.score) continue;
+          loreByEntryId.set(block.entryId, {
+            tier,
+            mountPointId: hit.mountPointId,
+            mountPointName: hit.mountPointName,
+            chunkId: hit.chunkId,
+            filePath: hit.relativePath,
+            fileName: hit.fileName,
+            fileType: 'markdown',
+            score: hit.score,
+            pointerTeaser: '',
+            body: null,
+            fmTags: null,
+            lore: { entryId: block.entryId, full: block.full, excerpt: block.excerpt },
+          });
+        } catch {
+          /* resolution failed — skip this hit */
+        }
+      }
+    }
+  }
+
+  logger.debug('Knowledge and lore candidates gathered', {
+    characterId: params.characterId,
+    tiers: tiers.map(t => `${t.tier}:${t.mountPointIds.length}`),
+    queryLength: params.query.length,
+    minScore,
+    loreMinScore,
+    budgetTokens: params.budgetTokens,
+    knowledgeHits: tierHits.reduce((sum, t) => sum + t.hits.length, 0),
+    knowledgeCandidates: candidatesByChunkId.size,
+    loreSearched: !!atlas,
+    loreHits: loreHits.flatMap(t => t.hits.map(h => ({ path: h.relativePath, score: Number(h.score.toFixed(3)) }))),
+    loreCandidates: loreByEntryId.size,
+  });
+
+  if (candidatesByChunkId.size === 0 && loreByEntryId.size === 0) return empty;
 
   // 5. Greedy pack into the budget. Try each candidate inline first (when
   // it has a body); if the inline form would overflow, demote to pointer.
   // After a single pass we stop the moment the next entry won't fit.
-  const candidates = Array.from(candidatesByChunkId.values()).sort((a, b) => b.score - a.score);
+  const candidates = [...candidatesByChunkId.values(), ...loreByEntryId.values()].sort((a, b) => b.score - a.score);
 
   const sections: string[] = [];
+  const loreSections: string[] = [];
+  let loreTokens = 0;
   const debug: KnowledgeDebugEntry[] = [];
   const seenFilePaths = new Set<string>();
   let runningTokens = 0;
@@ -297,6 +395,27 @@ export async function retrieveKnowledgeForTurn(
     let rendered = '';
     let renderedTokens = 0;
     let inlined = false;
+
+    if (c.lore) {
+      // The whole entry when it is short and fits; otherwise the passage that
+      // matched. An entry that fits neither way is passed over, not a stop:
+      // there is no pointer to fall back on.
+      const fullTokens = estimateTokens(c.lore.full, params.provider);
+      if (fullTokens <= inlineThreshold && runningTokens + fullTokens <= params.budgetTokens) {
+        rendered = c.lore.full;
+        renderedTokens = fullTokens;
+        inlined = true;
+      } else if (c.lore.excerpt) {
+        rendered = c.lore.excerpt;
+        renderedTokens = estimateTokens(rendered, params.provider);
+      }
+      if (!rendered || runningTokens + renderedTokens > params.budgetTokens) continue;
+      loreSections.push(rendered);
+      loreTokens += renderedTokens;
+      runningTokens += renderedTokens;
+      debug.push({ filePath: c.filePath, tier: c.tier, score: c.score, inline: inlined, tokenCount: renderedTokens });
+      continue;
+    }
 
     if (c.body !== null) {
       rendered = renderInlineEntry(c);
@@ -327,11 +446,22 @@ export async function retrieveKnowledgeForTurn(
     });
   }
 
-  if (sections.length === 0) return empty;
+  if (sections.length === 0 && loreSections.length === 0) return empty;
+
+  logger.debug('Knowledge and lore packed', {
+    characterId: params.characterId,
+    knowledgeEntries: sections.length,
+    loreEntries: loreSections.length,
+    knowledgeTokens: runningTokens - loreTokens,
+    loreTokens,
+    budgetTokens: params.budgetTokens,
+  });
 
   return {
     content: sections.join('\n\n'),
-    tokenCount: runningTokens,
+    tokenCount: runningTokens - loreTokens,
+    lore: loreSections.join('\n\n'),
+    loreTokenCount: loreTokens,
     debug,
   };
 }

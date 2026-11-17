@@ -9,6 +9,12 @@
  * folder, applies the change in memory and re-projects it, serialised per
  * folder. The folder operations are the shared `item-folder-ops.ts` ones.
  *
+ * A write re-creates the folder's search chunks without vectors, and recall by
+ * sense (`lib/atlas/prompt-section.ts`) finds an entry only by its vector, so
+ * every write here asks the embedding scheduler to embed the mount's waiting
+ * chunks — best-effort and never awaited: a failure costs recall by sense
+ * until the next scan, never the write.
+ *
  * Callers reach this through `resolveAtlasLocation` (`lib/atlas/location.ts`).
  * A grep-test holds that nothing else writes a file under `Atlas/`.
  *
@@ -36,6 +42,8 @@ import {
 } from '@/lib/atlas/vault-readers';
 import type { VaultFolderMount } from '@/lib/mount-index/item-folder-ops';
 import { createItemFolderStore, type ItemPatch, type ItemWriteGuard } from '@/lib/mount-index/item-store';
+import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/error-utils';
 
 /** An Atlas tier's folder on disk. */
 export type AtlasMount = VaultFolderMount;
@@ -79,6 +87,37 @@ const store = createItemFolderStore<AtlasRecord>({
   },
 });
 
+/** Ask for the mount's waiting chunks to be embedded. Never throws, never awaited. */
+function scheduleAtlasEmbedding(mount: AtlasMount): void {
+  void import('@/lib/mount-index/embedding-scheduler')
+    .then(({ enqueueEmbeddingJobsForMountPoint }) => enqueueEmbeddingJobsForMountPoint(mount.mountPointId))
+    .then((enqueued) => {
+      logger.debug('[AtlasWrites] Asked for the Atlas chunks to be embedded', {
+        mountPointId: mount.mountPointId,
+        enqueued,
+        context: 'atlas',
+      });
+    })
+    .catch((error) => {
+      logger.warn('[AtlasWrites] Could not queue embeddings after an Atlas write; recall by sense waits for the next scan', {
+        mountPointId: mount.mountPointId,
+        context: 'atlas',
+        error: getErrorMessage(error),
+      });
+    });
+}
+
+/** Wrap a write so the mount's chunks are queued for embedding once it lands. */
+function embedAfter<A extends unknown[], R>(
+  write: (mount: AtlasMount, ...rest: A) => Promise<R>,
+): (mount: AtlasMount, ...rest: A) => Promise<R> {
+  return async (mount, ...rest) => {
+    const result = await write(mount, ...rest);
+    scheduleAtlasEmbedding(mount);
+    return result;
+  };
+}
+
 /**
  * Resolve the Atlas folder's mount for a character id, or Quilltap General
  * for `null`. Throws `CharacterArchivedError` for an archived character.
@@ -90,22 +129,24 @@ export const readMountAtlas: (mount: AtlasMount) => Promise<AtlasRecord[]> = sto
 
 /** Re-project the folder from an authoritative record list (sweeping only the files the scan owns). */
 export const projectMountAtlas: (mount: AtlasMount, records: readonly AtlasRecord[], scan?: AtlasFolderScan) => Promise<void> =
-  store.project;
+  embedAfter(store.project);
 
 /** Create a record in the folder; `guard` runs inside the write chain first. */
-export const createAtlasInMount = store.create;
+export const createAtlasInMount = embedAfter(store.create);
 
 /**
  * Patch several records with one read and one projection; the updated records
  * in patch order. A missing id is skipped, or with `requireAll` refuses the
  * batch before anything is written.
  */
-export const updateAtlasManyInMount = store.updateMany;
+export const updateAtlasManyInMount = embedAfter(store.updateMany);
 
 /** Delete records from the folder. Returns the ids actually deleted. */
 export function deleteAtlasInMount(mount: AtlasMount, ids: readonly string[]): Promise<string[]> {
-  return store.delete(mount, ids);
+  return removeAtlas(mount, ids);
 }
+
+const removeAtlas = embedAfter((mount: AtlasMount, ids: readonly string[]) => store.delete(mount, ids));
 
 /** Every folder under the tier's `Atlas/`, with direct entry counts. */
 export const listAtlasFoldersInMount: (mount: AtlasMount) => Promise<AtlasFolder[]> = store.listFolders;

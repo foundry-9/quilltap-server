@@ -4,6 +4,17 @@
 
 ### 4.14-dev
 
+#### Atlas as a lorebook in the Commonplace Book whisper
+
+- Atlas knowledge is now delivered as a `lore` part of the Commonplace Book whisper (`CommonplaceParts.lore`, rendered ahead of `knowledge`) instead of the trailing `## What is being spoken of` section. `TrailingSections.atlas` and `buildAtlasSection` are removed; the operator now sees the lore in the whisper
+- Two triggers. **Named**: unchanged matcher and window (`buildNamedAtlasLore`), built every turn including when memory recall is skipped. **Recalled**: the knowledge injector searches each tier's `Atlas/` with the turn's existing embedding and resolves hits against the character's pool (`AtlasRecallSource`), so shadowed, archived and already-named entries are never recalled. Per-tier candidate limit is the Knowledge one; the minimum score is `ATLAS_RECALL_MIN_SCORE = 0.4` (Knowledge stays at 0.3)
+- One budget: named entries take from `knowledgeBudget` first (max 8; an entry that does not fit is cut at a word and marked ` …`, or left out when under 120 tokens remain), then recalled lore and Knowledge are packed together by score. A recalled entry is given whole when it is at most 500 tokens, otherwise as the matched passage (frontmatter stripped); there is no pointer form. Named Atlas text was previously unbudgeted
+- `tokenUsage.knowledge` now includes lore tokens; recalled entries appear in `debugKnowledge`
+- Fix: a write through the Atlas (`lib/atlas/vault-writes.ts`: create, update, delete, re-projection) re-created the folder's chunks without vectors and never queued them, so entries stayed unembedded until something else scanned the store. Each write now calls `enqueueEmbeddingJobsForMountPoint` for the mount (best-effort, not awaited)
+- Debug logging in the knowledge injector for candidates gathered and packed
+- A turn that names an Atlas entry now posts a Commonplace whisper even when it has no other recall
+- `help/atlas.md`, `help/salon-host-introductions.md`; spec §11 in `features/complete/atlas.md`
+
 #### Atlas: New Entry from Lore
 
 - New **New Entry from Lore…** button in the Atlas browser opens `AtlasLoreWizard`: give a subject, optional details, a "search the document stores and records" toggle and a model, and Brahma drafts the entry's name, aliases, graphic prompt and knowledge. Revise box for follow-up instructions. "Open in the editor" prefills the existing create editor (`initialDraft`); nothing is saved until the operator saves there. No picture is drafted
