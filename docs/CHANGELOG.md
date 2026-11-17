@@ -4,6 +4,14 @@
 
 ### 4.14-dev
 
+#### Atlas: New Entry from Lore
+
+- New **New Entry from Lore…** button in the Atlas browser opens `AtlasLoreWizard`: give a subject, optional details, a "search the document stores and records" toggle and a model, and Brahma drafts the entry's name, aliases, graphic prompt and knowledge. Revise box for follow-up instructions. "Open in the editor" prefills the existing create editor (`initialDraft`); nothing is saved until the operator saves there. No picture is drafted
+- `POST /api/v1/atlas?action=draft-from-lore` (SSE) and `GET /api/v1/atlas?action=lore-defaults`. Runs a one-shot tool loop in the parent: operator surface with read-only docs, lookup tools and `run_sql`, effect ceiling `read`; with searching off, no tools. Output is frontmatter + body, parsed by `parseAtlasLoreDraft` with a whole-answer fallback. New LLM log type `ATLAS_LORE_DRAFT`
+- Model defaults to Brahma's profile: new `resolveBrahmaConnectionProfileForProject` (project override, global inline profile, default); `resolveInlineBrahmaConnectionProfile` now delegates to it
+- The Scenario Builder's SSE client is now a wrapper over a shared `useAgentStreamRun` hook (`components/agent-stream/`), also used by the wizard
+- `help/atlas.md` documents it
+
 #### Markdown editor toolbar stays in view
 
 - `MarkdownLexicalEditor`'s formatting toolbar is now sticky (`qt-doc-toolbar-sticky`): on text longer than the scrolling surface it pins to the top of that surface instead of scrolling away. The editor frame uses `overflow-clip` instead of `overflow-hidden` so it does not become the scroll container. Opaque background plus an upward shadow covers the scroller's top padding strip

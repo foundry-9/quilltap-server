@@ -143,6 +143,8 @@ The floating Console has its own model picker; the Salon line does not, so it is
 
 A project may overrule that choice for its own conversations: open the project, find the **Model Behavior** card, and set **Inline Brahma Engine** (see [Project Settings](project-settings.md)). The order of precedence is plain — the project's choice, then the global setting, then your default profile — and should a chosen profile since have been deleted, Brahma quietly moves down the list rather than falling silent.
 
+The same engine (by the same order, the project being the one whose Atlas you are browsing) is offered first when Brahma drafts an entry for [the Atlas](atlas.md#asking-brahma-to-write-one-up).
+
 Enquiries of this sort reward a capable engine. A model that handles tools deftly will find Laura's age in three or four steps; a small or "flash" model may wander the ledgers until its turns run out.
 
 ## Setting the Console's patience

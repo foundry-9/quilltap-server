@@ -41,6 +41,21 @@ When two shelves hold an entry of the same name, the nearer one wins for each ch
 
 Beneath the name and the words it answers to, the editor posts the occasional notice: another entry within reach also answers to one of your words (the stronger shelf will win it), or a word is a character's name or alias. People always outrank things, so a word a character answers to will never call up an entry — rename one or the other if you meant it to.
 
+## Asking Brahma to write one up
+
+Writing an entry by hand is a fine thing when the particulars live in your head. When they are scattered across three chapters, a character's backstory and a conversation from last spring, let [Brahma](brahma-console.md) do the legwork. Beside **+ New Entry** at the foot of the Atlas sits **New Entry from Lore…**:
+
+1. **Name the thing** — "the Convertible", "Blackmoor Hall", "the brass contraption in the cellar". A description good enough to find it by will serve.
+2. **Search the document stores and records** is ticked to begin with. Brahma may then read every document store and look through characters, memories and conversations — reading only; he can change nothing. Untick it and he works from what you write below and nothing else (and from general knowledge, should the thing be a real one).
+3. **Further details** (optional) — facts he should take as given, where to look, what to leave out, how long you would like it.
+4. **Model** — Brahma's own engine is chosen for you (the project's Brahma engine for a project's Atlas, else the one set in [the Console's settings](brahma-console.md#choosing-the-engine-for-brahma), else your default). Any other profile may be chosen; while searching is on, profiles with tool use switched off are not offered.
+
+Press **Draft the entry** and his searches tick by as he makes them. What comes back is a draft of everything but the picture: a **name**, the other words it is **also called** (he is told which names the shelf already uses, and steers clear of them), a **graphic prompt** if the sources say what it looks like, and **what is known**. Ask for changes in the **Revise** box ("shorter, and find out what became of it after the war") as often as you like.
+
+Nothing is filed until you say so. **Open in the editor** carries the draft into the ordinary new-entry editor, on the shelf and in the folder you were browsing, where you may amend any of it before pressing **Save**. Add a picture once it is saved, as below.
+
+Should the model's answer come back in a muddle, the whole of it is kept as *what is known*, under the name you gave, with a note saying so.
+
 ## When a thing is named
 
 Quilltap listens for an entry's name and its other words, whole and in any case: *car* finds "the car" and "Car!", never "cars" or "carpet". Then:

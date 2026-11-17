@@ -13,12 +13,14 @@
 import { useCallback, useMemo, useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { AtlasEntryWithOrigin } from '@/lib/schemas/atlas.types'
+import type { AtlasLoreDraft } from '@/lib/atlas/lore-draft/request-schema'
 import { GENERAL_ATLAS_CONTAINER, containerOfAtlasOrigin, type AtlasContainer } from '@/lib/atlas/container'
 import { AtlasRequestError, useAtlasMutations } from '@/lib/hooks/use-atlas'
 import { useItemOverlays } from '@/components/item-browser/useItemOverlays'
 
 export type AtlasEditorState =
-  | { kind: 'create'; folder: string }
+  /** `draft`: a new entry prefilled from the lore wizard. */
+  | { kind: 'create'; folder: string; draft?: AtlasLoreDraft }
   | { kind: 'edit'; entry: AtlasEntryWithOrigin }
 
 /** A row's current picture on show, addressed through the tier it lives in. */
@@ -49,7 +51,9 @@ export function describeAtlasRefusal(error: unknown, fallback: string): string {
 export function useAtlasEntryActions({ container, requestConfirmation, requestAlert }: AtlasEntryActionsOptions) {
   const mutations = useAtlasMutations()
   const [imageView, setImageView] = useState<AtlasImageView | null>(null)
-  const overlays = useItemOverlays<AtlasEntryWithOrigin, AtlasEditorState>(imageView !== null)
+  /** The lore wizard, open on the folder a drafted entry will be filed in. */
+  const [loreWizard, setLoreWizard] = useState<{ folder: string } | null>(null)
+  const overlays = useItemOverlays<AtlasEntryWithOrigin, AtlasEditorState>(imageView !== null || loreWizard !== null)
 
   /** The tier an entry lives in. */
   const addressOf = useCallback(
@@ -115,12 +119,21 @@ export function useAtlasEntryActions({ container, requestConfirmation, requestAl
       requestConfirmation,
       requestAlert,
       openCreate: (folder = '') => openEditorWith({ kind: 'create', folder }),
+      loreWizard,
+      openLoreWizard: (folder = '') => setLoreWizard({ folder }),
+      closeLoreWizard: () => setLoreWizard(null),
+      /** The wizard's draft goes to the editor in create mode; the wizard closes. */
+      openCreateFromDraft: (draft: AtlasLoreDraft) => {
+        const folder = loreWizard?.folder ?? ''
+        setLoreWizard(null)
+        openEditorWith({ kind: 'create', folder, draft })
+      },
       openEditor: (entry: AtlasEntryWithOrigin) => openEditorWith({ kind: 'edit', entry }),
       remove,
       toggleArchived,
       duplicate,
     }),
-    [overlays, imageView, openImage, closeImage, openEditorWith, mutations, addressOf, requestConfirmation, requestAlert, remove, toggleArchived, duplicate],
+    [overlays, imageView, loreWizard, openImage, closeImage, openEditorWith, mutations, addressOf, requestConfirmation, requestAlert, remove, toggleArchived, duplicate],
   )
 }
 

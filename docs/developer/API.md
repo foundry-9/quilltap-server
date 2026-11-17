@@ -2499,6 +2499,13 @@ Formerly `POST /api/v1/atlas/transfers` with `action` in the body. The old path 
 
 `{ entryId, from: { scope, id }, to: { scope, id } }`. A move keeps the id, a copy mints one; folder path kept; pictures travel. A live entry of the same name at the destination is `NAME_TAKEN`. Answers `{ entry }`.
 
+#### `POST /api/v1/atlas?action=draft-from-lore` / `GET /api/v1/atlas?action=lore-defaults`
+
+Brahma drafts one entry from the operator's lore (`lib/atlas/routes/lore-draft.ts`, service `lib/services/atlas-lore/atlas-lore.service.ts`). Files nothing: the client hands the draft to the entry editor, which creates through the ordinary collection `POST`.
+
+- `POST …?action=draft-from-lore` — body (`atlasLoreDraftRequestSchema`, strict): `{ subject, details?, searchStores? (default true), connectionProfileId?, target: { scope, id? }, priorDraft?, revision? }` (`priorDraft` and `revision` together or not at all; a `general` target has no id, every other one needs one). Absent `connectionProfileId` → Brahma's profile for the target (`resolveBrahmaConnectionProfileForProject`: the target project's `brahmaConnectionProfileId`, the global inline profile, the default). `404` for a profile not the user's; `400` for a tool-less profile with `searchStores`, or a profile whose key will not resolve. Answers an SSE stream (untagged legacy frames): tool-call and reasoning events, then `{ done: true, draft: { name, aliases, graphicPrompt, knowledge }, structured, provider, modelName, usage, toolsExecuted }` or `{ error, errorType: 'atlas_lore_draft_failed', details }`. With the stores open the run is the operator surface under an effect ceiling of `read` (search without memories, the read-only `doc_*` tools, the lookup shortcuts, `run_sql`); closed, only `submit_final_response`. Logged as `ATLAS_LORE_DRAFT`.
+- `GET …?action=lore-defaults&scope=&id=` — `{ brahmaProfileId }` (null when the user has no profiles).
+
 #### `/api/v1/atlas/[entryId]/images?scope=<scope>&id=<containerId>`
 
 `createItemImagesRoute` over `Atlas/images/<entryId>/`: `GET`, `POST ?action=generate` (subject `graphicPrompt ?? name`; log type `ATLAS_ENTRY_IMAGE`), `upload`, `set-current`, `delete-image`, `GET ?action=save-targets`, `POST ?action=save-to-store`. Pictures are never sent to an image model as references.

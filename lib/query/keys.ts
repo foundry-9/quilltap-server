@@ -505,6 +505,8 @@ export const queryKeys = {
     overlaps: (tierKey: string) => ['atlas', 'overlaps', tierKey] as const,
     /** One entry's pictures. */
     images: (entryId: string) => ['atlas', 'images', entryId] as const,
+    /** The connection profile Brahma would draft from the lore with, for a tier. */
+    loreDefaults: (tierKey: string) => ['atlas', 'lore-defaults', tierKey] as const,
   },
   mailbox: {
     all: ['mailbox'] as const,

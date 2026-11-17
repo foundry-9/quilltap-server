@@ -45,6 +45,7 @@ export default function LLMLogsCard() {
       'VOICE_REWRITE': 'Voice Rewrite',
       'SCENARIO_BUILDER': 'Scenario Builder',
       'STORYTELLER_BID': 'Storyteller Bid',
+      'ATLAS_LORE_DRAFT': 'Atlas Lore Draft',
     }
     return labels[type] || type
   }
