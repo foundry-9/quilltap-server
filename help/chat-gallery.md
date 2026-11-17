@@ -28,6 +28,10 @@ A row of chips across the top lets you narrow to any one of these, with its coun
 
 Two of the seven change over time: the backdrop on the wall and the portrait a character is wearing. Both leave their predecessors behind in the gallery, which is the point — but you will want to know which one is presently in play. Those wear a small **current** badge in the corner. They are also, deliberately, the two you cannot delete.
 
+## The "Uncensored" badge
+
+A picture an uncensored image provider painted wears a small red **Uncensored** badge in its corner, beneath any **current** badge, and again beside its name in the enlarged view. Hover over it to learn how it came to the uncensored desk. The whole arrangement is set out under [The Concierge](/settings?group=moderation).
+
 ## Saving a picture to an album
 
 Hover any thumbnail and a small bookmark appears. It opens exactly the dialog the message ribbon's bookmark opens, with the same list of albums — your own persona's, each character in the chat, the project's album, every linked document store, and Quilltap General at the foot — the same caption field, and the same polite refusal if that album already holds the picture. See [Save Image to a Photo Album](chat-message-actions.md) for the full account of that dialog.

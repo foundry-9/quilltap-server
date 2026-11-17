@@ -4,6 +4,14 @@
 
 ### 4.14-dev
 
+#### Uncensored badge in every gallery
+
+- New `UncensoredBadge` (`components/images/UncensoredBadge.tsx`, class `qt-uncensored-badge`, overridable via `--qt-uncensored-badge-bg` / `-fg`) shown on tiles whose picture an uncensored profile drew, with a tooltip per `generationModeration` value
+- Shown in the chat gallery (chat and album modes of `PhotoGalleryModal`, plus `ChatGalleryImageViewModal`), Aurora's album, Avatar Rolls and Wardrobe Pictures (shared `GalleryImage` tile and `ImageDetailModal`), `/photos` (card and detail), and `ImageGallery`
+- Server side: `findUncensoredImages` / `withGenerationModeration` (`lib/photos/uncensored-images.ts`) look the answer up by sha256 through the new `FilesRepository.findUncensoredBySha256s`, so a kept album photo (a vault link with no `files` row) gets the badge of the picture it was kept from. Applied in `listChatGallery`, `listCharacterGallery`, `listUserGallery` / `getUserGalleryEntry`, `listAvatarRolls`, `listWardrobeGalleryImages` and `GET /api/v1/images`; each entry now carries `generationModeration`
+- `UNCENSORED_GENERATION_MODERATIONS` added to `lib/schemas/file.types.ts`
+- `help/the-concierge.md` documents the badge; `help/chat-gallery.md`, `help/character-gallery.md` and `help/photo-gallery.md` mention it
+
 #### Generated images record whether they were made uncensored
 
 - New `files.generationModeration` column (migration `add-file-generation-moderation-column-v1`): `moderated`, `uncensored-profile` (the chosen profile is itself uncensored: `isDangerousCompatible` or the Concierge's image desk), `uncensored-routed` (the Concierge sent the call to an uncensored profile before it ran: Unmoderated chat, pre-screen verdict, retry uncensored) or `uncensored-failover` (an ordinary profile refused and the understudy drew it)

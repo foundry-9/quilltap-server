@@ -39,6 +39,9 @@ import type { ChatEvent, ChatMetadata } from '@/lib/schemas/chat.types';
 import type { Character } from '@/lib/schemas/character.types';
 import type { FileEntry } from '@/lib/schemas/types';
 
+import type { GenerationModeration } from '@/lib/schemas/file.types';
+import { withGenerationModeration } from './uncensored-images';
+
 const log = logger.child({ module: 'photos.chat-gallery' });
 
 // ============================================================================
@@ -101,6 +104,11 @@ export interface ChatGalleryEntry {
   deletable: boolean;
   /** How many albums already hold these bytes. */
   linkSummary?: PhotoLinkSummary;
+  /**
+   * Set when an uncensored profile drew these bytes (`findUncensoredImages`,
+   * by sha256); null otherwise. Drives the gallery's Uncensored badge.
+   */
+  generationModeration?: GenerationModeration | null;
 }
 
 export interface ChatGalleryResult {
@@ -279,7 +287,7 @@ export async function listChatGallery(
   await passCastPortraits(chat, cast, collector, repos);
   await passInlineMarkdown(events, chat, cast, collector, repos);
 
-  const entries = collector.finish();
+  const entries = await withGenerationModeration(repos, collector.finish());
   log.debug('Chat gallery enumerated', {
     chatId,
     total: entries.length,

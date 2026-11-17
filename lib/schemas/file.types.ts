@@ -47,6 +47,10 @@ export const GenerationModerationEnum = z.enum([
 ]);
 export type GenerationModeration = z.infer<typeof GenerationModerationEnum>;
 
+/** The values that mean an uncensored profile drew the picture. */
+export const UNCENSORED_GENERATION_MODERATIONS: readonly GenerationModeration[] =
+  GenerationModerationEnum.options.filter((v) => v !== 'moderated');
+
 /** True when the picture was drawn by an uncensored profile, however it got there. */
 export function isUncensoredGeneration(value: GenerationModeration | null | undefined): boolean {
   return value != null && value !== 'moderated';

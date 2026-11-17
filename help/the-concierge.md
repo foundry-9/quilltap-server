@@ -219,6 +219,18 @@ Read the prompt on the finished image to tell them apart: if it drapes the scene
 - **An uncensored provider you chose is left alone.** If a character already uses an uncensored-compatible profile, the Concierge does not swap it for the desk's; he steps in only if that profile refuses anyway. The same holds for an uncensored image profile in any posture.
 - **Background errands go to the desk too.** Memory extraction, titles, summaries, scene tracking, story backgrounds and inter-character memory all use the uncensored text profile, so a squeamish cheap LLM cannot silently fail them.
 
+## The Uncensored Badge on Pictures
+
+A picture remembers which studio painted it. Whenever an avatar, a story background, or a picture summoned through the image tool or the Generate Image page is drawn by an uncensored image provider, the fact is written down beside it — and every gallery in the house shows it with a small red **Uncensored** badge in the tile's corner: the chat's Gallery, a character's album, Avatar Rolls and Wardrobe Pictures in Aurora, your own My Photos, and the image picker. The badge follows the picture into its enlarged view, too.
+
+Hover over the badge and it tells you how the picture came to the uncensored desk:
+
+- **Painted by an uncensored studio of your own choosing** — the image profile that drew it is itself marked Uncensored-compatible, or is the desk's own image profile.
+- **Sent round to the uncensored studio by the Concierge** — he sent the request across the street before anyone asked the usual firm: the chat was Unmoderated, the pre-screen took a dim view of the prompt, or you pressed **Try uncensored**.
+- **The house painter declined** — an ordinary provider refused the picture and the uncensored understudy painted it instead.
+
+A photograph kept into an album wears the badge of the picture it was kept from, since it is the very same bytes. Pictures painted before the house began keeping this record wear no badge either way, and nor do uploads, imports, or the likenesses of wardrobe items, inventory objects and Atlas entries.
+
 ## Badges Without the Uncensored Desk
 
 If you want the Concierge's badges and blur but never want an uncensored model consulted, you have two honest arrangements:

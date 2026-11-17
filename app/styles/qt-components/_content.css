@@ -2337,4 +2337,18 @@
     font-size: 0.625rem;
     opacity: 0.85;
   }
+
+  /**
+   * Uncensored badge — laid over a gallery tile (and the gallery's large view)
+   * when an uncensored profile drew the picture (`files.generationModeration`).
+   * A solid fill, not a tint, because it sits on a photo; the destructive pair
+   * is the same red-and-ink the Concierge's Unmoderated pill speaks in.
+   */
+  .qt-uncensored-badge {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium leading-none;
+    background: var(--qt-uncensored-badge-bg, var(--color-destructive));
+    color: var(--qt-uncensored-badge-fg, var(--color-destructive-foreground));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    pointer-events: auto;
+  }
 }

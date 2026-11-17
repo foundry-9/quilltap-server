@@ -26,7 +26,7 @@ Beneath the page title sits an **Album** selector. It opens on **My Photos**, th
 
 ## What you'll see when you visit
 
-The gallery presents your photographs as a tidy grid of thumbnails. Some thumbnails carry a small badge with a number. That number tells you in how many places the image is hard-linked: the album you're looking at, of course, but also any other album that has kept the same picture (a character's included), plus any chat attachments still pointing at the same bytes.
+The gallery presents your photographs as a tidy grid of thumbnails. A picture that an uncensored image provider painted wears a small red **Uncensored** badge in its top-left corner, on the thumbnail and in the detail card alike; hover over it to learn how it came to the uncensored desk. Some thumbnails carry a small badge with a number. That number tells you in how many places the image is hard-linked: the album you're looking at, of course, but also any other album that has kept the same picture (a character's included), plus any chat attachments still pointing at the same bytes.
 
 A click on a thumbnail unfolds a detail card with the picture, the original generation prompt (when known), the caption you assigned (if any), the tags, the time you saved it, and a list of every other place that's holding a link to those bytes — by mount name and relative path. So if your character Friday saved a portrait of a copper kettle six chats ago and you save the same picture today, both of you will appear in each other's link lists.
 

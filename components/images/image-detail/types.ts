@@ -2,6 +2,8 @@
  * TypeScript interfaces and types for ImageDetailModal
  */
 
+import type { GenerationModeration } from '@/lib/schemas/file.types'
+
 export interface CharacterGalleryLink {
   characterId: string
   characterName: string
@@ -32,6 +34,8 @@ export interface ImageData {
     tagId: string
   }>
   characterGalleryLinks?: CharacterGalleryLink[]
+  /** Set when an uncensored profile drew it; drives the Uncensored badge. */
+  generationModeration?: GenerationModeration | null
 }
 
 export interface Character {

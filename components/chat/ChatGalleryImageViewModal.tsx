@@ -19,6 +19,7 @@ import { FullScreenImageViewer } from '@/components/images/FullScreenImageViewer
 import { downloadGalleryEntry } from '@/lib/download-utils'
 import { copyImageToClipboard } from '@/lib/clipboard-utils'
 import { Icon } from '@/components/ui/icon'
+import { UncensoredBadge } from '@/components/images/UncensoredBadge'
 import type { ChatGalleryEntry, ChatGallerySource } from '@/lib/photos/chat-gallery'
 
 interface ChatGalleryImageViewModalProps {
@@ -133,7 +134,10 @@ export default function ChatGalleryImageViewModal({
       }
       caption={
         <>
-          <div>{entry.filename}</div>
+          <div className="flex items-center justify-center gap-2">
+            <span>{entry.filename}</span>
+            <UncensoredBadge moderation={entry.generationModeration} />
+          </div>
           <div className="text-xs opacity-80">
             {provenance}
             {linkCount > 0 && ` · [${linkCount} link${linkCount === 1 ? '' : 's'}]`}

@@ -20,6 +20,7 @@ The character's pre-existing portrait — the one you set as their avatar at cha
 - **Download a photograph** — hover over any thumbnail and click the downward arrow. The picture is handed to you as a proper file: a native save dialog in the desktop application, your browser's customary arrangements otherwise. No right-clicking required, which matters a great deal in the desktop shell, where right-clicking offers nothing at all. The same **Download** button (with **Copy**, beside it) sits at the top right of the enlarged view when you click a thumbnail.
 - **Delete a photograph** — hover and click the bin, then click it again to confirm. The link is severed; if your character's album was the last place holding a hand on those bytes, the bytes themselves are garbage-collected. (If another character's album, a chat attachment, your own *My Photos* gallery, or any other link still points at the picture, the bytes stay where they are.)
 - **Zoom in and out** with the magnifier controls to make the thumbnails larger or smaller.
+- **Spot an uncensored picture** — any photograph, avatar roll or wardrobe picture that an uncensored image provider painted wears a small red **Uncensored** badge in its top-left corner (below the **Avatar** badge, where there is one). Hover over it to learn how it came to the uncensored desk; the Concierge's help page has the particulars.
 
 ## Avatar Rolls — the plates the house has already developed
 

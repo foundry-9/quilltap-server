@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { triggerDownload } from '@/lib/download-utils'
+import type { GenerationModeration } from '@/lib/schemas/file.types'
 import type { AvatarRoll, GalleryImage } from '../types'
 
 interface AvatarRollEntry {
@@ -24,6 +25,7 @@ interface AvatarRollEntry {
   sha256: string
   isPortrait: boolean
   usedInChatCount: number
+  generationModeration?: GenerationModeration | null
 }
 
 interface AvatarRollsListResponse {
@@ -49,6 +51,7 @@ function toAvatarRoll(entry: AvatarRollEntry): AvatarRoll {
     usedInChatCount: entry.usedInChatCount,
     generationPrompt: entry.generationPrompt,
     generationModel: entry.generationModel,
+    generationModeration: entry.generationModeration ?? null,
   }
 }
 
