@@ -623,6 +623,7 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
     agentMode: { maxTurns: 10, defaultEnabled: false },
     storyBackgrounds: { enabled: false, hasDefaultImageProfile: false },
     wardrobeImages: { hasDesignatedImageProfile: false },
+    dynamicBackgrounds: { enabled: false, allowUncensored: false, refreshMinutes: 3 },
     timestamps: { mode: 'NONE', format: 'FRIENDLY' },
     autoLock: { enabled: false, idleMinutes: 15 },
     memoryCascade: {
@@ -724,6 +725,11 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
     },
     wardrobeImages: {
       hasDesignatedImageProfile: !!chatSettings?.wardrobeImageSettings?.imageProfileId,
+    },
+    dynamicBackgrounds: {
+      enabled: chatSettings?.dynamicBackgrounds?.enabled ?? false,
+      allowUncensored: chatSettings?.dynamicBackgrounds?.allowUncensored ?? false,
+      refreshMinutes: chatSettings?.dynamicBackgrounds?.refreshMinutes ?? 3,
     },
     timestamps: {
       mode: ts?.mode ?? 'NONE',

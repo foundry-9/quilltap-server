@@ -167,6 +167,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'symmetrize-memory-links-v1': 'Seeing that every cross-reference in the Commonplace Book points both ways…',
   'add-console-writing-assistant-fields-v1': 'Fitting the Console with a writing desk and a shelf for its references…',
   'add-file-generation-moderation-column-v1': 'Ruling a column in the picture ledger for which studio — the respectable or the other sort — did the painting…',
+  'add-dynamic-backgrounds-settings-field-v1': 'Hanging the picture rail for dynamic backgrounds…',
   'add-calliope-theme-draft-field-v1': 'Setting aside a chair for the Muse beside each theme upon the easel…',
   'repair-files-mime-and-size-from-mount-blob-v2': "Correcting the labels on pictures that were re-framed in lighter WebP but still claim to be PNGs…",
   'seed-chat-wardrobe-history-v1': 'Noting down what everyone has on at the moment',

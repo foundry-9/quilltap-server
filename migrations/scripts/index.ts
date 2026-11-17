@@ -480,6 +480,8 @@ import { addConsoleWritingAssistantFieldsMigration } from './add-console-writing
 import { addCalliopeThemeDraftFieldMigration } from './add-calliope-theme-draft-field';
 // Files: generationModeration (how a generated picture's provider came to draw it)
 import { addFileGenerationModerationColumnMigration } from './add-file-generation-moderation-column-v1';
+// Dynamic backgrounds: chat_settings.dynamicBackgrounds (the page-background collage)
+import { addDynamicBackgroundsSettingsFieldMigration } from './add-dynamic-backgrounds-settings-field-v1';
 
 /**
  * All available migrations.
@@ -993,6 +995,8 @@ export const migrations: Migration[] = [
   addCalliopeThemeDraftFieldMigration,
   // Files: generationModeration (moderated / uncensored-profile / -routed / -failover)
   addFileGenerationModerationColumnMigration,
+  // Dynamic backgrounds: chat_settings.dynamicBackgrounds
+  addDynamicBackgroundsSettingsFieldMigration,
 ];
 
 export {
@@ -1468,5 +1472,6 @@ export {
   repairFilesMimeAndSizeFromMountBlobV2Migration,
   addCalliopeThemeDraftFieldMigration,
   addFileGenerationModerationColumnMigration,
+  addDynamicBackgroundsSettingsFieldMigration,
 };
 

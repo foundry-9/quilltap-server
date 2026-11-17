@@ -323,7 +323,7 @@ export async function deleteAvatarRoll(
  * is written by the avatar cache and by nothing else, so it is the membership
  * test; the tag scopes it to one character.
  */
-async function findRollsForCharacter(
+export async function findRollsForCharacter(
   characterId: string,
   repos: ReturnType<typeof getRepositories>
 ): Promise<FileEntry[]> {

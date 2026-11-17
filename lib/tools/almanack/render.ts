@@ -713,6 +713,11 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push('#### Wardrobe Images', '');
   push(`- **Has Designated Image Profile**: ${yesNo(fc.wardrobeImages.hasDesignatedImageProfile)}`, '');
 
+  push('#### Dynamic Backgrounds', '');
+  push(`- **Enabled**: ${yesNo(fc.dynamicBackgrounds.enabled)}`);
+  push(`- **Allow Uncensored**: ${yesNo(fc.dynamicBackgrounds.allowUncensored)}`);
+  push(`- **Minutes Between Changes**: ${fc.dynamicBackgrounds.refreshMinutes}`, '');
+
   push('#### Aurora (Core Whisper)', '');
   push(`- **Enabled**: ${yesNo(fc.coreWhisper.enabled)}`);
   push(`- **Interval**: ${fc.coreWhisper.interval}`);

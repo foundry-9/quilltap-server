@@ -285,6 +285,7 @@ export function makeAlmanackFixture(
       agentMode: { maxTurns: 10, defaultEnabled: false },
       storyBackgrounds: { enabled: true, hasDefaultImageProfile: true },
       wardrobeImages: { hasDesignatedImageProfile: false },
+      dynamicBackgrounds: { enabled: true, allowUncensored: false, refreshMinutes: 3 },
       timestamps: { mode: 'EVERY_MESSAGE', format: 'FRIENDLY' },
       autoLock: { enabled: false, idleMinutes: 15 },
       memoryCascade: {

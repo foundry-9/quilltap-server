@@ -38,6 +38,8 @@ Each plate carries the same four courtesies the album offers, plus one of its ow
 
 Avatar rolls do not appear in the album above unless you put them there. The album is what someone chose to keep; this drawer is what the house had to draw along the way.
 
+With [Dynamic Backgrounds](dynamic-backgrounds.md) switched on (Settings → Appearance), these plates are also what papers the character's page: once a character has three or more, a changing collage of them hangs behind it.
+
 ## Wardrobe Pictures — likenesses of every garment within reach
 
 Below the Avatar Rolls sits a third shelf: **Wardrobe Pictures**. Click the heading to open it.

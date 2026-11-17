@@ -21,6 +21,7 @@ import type { ProjectFile } from './types'
 import { useStoryBackground } from '@/hooks/useStoryBackground'
 import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { useReportWorkspaceBackdrop } from '@/components/workspace/workspace-backdrop'
+import { useDynamicBackground } from '@/hooks/useDynamicBackground'
 import {
   ProjectDetailHeader,
   FilesCard,
@@ -115,8 +116,12 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
   // screen if this view reports it. The Prospero subsystem image is the
   // fallback, matching what the list view behind us paints when the project
   // asks for no background of its own ('theme' mode).
+  // With dynamic backgrounds on and enough pictures, the collage wins over the
+  // project's own display mode; null leaves that mode in charge.
+  const dynamicUrl = useDynamicBackground('project', projectId)
+  const backgroundUrl = dynamicUrl || storyBackgroundUrl
   const { backgroundImage: prosperoBackgroundImage } = useSubsystemInfo('prospero')
-  useReportWorkspaceBackdrop(storyBackgroundUrl || prosperoBackgroundImage || null, false)
+  useReportWorkspaceBackdrop(backgroundUrl || prosperoBackgroundImage || null, false)
 
   // Every read on this page is a query under the `projects` prefix (or the
   // store and profile lists), so the Prospero tab's activation refetch and
@@ -147,7 +152,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
   return (
     <div
       className="qt-page-container qt-text"
-      style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
+      style={backgroundUrl ? { '--story-background-url': `url('${backgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <ProjectDetailHeader
         project={project}

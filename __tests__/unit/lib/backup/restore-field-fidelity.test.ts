@@ -922,6 +922,8 @@ describe('restore field fidelity — 4.10 data-model additions', () => {
   const NEW_410_CHAT_SETTINGS_FIELDS = {
     impersonationVoiceMode: 'ask',
     wardrobeImageSettings: { imageProfileId: 'img-1', toolImagesEnabled: true },
+    // 4.14: dynamic backgrounds ride with the rest of the row (no ids, no ID_FIELDS entry)
+    dynamicBackgrounds: { enabled: true, allowUncensored: true, refreshMinutes: 7 },
   }
 
   it('carries every new 4.10 chats and chat_messages column through restore', async () => {

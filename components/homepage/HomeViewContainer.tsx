@@ -16,6 +16,8 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { HomeView, type HomeViewProps } from '@/components/homepage/HomeView'
+import { useReportWorkspaceBackdrop } from '@/components/workspace/workspace-backdrop'
+import { useDynamicBackground } from '@/hooks/useDynamicBackground'
 
 type HomeData = HomeViewProps
 
@@ -24,6 +26,11 @@ export function HomeViewContainer() {
     queryKey: queryKeys.home.all,
     queryFn: ({ signal }) => apiFetch<HomeData>('/api/v1/system/home', { signal }),
   })
+
+  // The home tab has no background of its own; with dynamic backgrounds on,
+  // the workspace backdrop paints the collage behind it.
+  const dynamicUrl = useDynamicBackground('home')
+  useReportWorkspaceBackdrop(dynamicUrl, false)
 
   if (isLoading) {
     return (

@@ -231,6 +231,8 @@ Hover over the badge and it tells you how the picture came to the uncensored des
 
 A photograph kept into an album wears the badge of the picture it was kept from, since it is the very same bytes. Pictures painted before the house began keeping this record wear no badge either way, and nor do uploads, imports, or the likenesses of wardrobe items, inventory objects and Atlas entries.
 
+The same record decides which pictures may hang in a [Dynamic Backgrounds](dynamic-backgrounds.md) collage: a badged picture stays off the walls unless you allow uncensored images there. For older, unbadged pictures the collage makes a guess from the chats they belong to.
+
 ## Badges Without the Uncensored Desk
 
 If you want the Concierge's badges and blur but never want an uncensored model consulted, you have two honest arrangements:

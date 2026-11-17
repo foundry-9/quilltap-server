@@ -110,6 +110,7 @@ export const SETTINGS_CARD_COMPONENTS: Readonly<Record<string, ComponentType<Set
 
   // Appearance
   appearance: lazyCard(appearance, (m) => m.AppearanceCard),
+  'dynamic-backgrounds': lazyCard(appearance, (m) => m.DynamicBackgroundsCard),
   'avatar-settings': lazyCard(appearance, (m) => m.AvatarSettingsCard),
   calliope: lazyCard(appearance, (m) => m.CalliopeCard),
   tags: lazyCard(appearance, (m) => m.TagsCard),

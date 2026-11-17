@@ -8,6 +8,10 @@ url: /settings?group=appearance
 
 The Appearance group of Settings is where you customize how Quilltap looks and feels. Here you can change themes, select your preferred color mode (light/dark/system), enable the theme quick-switcher, and adjust sidebar width.
 
+## Dynamic Backgrounds
+
+The **Dynamic Backgrounds** card hangs a changing collage of your own generated pictures behind the home parlour, each project and each character. It is off until you switch it on, and it pays no attention to the theme. See [Dynamic Backgrounds](dynamic-backgrounds.md).
+
 ## Accessing Appearance Settings
 
 1. Click **Settings** in the sidebar (gear icon)
@@ -379,6 +383,7 @@ Characters with help tools enabled can navigate directly to this page:
 For more information, see:
 
 - [Themes](themes.md) — Complete guide to themes and color modes
+- [Dynamic Backgrounds](dynamic-backgrounds.md) — A changing collage of your pictures behind the home, project and character pages
 - [Theme Quick-Switcher](theme-quick-switcher.md) — Sidebar quick-switcher details
 - [Calliope's Atelier](theme-editor.md) — Designing a theme with a live preview
 - [Making a Theme](making-a-theme.md) — A guided tour from a blank draft to a finished theme

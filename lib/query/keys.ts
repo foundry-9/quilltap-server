@@ -544,4 +544,18 @@ export const queryKeys = {
     /** Home dashboard payload for the workspace home tab. */
     all: ['home'] as const,
   },
+  dynamicBackgrounds: {
+    all: ['dynamic-backgrounds'] as const,
+    /**
+     * A page's collage status. The settings that change what is drawn
+     * (uncensored allowance, interval) are part of the key, so a change draws
+     * the next collage under the new rule at once.
+     */
+    status: (
+      scope: 'home' | 'project' | 'character',
+      id: string | null,
+      orientation: 'landscape' | 'portrait',
+      rule: { allowUncensored: boolean; refreshMinutes: number },
+    ) => ['dynamic-backgrounds', scope, id ?? '', orientation, rule.allowUncensored, rule.refreshMinutes] as const,
+  },
 } as const

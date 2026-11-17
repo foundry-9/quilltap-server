@@ -270,6 +270,7 @@ export interface FeatureConfigInfo {
   agentMode: { maxTurns: number; defaultEnabled: boolean };
   storyBackgrounds: { enabled: boolean; hasDefaultImageProfile: boolean };
   wardrobeImages: { hasDesignatedImageProfile: boolean };
+  dynamicBackgrounds: { enabled: boolean; allowUncensored: boolean; refreshMinutes: number };
   timestamps: { mode: string; format: string };
   autoLock: { enabled: boolean; idleMinutes: number };
   memoryCascade: { onMessageDelete: string; onSwipeRegenerate: string };

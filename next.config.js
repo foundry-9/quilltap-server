@@ -178,7 +178,7 @@ const nextConfig = {
         // route's header of the same name, so those paths must be left out
         // here or their policy never reaches the browser.
         source:
-          '/:path((?!api/v1/files/|api/v1/mount-points/|api/themes/|api/v1/chats/[^/]+/qtap-target).*)',
+          '/:path((?!api/v1/files/|api/v1/mount-points/|api/themes/|api/v1/chats/[^/]+/qtap-target|api/v1/system/dynamic-backgrounds).*)',
         headers: [
           {
             // Set here rather than in proxy.ts so it reaches every response,

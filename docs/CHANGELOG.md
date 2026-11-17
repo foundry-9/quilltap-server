@@ -4,9 +4,17 @@
 
 ### 4.14-dev
 
-#### Dynamic backgrounds spec
+#### Dynamic backgrounds
 
-- New spec `docs/developer/features/dynamic-backgrounds.md`: an Appearance setting that paints a server-composed collage of generated pictures behind the home, project and character pages, with an uncensored filter and a refresh interval. Not implemented yet
+- New Appearance setting `chatSettings.dynamicBackgrounds` (`enabled`, `allowUncensored`, `refreshMinutes` 1–120, default 3) with migration `add-dynamic-backgrounds-settings-field-v1`. Settings card `dynamic-backgrounds` in the Appearance group
+- When on, the workspace home tab, project pages and character pages show a server-composed WebP collage instead of their usual background, redrawn every `refreshMinutes`. Pools: every story background (home), the project's story backgrounds including those of chats moved into it (project), the character's avatar rolls (character). Fewer than 3 distinct pictures → no collage. On a project page the collage overrides `backgroundDisplayMode`
+- New module `lib/dynamic-backgrounds/` (settings, pools, eligibility, layout, compose, seed). Rows layout for home/project, columns for characters; tiles cover the 1920×1080 / 1080×1920 canvas exactly with no gaps and no picture next to itself
+- Uncensored filter (`filterForCollage`): out if the bytes carry an uncensored `generationModeration`; in if `moderated`; for `null` rows, out if a linked chat is Unmoderated or has `isDangerousChat` (the one sanctioned read, held by a grep-test)
+- New route `GET /api/v1/system/dynamic-backgrounds` (status JSON with a fresh seeded image URL; `?action=image` serves the WebP through `serveStoredBytes`, 404 when off or below the floor). Strict query schema; the uncensored rule is never a query parameter. Added to the CSP-exempt pattern in `next.config.js`. Last 8 collages cached in process
+- New hook `useDynamicBackground` (`hooks/`): only the visible workspace tab rotates; a new collage is preloaded before it replaces the old one
+- `isStoryBackgroundFile` / `isAvatarFile` moved to `lib/photos/generated-image-kind.ts`; `findRollsForCharacter` exported; new `FilesRepository.findGeneratedImages()`
+- Almanack feature config and `help_settings` (`appearance`) report the setting
+- New help page `help/dynamic-backgrounds.md`; cross-links from appearance, story backgrounds, the Concierge, project settings and character gallery pages
 - CLAUDE.md names the one sanctioned read of `isDangerousChat` for a display decision (the collage filter's guess for pictures with no `generationModeration`)
 
 #### Uncensored badge in every gallery

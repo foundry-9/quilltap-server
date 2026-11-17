@@ -304,6 +304,12 @@ Cast sizes:
 
 - **Has Designated Image Profile**: No
 
+#### Dynamic Backgrounds
+
+- **Enabled**: Yes
+- **Allow Uncensored**: No
+- **Minutes Between Changes**: 3
+
 #### Aurora (Core Whisper)
 
 - **Enabled**: Yes

@@ -784,6 +784,45 @@ export const WardrobeImageSettingsSchema = z.object({
 export type WardrobeImageSettings = z.infer<typeof WardrobeImageSettingsSchema>;
 
 // ============================================================================
+// DYNAMIC BACKGROUNDS
+// ============================================================================
+
+/** Bounds and default for `DynamicBackgroundsSettings.refreshMinutes`. */
+export const DYNAMIC_BACKGROUND_REFRESH_MIN = 1;
+export const DYNAMIC_BACKGROUND_REFRESH_MAX = 120;
+export const DYNAMIC_BACKGROUND_REFRESH_DEFAULT = 3;
+
+/**
+ * Dynamic backgrounds (Settings → Appearance → Dynamic Backgrounds): a
+ * server-composed collage of generated pictures behind the home, project and
+ * character pages. Instance-wide and independent of the theme. Read on the
+ * server only through `resolveDynamicBackgroundSettings`
+ * (`lib/dynamic-backgrounds/settings.ts`).
+ */
+export const DynamicBackgroundsSettingsSchema = z.object({
+  /** Master switch. Off: no page asks for a collage. */
+  enabled: z.boolean().default(false),
+  /** Let pictures drawn by an uncensored profile into collages. */
+  allowUncensored: z.boolean().default(false),
+  /** Minutes a collage stays up before a new one is drawn. */
+  refreshMinutes: z
+    .number()
+    .int()
+    .min(DYNAMIC_BACKGROUND_REFRESH_MIN)
+    .max(DYNAMIC_BACKGROUND_REFRESH_MAX)
+    .default(DYNAMIC_BACKGROUND_REFRESH_DEFAULT),
+});
+
+export type DynamicBackgroundsSettings = z.infer<typeof DynamicBackgroundsSettingsSchema>;
+
+/** A fresh instance's dynamic-backgrounds settings. */
+export const DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS: DynamicBackgroundsSettings = {
+  enabled: false,
+  allowUncensored: false,
+  refreshMinutes: DYNAMIC_BACKGROUND_REFRESH_DEFAULT,
+};
+
+// ============================================================================
 // CHAT SETTINGS
 // ============================================================================
 
@@ -809,6 +848,12 @@ export const ChatSettingsSchema = z.object({
     activeThemeId: null,
     colorMode: 'system',
     showNavThemeSelector: false,
+  }),
+  /** Dynamic backgrounds: the changing collage behind the home, project and character pages. */
+  dynamicBackgrounds: DynamicBackgroundsSettingsSchema.default({
+    enabled: false,
+    allowUncensored: false,
+    refreshMinutes: DYNAMIC_BACKGROUND_REFRESH_DEFAULT,
   }),
   /** Sidebar width in pixels (256-512, default: 256) */
   sidebarWidth: z.number().min(256).max(512).default(256).optional(),

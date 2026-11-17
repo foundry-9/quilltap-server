@@ -102,6 +102,27 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   }
 
   /**
+   * Every generated picture that is not an avatar-cache roll: `source =
+   * 'GENERATED'`, `category = 'IMAGE'`, no `generationKey`. Story backdrops,
+   * image-tool pictures and dialog pictures; the caller classifies them
+   * (`isStoryBackgroundFile`). Backs the dynamic backgrounds' home pool.
+   */
+  async findGeneratedImages(): Promise<FileEntry[]> {
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({
+          source: 'GENERATED',
+          category: 'IMAGE',
+          generationKey: null,
+        } as TypedQueryFilter<FileEntry>);
+        return files;
+      },
+      'Error finding generated images',
+      {}
+    );
+  }
+
+  /**
    * Find files by category
    */
   async findByCategory(category: FileCategory): Promise<FileEntry[]> {

@@ -71,6 +71,8 @@ Set the mode on the project's own page, in the **Image Generation** card under *
 
 Two further options — **Project-generated background** and **Static uploaded image** — were struck from the menu in 4.9, having been advertised without ever having been built. Neither could produce a picture: the first read a slot only the Latest Chat machinery ever filled, and the second read a slot nothing filled at all, there being no means anywhere in the building to upload such an image. A project left in either mode now shows its theme backdrop, which is precisely what it was showing before, only now the menu has the decency to admit it.
 
+With [Dynamic Backgrounds](dynamic-backgrounds.md) switched on (Settings → Appearance), a project with at least three story backgrounds shows a changing collage of them instead, whatever its display mode says; the mode takes charge again when the setting is off. The home parlour gets a collage of every story background in the house.
+
 When a project is open beside a conversation in a split workspace, the conversation's background wins the whole screen; the project's background returns when you close or move away from that conversation.
 
 ## Performance Notes
@@ -120,3 +122,4 @@ Characters with help tools enabled can navigate directly to this page:
 - [Image Generation Profiles](image-generation-profiles.md)
 - [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md#story-backgrounds-settings)
 - [Projects](projects.md)
+- [Dynamic Backgrounds](dynamic-backgrounds.md)

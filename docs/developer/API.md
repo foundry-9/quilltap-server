@@ -532,6 +532,7 @@ Update chat settings.
   },
   "imageDescriptionProfileId": "profile-uuid" | null,
   "wardrobeImageSettings": { "imageProfileId": "image-profile-uuid" | null },
+  "dynamicBackgrounds": { "enabled": false, "allowUncensored": false, "refreshMinutes": 3 },
   "themePreference": {
     "activeThemeId": "theme-id" | null,
     "colorMode": "light" | "dark" | "system"
@@ -8062,6 +8063,25 @@ Returns deployment information. This endpoint is unauthenticated as it is needed
 Returns the home dashboard payload for the client-rendered workspace home tab: greeting name, the "continue last" chat id, recent chats, active projects, and characters. The server-rendered `/` route computes the same payload directly through the shared `home-data` service, so this endpoint exists for the workspace tab to fetch it client-side. See `docs/developer/features/complete/tabbed-workspace.md`.
 
 **Response**: `200 OK` — the home dashboard data object.
+
+---
+
+### System Dynamic Backgrounds
+
+The collage painted behind the home, project and character pages when `chatSettings.dynamicBackgrounds.enabled` is on. Everything about pools, eligibility, layout and composition is `lib/dynamic-backgrounds/`; the route parses and serves. The query is a strict schema: `scope` is `home` | `project` | `character`; `id` (UUID) is required for `project` / `character` and refused for `home`; `orientation` is `landscape` (default, 1920×1080) or `portrait` (1080×1920). Any other parameter — including any attempt to pass the uncensored rule — is a `400`, as is an unknown `?action=`. See `docs/developer/features/complete/dynamic-backgrounds.md`.
+
+#### `GET /api/v1/system/dynamic-backgrounds?scope=…&id=…&orientation=…`
+
+```jsonc
+{ "enabled": true, "available": true, "count": 41, "refreshMinutes": 3,
+  "url": "/api/v1/system/dynamic-backgrounds?action=image&scope=home&orientation=landscape&seed=9f3a1c…" }
+```
+
+`url` is `null` when the setting is off or fewer than 3 distinct fit pictures remain after filtering (`available: false`). Every call mints a fresh random `seed`, which is what makes each refresh a new collage. An unknown project is a `404`; a missing or archived character simply has no pool.
+
+#### `GET /api/v1/system/dynamic-backgrounds?action=image&scope=…&id=…&orientation=…&seed=…`
+
+`image/webp`, served inline through `serveStoredBytes` (`nosniff`, sandbox CSP; the path is left out of the page CSP in `next.config.js`). Settings, pool and the uncensored filter are re-resolved on the request. Deterministic for (scope, id, orientation, seed, pool); the last 8 composed collages are cached in process. `404` when the setting is off, the pool is below the floor, the project is unknown, or fewer than 3 pictures could be read. Nothing is stored.
 
 ---
 

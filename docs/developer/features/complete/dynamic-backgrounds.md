@@ -1,6 +1,15 @@
 # Dynamic backgrounds
 
-Status: **specified, not implemented.** Written 2026-11-17 for 4.13-dev.
+Status: **implemented** in 4.14-dev (2026-11-17). Written 2026-11-17.
+
+**As built** — deviations from the text below, all small:
+
+- `loadCollagePool` takes `{ scope, id, userId }` (projects carry no `userId`, so the request's user scopes `findByProjectId`).
+- The visible-tab gate uses the existing `useWorkspaceTabVisible()` rather than `useWorkspaceTabId` + `useWorkspace`.
+- Image-tool pictures share the Lantern Backgrounds mount (under `tool/`), so the pool resolves Lantern link paths (one `findByMountPointId` read) rather than trusting the mount id alone.
+- Pictures without a moderation record are dated "before 4.14" (the column shipped in 4.14, not 4.13).
+- The orchestration (`describeCollage`, `drawCollage`, the 8-entry cache) lives in `lib/dynamic-backgrounds/index.ts`; the route only parses and serves.
+- `.qtap` exports do not carry chat settings, so the export schema is unchanged; backups carry the whole row.
 
 ## 1. What it is
 

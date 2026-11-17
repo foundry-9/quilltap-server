@@ -586,6 +586,15 @@ export const SETTINGS_CARDS: readonly SettingsCard[] = [
     help: 'appearance-settings',
   },
   {
+    id: 'dynamic-backgrounds',
+    group: 'appearance',
+    title: 'Dynamic Backgrounds',
+    description: 'Let the house hang a changing collage of your own pictures behind the home, project and character pages',
+    persona: 'lantern',
+    keywords: ['background', 'collage', 'wallpaper', 'dynamic', 'uncensored', 'refresh', 'rotate'],
+    help: 'dynamic-backgrounds',
+  },
+  {
     id: 'avatar-settings',
     group: 'appearance',
     title: 'Avatar Settings',
