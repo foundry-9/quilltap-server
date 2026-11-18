@@ -43,6 +43,7 @@ import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types';
 import type { FileAttachment } from '@/lib/llm/base';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { DEFAULT_CHARACTER_KIND, resolveCharacterKind, type CharacterKind } from '@/lib/characters/kind';
+import { fitPhysicalPrompt } from '@/lib/characters/physical-description-limits';
 
 // ============================================================================
 // Types
@@ -681,19 +682,19 @@ export async function generatePhysicalDescriptions(
 
     switch (level) {
       case 'headAndShoulders':
-        results.headAndShouldersPrompt = content.substring(0, 500);
+        results.headAndShouldersPrompt = fitPhysicalPrompt('headAndShouldersPrompt', content);
         break;
       case 'short':
-        results.shortPrompt = content.substring(0, 350);
+        results.shortPrompt = fitPhysicalPrompt('shortPrompt', content);
         break;
       case 'medium':
-        results.mediumPrompt = content.substring(0, 500);
+        results.mediumPrompt = fitPhysicalPrompt('mediumPrompt', content);
         break;
       case 'long':
-        results.longPrompt = content.substring(0, 750);
+        results.longPrompt = fitPhysicalPrompt('longPrompt', content);
         break;
       case 'complete':
-        results.completePrompt = content.substring(0, 1000);
+        results.completePrompt = fitPhysicalPrompt('completePrompt', content);
         break;
       case 'full':
         results.fullDescription = content;

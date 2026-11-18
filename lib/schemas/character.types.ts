@@ -17,6 +17,7 @@ import { TimestampConfigSchema } from './settings.types';
 import { DEFAULT_DIAGRAM_STYLE, DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
 import { CHARACTER_KINDS, DEFAULT_CHARACTER_KIND } from '@/lib/characters/kind';
 import { BirthdaySchema } from '@/lib/characters/birthday';
+import { PHYSICAL_PROMPT_LIMITS } from '@/lib/characters/physical-description-limits';
 
 // ============================================================================
 // CHARACTER SYSTEM PROMPTS
@@ -75,11 +76,11 @@ export const PhysicalDescriptionSchema = z.object({
   // Tight head-and-shoulders portrait prompt — face/hair/expression/neckline
   // only, never below-shoulder anatomy. Preferred source for avatar generation
   // (avatars are a head-and-shoulders crop); see lib/image-gen/avatar-prompt.ts.
-  headAndShouldersPrompt: z.string().max(500).nullable().optional(),
-  shortPrompt: z.string().max(350).nullable().optional(),
-  mediumPrompt: z.string().max(500).nullable().optional(),
-  longPrompt: z.string().max(750).nullable().optional(),
-  completePrompt: z.string().max(1000).nullable().optional(),
+  headAndShouldersPrompt: z.string().max(PHYSICAL_PROMPT_LIMITS.headAndShouldersPrompt).nullable().optional(),
+  shortPrompt: z.string().max(PHYSICAL_PROMPT_LIMITS.shortPrompt).nullable().optional(),
+  mediumPrompt: z.string().max(PHYSICAL_PROMPT_LIMITS.mediumPrompt).nullable().optional(),
+  longPrompt: z.string().max(PHYSICAL_PROMPT_LIMITS.longPrompt).nullable().optional(),
+  completePrompt: z.string().max(PHYSICAL_PROMPT_LIMITS.completePrompt).nullable().optional(),
   fullDescription: z.string().nullable().optional(),
   // Whether the character has a body that can be drawn as one (head,
   // shoulders, torso, limbs). Absent means true; `false` marks a character

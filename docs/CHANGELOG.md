@@ -4,6 +4,15 @@
 
 ### 4.14-dev
 
+#### Summon From Lore: truncated steps, physical prompt limits, lost memories
+
+- Every Summon From Lore call now adds reasoning headroom to its token budget (`withReasoningHeadroom`) and fails on a truncated finish reason (`isTruncatedFinishReason`) instead of letting `parseLLMJson` close the brackets on a partial answer. On a GLM-5.2 run the system prompts, physical descriptions, memories and both repair calls all stopped at their caps: the default system prompt ended mid-sentence, `fullDescription` was missing, and memory 13 had no `summary`. Answer budgets raised (system prompts 4000, physical descriptions 3500, memories 5000, chats 5000); the repair budget scales with the size of the sections it echoes
+- New `normalizeGeneratedMemories` fills a missing summary from the content's first sentence, unwraps `{ memories: [...] }`, coerces keywords and importance, and drops only empty entries, so one malformed memory no longer sends the whole array to the LLM repair
+- The validation repair may no longer replace an array section with a shorter one. Before, the repair (itself truncated) replaced 13 memories with 3
+- New `lib/characters/physical-description-limits.ts` (`PHYSICAL_PROMPT_LIMITS`, `fitToCharacterLimit`, `fitPhysicalPrompt`): overlong physical prompts are trimmed at the last sentence, clause or word boundary instead of a hard `substring`. Used by Summon From Lore and the AI Wizard; `PhysicalDescriptionSchema` reads its caps from the same constants
+- The physical description prompt now asks for about four-fifths of each cap and insists on `fullDescription`; a missing one is logged
+- `help/ai-character-import.md` describes truncated steps and prompt trimming
+
 #### Dynamic backgrounds
 
 - New Appearance setting `chatSettings.dynamicBackgrounds` (`enabled`, `allowUncensored`, `refreshMinutes` 1–120, default 3) with migration `add-dynamic-backgrounds-settings-field-v1`. Settings card `dynamic-backgrounds` in the Appearance group

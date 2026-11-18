@@ -13,6 +13,8 @@ import { createLLMProvider } from '@/lib/llm';
 import { withReasoningHeadroom } from '@/lib/llm/reasoning-headroom';
 import { profileParams } from '@/lib/llm/cheap-llm';
 import { parseLLMJson } from '@/lib/llm/llm-json';
+import { isTruncatedFinishReason } from '@/lib/llm/extract-finish-reason';
+import { fitPhysicalPrompt } from '@/lib/characters/physical-description-limits';
 import { DEFAULT_CHARACTER_KIND } from '@/lib/characters/kind';
 import { describeGeneratedProperties, parseGeneratedProperties } from '@/lib/characters/generated-properties';
 
@@ -235,6 +237,8 @@ const PHYSICAL_DESCRIPTIONS_PROMPT = `${PHYSICAL_DESCRIPTION_SEMANTICS}
 
 Generate physical descriptions of this character at varying detail levels for image generation.
 Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Describe the person as if nothing removable were part of the description; focus only on the character's physical traits. Include the character's natural hair (colour, length, texture) here, but not a styled hairdo — hairstyles are wardrobe items.
+Each "max N chars" is a hard limit counted in characters, spaces included; aim for about four-fifths of it. Anything past the limit is cut off.
+Always include "fullDescription" — it is the most important field.
 
 Respond with JSON:
 {
@@ -303,7 +307,15 @@ Create 5-8 messages showing natural conversation flow with the character's uniqu
 type LLMProvider = Awaited<ReturnType<typeof createLLMProvider>>;
 
 /**
- * Make an LLM call with structured JSON response expected
+ * Make an LLM call with structured JSON response expected.
+ *
+ * `answerTokens` is the room the answer itself needs; reasoning headroom is
+ * added on top, because models that think by default count their thinking
+ * against `max_tokens`. A reply cut off at the ceiling is a failure, never a
+ * result: `parseLLMJson` would otherwise close the brackets on half an answer
+ * and the step would "succeed" with its tail missing — a memory without a
+ * summary, a physical description without `fullDescription`, a system prompt
+ * ending mid-sentence.
  */
 async function callLLM(
   provider: LLMProvider,
@@ -313,7 +325,8 @@ async function callLLM(
   instruction: string,
   options: {
     temperature: number;
-    maxTokens: number;
+    answerTokens: number;
+    what: string;
     userId?: string;
     profileProvider?: string;
     profileParameters?: Record<string, unknown>;
@@ -324,13 +337,14 @@ async function callLLM(
     { role: 'user' as const, content: `${sourceContext}\n\n---\n\n${instruction}` },
   ];
 
+  const maxTokens = withReasoningHeadroom(options.answerTokens);
   const startTime = Date.now();
 
   const response = await provider.sendMessage(
     {
       model: modelName,
       messages,
-      maxTokens: options.maxTokens,
+      maxTokens,
       temperature: options.temperature,
       profileParameters: options.profileParameters,
     },
@@ -338,9 +352,26 @@ async function callLLM(
   );
 
   const durationMs = Date.now() - startTime;
+  const finishReason = response?.finishReason ?? null;
+
+  logger.debug('[AIImport] Step call returned', {
+    what: options.what,
+    modelName,
+    maxTokens,
+    finishReason,
+    completionTokens: response?.usage?.completionTokens,
+    contentLength: response?.content?.length ?? 0,
+    durationMs,
+  });
+
+  if (isTruncatedFinishReason(finishReason)) {
+    throw new Error(
+      `The model ran out of room before finishing the ${options.what} (finish reason: ${finishReason})`
+    );
+  }
 
   if (!response?.content) {
-    throw new Error('No response from model');
+    throw new Error(finishReason ? `No response from model (finish reason: ${finishReason})` : 'No response from model');
   }
 
   // Log the LLM call (fire and forget)
@@ -356,11 +387,12 @@ async function callLLM(
           { role: 'user', content: `[source context + instruction - ${instruction.substring(0, 80)}...]` },
         ],
         temperature: options.temperature,
-        maxTokens: options.maxTokens,
+        maxTokens,
       },
       response: {
         content: response.content.substring(0, 500),
         error: undefined,
+        finishReason,
       },
       usage: response.usage,
       durationMs,
@@ -435,6 +467,67 @@ function getSnippet(content: unknown, maxLength: number = 100): string {
     }
   }
   return '';
+}
+
+// ============================================================================
+// Memories
+// ============================================================================
+
+type GeneratedMemory = NonNullable<AIImportStepResults['memories']>[number];
+
+/** First sentence of `text`, capped, for a memory that came back without a summary. */
+function summaryFromContent(content: string): string {
+  const firstSentence = content.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? content;
+  return firstSentence.length > 200 ? `${firstSentence.slice(0, 197).trimEnd()}...` : firstSentence;
+}
+
+/**
+ * Bring the memories step's output to the shape assembly needs, without
+ * another model call. Models wrap the array (`{ "memories": [...] }`), omit a
+ * summary, send keywords as a string or importance as text; each is fixed here
+ * deterministically. Only an entry with no content at all is dropped. Before
+ * this, one memory missing its summary failed validation and handed the whole
+ * array to the LLM repair, which returned three of thirteen.
+ */
+export function normalizeGeneratedMemories(raw: unknown): GeneratedMemory[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === 'object' && Array.isArray((raw as { memories?: unknown }).memories)
+      ? (raw as { memories: unknown[] }).memories
+      : [];
+
+  const memories: GeneratedMemory[] = [];
+  for (const entry of list) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    const content = typeof e.content === 'string' ? e.content.trim() : '';
+    const summary = typeof e.summary === 'string' ? e.summary.trim() : '';
+    if (!content && !summary) continue;
+
+    const keywords = Array.isArray(e.keywords)
+      ? e.keywords.filter((k): k is string => typeof k === 'string' && k.trim().length > 0).map((k) => k.trim())
+      : typeof e.keywords === 'string'
+        ? e.keywords.split(',').map((k) => k.trim()).filter(Boolean)
+        : [];
+
+    const importanceRaw = typeof e.importance === 'number' ? e.importance : Number(e.importance);
+    const importance = Number.isFinite(importanceRaw) ? Math.max(0, Math.min(1, importanceRaw)) : 0.5;
+
+    memories.push({
+      content: content || summary,
+      summary: summary || summaryFromContent(content),
+      keywords,
+      importance,
+    });
+  }
+
+  if (memories.length !== list.length) {
+    logger.debug('[AIImport] Dropped memories with no content', {
+      received: list.length,
+      kept: memories.length,
+    });
+  }
+  return memories;
 }
 
 // ============================================================================
@@ -538,12 +631,12 @@ export function assembleQtapExport(
     physicalDescription: stepResults.physical_descriptions
       ? {
           id: crypto.randomUUID(),
-          headAndShouldersPrompt: (stepResults.physical_descriptions.headAndShouldersPrompt || '').substring(0, 500),
-          shortPrompt: (stepResults.physical_descriptions.shortPrompt || '').substring(0, 350),
-          mediumPrompt: (stepResults.physical_descriptions.mediumPrompt || '').substring(0, 500),
-          longPrompt: (stepResults.physical_descriptions.longPrompt || '').substring(0, 750),
-          completePrompt: (stepResults.physical_descriptions.completePrompt || '').substring(0, 1000),
-          fullDescription: stepResults.physical_descriptions.fullDescription,
+          headAndShouldersPrompt: fitPhysicalPrompt('headAndShouldersPrompt', stepResults.physical_descriptions.headAndShouldersPrompt),
+          shortPrompt: fitPhysicalPrompt('shortPrompt', stepResults.physical_descriptions.shortPrompt),
+          mediumPrompt: fitPhysicalPrompt('mediumPrompt', stepResults.physical_descriptions.mediumPrompt),
+          longPrompt: fitPhysicalPrompt('longPrompt', stepResults.physical_descriptions.longPrompt),
+          completePrompt: fitPhysicalPrompt('completePrompt', stepResults.physical_descriptions.completePrompt),
+          fullDescription: stepResults.physical_descriptions.fullDescription?.trim() || null,
           createdAt: now,
           updatedAt: now,
         }
@@ -889,7 +982,7 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           sourceContext,
           getAnalyzingPrompt(sourceContext.length),
-          { temperature: 0.3, maxTokens: 2000, ...llmOpts }
+          { temperature: 0.3, answerTokens: 2000, what: 'source analysis', ...llmOpts }
         );
         const analysis = parseLLMJson<Record<string, unknown>>(raw);
         stepResults.analyzing = JSON.stringify(analysis, null, 2);
@@ -919,7 +1012,7 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           enrichedContext,
           CHARACTER_BASICS_PROMPT,
-          { temperature: 0.7, maxTokens: 2000, ...llmOpts }
+          { temperature: 0.7, answerTokens: 3000, what: 'character basics', ...llmOpts }
         );
         stepResults.character_basics = parseLLMJson(raw);
         onProgress({
@@ -950,7 +1043,7 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           FIRST_MESSAGE_PROMPT,
-          { temperature: 0.8, maxTokens: 1500, ...llmOpts }
+          { temperature: 0.8, answerTokens: 2500, what: 'first message', ...llmOpts }
         );
         stepResults.first_message = parseLLMJson(raw);
         onProgress({
@@ -974,7 +1067,7 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           SYSTEM_PROMPTS_PROMPT,
-          { temperature: 0.7, maxTokens: 1500, ...llmOpts }
+          { temperature: 0.7, answerTokens: 4000, what: 'system prompts', ...llmOpts }
         );
         stepResults.system_prompts = parseLLMJson(raw);
         onProgress({
@@ -998,9 +1091,14 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           PHYSICAL_DESCRIPTIONS_PROMPT,
-          { temperature: 0.7, maxTokens: 2000, ...llmOpts }
+          { temperature: 0.7, answerTokens: 3500, what: 'physical descriptions', ...llmOpts }
         );
         stepResults.physical_descriptions = parseLLMJson(raw);
+        if (!stepResults.physical_descriptions?.fullDescription?.trim()) {
+          logger.warn('[AIImport] Physical descriptions step returned no fullDescription', {
+            keys: Object.keys(stepResults.physical_descriptions ?? {}),
+          });
+        }
         onProgress({
           type: 'step_complete',
           step: 'physical_descriptions',
@@ -1022,7 +1120,7 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           WARDROBE_ITEMS_PROMPT,
-          { temperature: 0.7, maxTokens: 3000, ...llmOpts }
+          { temperature: 0.7, answerTokens: 4000, what: 'wardrobe items', ...llmOpts }
         );
         const items = parseLLMJson<GeneratedWardrobeItem[]>(raw);
         stepResults.wardrobe_items = sanitizeGeneratedWardrobeItems(items);
@@ -1047,7 +1145,7 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           PROPERTIES_EXTRACTION_PROMPT,
-          { temperature: 0.3, maxTokens: withReasoningHeadroom(300), ...llmOpts }
+          { temperature: 0.3, answerTokens: 300, what: 'pronouns and aliases', ...llmOpts }
         );
         const props = parseGeneratedProperties(raw);
         stepResults.pronouns = props.pronouns ?? undefined;
@@ -1076,9 +1174,9 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           MEMORIES_PROMPT,
-          { temperature: 0.7, maxTokens: 3000, ...llmOpts }
+          { temperature: 0.7, answerTokens: 5000, what: 'memories', ...llmOpts }
         );
-        stepResults.memories = parseLLMJson(raw);
+        stepResults.memories = normalizeGeneratedMemories(parseLLMJson<unknown>(raw));
         onProgress({
           type: 'step_complete',
           step: 'memories',
@@ -1100,7 +1198,7 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           CHATS_PROMPT,
-          { temperature: 0.8, maxTokens: 4000, ...llmOpts }
+          { temperature: 0.8, answerTokens: 5000, what: 'example chat', ...llmOpts }
         );
         stepResults.chats = parseLLMJson(raw);
         onProgress({
@@ -1202,19 +1300,38 @@ ${JSON.stringify(sectionsToRepair, null, 2)}
 
 Return ONLY a JSON object with the same section keys (${Object.keys(sectionsToRepair).join(', ')}), containing the corrected arrays. Do not change the structure, only fix the values that cause validation errors. If a field should be absent rather than null, remove it entirely.`;
 
+          // The repair echoes every section it fixes, so its budget scales with
+          // what it was sent (~3 characters a token, plus room to spare).
+          const sectionsJsonLength = JSON.stringify(sectionsToRepair).length;
           const raw = await callLLM(
             provider, apiKey, profile.modelName,
             '',
             repairPrompt,
-            { temperature: 0.5, maxTokens: 2000, ...llmOpts }
+            {
+              temperature: 0.5,
+              answerTokens: Math.max(2000, Math.ceil(sectionsJsonLength / 3) + 1000),
+              what: 'validation repair',
+              ...llmOpts,
+            }
           );
 
           const repairedSections = parseLLMJson<Record<string, unknown>>(raw);
-          // Only apply repaired sections, don't touch other sections
+          // Only apply repaired sections, don't touch other sections — and never
+          // one that came back with fewer entries than it went in with: a repair
+          // fixes values, it does not get to drop memories or wardrobe items.
           for (const section of Object.keys(sectionsToRepair)) {
-            if (repairedSections[section]) {
-              dataObj[section] = repairedSections[section];
+            const before = sectionsToRepair[section];
+            const after = repairedSections[section];
+            if (!after) continue;
+            if (Array.isArray(before) && (!Array.isArray(after) || after.length < before.length)) {
+              logger.warn('[AIImport] Rejected a repair that shrank a section', {
+                section,
+                before: before.length,
+                after: Array.isArray(after) ? after.length : typeof after,
+              });
+              continue;
             }
+            dataObj[section] = after;
           }
 
           const revalidation = validateQtapExport(exportData);

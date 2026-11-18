@@ -62,6 +62,8 @@ Watch the AI work through each extraction step:
 
 Each step shows its status: pending, in progress, complete, or warning. Non-critical failures (like dialogue generation) won't block the import — only character basics are required.
 
+A step whose answer the model could not finish — it ran out of room mid-sentence — is marked as a warning rather than quietly kept half-written, so you will never import a system prompt that stops in the middle of a thought or a memory without its summary. Such a step is first in line for **Add More & Regenerate**. The shorter physical description prompts have firm length limits; when the model overshoots one, the prompt is trimmed back to its last whole phrase rather than cut off mid-word. Should the final validation turn up a fault, the repair may mend values but is never permitted to throw memories or wardrobe pieces overboard.
+
 ### Step 4: Review & Import
 
 Review the generated character before importing:
