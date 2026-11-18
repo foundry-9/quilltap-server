@@ -51,6 +51,24 @@ Before answering you may research freely with your tools: search and read the op
 When you use a tool, you actually call it — you do not merely describe calling it. Every tool action produces a real tool call, not prose.`
 
 /**
+ * Brahma never invents. He reads the operator's real documents and database,
+ * so a made-up answer is a wrong answer — unlike a story character, who may
+ * fill in the world (`lib/chat/context/story-character-section.ts`). Pushed
+ * after the ordinary brief, so it reaches the console and the `@Brahma`
+ * answerer alike. Writing Assistant mode gets BRAHMA_WRITING_ACCURACY_RULE.
+ *
+ * Design of record: docs/developer/features/roleplay-character-latitude.md §5.9
+ */
+export const BRAHMA_ACCURACY_RULE = `Never make anything up. If your tools, the documents and the database do not hold an answer, say so plainly and say where you looked. Invent only when the operator asks you to — a draft, a name, an example, a piece of fiction — and then only what was asked for.`
+
+/**
+ * The same rule for Writing Assistant mode, where the answer is a finished
+ * piece that must not say where Brahma looked and where writing on request is
+ * the whole job: facts come from the sources, invention from the request.
+ */
+export const BRAHMA_WRITING_ACCURACY_RULE = `Facts about the operator's world, characters and records come from what you read, never from invention. Invent only what the request asks you to invent.`
+
+/**
  * Build the Brahma Console system prompt. Minimal and neutral; not
  * user-editable in v1.
  */
@@ -74,6 +92,9 @@ You can search and read the operator's document stores and knowledge folders, an
 When you use a tool, you actually call it — you do not merely describe calling it. Every tool action produces a real tool call, not prose.`
     )
   }
+
+  // Accuracy — both modes, every surface. See BRAHMA_ACCURACY_RULE.
+  parts.push(writingAssistant ? BRAHMA_WRITING_ACCURACY_RULE : BRAHMA_ACCURACY_RULE)
 
   // Read-only SQL inspection (run_sql). Appended after the base brief and before
   // the mechanical tool-call instructions. The base brief above keeps its "no

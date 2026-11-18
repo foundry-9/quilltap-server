@@ -42,7 +42,7 @@ Switching the engine **continues the same conversation**. The transcript carries
 
 ## What the Console can do
 
-The Console is a capable, concise, neutral assistant. Beyond plain conversation, it carries a deliberately small kit of tools:
+The Console is a capable, concise, neutral assistant, and a scrupulous one: it **never makes anything up**. Where its tools, your documents and the ledgers hold no answer, it says so and tells you where it looked. The characters of your stories may embroider; the Console may not, unless you ask it to invent something (a name, a draft, an example), in which case it invents precisely that and no more. Beyond plain conversation, it carries a deliberately small kit of tools:
 
 - **Search** — It can search across your past conversations and every one of your document stores, including the knowledge folders within them.
 - **Documents** — It has full reach into your document stores: it can read files, list and grep their contents, and **write** to them as well (except in a Writing Assistant conversation, where it reads only).

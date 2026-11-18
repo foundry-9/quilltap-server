@@ -36,6 +36,8 @@ import { wardrobeTakeOffToolDefinition } from './wardrobe-take-off-tool'
 import { wardrobeRollbackToolDefinition } from './wardrobe-rollback-tool'
 import { wardrobeHistoryToolDefinition } from './wardrobe-history-tool'
 import { enabledInventoryToolDefinitions, type InventoryToolFlags } from './inventory-tool-flags'
+import { STORY_LOOKUP_NOTE } from './native-tool-prompt'
+import type { ToolRulesVariant } from '@/lib/characters/kind'
 
 /**
  * Which tools to document in the prompt. Mirrors the shape of
@@ -174,7 +176,23 @@ function renderToolEntry(tool: OpenAIToolDefinition): string {
  * the provider stop sequence (`</tool_call>`) is configured separately at
  * the streaming layer.
  */
-export function buildSimpleJsonToolInstructions(options: SimpleJsonPromptOptions): string {
+/**
+ * The recall rule in this prompt's bullet form, by kind. The assistant text
+ * is the rule as it has always stood here; the roleplay text carries the same
+ * change as `RECALL_RULE.roleplay` and `STORY_LOOKUP_NOTE` in
+ * `native-tool-prompt.ts` (search first, report a record as it is, fill a
+ * real gap instead of pleading ignorance).
+ */
+export const SIMPLE_JSON_RECALL_RULE: Readonly<Record<ToolRulesVariant, string>> = {
+  assistant: `- Recalling past events: when asked about a past event or specific detail not in your current recall, use \`search\` (with \`since\`/\`until\` when a time period is mentioned), then \`read_conversation\` on the source conversation, and answer from what you find. If the search lists conversations from that period, read the likeliest one with \`read_conversation\` before answering. Only if it finds nothing and lists no conversation from that period, say you don't recall — never invent dates, places, or details.`,
+  roleplay: `- Recalling past events: when asked about a past event you shared with someone here, or a specific detail not in your current recall, use \`search\` (with \`since\`/\`until\` when a time period is mentioned), then \`read_conversation\` on the source conversation, and answer from what you find. If the search lists conversations from that period, read the likeliest one with \`read_conversation\` before answering. What you find is what happened; tell it as it was. Only if it finds nothing and lists no conversation from that period may you fill in detail that fits everything established, instead of saying you don't recall — and never what {{user}} said or did, which you ask about.
+- ${STORY_LOOKUP_NOTE}`,
+}
+
+export function buildSimpleJsonToolInstructions(
+  options: SimpleJsonPromptOptions,
+  variant: ToolRulesVariant = 'assistant',
+): string {
   const entries: string[] = []
 
   if (options.whisper) {
@@ -263,6 +281,6 @@ Rules:
 - Emit at most ONE \`<tool_call>\` per turn. Stop immediately after the closing \`</tool_call>\` tag — do not narrate fictional results.
 - After you stop, the system will execute the tool and reply with a \`<tool_result name="...">\` block. Read it, then either respond to the user or make another tool call.
 - Only call a tool when it would genuinely improve your answer. Don't decorate the response with tool calls you don't need.
-- Recalling past events: when asked about a past event or specific detail not in your current recall, use \`search\` (with \`since\`/\`until\` when a time period is mentioned), then \`read_conversation\` on the source conversation, and answer from what you find. If the search lists conversations from that period, read the likeliest one with \`read_conversation\` before answering. Only if it finds nothing and lists no conversation from that period, say you don't recall — never invent dates, places, or details.
+${SIMPLE_JSON_RECALL_RULE[variant]}
 `.trim()
 }

@@ -419,6 +419,28 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * The character's most recent live memories that carry one exact keyword,
+   * newest first. Used to find what a character has already told as fact
+   * (`STATED_PARTICULARS_KEYWORD`, `lib/memory/extraction/parse.ts`). The
+   * column is a JSON array, so the match is on the quoted keyword; rows a
+   * digest supersedes are left out.
+   */
+  async findRecentWithKeyword(characterId: string, keyword: string, limit: number = 40): Promise<Memory[]> {
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter(
+          { characterId, keywords: { $contains: JSON.stringify(keyword) } },
+          { sort: { createdAt: -1 }, limit },
+        );
+        return memories.filter((m) => !m.supersededById);
+      },
+      'Error finding recent memories by keyword',
+      { characterId, keyword, limit },
+      []
+    );
+  }
+
+  /**
    * Find the most important memories for a character — the frozen archive's
    * candidate pool.
    *

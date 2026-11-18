@@ -114,6 +114,8 @@ The assembled system prompt addresses the character directly throughout, and eac
 - **Assistant** is a member of the staff: a capable aide whose business is doing work for you, such as research, drafting or keeping the books
 - The choice is about how the character is *performed*, not what they are in the story. A ship's mind or a household automaton who lives in the scene is still a roleplay character
 - With [Agent Mode](agent-mode.md) on, a roleplay character uses their tools as things they do in the scene and still answers in prose; an assistant researches, verifies and delivers a finished report
+- A roleplay character is also handed, on every turn, a short standing note on how a person in a story is played: they may **supply plausible particulars** where nothing on record gainsays them (what the clerk said, how the afternoon went, what they did while out of everyone's sight); they are played **as written, warts included** (the timid may quail, the suspicious may act on it, the scoundrel pursues the scheme); and **their own troubles come into the room with them**. What you narrate, the conversation itself, their memories and anything a tool truly returned all outrank an invention, and their own system prompt outranks the note. See [Sample Prompts](prompts.md) for the full particulars
+- An assistant receives no such note. It gets the facts right and says so plainly when it does not know
 - Every character begins as a roleplay character, including every character made before the choice existed
 
 **Tags**

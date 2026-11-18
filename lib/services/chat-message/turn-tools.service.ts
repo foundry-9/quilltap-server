@@ -190,7 +190,7 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
       canManageInventory
     )
     if (resolvedToolMode === 'simple-json') {
-      toolInstructions = buildSimpleJsonSystemInstructions(textOptions)
+      toolInstructions = buildSimpleJsonSystemInstructions(textOptions, characterKindPolicy(character).toolRules)
       logSimpleJsonToolUsage(profile.provider, profile.modelName, textOptions)
     } else {
       toolInstructions = buildTextBlockSystemInstructions(textOptions)

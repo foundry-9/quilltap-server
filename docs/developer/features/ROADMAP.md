@@ -83,6 +83,7 @@ This document tracks planned features and improvements for Quilltap.
 - [X] AI direct character edit
   - [X] Give the AI instructions, it proposes edits to the character
   - [ ] Optionally can adjust or delete memories
+- [x] Roleplay character latitude — a fixed section for every roleplay character (invent within what is established, be played as written, carry their own troubles), a kind-aware recall rule, the same latitude for a roleplay Carina answerer, and a never-invent rule for Brahma (design: [roleplay-character-latitude.md](roleplay-character-latitude.md)) — implemented 4.14-dev; live V4test eval outstanding
 - [x] Prompt trust, part two — "the probation": drop the "times they slipped" ledger from the trust disposition and sample prompts, add a companion default-yes and a universal no-mind-reading rule, rescope the group-scene anti-chorus rules, and teach the extractor and binder to record repairs (design: [prompt-trust-the-probation.md](prompt-trust-the-probation.md)) — implemented 4.12-dev; live V4test eval outstanding
 
 ### External Integrations

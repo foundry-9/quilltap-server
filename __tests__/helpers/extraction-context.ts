@@ -127,6 +127,7 @@ export function makeExtractionContext(opts: TestContextOptions = {}): Extraction
     userCharacter: userSeat ? cast.get(userSeat.characterId) ?? null : null,
     speakerNames,
     canonForSelf: async (holderId: string) => `SELF CANON ${holderId}`,
+    priorTellings: async () => [],
     canonFor: async (holderId: string, aboutId: string) => ({ block: `CANON ${holderId}→${aboutId}`, source: 'identity' }),
     project: { id: opts.projectId ?? null, description: opts.projectDescription ?? null },
     orienting: { projectDescription: opts.projectDescription ?? null, chatContextSummary: opts.chatContextSummary ?? null },

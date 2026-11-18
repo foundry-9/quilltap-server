@@ -236,9 +236,12 @@ export function checkResolvedToolMode(
  * Build simple-json system-prompt instructions. Mirrors the shape of
  * `buildTextBlockSystemInstructions` so the orchestrator wires it in
  * symmetrically.
+ *
+ * @param variant Which recall rule the speaker hears (from `KindPolicy.toolRules`)
  */
 export function buildSimpleJsonSystemInstructions(
-  enabledOptions: TextBlockEnabledToolOptions
+  enabledOptions: TextBlockEnabledToolOptions,
+  variant: ToolRulesVariant
 ): string {
   const options: SimpleJsonPromptOptions = {
     whisper: enabledOptions.whisper,
@@ -263,7 +266,7 @@ export function buildSimpleJsonSystemInstructions(
     wardrobeArchive: enabledOptions.wardrobeArchive,
     ...pickInventoryToolFlags(enabledOptions),
   }
-  return buildSimpleJsonToolInstructions(options)
+  return buildSimpleJsonToolInstructions(options, variant)
 }
 
 /**

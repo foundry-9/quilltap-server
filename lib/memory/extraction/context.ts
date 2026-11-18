@@ -19,6 +19,7 @@ import { isParticipantPresent } from '@/lib/schemas/types'
 import type { Character, ChatMetadata, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
 import { logger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/error-utils'
 import { loadChatMessageEvents } from '@/lib/services/chat-message/turn-transcript'
 import { resolveMemorySettings, type MemorySettings } from '../settings'
 import { refreshMemoryTimeZone } from '../time/calendar-refresh'
@@ -34,6 +35,10 @@ import { resolveExtractionRoute, type ExtractionRoute } from './route'
 import { createRateLimiter, type RateLimiter } from './rate-limit'
 import type { DryRunBook } from '../admission/dry-run-book'
 import { liveCursorStore, memoryCursorStore, type CursorStore } from './cursors'
+import { STATED_PARTICULARS_KEYWORD } from './parse'
+
+/** How many of a holder's recent tellings one extraction context reads. */
+const PRIOR_TELLINGS_POOL = 40
 
 /** One character the unit of work may extract for or about. */
 export interface CastMember {
@@ -62,6 +67,13 @@ export interface ExtractionContext {
   speakerNames: SpeakerNames
   /** The holder's own ALREADY ESTABLISHED block (card fields + `Commonplace/Self.md`). Memoised. */
   canonForSelf(holderId: string): Promise<string>
+  /**
+   * What the holder has already told as fact: the content of their recent
+   * stated-particulars memories, newest first. Memoised; empty on any failure.
+   * The SELF pass shows the relevant ones to the extractor so a retelling is
+   * not recorded twice.
+   */
+  priorTellings(holderId: string): Promise<string[]>
   /** What `holderId` already knows about `aboutId` (`Others/<name>.md`, identity, digest). Memoised. */
   canonFor(holderId: string, aboutId: string): Promise<{ block: string; source: string }>
   project: { id: string | null; description: string | null }
@@ -256,6 +268,7 @@ export async function buildExtractionContext(
   const dryRun = opts.dryRun === true
 
   const selfCanon = new Map<string, Promise<string>>()
+  const tellings = new Map<string, Promise<string[]>>()
   const otherCanon = new Map<string, Promise<{ block: string; source: string }>>()
   let messagesPromise: Promise<MessageEvent[]> | null = opts.messages ? Promise.resolve(opts.messages) : null
 
@@ -283,6 +296,31 @@ export async function buildExtractionContext(
         selfCanon.set(holderId, block)
       }
       return block
+    },
+    priorTellings(holderId) {
+      let found = tellings.get(holderId)
+      if (!found) {
+        // An async wrapper, so a throw before the first await is caught too.
+        found = (async () => {
+          const rows = await getRepositories().memories.findRecentWithKeyword(
+            holderId,
+            STATED_PARTICULARS_KEYWORD,
+            PRIOR_TELLINGS_POOL,
+          )
+          const contents = rows.map(r => r.content).filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+          logger.debug('[Extraction] Prior tellings read', { chatId: chat.id, holderId, count: contents.length })
+          return contents
+        })().catch((error) => {
+            logger.warn('[Extraction] Could not read prior tellings; continuing without them', {
+              chatId: chat.id,
+              holderId,
+              error: getErrorMessage(error),
+            })
+          return [] as string[]
+        })
+        tellings.set(holderId, found)
+      }
+      return found
     },
     canonFor(holderId, aboutId) {
       const key = `${holderId}\u0000${aboutId}`

@@ -2,16 +2,37 @@
  * The `self-turn` pass: what each character who spoke in a closed turn retains
  * about themselves. One call per slice; the holder's own canon (card fields
  * and `Commonplace/Self.md`) is the ALREADY ESTABLISHED block. Carina's
- * answers run on this pass with the `carina` provenance.
+ * answers run on this pass with the `carina` provenance. A story character's
+ * call, and every Carina call, also asks for stated particulars
+ * (`statedParticularsFor`), which get a slot of their own in the parse.
  *
  * @module memory/extraction/passes/self-turn
  */
 
 import { HARD_CANDIDATE_CAP, parseSelfDrafts, passCap } from '../parse'
-import { buildSelfTurnMessages } from '../prompts/self'
+import { buildSelfTurnMessages, type StatedParticularsMode } from '../prompts/self'
+import { characterKindPolicy } from '@/lib/characters/kind'
 import { clockAt, type ExtractionContext } from '../context'
 import type { ExtractionPass, PassCall } from '../run'
 import { firstValidIso, type TranscriptWindow } from '../window'
+
+/**
+ * Whether a SELF call asks for stated particulars, and in which form
+ * (`prompts/self.ts`). A Carina answer always does: it is a reference answer.
+ * An ordinary turn does for a story character an LLM is playing — the one
+ * who may invent detail and must keep to it. An assistant's facts come from
+ * its sources, and a human-played seat's lines are the operator's own, so
+ * neither is asked.
+ */
+export function statedParticularsFor(
+  candidatePass: 'self-turn' | 'carina',
+  character: { kind?: unknown } | null | undefined,
+  isUserControlled: boolean,
+): StatedParticularsMode | null {
+  if (candidatePass === 'carina') return 'carina'
+  if (isUserControlled) return null
+  return characterKindPolicy(character).storySection ? 'story' : null
+}
 
 export function selfTurnPass(candidatePass: 'self-turn' | 'carina' = 'self-turn'): ExtractionPass {
   return {
@@ -27,6 +48,7 @@ export function selfTurnPass(candidatePass: 'self-turn' | 'carina' = 'self-turn'
       for (const slice of transcript.characterSlices) {
         const holder = ctx.cast.get(slice.characterId)
         if (!holder) continue
+        const statedParticulars = statedParticularsFor(candidatePass, holder.character, slice.isUserControlled ?? false)
         const messages = buildSelfTurnMessages({
           transcript,
           holderId: slice.characterId,
@@ -35,6 +57,8 @@ export function selfTurnPass(candidatePass: 'self-turn' | 'carina' = 'self-turn'
           inAutonomousRoom: ctx.inAutonomousRoom,
           orienting: ctx.orienting,
           clock,
+          statedParticulars,
+          priorTellings: statedParticulars ? await ctx.priorTellings(slice.characterId) : [],
         })
         if (!messages) continue
         const sourceMessageId =
@@ -48,7 +72,7 @@ export function selfTurnPass(candidatePass: 'self-turn' | 'carina' = 'self-turn'
           parse: raw => [{
             holders: [holder],
             about: null,
-            drafts: parseSelfDrafts(raw, cap),
+            drafts: parseSelfDrafts(raw, cap, { statedSlot: statedParticulars !== null }),
             source: { messageId: sourceMessageId, createdAt: sourceTime },
             anchors: { referenceIso: sourceTime ?? window.nowIso, fallbackIso: sourceTime ?? window.nowIso },
           }],
