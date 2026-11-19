@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Navigation menus: spec for a grouped rail and a shell menu bar
+
+- New proposed spec, `docs/developer/features/navigation-menus.md`. The left rail has 19 icon-only buttons in two hand-written lists. The spec replaces them with one navigation registry (`lib/navigation/registry.ts`), a rail of 10 buttons (Home, Characters, four flyout menus: Conversations, Objects, Library, Studio; and Help, Quick-hide, Settings, Profile), and a `GET /api/v1/system/navigation` endpoint plus a bridge call so the Electron shell can build a native menu bar from the same table. It also retires the `showNavThemeSelector` setting. Nothing is built yet
+
 #### Research kit: Brahma and the builders research in fewer steps
 
 - Reviews of Brahma Console and builder runs on Friday showed judgment questions taking up to 48 model calls and 344 seconds, two tools that failed on every call, and runs that kept searching after saying they had enough. Spec: `docs/developer/features/research-kit.md`
