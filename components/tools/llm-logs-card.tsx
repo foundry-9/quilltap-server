@@ -46,6 +46,7 @@ export default function LLMLogsCard() {
       'SCENARIO_BUILDER': 'Scenario Builder',
       'STORYTELLER_BID': 'Storyteller Bid',
       'ATLAS_LORE_DRAFT': 'Atlas Lore Draft',
+      'WARDROBE_INSTRUCTION_DESIGN': 'Wardrobe Design',
     }
     return labels[type] || type
   }

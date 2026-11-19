@@ -13,7 +13,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { lowerToolEffect, offeredTools, type ToolEffect, type ToolOffer } from '@/lib/tools/effects'
+import { lowerToolEffect, offeredTools, type ToolEffect, type ToolEffectSpec, type ToolOffer } from '@/lib/tools/effects'
 import type { RosterContext as CustomToolRosterContext } from '@/lib/pascal/custom-tools'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -69,7 +69,7 @@ export interface TurnToolSlate extends ProfileToolFormat {
   /** The highest effect a tool call may have this turn; unset = no ceiling. */
   effectCeiling: ToolEffect | undefined
   customToolEffects: Map<string, ToolEffect>
-  pluginToolEffects: Map<string, ToolEffect>
+  pluginToolEffects: Map<string, ToolEffectSpec>
   /** The tool names this seat was offered this turn; the executor refuses any other. */
   toolOffer: ToolOffer
   /** The operator changed tool settings since the last turn (the tool-change notice fires). */

@@ -31,7 +31,7 @@ jest.mock('@/lib/plugins/tool-registry', () => ({
 }))
 
 jest.mock('@/lib/tools/handlers/web-search-handler', () => ({
-  isWebSearchConfigured: jest.fn(() => false),
+  isWebSearchConfigured: jest.fn(async () => false),
 }))
 
 import { GET } from '@/app/api/v1/tools/route'

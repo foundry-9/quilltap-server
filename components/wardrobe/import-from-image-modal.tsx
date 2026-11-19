@@ -7,10 +7,11 @@
  * 1. Upload state — file picker, the vision profile to read it with (preset
  *    to the one the server would pick), optional guidance notes, "Analyze" button
  * 2. Analyzing state — loading spinner while LLM processes the image
- * 3. Review state — editable item cards with select/deselect, "Import Selected" button,
- *    plus an optional ensemble card that bundles the imported pieces into one
- *    composite outfit. The pieces are created first; their returned ids become
- *    the outfit's `componentItemIds`, so nothing needs an id assigned up front.
+ * 3. Review state — the shared review pane (`proposal-review/ProposalReview`):
+ *    editable item cards with select/deselect, plus an optional ensemble card
+ *    that bundles the imported pieces into one composite outfit. The import is
+ *    the shared `useProposalImport`: the pieces are created first and their
+ *    returned ids become the outfit's `componentItemIds`.
  *
  * Unless the operator declines, the photograph itself is attached to every
  * piece (and the outfit) as its first picture, `kind=imported`. It is
@@ -30,12 +31,20 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { fetchJson } from '@/lib/fetch-helpers'
 import FormActions from '@/components/ui/FormActions'
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
-import { unionTypes } from '@/lib/wardrobe/composite-types'
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { linkWardrobeItemImage, uploadWardrobeItemImage } from '@/lib/wardrobe/item-images-client'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
-import { WARDROBE_IMAGE_PROMPT_MAX_LENGTH } from '@/lib/wardrobe/image-prompt-limit'
+import type { ProposedOutfit } from '@/lib/wardrobe/proposal/types'
+import {
+  EMPTY_OUTFIT,
+  ProposalReview,
+  summarizeReview,
+  toOutfitDraft,
+  toReviewItems,
+  type OutfitDraft,
+  type ReviewItem,
+} from './proposal-review/ProposalReview'
+import { useProposalImport } from './proposal-review/useProposalImport'
 
 // ============================================================================
 // TYPES
@@ -45,28 +54,6 @@ interface ImportFromImageModalProps {
   characterId: string
   onClose: () => void
   onImported: () => void
-}
-
-interface ProposedItem {
-  title: string
-  description: string
-  /** The image-generation cue the analysis wrote; always filled, capped. */
-  imagePrompt: string
-  types: WardrobeItemType[]
-  appropriateness: string
-  selected: boolean
-}
-
-interface ProposedOutfit {
-  title: string
-  description: string
-  appropriateness: string
-}
-
-interface OutfitDraft extends ProposedOutfit {
-  enabled: boolean
-  /** Composite equip behaviour — on by default, since this is a whole look. */
-  replace: boolean
 }
 
 type ModalState = 'upload' | 'analyzing' | 'review'
@@ -82,17 +69,6 @@ interface VisionProfilesResponse {
   profiles: VisionProfileOption[]
   /** What the analysis uses when nothing is chosen; null when no profile can see. */
   defaultProfileId: string | null
-}
-
-/** An ensemble needs at least two pieces to be worth bundling. */
-const MIN_OUTFIT_PIECES = 2
-
-const EMPTY_OUTFIT: OutfitDraft = {
-  enabled: false,
-  title: '',
-  description: '',
-  appropriateness: '',
-  replace: true,
 }
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -112,9 +88,8 @@ export function ImportFromImageModal({
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [guidance, setGuidance] = useState('')
-  const [proposedItems, setProposedItems] = useState<ProposedItem[]>([])
+  const [proposedItems, setProposedItems] = useState<ReviewItem[]>([])
   const [outfit, setOutfit] = useState<OutfitDraft>(EMPTY_OUTFIT)
-  const [importing, setImporting] = useState(false)
   /** Keep the photograph as each created piece's first picture. */
   const [keepPhotograph, setKeepPhotograph] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -129,6 +104,10 @@ export function ImportFromImageModal({
   const visionProfiles = useMemo(() => visionProfilesQuery.data?.profiles ?? [], [visionProfilesQuery.data])
   const selectedProfileId = chosenProfileId ?? visionProfilesQuery.data?.defaultProfileId ?? ''
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Every create posts to the character's own wardrobe, so that is the
+  // container each new piece (and the outfit) lives in.
+  const container = useMemo<WardrobeContainer>(() => ({ scope: 'character', id: characterId }), [characterId])
+  const { importing, run: runImport } = useProposalImport({ container, logLabel: 'ImportFromImageModal' })
   // ── File Selection ──────────────────────────────────────────────────────
 
   const handleFileSelect = useCallback((file: File) => {
@@ -221,13 +200,8 @@ export function ImportFromImageModal({
 
       const reader = visionProfiles.find(p => p.id === selectedProfileId)
       setAnalyzedBy(reader ? `${reader.name} (${reader.provider} • ${reader.modelName})` : `${result.data.provider} • ${result.data.model}`)
-      setProposedItems(items.map(item => ({ ...item, imagePrompt: item.imagePrompt ?? '', selected: true })))
-      const proposedOutfit = result.data.proposedOutfit
-      setOutfit(
-        proposedOutfit && items.length >= MIN_OUTFIT_PIECES
-          ? { ...EMPTY_OUTFIT, ...proposedOutfit, enabled: true }
-          : EMPTY_OUTFIT
-      )
+      setProposedItems(toReviewItems(items))
+      setOutfit(toOutfitDraft(result.data.proposedOutfit, items.length))
       setState('review')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Analysis failed'
@@ -236,40 +210,14 @@ export function ImportFromImageModal({
     }
   }, [selectedFile, guidance, selectedProfileId, visionProfiles])
 
-  // ── Item Editing ────────────────────────────────────────────────────────
-
-  const updateItem = useCallback((index: number, updates: Partial<ProposedItem>) => {
-    setProposedItems(prev => prev.map((item, i) =>
-      i === index ? { ...item, ...updates } : item
-    ))
-  }, [])
-
-  const toggleItemType = useCallback((index: number, type: WardrobeItemType) => {
-    setProposedItems(prev => prev.map((item, i) => {
-      if (i !== index) return item
-      const types = item.types.includes(type)
-        ? item.types.filter(t => t !== type)
-        : [...item.types, type]
-      return { ...item, types: types.length > 0 ? types : [type] }
-    }))
-  }, [])
-
   // ── Import ──────────────────────────────────────────────────────────────
 
-  const selectedCount = proposedItems.filter(i => i.selected).length
-  const outfitAvailable = selectedCount >= MIN_OUTFIT_PIECES
-  const willCreateOutfit = outfitAvailable && outfit.enabled
-  const outfitTitleMissing = willCreateOutfit && outfit.title.trim().length === 0
+  const { selectedCount, willCreateOutfit, outfitTitleMissing } = summarizeReview(proposedItems, outfit)
 
   const handleImport = useCallback(async () => {
     const itemsToImport = proposedItems.filter(i => i.selected)
     if (itemsToImport.length === 0) return
 
-    setImporting(true)
-
-    // Every create below posts to the character's own wardrobe, so that is
-    // the container each new piece (and the outfit) lives in.
-    const container: WardrobeContainer = { scope: 'character', id: characterId }
     const photograph = keepPhotograph ? selectedFile : null
     let pictureFailures = 0
 
@@ -301,76 +249,36 @@ export function ImportFromImageModal({
     }
 
     try {
-      const created: WardrobeItem[] = []
+      const result = await runImport({
+        pieces: itemsToImport,
+        outfit: willCreateOutfit ? outfit : null,
+        afterCreate: (item, title) => attachPhotograph(item.id, title),
+      })
 
-      for (const item of itemsToImport) {
-        const result = await fetchJson<{ wardrobeItem: WardrobeItem }>(
-          `/api/v1/characters/${characterId}/wardrobe`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: item.title,
-              description: item.description || null,
-              imagePrompt: item.imagePrompt.trim() || null,
-              types: item.types,
-              appropriateness: item.appropriateness || null,
-              isDefault: false,
-            }),
-          }
-        )
-
-        if (result.ok && result.data?.wardrobeItem) {
-          created.push(result.data.wardrobeItem)
-          await attachPhotograph(result.data.wardrobeItem.id, item.title)
-        } else {
-          console.warn('[ImportFromImageModal] Failed to create item:', item.title, result.error)
-        }
-      }
-
-      if (created.length === 0) {
+      const importedCount = result.created.length
+      if (importedCount === 0) {
         showErrorToast('Failed to import wardrobe items')
         return
       }
 
-      const importedCount = created.length
       showSuccessToast(
         importedCount === 1
           ? '1 wardrobe item imported from image'
           : `${importedCount} wardrobe items imported from image`
       )
 
-      // Bundle whichever pieces actually landed. Their ids come back from the
-      // create calls above; the outfit's coverage is their slot union, exactly
-      // as the item editor computes it for a hand-built bundle.
-      if (willCreateOutfit && created.length >= MIN_OUTFIT_PIECES) {
-        const outfitResult = await fetchJson<{ wardrobeItem: WardrobeItem }>(
-          `/api/v1/characters/${characterId}/wardrobe`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: outfit.title.trim(),
-              description: outfit.description.trim() || null,
-              types: unionTypes(created),
-              appropriateness: outfit.appropriateness.trim() || null,
-              componentItemIds: created.map(c => c.id),
-              replace: outfit.replace,
-              isDefault: false,
-            }),
-          }
-        )
-        if (outfitResult.ok) {
-          if (outfitResult.data?.wardrobeItem) {
-            await attachPhotograph(outfitResult.data.wardrobeItem.id, outfit.title.trim())
-          }
-          showSuccessToast(`Outfit "${outfit.title.trim()}" assembled from ${created.length} pieces`)
-        } else {
-          console.warn('[ImportFromImageModal] Failed to create outfit:', outfit.title, outfitResult.error)
+      switch (result.outfitOutcome) {
+        case 'created':
+          showSuccessToast(`Outfit "${outfit.title.trim()}" assembled from ${importedCount} pieces`)
+          break
+        case 'failed':
           showErrorToast('The pieces were imported, but the outfit could not be assembled')
-        }
-      } else if (willCreateOutfit) {
-        showErrorToast('Too few pieces were imported to assemble an outfit')
+          break
+        case 'too-few':
+          showErrorToast('Too few pieces were imported to assemble an outfit')
+          break
+        case 'none':
+          break
       }
 
       if (pictureFailures > 0) {
@@ -385,10 +293,8 @@ export function ImportFromImageModal({
       onClose()
     } catch (err) {
       showErrorToast('Failed to import wardrobe items')
-    } finally {
-      setImporting(false)
     }
-  }, [proposedItems, characterId, onImported, onClose, willCreateOutfit, outfit, keepPhotograph, selectedFile])
+  }, [proposedItems, container, runImport, onImported, onClose, willCreateOutfit, outfit, keepPhotograph, selectedFile])
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -614,204 +520,12 @@ export function ImportFromImageModal({
             </span>
           </label>
 
-          {/* Item cards */}
-          <div className="space-y-4">
-            {proposedItems.map((item, index) => (
-              <div
-                key={index}
-                className={`border qt-border-default rounded-lg p-4 space-y-3 transition-opacity ${
-                  item.selected ? '' : 'opacity-50'
-                }`}
-              >
-                {/* Select checkbox + title */}
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={item.selected}
-                    onChange={(e) => updateItem(index, { selected: e.target.checked })}
-                    aria-label={`Import ${item.title || 'this item'}`}
-                    className="qt-checkbox mt-1"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <input
-                      type="text"
-                      value={item.title}
-                      onChange={(e) => updateItem(index, { title: e.target.value })}
-                      aria-label="Item title"
-                      className="qt-input text-sm font-medium w-full"
-                      placeholder="Item title"
-                    />
-                  </div>
-                </div>
-
-                {item.selected && (
-                  <>
-                    {/* Types */}
-                    <div className="ml-8">
-                      <span className="qt-label text-xs mb-1 block">Type(s)</span>
-                      <div className="flex flex-wrap gap-2">
-                        {WARDROBE_SLOT_TYPES.map((type) => (
-                          <label
-                            key={type}
-                            className="inline-flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={item.types.includes(type)}
-                              onChange={() => toggleItemType(index, type)}
-                              className="qt-checkbox"
-                            />
-                            <span className="text-xs capitalize qt-text">{type}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Appropriateness */}
-                    <div className="ml-8">
-                      <label htmlFor={`${id}-appropriateness-${index}`} className="qt-label text-xs mb-1 block">
-                        Appropriateness
-                      </label>
-                      <input
-                        id={`${id}-appropriateness-${index}`}
-                        type="text"
-                        value={item.appropriateness}
-                        onChange={(e) => updateItem(index, { appropriateness: e.target.value })}
-                        className="qt-input text-sm w-full"
-                        placeholder="e.g., formal, casual, intimate"
-                        maxLength={200}
-                      />
-                    </div>
-
-                    {/* Portrait cue — what the image-makers are told */}
-                    <div className="ml-8">
-                      <div className="flex items-center justify-between mb-1">
-                        <label htmlFor={`${id}-image-prompt-${index}`} className="qt-label text-xs block">
-                          Portrait Cue
-                        </label>
-                        <span className="text-xs qt-text-secondary">
-                          {item.imagePrompt.length}/{WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
-                        </span>
-                      </div>
-                      <input
-                        id={`${id}-image-prompt-${index}`}
-                        type="text"
-                        value={item.imagePrompt}
-                        onChange={(e) => updateItem(index, { imagePrompt: e.target.value })}
-                        className="qt-input text-sm w-full"
-                        placeholder="e.g., worn brown leather duster with brass buttons"
-                        maxLength={WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
-                      />
-                    </div>
-
-                    {/* Description */}
-                    <div className="ml-8">
-                      <label htmlFor={`${id}-description-${index}`} className="qt-label text-xs mb-1 block">
-                        Description
-                      </label>
-                      <textarea
-                        id={`${id}-description-${index}`}
-                        value={item.description}
-                        onChange={(e) => updateItem(index, { description: e.target.value })}
-                        rows={3}
-                        className="qt-textarea text-sm w-full"
-                        placeholder="Item description..."
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Ensemble — bundles the imported pieces into one outfit */}
-          <div
-            className={`border qt-border-default rounded-lg p-4 space-y-3 transition-opacity ${
-              willCreateOutfit ? '' : 'opacity-50'
-            }`}
-          >
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={willCreateOutfit}
-                disabled={!outfitAvailable}
-                onChange={(e) => setOutfit(prev => ({ ...prev, enabled: e.target.checked }))}
-                className="qt-checkbox mt-1"
-              />
-              <span className="flex-1 min-w-0">
-                <span className="text-sm font-medium qt-text block">
-                  Also create an outfit from these pieces
-                </span>
-                <span className="text-xs qt-text-secondary block mt-0.5">
-                  {outfitAvailable
-                    ? `Bundles the ${selectedCount} selected items into a single outfit you can wear in one gesture.`
-                    : 'Select at least two items to bundle them into an outfit.'}
-                </span>
-              </span>
-            </label>
-
-            {willCreateOutfit && (
-              <>
-                <div className="ml-8">
-                  <label htmlFor="wardrobe-image-outfit-title" className="qt-label text-xs mb-1 block">
-                    Outfit title
-                  </label>
-                  <input
-                    id="wardrobe-image-outfit-title"
-                    type="text"
-                    value={outfit.title}
-                    onChange={(e) => setOutfit(prev => ({ ...prev, title: e.target.value }))}
-                    className="qt-input text-sm font-medium w-full"
-                    placeholder="e.g., Midnight Gala Ensemble"
-                  />
-                </div>
-
-                <div className="ml-8">
-                  <label htmlFor="wardrobe-image-outfit-appropriateness" className="qt-label text-xs mb-1 block">
-                    Appropriateness
-                  </label>
-                  <input
-                    id="wardrobe-image-outfit-appropriateness"
-                    type="text"
-                    value={outfit.appropriateness}
-                    onChange={(e) => setOutfit(prev => ({ ...prev, appropriateness: e.target.value }))}
-                    className="qt-input text-sm w-full"
-                    placeholder="e.g., formal, evening"
-                    maxLength={200}
-                  />
-                </div>
-
-                <div className="ml-8">
-                  <label htmlFor="wardrobe-image-outfit-description" className="qt-label text-xs mb-1 block">
-                    Description
-                  </label>
-                  <textarea
-                    id="wardrobe-image-outfit-description"
-                    value={outfit.description}
-                    onChange={(e) => setOutfit(prev => ({ ...prev, description: e.target.value }))}
-                    rows={2}
-                    className="qt-textarea text-sm w-full"
-                    placeholder="The overall look..."
-                  />
-                </div>
-
-                <label className="ml-8 flex items-start gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={outfit.replace}
-                    onChange={(e) => setOutfit(prev => ({ ...prev, replace: e.target.checked }))}
-                    className="qt-checkbox mt-0.5"
-                  />
-                  <span className="text-sm qt-text">
-                    Replace everything in its slots when worn
-                    <span className="block text-xs qt-text-secondary">
-                      Off layers the pieces over whatever is already on.
-                    </span>
-                  </span>
-                </label>
-              </>
-            )}
-          </div>
+          <ProposalReview
+            items={proposedItems}
+            onItemsChange={setProposedItems}
+            outfit={outfit}
+            onOutfitChange={setOutfit}
+          />
         </>
       )}
     </BaseModal>

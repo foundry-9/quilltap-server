@@ -109,4 +109,5 @@ Characters with help tools enabled can navigate directly to this page:
 - [Absent Acquaintances](salon-host-introductions.md) — the same arrangement, for people
 - [Story Backgrounds](story-backgrounds.md) — how the Lantern paints, and what it consults
 - [The Inventory](inventory.md) — the things a character carries, as opposed to the things the world contains
+- [The Wardrobe](wardrobe.md#import-from-instructions) — where Aurora designs an outfit from a written brief, much as Brahma drafts an entry here
 - [The Scriptorium](scriptorium.md) — where the `Atlas/` folders live as files

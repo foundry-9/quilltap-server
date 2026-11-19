@@ -101,3 +101,4 @@ Characters with help tools enabled can navigate directly to this page:
 - [Groups](groups.md) — Groups, and the stores and scenarios they keep.
 - [Chats Overview](chats.md) — Starting a chat and changing its scene.
 - [The Brahma Console](brahma-console.md) — Another tool-using assistant, for the operator's own questions.
+- [The Wardrobe](wardrobe.md#import-from-instructions) — Aurora designs an outfit from a written brief, in much the same manner.

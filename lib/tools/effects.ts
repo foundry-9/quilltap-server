@@ -202,23 +202,34 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
 
 /** Everything an effect lookup may need beyond the call itself. */
 export interface ToolEffectContext extends ToolEffectLookups {
-  /** Plugin / MCP tool name → declared effect. A plugin tool missing here counts as `write`. */
-  pluginToolEffects?: ReadonlyMap<string, ToolEffect>;
+  /**
+   * Plugin / MCP tool name → declared effect (a plain effect, or one computed
+   * from the call's input). A plugin tool missing here counts as `write`.
+   */
+  pluginToolEffects?: ReadonlyMap<string, ToolEffectSpec>;
 }
 
-/** The declared spec for a tool, or undefined when it declares none. */
+/** The declared spec for a built-in tool, or undefined when it declares none. */
 export function toolEffectSpecOf(name: string): ToolEffectSpec | undefined {
   return Object.prototype.hasOwnProperty.call(BUILT_IN_TOOL_EFFECTS, name) ? BUILT_IN_TOOL_EFFECTS[name] : undefined;
 }
 
 /**
- * The effect of one call. A computed built-in effect sees the call's input
- * (validated by the tool's own schema; invalid input counts as `write`).
+ * The spec for any tool: a built-in's own, else the plugin's declaration, else
+ * undeclared. A built-in name always wins, so a plugin cannot restate one.
+ */
+export function toolEffectSpecFor(name: string, ctx: ToolEffectContext = {}): ToolEffectSpec {
+  return toolEffectSpecOf(name) ?? ctx.pluginToolEffects?.get(name) ?? UNDECLARED_TOOL_EFFECT;
+}
+
+/**
+ * The effect of one call. A computed effect sees the call's input (a built-in's
+ * validated by the tool's own schema, a plugin's by the plugin; invalid input
+ * counts as `write`).
  */
 export function effectOfToolCall(name: string, input: unknown, ctx: ToolEffectContext = {}): ToolEffect {
-  const spec = toolEffectSpecOf(name);
-  if (spec !== undefined) return isComputedToolEffect(spec) ? spec(input, ctx) : spec;
-  return ctx.pluginToolEffects?.get(name) ?? UNDECLARED_TOOL_EFFECT;
+  const spec = toolEffectSpecFor(name, ctx);
+  return isComputedToolEffect(spec) ? spec(input, ctx) : spec;
 }
 
 /**
@@ -227,9 +238,8 @@ export function effectOfToolCall(name: string, input: unknown, ctx: ToolEffectCo
  * tool-list filter, the autonomous-room destructive gate, a bid's named tools.
  */
 export function maxEffectOfTool(name: string, ctx: ToolEffectContext = {}): ToolEffect {
-  const spec = toolEffectSpecOf(name);
-  if (spec !== undefined) return isComputedToolEffect(spec) ? spec.maxEffect : spec;
-  return ctx.pluginToolEffects?.get(name) ?? UNDECLARED_TOOL_EFFECT;
+  const spec = toolEffectSpecFor(name, ctx);
+  return isComputedToolEffect(spec) ? spec.maxEffect : spec;
 }
 
 /** The tool result's text when a call is refused for exceeding the turn's ceiling. */

@@ -142,7 +142,7 @@ describe('autoConfigureProfile', () => {
   beforeEach(() => {
     jest.clearAllMocks()
 
-    mockIsWebSearchConfigured.mockReturnValue(true)
+    mockIsWebSearchConfigured.mockResolvedValue(true)
 
     const mockRepos = createMockRepos()
     mockGetUserRepositories.mockReturnValue(mockRepos)
@@ -291,7 +291,7 @@ describe('autoConfigureProfile', () => {
   // --------------------------------------------------------------------------
 
   it('should throw when web search is not configured', async () => {
-    mockIsWebSearchConfigured.mockReturnValue(false)
+    mockIsWebSearchConfigured.mockResolvedValue(false)
 
     await expect(autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)).rejects.toThrow(
       'Web search is not configured'

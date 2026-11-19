@@ -34,7 +34,7 @@ import {
   runOneShotToolLoop,
 } from '@/lib/services/agent-loop/one-shot-loop'
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler'
-import { toolRegistry } from '@/lib/plugins/tool-registry'
+import { resolveWebCapabilities, type WebCapabilities } from '@/lib/tools/web-capabilities'
 import { resolveScenarioBuilderMountPool } from '@/lib/scenario-builder/mount-pool'
 import {
   buildScenarioBuilderSystemPrompt,
@@ -47,9 +47,6 @@ const logger = createServiceLogger('ScenarioBuilder')
 
 /** Turn budget for one builder run. A constant in v1 (see the spec's Deferred list). */
 export const SCENARIO_BUILDER_MAX_AGENT_TURNS = 25
-
-/** The curl plugin's config row name. */
-const CURL_PLUGIN_NAME = 'qtap-plugin-curl'
 
 export interface ScenarioBuilderInput {
   mode: ScenarioBuilderMode
@@ -75,41 +72,19 @@ export interface RunScenarioBuilderOptions {
   input: ScenarioBuilderInput
 }
 
-export interface ScenarioBuilderCapabilities {
-  webSearchConfigured: boolean
-  curlConfigured: boolean
-}
+/** What the builder could reach on the web: `resolveWebCapabilities` (`lib/tools/web-capabilities.ts`). */
+export type ScenarioBuilderCapabilities = WebCapabilities
 
-/**
- * What the builder could reach on the web for this user, independent of any
- * profile: a configured search provider, and a curl plugin with at least one
- * allowed URL pattern.
- */
-export async function resolveScenarioBuilderCapabilities(
-  repos: ReturnType<typeof getRepositories>,
+/** The Scenario Builder's name for {@link resolveWebCapabilities}. */
+export const resolveScenarioBuilderCapabilities = resolveWebCapabilities
+
+/** Web search reaches this run only in real mode, on a profile that allows it, with a provider that has its key. */
+export async function isScenarioWebAvailable(
+  mode: ScenarioBuilderMode,
+  profile: ConnectionProfile,
   userId: string,
-): Promise<ScenarioBuilderCapabilities> {
-  const webSearchConfigured = isWebSearchConfigured()
-  let curlConfigured = false
-  try {
-    if (toolRegistry.hasPlugin('curl')) {
-      const config = await repos.pluginConfigs.findByUserAndPlugin(userId, CURL_PLUGIN_NAME)
-      const patterns = (config?.config as { allowedUrlPatterns?: unknown } | undefined)?.allowedUrlPatterns
-      curlConfigured = Array.isArray(patterns) && patterns.length > 0
-    }
-  } catch (error) {
-    logger.warn('Curl capability lookup failed; treating curl as unavailable', {
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-  logger.debug('Resolved Scenario Builder capabilities', { webSearchConfigured, curlConfigured })
-  return { webSearchConfigured, curlConfigured }
-}
-
-/** Web search reaches this run only in real mode, on a profile that allows it, with a provider configured. */
-export function isScenarioWebAvailable(mode: ScenarioBuilderMode, profile: ConnectionProfile): boolean {
-  return mode === 'real' && !!profile.allowWebSearch && isWebSearchConfigured()
+): Promise<boolean> {
+  return mode === 'real' && !!profile.allowWebSearch && (await isWebSearchConfigured(userId))
 }
 
 /**
@@ -129,7 +104,7 @@ export async function runScenarioBuilder(
   // Tools need a chat id only for scoping; nothing reads or writes a chat row
   // with a synthetic one (the read-only slate posts no Librarian notices).
   const chatId = input.chat?.id ?? randomUUID()
-  const webAvailable = isScenarioWebAvailable(input.mode, connectionProfile)
+  const webAvailable = await isScenarioWebAvailable(input.mode, connectionProfile, userId)
 
   try {
     const mountPool = await resolveScenarioBuilderMountPool({

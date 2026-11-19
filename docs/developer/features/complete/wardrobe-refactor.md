@@ -386,3 +386,7 @@ CLAUDE.md chokepoint entry; what follows is where the build departed from §3–
 - **Not done:** `useWardrobeInstructions` is still a `useState` loader; there is no wardrobe realtime
   topic (lists refresh on invalidation); the legacy `app/api/v1/images/route.ts` generator keeps its own
   decode tail.
+
+## Later: Import from instructions (4.14-dev)
+
+Aurora designs pieces and an outfit from a written brief; see [wardrobe-import-from-instructions.md](../wardrobe-import-from-instructions.md). It added the shared proposal parser (`lib/wardrobe/proposal/`) and the shared review pane and import routine (`components/wardrobe/proposal-review/`), which Import from Image now uses too.

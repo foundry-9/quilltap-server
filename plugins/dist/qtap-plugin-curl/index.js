@@ -176,6 +176,14 @@ function validateCurlInput(input) {
   }
   return true;
 }
+var READ_ONLY_METHODS = /* @__PURE__ */ new Set(["GET", "HEAD", "OPTIONS"]);
+function isReadOnlyCurlCall(input) {
+  if (!validateCurlInput(input)) {
+    return false;
+  }
+  return READ_ONLY_METHODS.has(input.request ?? "GET");
+}
+var CURL_READ_ONLY_NOTE = "Only GET, HEAD and OPTIONS requests are allowed this turn.";
 
 // node_modules/domelementtype/lib/esm/index.js
 var ElementType;
@@ -30967,11 +30975,18 @@ var plugin = {
     return [curlToolDefinition];
   },
   /**
-   * curl can POST, PUT and DELETE to the outside world, so it is declared a
-   * write. (A static map cannot tell a GET from a DELETE.)
+   * A GET, HEAD or OPTIONS reads; every other method can change something in
+   * the outside world and is a write. On a turn that allows only lookups the
+   * host keeps curl listed with the note and refuses the writing calls.
    */
   getToolEffects(_config) {
-    return { curl: "write" };
+    return {
+      curl: {
+        max: "write",
+        of: (input) => isReadOnlyCurlCall(input) ? "read" : "write",
+        notes: { read: CURL_READ_ONLY_NOTE }
+      }
+    };
   },
   /**
    * Execute a tool by name (multi-tool pattern)

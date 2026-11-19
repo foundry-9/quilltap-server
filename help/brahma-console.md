@@ -48,7 +48,7 @@ The Console is a capable, concise, neutral assistant, and a scrupulous one: it *
 - **Documents** — It has full reach into your document stores: it can read files, list and grep their contents, and **write** to them as well (except in a Writing Assistant conversation, where it reads only).
 - **The clerk's shortcuts** — Four ready-made enquiries that answer the commonest questions in a single stroke each. See *The clerk's shortcuts*, below.
 - **The ledgers themselves** — It can put **read-only questions** straight to the databases that keep your establishment running. See *Consulting the ledgers*, below.
-- **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly. (The `curl` plugin counts as a *writing* tool — it can send as well as fetch — so a Writing Assistant conversation, which reads only, does without it.)
+- **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly. (The `curl` plugin can send as well as fetch, and the house judges each errand on its own merits: a plain fetch is *reading*, anything that posts, puts or deletes is *writing*. A Writing Assistant conversation, which reads only, may therefore fetch a page but will be politely refused should it attempt to send one.)
 
 ## Sending papers along with the question
 

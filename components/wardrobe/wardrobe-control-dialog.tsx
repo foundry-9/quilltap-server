@@ -35,6 +35,7 @@ import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstr
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { OutfitComposer } from './outfit-composer'
 import { ImportFromImageModal } from './import-from-image-modal'
+import { ImportFromInstructionsModal } from './ImportFromInstructionsModal'
 import { ImagePromptOptimizerModal } from './image-prompt-optimizer-modal'
 import { AvatarGenerationPane } from './AvatarGenerationPane'
 import { WardrobeBrowser, WardrobeItemOverlays } from './WardrobeBrowser'
@@ -179,6 +180,8 @@ function WardrobeControlDialogInner({
 
   const [rightTab, setRightTab] = useState<RightTab>(isInChat ? 'live' : 'builder')
   const [importFromImageOpen, setImportFromImageOpen] = useState(false)
+  /** The folder Import from instructions will file into; null while it is shut. */
+  const [importFromInstructionsFolder, setImportFromInstructionsFolder] = useState<string | null>(null)
   const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false)
 
   /**
@@ -249,7 +252,8 @@ function WardrobeControlDialogInner({
 
   // While an overlay is up, a click inside it (rendered as a sibling) must not
   // close the outer dialog via BaseModal's click-outside handler.
-  const overlayOpen = actions.overlayOpen || importFromImageOpen || promptOptimizerOpen
+  const overlayOpen =
+    actions.overlayOpen || importFromImageOpen || importFromInstructionsFolder !== null || promptOptimizerOpen
 
   return (
     <ItemControlDialogShell
@@ -274,6 +278,19 @@ function WardrobeControlDialogInner({
             <ImportFromImageModal
               characterId={selectedCharacterId}
               onClose={() => setImportFromImageOpen(false)}
+              onImported={() => {
+                void actions.refresh()
+              }}
+            />
+          )}
+
+          {/* Import-from-instructions wizard — Aurora designs for the browsed tier */}
+          {importFromInstructionsFolder !== null && selectedContainer && (
+            <ImportFromInstructionsModal
+              container={selectedContainer}
+              containerLabel={selectedContainerLabel}
+              folder={importFromInstructionsFolder}
+              onClose={() => setImportFromInstructionsFolder(null)}
               onImported={() => {
                 void actions.refresh()
               }}
@@ -325,6 +342,9 @@ function WardrobeControlDialogInner({
             }
             onImportFromImage={
               selectedCharacterId ? () => setImportFromImageOpen(true) : undefined
+            }
+            onImportFromInstructions={
+              selectedContainer ? (folder) => setImportFromInstructionsFolder(folder) : undefined
             }
             onOptimizePrompts={
               selectedContainer ? () => setPromptOptimizerOpen(true) : undefined

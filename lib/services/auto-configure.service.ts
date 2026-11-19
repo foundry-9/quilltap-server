@@ -316,7 +316,7 @@ export async function autoConfigureProfile(
   logger.info('[Auto-Configure] Starting auto-configuration', { provider, modelName, userId })
 
   // Verify web search is available
-  if (!isWebSearchConfigured()) {
+  if (!(await isWebSearchConfigured(userId))) {
     throw new Error('Web search is not configured. Please add a search provider API key in Settings to use Auto-Configure.')
   }
 

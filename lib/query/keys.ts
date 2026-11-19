@@ -434,6 +434,8 @@ export const queryKeys = {
     folders: (tierKey: string) => ['wardrobe', 'folders', tierKey] as const,
     /** The vision profiles Import from image may read a photograph with (GET analyze-image). */
     visionProfiles: ['wardrobe', 'vision-profiles'] as const,
+    /** The usual model and the web's reach for Import from instructions (GET design-defaults). */
+    designDefaults: ['wardrobe', 'design-defaults'] as const,
     /**
      * What every character in one chat is wearing (`?action=outfit`). Under
      * `wardrobe` so `wardrobe.all` invalidation after an equip refreshes it.

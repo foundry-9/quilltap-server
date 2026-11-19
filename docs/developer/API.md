@@ -2260,6 +2260,57 @@ One route for an item's pictures in every tier; the item's container rides in th
 
 A `POST` without an action is a 400. `generate` runs synchronously inside `trackActivity('image', …)`, with the profile resolved by `resolveWardrobeImageProfile` (override → `chatSettings.wardrobeImageSettings.imageProfileId` → default image profile; no usable profile → 400). A character's own item is drawn worn by its owner; a shared item is drawn catalogue style. The provider call goes through `generateImageWithConciergeFailover` with `purpose: 'wardrobe'` and no chat; a refusal that could not be rerouted answers **422** with `details: { trail, refused: true }`; any other provider failure (auth, rate limit, timeout, no image) answers **502** with the same `details` shape. `set-current`, `delete-image` and `save-to-store` refuse a file not linked to the item (400). `save-to-store` files a copy into the store's `photos/` through `saveImageToAlbum` (the Salon's save service), attributed to the operator and captioned with the item's title by default; an archived character's vault as the target is a **409**, and a store already holding the picture is a **409** `{ code: 'ALREADY_SAVED', keptAt, relativePath }`. The item is not written, so a picture may be copied out of an archived character's wardrobe.
 
+#### `POST /api/v1/wardrobe?action=design-from-instructions`
+
+Import from Instructions: Aurora designs wardrobe pieces and an outfit from a written brief. Server-Sent Events; the run writes nothing. On the General collection only (the target tier travels in the body).
+
+**Request body** (`wardrobeDesignRequestSchema`, strict):
+
+```json
+{
+  "instructions": "A Pan Am stewardess's uniform, 1968",
+  "searchStores": true,
+  "searchWeb": true,
+  "connectionProfileId": "<uuid>",
+  "target": { "scope": "character", "id": "<uuid>" },
+  "priorProposal": { "items": [], "outfit": null, "reuseItemIds": [] },
+  "revision": "make the skirt longer"
+}
+```
+
+- `instructions` (1 to 4,000 characters), `connectionProfileId` and `target` are required. `target` is `{ scope: "general" }` or a scope (`character` / `group` / `project`) with its `id`.
+- `searchStores` (default `true`): the operator surface, read-only — `search` without memories, the `doc_*` reads, the `lookup_*` shortcuts and `run_sql`.
+- `searchWeb` (default `true`): `search_web` when the profile has `allowWebSearch` and a search provider is configured; `curl` when the plugin has URL patterns. Asking for a web that is unreachable is not an error; the model is told it is unavailable.
+- `priorProposal` and `revision` travel together (a revision of the design as edited). `reuseItemIds` are existing items of the target wardrobe.
+- Everything runs under `effectCeiling: 'read'`, so a `curl` call other than GET / HEAD / OPTIONS is refused.
+
+**Refusals before the stream opens:** 400 validation; 404 for a missing, foreign or archived character, a target that does not resolve (nothing is provisioned), or a profile that is not the user's; 400 for a profile with `allowToolUse: false` when the run would build any tool; 400 for a profile with no usable API key.
+
+**Stream:** the one-shot agent events (`status`, tool detection and results, cumulative `reasoning`), then one terminal event:
+
+```json
+{
+  "done": true,
+  "proposal": {
+    "items": [{ "title": "", "description": "", "imagePrompt": "", "types": ["top"], "appropriateness": "" }],
+    "outfit": { "title": "", "description": "", "appropriateness": "" },
+    "reuse": [{ "id": "<uuid>", "title": "Navy Blazer", "types": ["top"] }],
+    "notes": "What the design rests on."
+  },
+  "provider": "ANTHROPIC",
+  "modelName": "…",
+  "usage": { "promptTokens": 0, "completionTokens": 0, "totalTokens": 0 },
+  "toolsExecuted": 3,
+  "reach": { "stores": true, "webSearch": true, "webFetch": false, "webWantedButUnavailable": false }
+}
+```
+
+or `{ "error": "…", "errorType": "wardrobe_design_failed" | "wardrobe_design_unreadable" | "wardrobe_design_empty" }`. Closing the request aborts the run. LLM log type `WARDROBE_INSTRUCTION_DESIGN`. The client creates the pieces through the ordinary wardrobe `POST`.
+
+#### `GET /api/v1/wardrobe?action=design-defaults`
+
+`{ "defaultProfileId": "<uuid> | null", "webSearchConfigured": true, "curlConfigured": false }` — the user's default connection profile, and what of the web is reachable independent of any profile.
+
 #### `POST /api/v1/wardrobe?action=analyze-image`
 
 (`GET ?action=analyze-image` lists the vision profiles the dialog may offer.) Formerly `/api/v1/wardrobe/analyze-image`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).

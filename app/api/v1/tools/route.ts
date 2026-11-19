@@ -138,7 +138,7 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
             hasProject,
             hasDocumentStores,
             allowsWebSearch,
-            webSearchConfigured: allowsWebSearch && isWebSearchConfigured(),
+            webSearchConfigured: allowsWebSearch && (await isWebSearchConfigured(user.id)),
             isMultiCharacter,
             canDressThemselves,
             canCreateOutfits,

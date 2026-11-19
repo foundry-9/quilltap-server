@@ -72,13 +72,31 @@ export class WebSearchError extends Error {
 const SERPER_API_URL = 'https://google.serper.dev/search'
 
 /**
- * Check if web search is configured
+ * Whether a web search would actually have a backend to run on for this user.
  *
- * Returns true if a search provider plugin is registered OR the legacy
- * SERPER_API_KEY env var is set.
+ * It asks the question the way {@link executeWebSearchTool} answers it: the
+ * registered search provider, with an active API key for it when it needs one;
+ * failing a provider, the legacy `SERPER_API_KEY` env var. A provider that is
+ * registered but has no key is NOT configured — offering `search_web` then
+ * only buys a failure on every call. Never throws: a key lookup that fails
+ * reads as no key.
  */
-export function isWebSearchConfigured(): boolean {
-  return searchProviderRegistry.isSearchConfigured() || !!process.env.SERPER_API_KEY
+export async function isWebSearchConfigured(userId: string): Promise<boolean> {
+  const provider = searchProviderRegistry.getDefaultProvider()
+  if (!provider) {
+    return !!process.env.SERPER_API_KEY
+  }
+  if (!provider.config.requiresApiKey) {
+    return true
+  }
+  const apiKey = await getSearchProviderApiKey(provider.metadata.providerName, userId)
+  if (!apiKey) {
+    logger.debug('Web search provider is registered but has no API key; web search is not configured', {
+      userId,
+      provider: provider.metadata.providerName,
+    })
+  }
+  return !!apiKey
 }
 
 /**

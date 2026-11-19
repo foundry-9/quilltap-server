@@ -63,16 +63,18 @@ describe('isWebSearchConfigured', () => {
     process.env = originalEnv
   })
 
-  it('should return true when SERPER_API_KEY is set', () => {
+  // No search provider is registered in this suite, so the legacy env var
+  // decides. The provider cases are in web-search-configured.test.ts.
+  it('should return true when SERPER_API_KEY is set', async () => {
     process.env.SERPER_API_KEY = 'test-api-key'
     // Re-import to get fresh module state
     const { isWebSearchConfigured: freshCheck } = require('@/lib/tools/handlers/web-search-handler')
-    expect(freshCheck()).toBe(true)
+    await expect(freshCheck('test-user')).resolves.toBe(true)
   })
 
-  it('should return false when SERPER_API_KEY is not set', () => {
+  it('should return false when SERPER_API_KEY is not set', async () => {
     delete process.env.SERPER_API_KEY
-    expect(isWebSearchConfigured()).toBe(false)
+    await expect(isWebSearchConfigured('test-user')).resolves.toBe(false)
   })
 })
 

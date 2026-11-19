@@ -42,6 +42,7 @@ export const LLMLogTypeEnum = z.enum([
   'SCENARIO_BUILDER',
   'STORYTELLER_BID',
   'ATLAS_LORE_DRAFT',
+  'WARDROBE_INSTRUCTION_DESIGN',
 ]);
 export type LLMLogType = z.infer<typeof LLMLogTypeEnum>;
 

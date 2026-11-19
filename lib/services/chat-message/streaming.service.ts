@@ -40,9 +40,10 @@ import {
   isWithinCeiling,
   maxEffectOfTool,
   offeredTools,
-  toolEffectSpecOf,
+  toolEffectSpecFor,
   type ToolEffect,
   type ToolEffectContext,
+  type ToolEffectSpec,
   type ToolOffer,
 } from '@/lib/tools/effects'
 
@@ -176,8 +177,8 @@ function applyEffectCeilingToTools(
       kept.push(tool)
       continue
     }
-    const spec = toolEffectSpecOf(name)
-    const note = spec && isComputedToolEffect(spec) ? spec.usesAllowedUnder(ceiling) : null
+    const spec = toolEffectSpecFor(name, ctx)
+    const note = isComputedToolEffect(spec) ? spec.usesAllowedUnder(ceiling) : null
     if (!note) {
       dropped.push(name)
       continue
@@ -268,6 +269,8 @@ export interface BuildToolsOptions {
   documentsOnlySearch?: boolean
   /** `false` withholds `search_web` even when the profile allows it. */
   webSearch?: boolean
+  /** `false` withholds the stores' `search` tool (it is otherwise on every surface). */
+  storeSearch?: boolean
   /**
    * The turn's effect ceiling (a storyteller turn, an autonomous room without
    * destructive permission). A tool whose static effect is above it is
@@ -289,8 +292,8 @@ export interface BuiltTools {
   useNativeWebSearch: boolean
   /** Custom tool name → derived effect, for the roster offered this turn (empty when none). */
   customToolEffects: Map<string, ToolEffect>
-  /** Plugin / MCP tool name → declared effect (undeclared tools are absent and count as `write`). */
-  pluginToolEffects: Map<string, ToolEffect>
+  /** Plugin / MCP tool name → declared effect, plain or computed (undeclared tools are absent and count as `write`). */
+  pluginToolEffects: Map<string, ToolEffectSpec>
   /**
    * The names this seat was offered, for the executor's tool permit: every
    * tool the surface flags, the per-character switches and the chat's
@@ -328,11 +331,12 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     pluginToolAllowlist,
     documentsOnlySearch,
     webSearch,
+    storeSearch,
     effectCeiling,
     onlyTools,
   } = options
   const customToolEffects = new Map<string, ToolEffect>()
-  let pluginToolEffects = new Map<string, ToolEffect>()
+  let pluginToolEffects = new Map<string, ToolEffectSpec>()
   const provider = await createLLMProvider(
     connectionProfile.provider,
     connectionProfile.baseUrl || undefined
@@ -421,6 +425,7 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     docToolsMode: docToolsMode ?? 'off',
     pluginToolAllowlist,
     documentsOnlySearch: !!documentsOnlySearch,
+    storeSearch: storeSearch !== false,
     askCarina: askCarinaEnabled,
     includeWorkspaceTools: includeWorkspaceTools !== false,
     excludeMemorySearch: !!excludeMemorySearch,

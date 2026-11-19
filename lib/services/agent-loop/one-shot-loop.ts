@@ -7,6 +7,12 @@
  *    Brahma consulted as a Carina answerer; sink controller, operator surface.
  *  - `runScenarioBuilder` (`lib/services/scenario-builder/scenario-builder.service.ts`)
  *    — The Host setting a scene; live SSE controller, pre-built mount pool.
+ *  - `runAtlasLoreDraft` (`lib/services/atlas-lore/atlas-lore.service.ts`) —
+ *    Brahma drafting an Atlas entry; live SSE controller, operator surface.
+ *  - `runWardrobeInstructionDesign`
+ *    (`lib/services/wardrobe-design/wardrobe-design.service.ts`) — Aurora
+ *    designing an outfit from instructions; live SSE controller, operator
+ *    surface and the web, all under a read ceiling.
  *
  * The caller owns everything surface-specific: the profile and key, the tool
  * slate (`buildTools`), the system prompt and the tool context. This module owns

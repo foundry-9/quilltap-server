@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] - 2026-11-18
+
+### Added
+
+- `ToolCallEffect` (`{ max, of, notes? }`) — an effect that depends on the call's input. `ToolPlugin.getToolEffects` may return one in place of a plain `ToolEffect`, so a tool whose calls differ (an HTTP tool: GET reads, POST writes) can be used on a read-only turn for its read-only calls. An older host does not recognise it and counts the tool as `write`.
+
+### Changed
+
+- `PLUGIN_TYPES_VERSION` re-synced to the package version.
+
 ## [2.11.0] - 2026-11-12
 
 ### Added

@@ -129,6 +129,7 @@ import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 import {
   resolveToolPermit,
   type ToolEffect,
+  type ToolEffectSpec,
   type ToolOffer,
 } from '@/lib/tools/effects';
 
@@ -264,7 +265,7 @@ export interface ToolExecutionContext {
   /** Custom tool name → derived effect for the caller's roster, so `run_custom` can be ranked. */
   customToolEffects?: ReadonlyMap<string, ToolEffect>;
   /** Plugin / MCP tool name → declared effect. Missing tools count as `write`. */
-  pluginToolEffects?: ReadonlyMap<string, ToolEffect>;
+  pluginToolEffects?: ReadonlyMap<string, ToolEffectSpec>;
   /**
    * What this seat was offered this turn: `buildTools()`'s `offer` for a
    * model-driven loop, `OPERATOR_TOOL_OFFER` for a run the operator started by

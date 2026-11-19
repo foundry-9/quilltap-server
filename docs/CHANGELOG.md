@@ -4,6 +4,35 @@
 
 ### 4.14-dev
 
+#### Web search: "configured" now means it has its API key
+
+- `isWebSearchConfigured()` was true whenever a search provider plugin was registered, with or without an API key. Surfaces that gate on it offered `search_web`, and every call then failed with "No API key configured". It is now `isWebSearchConfigured(userId)` (async) and asks what `executeWebSearchTool` asks: a registered provider must have an active API key when it requires one; with no provider registered, the legacy `SERPER_API_KEY` env var decides. The env var no longer counts when a provider is registered, because the tool never used it in that case
+- Affected: the Scenario Builder (real mode and its capabilities read), the wardrobe's Import from instructions, Auto-Configure's precondition, and `webSearchConfigured` in the tools list (`GET /api/v1/tools`). `isScenarioWebAvailable` is now async and takes the user id; `resolveWebCapabilities` is the one read the wardrobe wizard uses
+- Tests: `__tests__/unit/web-search-configured.test.ts`
+
+#### Wardrobe: Import from instructions
+
+- New wizard in the Wardrobe dialog, **Import from instructions**, beside **Import from image**. The operator writes what they want; Aurora designs wardrobe pieces and an outfit for review. It works in all four tiers (character, group, project, Quilltap General) and files into the open folder. Nothing is created until **Import** is pressed
+- The run is a one-shot tool loop in the parent, streamed over SSE (`runWardrobeInstructionDesign`, `lib/services/wardrobe-design/`). `POST /api/v1/wardrobe?action=design-from-instructions`; `GET ?action=design-defaults` returns the default profile and what of the web is reachable. No chat row, no messages; LLM log type `WARDROBE_INSTRUCTION_DESIGN`
+- Internal evidence: a server-built brief in the user message (`lib/wardrobe/instruction-design/brief.ts`: the wearer's looks, pronouns, identity and description; dressing instructions; the target's own pieces, numbered; pieces reachable from other tiers; outfit titles in use). With **Search the stores and records** on, the operator surface read-only (`search` without memories, `doc_*` reads, `lookup_*`, `run_sql`)
+- External evidence: with **Consult the wider web** on, `search_web` (profile allows it and a provider is configured) and `curl` (the plugin has URL patterns). Unreachable web warns and does not block. The prompt forbids story text in queries and tells the model to ignore instructions in web pages
+- Every run has `effectCeiling: 'read'` on the slate and in the executor, so a `curl` POST is refused. No `wardrobe_*` or `inventory_*` tool is offered
+- Aurora may name existing pieces of the target wardrobe for the outfit (`outfit.reuse`, by number) instead of designing duplicates; the outfit is created with them as components. She also returns a short note on what the design rests on. **Revise** re-runs from the design as edited
+- Shared code extracted from Import from image, with no behavior change there: `parseWardrobeProposal` (`lib/wardrobe/proposal/`) reads a model's proposal, `ProposalReview` and `useProposalImport` (`components/wardrobe/proposal-review/`) are the review pane and the import. The parser now also accepts a JSON object with text around it
+- `buildTools` gains `storeSearch: false`, which withholds the `search` tool for a surface that may use the web but not the stores
+- `resolveScenarioBuilderCapabilities` moved to `resolveWebCapabilities` (`lib/tools/web-capabilities.ts`); the Scenario Builder re-exports it
+- Help: `help/wardrobe.md` ("Import from Instructions"). API: `docs/developer/API.md`. Spec: `docs/developer/features/wardrobe-import-from-instructions.md`
+- Run live on V4test with gpt-5: design, revise, import (with a reused piece), stop, and the disabled web box all pass. Web search and `curl` fetches are not verified live: V4test has a search plugin without an API key and no curl URL patterns. Results in the spec, §12.1
+
+#### Plugin tools: an effect that depends on the call
+
+- A plugin tool can now declare an effect that depends on its input. `ToolPlugin.getToolEffects` may return a `ToolCallEffect` (`{ max, of(input), notes? }`) in place of a plain effect (`@quilltap/plugin-types` 2.12.0). Before this, a plugin tool had one static effect, so an HTTP tool that can POST was a `write` for every call and could not be used at all under a `read` ceiling
+- `toolEffectSpecFromDeclaration` (`lib/tools/effect-types.ts`) turns a declaration into the same computed effect built-in tools use. A throw, a non-object input or an answer that is not an effect counts as `write` for that call; an answer above `max` stands. A malformed declaration leaves the tool undeclared (`write`)
+- `pluginToolEffects` now maps a tool name to a `ToolEffectSpec`. `effectOfToolCall`, `maxEffectOfTool` and the tool-list ceiling filter resolve built-in and plugin tools through one function, `toolEffectSpecFor`. A built-in name still wins over a plugin's declaration. Under a ceiling below `max`, a plugin tool with a note for that ceiling stays listed with the note appended; one without is dropped, as before
+- Bids and the autonomous-room destructive gate use `max`, so nothing changes for a plugin that declares a plain effect
+- `qtap-plugin-curl` 1.0.38 declares one: GET, HEAD and OPTIONS are `read`, every other method is `write` (`isReadOnlyCurlCall` in `curl-tool.ts`; invalid input counts as `write`). On a turn limited to lookups (a storyteller bid's read tier, a read-only console) curl stays listed with "Only GET, HEAD and OPTIONS requests are allowed this turn." and a POST, PUT, PATCH or DELETE is refused before it runs. Before this, curl was dropped from such turns entirely. The Writing Assistant can now fetch pages (`help/brahma-console.md` updated)
+- Spec: `docs/developer/features/wardrobe-import-from-instructions.md` (the Import from instructions wizard, not yet built)
+
 #### Roleplay characters: invention, flaws, preoccupation
 
 - New fixed section, `STORY_CHARACTER_SECTION` (`lib/chat/context/story-character-section.ts`), sent to every roleplay character on every turn. It says three things: the character may supply plausible detail where nothing established contradicts it; the character is played as written, including fear, distrust and bad motives; and the character's own recent troubles can outweigh the conversation. What the user narrated, the conversation, memories and real tool results outrank invention, and the character's own system prompt outranks the section. Assistant-kind characters get nothing and their prompts are unchanged

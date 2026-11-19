@@ -339,6 +339,14 @@ export interface BuildToolsOptions extends InventoryToolFlags {
   documentsOnlySearch?: boolean;
 
   /**
+   * `false` withholds the `search` tool altogether — for a surface that may
+   * look at the web but has been told to leave the stores alone (the
+   * wardrobe's Import from Instructions with store searching off). Defaults
+   * to `true`: `search` is otherwise on every surface.
+   */
+  storeSearch?: boolean;
+
+  /**
    * When true, include the `run_sql` tool — read-only SQL access to the three
    * Quilltap databases. Offered on the **Brahma Console** surface only;
    * execution is additionally gated on `operatorSurface` in the tool executor.
@@ -531,16 +539,19 @@ export async function buildToolsForProvider(
     universalTools.push(logReadToolDefinition as UniversalTool);
   }
 
-  // Unified search — available on every surface. The Brahma variant drops the
+  // Unified search — available on every surface that has not withheld it
+  // (`storeSearch: false`). The Brahma variant drops the
   // `memories` source so the console can never search memories.
   // The Scenario Builder variant narrows further to documents/knowledge.
-  universalTools.push(
-    (options.documentsOnlySearch
-      ? searchScriptoriumScenarioToolDefinition
-      : options.excludeMemorySearch
-        ? searchScriptoriumBrahmaToolDefinition
-        : searchScriptoriumToolDefinition) as UniversalTool
-  );
+  if (options.storeSearch !== false) {
+    universalTools.push(
+      (options.documentsOnlySearch
+        ? searchScriptoriumScenarioToolDefinition
+        : options.excludeMemorySearch
+          ? searchScriptoriumBrahmaToolDefinition
+          : searchScriptoriumToolDefinition) as UniversalTool
+    );
+  }
 
   // Read-only SQL access — Brahma Console only. Execution is additionally gated
   // on `operatorSurface` in the tool executor, so a leaked tool name can never

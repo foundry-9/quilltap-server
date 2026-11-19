@@ -7,6 +7,8 @@
  * POST /api/v1/wardrobe?action=instructions — write (or clear) them
  * GET  /api/v1/wardrobe?action=analyze-image — the vision profiles image analysis may use
  * POST /api/v1/wardrobe?action=analyze-image — propose items from a picture
+ * GET  /api/v1/wardrobe?action=design-defaults — the usual model and web reach for Import from Instructions
+ * POST /api/v1/wardrobe?action=design-from-instructions — Aurora designs pieces from a written brief (SSE)
  * POST /api/v1/wardrobe?action=preview-avatar — a one-off avatar for an outfit snapshot
  * POST /api/v1/wardrobe?action=move-to-tier | copy-to-tier — move or copy an item between tiers
  *
@@ -16,6 +18,7 @@
 import type { NextRequest } from 'next/server';
 import { createWardrobeCollectionHandlers } from '@/lib/wardrobe/routes/wardrobe-route-factory';
 import { handleAnalyzeImage, handleAnalyzeImageProfiles } from '@/lib/wardrobe/routes/analyze-image';
+import { handleWardrobeDesign, handleWardrobeDesignDefaults } from '@/lib/wardrobe/routes/design-from-instructions';
 import { handlePreviewAvatarAction } from '@/lib/wardrobe/routes/preview-avatar';
 import { handleWardrobeTransfer } from '@/lib/wardrobe/routes/transfer';
 
@@ -25,9 +28,13 @@ const handlers = createWardrobeCollectionHandlers<Record<string, never>>({
   logTag: '[Wardrobe Archetypes v1]',
   logIdKey: 'generalId',
   // Cross-tier and image actions live on the General collection alone.
-  extraGetActions: { 'analyze-image': handleAnalyzeImageProfiles },
+  extraGetActions: {
+    'analyze-image': handleAnalyzeImageProfiles,
+    'design-defaults': handleWardrobeDesignDefaults,
+  },
   extraPostActions: {
     'analyze-image': handleAnalyzeImage,
+    'design-from-instructions': handleWardrobeDesign,
     'preview-avatar': handlePreviewAvatarAction,
     'move-to-tier': handleWardrobeTransfer('move'),
     'copy-to-tier': handleWardrobeTransfer('copy'),

@@ -18,7 +18,7 @@ import type {
   ToolExecutionResult,
 } from './interfaces/tool-plugin';
 import { getErrorMessage } from '@/lib/error-utils';
-import { TOOL_EFFECTS, type ToolEffect } from '@/lib/tools/effect-types';
+import { toolEffectSpecFromDeclaration, type ToolEffectSpec } from '@/lib/tools/effect-types';
 import { AbstractMapRegistry } from './abstract-map-registry';
 import type { BaseRegistryState } from './base-registry';
 
@@ -136,21 +136,31 @@ class ToolRegistry extends AbstractMapRegistry<ToolPlugin, ToolRegistryState> {
   }
 
   /**
-   * Every plugin tool's declared effect, keyed by tool name. A plugin that
-   * declares nothing (or whose declaration fails) contributes nothing, so its
-   * tools count as `write` wherever this map is consulted.
+   * Every plugin tool's declared effect, keyed by tool name: a plain effect, or
+   * one computed from the call's input when the plugin declares a
+   * `ToolCallEffect`. A plugin that declares nothing (or whose declaration
+   * fails or is malformed) contributes nothing, so its tools count as `write`
+   * wherever this map is consulted.
    *
    * @param configs Plugin name (without the `qtap-plugin-` prefix) → user configuration
    */
-  async getToolEffects(configs: ReadonlyMap<string, Record<string, unknown>>): Promise<Map<string, ToolEffect>> {
-    const effects = new Map<string, ToolEffect>();
+  async getToolEffects(configs: ReadonlyMap<string, Record<string, unknown>>): Promise<Map<string, ToolEffectSpec>> {
+    const effects = new Map<string, ToolEffectSpec>();
     for (const plugin of this.getAllPlugins()) {
       if (typeof plugin.getToolEffects !== 'function') continue;
       const pluginName = plugin.metadata.toolName;
       try {
         const declared = await plugin.getToolEffects(configs.get(pluginName) ?? {});
-        for (const [toolName, effect] of Object.entries(declared ?? {})) {
-          if (TOOL_EFFECTS.includes(effect)) effects.set(toolName, effect);
+        for (const [toolName, entry] of Object.entries(declared ?? {})) {
+          const spec = toolEffectSpecFromDeclaration(entry);
+          if (spec !== undefined) {
+            effects.set(toolName, spec);
+          } else {
+            this.registryLogger.debug('Plugin declared an unreadable tool effect; the tool counts as write', {
+              plugin: pluginName,
+              tool: toolName,
+            });
+          }
         }
       } catch (error) {
         this.registryLogger.warn('Plugin tool effects unavailable; its tools count as write', {
