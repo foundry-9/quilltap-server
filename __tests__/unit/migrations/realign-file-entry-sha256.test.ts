@@ -62,7 +62,10 @@ jest.mock('better-sqlite3', () =>
   require(require('path').join(process.cwd(), 'node_modules', 'better-sqlite3'))
 );
 
-import { realignFileEntrySha256Migration } from '../../../migrations/scripts/realign-file-entry-sha256';
+import {
+  realignFileEntrySha256Migration,
+  realignFileEntrySha256V2Migration,
+} from '../../../migrations/scripts/realign-file-entry-sha256';
 import { reportProgress } from '../../../migrations/lib/progress';
 
 const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite3'));
@@ -259,5 +262,24 @@ describe('realign-file-entry-sha256-v1', () => {
 
     expect(result.itemsAffected).toBe(total);
     expect(shaOf('file-01199')).toBe(STORED_WEBP_SHA);
+  });
+});
+
+describe('realign-file-entry-sha256-v2', () => {
+  // The same pass under a new id, for generated images whose rows took the
+  // provider's raw-bytes hash after v1 had already run.
+  it('runs after v1 and repairs a generated row that drifted since', async () => {
+    expect(realignFileEntrySha256V2Migration.id).toBe('realign-file-entry-sha256-v2');
+    expect(realignFileEntrySha256V2Migration.dependsOn).toContain('realign-file-entry-sha256-v1');
+
+    seedBlob('blob-gen', STORED_WEBP_SHA);
+    seedFile('file-gen', INPUT_PNG_SHA, `mount-blob:${MOUNT}:blob-gen`);
+
+    const result = await realignFileEntrySha256V2Migration.run();
+
+    expect(result.success).toBe(true);
+    expect(result.id).toBe('realign-file-entry-sha256-v2');
+    expect(result.itemsAffected).toBe(1);
+    expect(shaOf('file-gen')).toBe(STORED_WEBP_SHA);
   });
 });

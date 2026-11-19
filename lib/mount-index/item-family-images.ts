@@ -197,7 +197,6 @@ export function createItemImages<
     });
     const file = await createGeneratedFileRow(repos, {
       userId: input.userId,
-      sha256: written.sha256,
       originalFilename: written.leafName,
       stored: written,
       width: input.width ?? null,

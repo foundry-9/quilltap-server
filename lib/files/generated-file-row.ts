@@ -10,9 +10,11 @@
  * Two rules it keeps for every caller:
  *
  * - **Stored, not sent.** The bridges transcode bitmaps to WebP, so the row's
- *   `mimeType` and `size` are the bridge's `storedMimeType` / `sizeBytes`,
- *   never the input's — a vision provider rejects bytes whose declared type
- *   is wrong ("media_type X but image is Y").
+ *   `mimeType`, `size` and `sha256` are the bridge's `storedMimeType` /
+ *   `sizeBytes` / `sha256`, never the input's — a vision provider rejects
+ *   bytes whose declared type is wrong ("media_type X but image is Y"), and a
+ *   provider-bytes hash matches no vault copy (the stale-chat sweep deleted a
+ *   default avatar that way).
  * - **No label on a generated picture.** `description` is what
  *   `describe_image` and the blind-model fallback read as "what this picture
  *   shows"; a stub such as "Story background for: <title>" shadowed the
@@ -38,14 +40,18 @@ export interface StoredImageBytes {
   storageKey: string;
   storedMimeType: string;
   sizeBytes: number;
+  /**
+   * Hash of the bytes the store kept — after any transcode. Never the
+   * provider's input hash: the two differ whenever the bridge re-encodes, and
+   * a row carrying the input hash matches no vault copy by sha256.
+   */
+  sha256: string;
 }
 
 export interface GeneratedFileRowInput {
   userId: string;
   /** Pre-chosen row id; a fresh UUID when omitted. */
   id?: string;
-  /** Hash of the stored bytes. */
-  sha256: string;
   originalFilename: string;
   stored: StoredImageBytes;
   width?: number | null;
@@ -98,7 +104,7 @@ export async function createGeneratedFileRow(
   const file = await repos.files.create(
     {
       userId: input.userId,
-      sha256: input.sha256,
+      sha256: input.stored.sha256,
       originalFilename: input.originalFilename,
       mimeType: input.stored.storedMimeType,
       size: input.stored.sizeBytes,

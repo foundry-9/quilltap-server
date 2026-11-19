@@ -233,6 +233,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'recompute-chat-last-message-at-v1': 'Re-reading each conversation to find when a soul last actually spoke in it…',
   'collapse-duplicate-folders-v1': 'Sweeping up the duplicate folders that crept into the filing cabinet…',
   'realign-file-entry-sha256-v1': 'Matching each picture to its fingerprint, so nothing goes missing on the shelves…',
+  'realign-file-entry-sha256-v2': 'Taking fresh fingerprints of the conjured portraits, lest a cherished likeness be swept out with the rubbish…',
   'add-route-trail-message-column-v1': 'Pinning the call sheet to every reply, so you may see who was asked…',
   'add-cycle-order-column-v1': 'Drawing up the running order, so your cast knows who follows whom…',
   'add-transcript-version-column-v1': 'Fitting each conversation with a bell-pull, so every open window hears when a new line is set down…',

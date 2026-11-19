@@ -405,7 +405,10 @@ import { addProfileFallbackFieldsMigration } from './add-profile-fallback-fields
 import { recomputeChatLastMessageAtMigration } from './recompute-chat-last-message-at';
 import { collapseDuplicateFoldersMigration } from './collapse-duplicate-folders';
 // files.sha256 must name the bytes on disk, not the pre-transcode input (bug 117)
-import { realignFileEntrySha256Migration } from './realign-file-entry-sha256';
+import {
+  realignFileEntrySha256Migration,
+  realignFileEntrySha256V2Migration,
+} from './realign-file-entry-sha256';
 // Message route trail: routeTrail column on chat_messages (every model tried, in order)
 import { addRouteTrailMessageColumnMigration } from './add-route-trail-message-column-v1';
 // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
@@ -997,6 +1000,8 @@ export const migrations: Migration[] = [
   addFileGenerationModerationColumnMigration,
   // Dynamic backgrounds: chat_settings.dynamicBackgrounds
   addDynamicBackgroundsSettingsFieldMigration,
+  // Files: sha256 realigned again for generated images that took the provider's raw-bytes hash
+  realignFileEntrySha256V2Migration,
 ];
 
 export {
@@ -1473,5 +1478,6 @@ export {
   addCalliopeThemeDraftFieldMigration,
   addFileGenerationModerationColumnMigration,
   addDynamicBackgroundsSettingsFieldMigration,
+  realignFileEntrySha256V2Migration,
 };
 

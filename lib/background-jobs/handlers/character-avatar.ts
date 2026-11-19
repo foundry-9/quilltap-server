@@ -475,7 +475,6 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     await createGeneratedFileRow(repos, {
       id: fileId,
       userId: job.userId,
-      sha256: decoded.sha256,
       originalFilename: decoded.filename,
       stored: written,
       width: decoded.width,

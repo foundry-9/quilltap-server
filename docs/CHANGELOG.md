@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Stale-chat asset collapse: no longer deletes a character's default avatar
+
+- Fixed the stale-chat asset sweep (`lib/background-jobs/maintenance/collapse-stale-chat-assets.ts`) deleting a character's default avatar when that avatar had first been generated in a chat that later went stale. The default is stored as a vault link id, so `findByDefaultImageId(files.id)` missed it. The album/vault check matched on `files.sha256`, which disagrees with the vault's own hash for about a fifth of generated images, so it missed too. Deleting a `mount-blob:` file removes every link to its blob, `photos/` included
+- The sweep now resolves the links a delete would take (storageKey → blob → links) and skips the file if any is a `photos/` link, a link id in the chat's keep-set, or a link id held as a character default or avatar override. A failed lookup leaves the rest of the chat for the next sweep. Skips are logged at debug with a reason
+- Fixed generated images recording the wrong `files.sha256`. `createGeneratedFileRow` took the hash as a separate input, and the wardrobe-avatar job, the story-background job, the wardrobe preview and the image tool passed the hash of the provider's (or the handler's converted) bytes, while `size` and `mimeType` came from the bridge. When the bridge re-encoded, the row hashed bytes that exist nowhere, so sha256 joins to the vault copy found nothing (546 of 3,831 mount-blob images on the reference instance, most since September). The hash is now part of `StoredImageBytes` and the row takes it from there; the separate input is gone
+- New migration `realign-file-entry-sha256-v2`: the bug 117 realign pass, run again, rewrites each `mount-blob:` row's `sha256` to its blob's hash where they differ. `realign-file-entry-sha256.ts` is now a v1/v2 factory
+
 #### Navigation menus: spec for a grouped rail and a shell menu bar
 
 - New proposed spec, `docs/developer/features/navigation-menus.md`. The left rail has 19 icon-only buttons in two hand-written lists. The spec replaces them with one navigation registry (`lib/navigation/registry.ts`), a rail of 10 buttons (Home, Characters, four flyout menus: Conversations, Objects, Library, Studio; and Help, Quick-hide, Settings, Profile), and a `GET /api/v1/system/navigation` endpoint plus a bridge call so the Electron shell can build a native menu bar from the same table. It also retires the `showNavThemeSelector` setting. Nothing is built yet

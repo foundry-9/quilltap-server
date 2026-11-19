@@ -177,7 +177,6 @@ async function saveGeneratedImage(
     const fileEntry = await createGeneratedFileRow(repos, {
       id: fileId,
       userId,
-      sha256,
       originalFilename,
       stored: written,
       width: decoded.width,

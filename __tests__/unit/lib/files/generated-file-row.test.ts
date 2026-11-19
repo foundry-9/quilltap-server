@@ -1,6 +1,6 @@
 /**
  * createGeneratedFileRow (lib/files/generated-file-row.ts): the one `files`
- * row every stored picture gets — the bridge's stored type and size, measured
+ * row every stored picture gets — the bridge's stored type, size and hash, measured
  * dimensions, and no label in `description` (bug 132).
  */
 
@@ -14,9 +14,8 @@ describe('createGeneratedFileRow', () => {
     const row = await createGeneratedFileRow({ files: { create } } as never, {
       id: 'file-1',
       userId: 'user-1',
-      sha256: SHA,
       originalFilename: 'avatar_x.webp',
-      stored: { storageKey: 'mount-blob:m:b', storedMimeType: 'image/webp', sizeBytes: 1234 },
+      stored: { storageKey: 'mount-blob:m:b', storedMimeType: 'image/webp', sizeBytes: 1234, sha256: SHA },
       width: 832,
       height: 1216,
       linkedTo: ['chat-1', 'char-1'],
@@ -58,9 +57,8 @@ describe('createGeneratedFileRow', () => {
     const create = jest.fn(async (data: object, options?: { id?: string }) => ({ ...data, id: options?.id }))
     await createGeneratedFileRow({ files: { create } } as never, {
       userId: 'user-1',
-      sha256: SHA,
       originalFilename: 'x.webp',
-      stored: { storageKey: 'k', storedMimeType: 'image/webp', sizeBytes: 1 },
+      stored: { storageKey: 'k', storedMimeType: 'image/webp', sizeBytes: 1, sha256: SHA },
       linkedTo: ['item-1'],
       source: 'IMPORTED',
     })

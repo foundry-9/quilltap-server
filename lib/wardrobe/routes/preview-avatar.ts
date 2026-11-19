@@ -191,7 +191,6 @@ const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestCon
     // label (bug 132): the prompt is the account of record.
     const file = await createGeneratedFileRow(repos, {
       userId: user.id,
-      sha256: decoded.sha256,
       originalFilename: decoded.filename,
       stored: written,
       width: decoded.width,
