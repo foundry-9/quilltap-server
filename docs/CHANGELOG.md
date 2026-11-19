@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Dependencies: npm audit cleared with overrides; install-script approvals by name
+
+- `npm audit` now reports 0 vulnerabilities (was 22: 18 moderate, 4 low) without major upgrades. The `glob` override goes from `^12.0.0` (vulnerable) to `^14.0.6`; only Jest uses it. A nested override sets `test-exclude`'s `minimatch` to `^11.0.5`, leaving ESLint plugins on minimatch 3. `"katex": "$katex"` makes `rehype-katex` and `remark-math` use the root KaTeX 0.19.1 instead of 0.16.47
+- `allowScripts` entries are now by package name instead of pinned versions, so dependency updates no longer re-raise install-script warnings. Approved: `esbuild`, `fsevents`, `node-pty`, `@parcel/watcher`. Denied: `better-sqlite3-multiple-ciphers`, `@openrouter/sdk` (its postinstall only prints a type check notice). Dropped `unrs-resolver`, which has no install script
+
 #### Dependencies: npm update across root, packages and plugins
 
 - Ran `npm update -S` in the root project, every package and every plugin. Notable bumps: `better-sqlite3-multiple-ciphers` 13.2.0 (root and CLI), `openai` 7.60, `@anthropic-ai/sdk` 1.10, `@openrouter/sdk` 1.5.120, `@tanstack/react-query` / `react-query-devtools` / `eslint-plugin-query` 5.108.1, `@testing-library/user-event` 14.6.13

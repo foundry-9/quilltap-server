@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.14.0-dev.62",
+  "version": "4.14.0-dev.63",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -152,7 +152,11 @@
     "typescript": "^6.0.3"
   },
   "overrides": {
-    "glob": "^12.0.0",
+    "glob": "^14.0.6",
+    "test-exclude": {
+      "minimatch": "^11.0.5"
+    },
+    "katex": "$katex",
     "cookie": "^0.7.0",
     "sharp": "$sharp",
     "fast-uri": "^3.1.5",
@@ -168,12 +172,11 @@
     }
   },
   "allowScripts": {
-    "fsevents@2.3.3": true,
-    "node-pty@1.1.0": true,
-    "unrs-resolver@1.12.2": true,
-    "esbuild@0.28.2": true,
-    "@parcel/watcher@2.6.0": true,
-    "better-sqlite3-multiple-ciphers": false,
-    "@openrouter/sdk@1.5.105": true
+    "@openrouter/sdk": false,
+    "esbuild": true,
+    "fsevents": true,
+    "node-pty": true,
+    "@parcel/watcher": true,
+    "better-sqlite3-multiple-ciphers": false
   }
 }
