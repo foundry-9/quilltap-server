@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Context summary: one fold per chat at a time (doubled story backgrounds)
+
+- Fixed group chats getting two story backgrounds back to back, so the first was replaced before anyone saw it. A summary fold takes about 30 seconds and only advances `lastSummaryTurn` when it finishes. In a multi-character chat the next character's reply read the same anchor, passed the gate again and started a second fold over the same turns. Each fold retitled the chat, and each retitle queued a story background. The story-background dedupe absorbs only a pending job, and the first had already started. On the reference instance this happened for 18 of 34 fold checkpoints in a week
+- `generateContextSummary` (`lib/chat/context-summary.ts`) is now single-flight per chat within a process: a call made while a fold is running joins it and gets its result. `checkAndGenerateSummaryIfNeeded` skips the gate while a fold is in flight, and the next reply's check sees the advanced anchor. `isContextSummaryFoldInFlight` is exported for this
+
 #### Dependencies: npm audit cleared with overrides; install-script approvals by name
 
 - `npm audit` now reports 0 vulnerabilities (was 22: 18 moderate, 4 low) without major upgrades. The `glob` override goes from `^12.0.0` (vulnerable) to `^14.0.6`; only Jest uses it. A nested override sets `test-exclude`'s `minimatch` to `^11.0.5`, leaving ESLint plugins on minimatch 3. `"katex": "$katex"` makes `rehype-katex` and `remark-math` use the root KaTeX 0.19.1 instead of 0.16.47
