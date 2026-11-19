@@ -51,7 +51,7 @@ The body that follows the closing `---` is what is spliced into the system promp
 
 ## Tending the Collection
 
-The **Scenarios** entry in the sidebar opens the dedicated page where you may:
+Open **Conversations** and choose **Scenarios** to reach the dedicated page where you may:
 
 - **Create** a new scenario via **+ New scenario** — a modal opens with a filename, name, description, default checkbox, and the same Markdown editor used elsewhere in the workspace.
 - **Edit** an existing scenario with the **Edit** button — the modal returns, pre-filled.

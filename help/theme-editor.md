@@ -8,7 +8,7 @@ url: /calliope
 
 There comes a moment in every household when the wallpaper, however splendid, is simply not *quite* the shade one had in mind. Until now the remedy was a text editor, a zip archive and a certain fortitude. **Calliope's Atelier** is the civilised alternative: a workroom where you cut a theme of your own, watch the whole of Quilltap put it on while you work, and hang it in the wardrobe when it is ready to be worn in public.
 
-Find it by pressing **Design a theme** on the Theme card in **Settings → Appearance**, or by asking a help-enabled character to take you there. It opens as a tab in the workspace, like any other room of the house.
+Find it by opening **Studio** and choosing **The Atelier**, by pressing **Design a theme** on the Theme card in **Settings → Appearance**, or by asking a help-enabled character to take you there. It opens as a tab in the workspace, like any other room of the house.
 
 This page is the reference: every section and every control, in the order the Atelier presents them. If you have never made a theme and would like to be walked through one from first colour to finished bundle, begin with [Making a Theme](making-a-theme.md).
 

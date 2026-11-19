@@ -306,7 +306,7 @@ export const SHELL_SPECIMENS: SpecimenTable = {
   'qt-collapsed-nav-button': {
     render: ({ el }) => (
       <nav className="qt-collapsed-nav" aria-label="Specimen navigation">
-        <a {...el} href="#specimen" aria-label="A navigation item"><Icon name="projects" className="w-5 h-5" /></a>
+        <a {...el} href="#specimen" aria-label="A navigation item"><Icon name="characters" className="w-5 h-5" /></a>
       </nav>
     ),
   },
@@ -327,14 +327,18 @@ export const SHELL_SPECIMENS: SpecimenTable = {
     ),
   },
   'qt-left-sidebar-popout': {
-    render: ({ el }) => (
-      <div className="qt-left-sidebar-footer" style={{ position: 'relative', height: '7rem' }}>
-        <div {...el} role="menu" aria-label="Specimen menu" style={{ position: 'absolute', left: '0.5rem', top: '0.5rem' }}>
-          <button type="button" role="menuitem" className="qt-button qt-button-ghost qt-button-sm w-full">A menu item</button>
-          <button type="button" role="menuitem" className="qt-button qt-button-ghost qt-button-sm w-full">Another</button>
-        </div>
-      </div>
-    ),
+    render: ({ el }) => <RailFlyout el={el} />,
+    note: 'In the app it is portalled beside its rail button, or along the bottom of a phone screen.',
+  },
+  'qt-left-sidebar-menu-heading': { render: ({ el }) => <RailFlyout part="heading" el={el} /> },
+  'qt-left-sidebar-menu': { render: ({ el }) => <RailFlyout part="menu" el={el} /> },
+  'qt-left-sidebar-menu-item': { render: ({ el }) => <RailFlyout part="item" el={el} /> },
+  'qt-left-sidebar-menu-item-icon': { render: ({ el }) => <RailFlyout part="icon" el={el} /> },
+  'qt-left-sidebar-menu-item-text': { render: ({ el }) => <RailFlyout part="text" el={el} /> },
+  'qt-left-sidebar-menu-item-label': { render: ({ el }) => <RailFlyout part="label" el={el} /> },
+  'qt-left-sidebar-menu-item-reason': {
+    render: ({ el }) => <RailFlyout part="reason" el={el} />,
+    note: 'Shown only on a row that cannot be chosen now.',
   },
   'qt-left-sidebar-profile': {
     render: ({ el }) => (
@@ -392,6 +396,35 @@ function CharacterCard({ name, el }: { name: string; el?: Record<string, string>
   )
 }
 
+type FlyoutPart = 'heading' | 'menu' | 'item' | 'icon' | 'text' | 'label' | 'reason'
+
+function RailFlyout({ part, el }: { part?: FlyoutPart; el: Record<string, string> & { className: string } }) {
+  const on = (which: FlyoutPart, fallback: string) => (part === which ? el : { className: fallback })
+  const popout = part === undefined ? el : { className: 'qt-left-sidebar-popout qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg' }
+  return (
+    <div style={{ position: 'relative', minHeight: '11rem' }}>
+      <div data-nav-menu="library" {...popout} style={{ position: 'absolute', left: '0.5rem', top: '0.5rem', width: '15rem' }}>
+        <p {...on('heading', 'qt-left-sidebar-menu-heading')}>Library</p>
+        <div {...on('menu', 'qt-left-sidebar-menu')} role="menu" aria-label="Specimen menu">
+          <a role="menuitem" data-nav="projects" href="#specimen" {...on('item', 'qt-left-sidebar-menu-item')}>
+            <Icon name="projects" className={part === 'icon' ? `${el.className} w-5 h-5` : 'qt-left-sidebar-menu-item-icon w-5 h-5'} />
+            <span {...on('text', 'qt-left-sidebar-menu-item-text')}>
+              <span {...on('label', 'qt-left-sidebar-menu-item-label')}>Projects</span>
+            </span>
+          </a>
+          <button type="button" className="qt-left-sidebar-menu-item" role="menuitem" data-nav="brahma" aria-disabled="true">
+            <Icon name="brahma-console" className="qt-left-sidebar-menu-item-icon w-5 h-5" />
+            <span className="qt-left-sidebar-menu-item-text">
+              <span className="qt-left-sidebar-menu-item-label">Brahma Console</span>
+              <span {...on('reason', 'qt-left-sidebar-menu-item-reason')}>Needs a connection profile</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Rail({ part, el }: { part?: 'content' | 'nav' | 'footer' | 'actions'; el: Record<string, string> & { className: string } }) {
   const on = (which: typeof part, fallback: string) => (part === which ? el : { className: fallback })
   return (
@@ -399,7 +432,7 @@ function Rail({ part, el }: { part?: 'content' | 'nav' | 'footer' | 'actions'; e
       <div {...on('content', 'qt-left-sidebar-content')}>
         <nav {...on('nav', 'qt-collapsed-nav')} aria-label="Specimen navigation">
           <a className="qt-collapsed-nav-button" data-nav="home" aria-current="page" href="#specimen" aria-label="Home"><Icon name="brand" className="w-5 h-5" /></a>
-          <a className="qt-collapsed-nav-button" data-nav="projects" href="#specimen" aria-label="Projects"><Icon name="projects" className="w-5 h-5" /></a>
+          <button type="button" className="qt-collapsed-nav-button" data-nav="library" aria-haspopup="menu" aria-expanded="false" aria-label="Library"><Icon name="scriptorium" className="w-5 h-5" /></button>
         </nav>
       </div>
       <div {...on('footer', 'qt-left-sidebar-footer')}>

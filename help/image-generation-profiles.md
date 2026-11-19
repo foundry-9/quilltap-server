@@ -81,7 +81,7 @@ The reading is discarded the moment you edit the Source, on the grounds that fac
 
 Image profiles are kept with the providers that paint them, under **Settings → Connections → Providers**:
 
-1. Click **Settings** (gear icon) in the left sidebar
+1. Click **Settings** (gear icon) on the rail
 2. Choose the **Connections** group and open the **Providers** card
 3. With the view set to **By provider** (the default), open the card of the provider you paint with — OpenAI, Google, NanoGPT and so on
 

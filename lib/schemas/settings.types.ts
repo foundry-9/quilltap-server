@@ -847,7 +847,6 @@ export const ChatSettingsSchema = z.object({
   themePreference: ThemePreferenceSchema.default({
     activeThemeId: null,
     colorMode: 'system',
-    showNavThemeSelector: false,
   }),
   /** Dynamic backgrounds: the changing collage behind the home, project and character pages. */
   dynamicBackgrounds: DynamicBackgroundsSettingsSchema.default({

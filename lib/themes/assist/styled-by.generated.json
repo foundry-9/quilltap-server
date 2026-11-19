@@ -1,5 +1,5 @@
 {
- "catalogueVersion": 1,
+ "catalogueVersion": 2,
  "sources": ["app/styles/qt-components","app/globals.css"],
  "hooks": {
   "qt-app-layout": [
@@ -116,7 +116,8 @@
   ],
   "qt-collapsed-nav-button": [
    {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":["--theme-radius-md"]},{"property":"color","vars":["--color-foreground"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"height","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true},{"property":"width","vars":["--spacing"]}]},
-   {"when":":hover","properties":[{"property":"background","vars":["--qt-sidebar-item-hover-bg"]}]}
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-sidebar-item-hover-bg"]}]},
+   {"when":"state: A group button's flyout is open (aria-expanded=\"true\")","properties":[{"property":"background","vars":["--qt-sidebar-item-hover-bg"]}]}
   ],
   "qt-left-sidebar-footer": [
    {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-color","vars":["--qt-left-sidebar-border"]},{"property":"border-top","vars":[],"literal":true},{"property":"border-top-style","vars":[],"literal":true},{"property":"border-top-width","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"padding","vars":["--spacing"]}]}
@@ -126,10 +127,40 @@
   ],
   "qt-left-sidebar-item": [
    {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":["--theme-radius-md"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--text-sm"]},{"property":"gap","vars":["--spacing"]},{"property":"justify-content","vars":[],"literal":true},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding","vars":["--qt-sidebar-item-padding-x","--qt-sidebar-item-padding-y"]},{"property":"padding-inline","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},
+   {"when":":disabled","properties":[{"property":"cursor","vars":[],"literal":true},{"property":"opacity","vars":[],"literal":true}]},
    {"when":":hover","properties":[{"property":"background","vars":["--qt-sidebar-item-hover-bg"]}]}
   ],
   "qt-left-sidebar-item-icon": [
    {"when":"","properties":[{"property":"color","vars":["--color-foreground"]},{"property":"flex-shrink","vars":[],"literal":true},{"property":"height","vars":["--qt-left-sidebar-item-icon-size"]},{"property":"width","vars":["--qt-left-sidebar-item-icon-size"]}]}
+  ],
+  "qt-left-sidebar-popout": [
+   {"when":"","properties":[{"property":"background-color","vars":["--qt-popover-bg"]},{"property":"border","vars":["--color-border"]},{"property":"border-radius","vars":["--radius-lg"]},{"property":"box-shadow","vars":["--qt-dialog-shadow"]},{"property":"max-height","vars":[],"literal":true},{"property":"outline","vars":[],"literal":true},{"property":"overflow-y","vars":[],"literal":true},{"property":"width","vars":[],"literal":true},{"property":"z-index","vars":["--qt-floating-layer-z"]}]}
+  ],
+  "qt-left-sidebar-menu-heading": [
+   {"when":"","properties":[{"property":"color","vars":["--color-muted-foreground"]},{"property":"font-size","vars":["--text-xs"]},{"property":"font-weight","vars":["--font-weight-semibold"]},{"property":"letter-spacing","vars":["--tracking-wide"]},{"property":"line-height","vars":["--text-xs--line-height"]},{"property":"padding-bottom","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"padding-top","vars":["--spacing"]},{"property":"text-transform","vars":[],"literal":true}]}
+  ],
+  "qt-left-sidebar-menu": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"padding","vars":["--spacing"]},{"property":"padding-top","vars":[],"literal":true}]}
+  ],
+  "qt-left-sidebar-menu-item": [
+   {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":["--theme-radius-md"]},{"property":"color","vars":["--color-foreground"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"font-size","vars":["--text-sm"]},{"property":"gap","vars":["--spacing"]},{"property":"line-height","vars":["--text-sm--line-height"]},{"property":"padding-block","vars":["--spacing"]},{"property":"padding-inline","vars":["--spacing"]},{"property":"text-align","vars":[],"literal":true},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true},{"property":"width","vars":[],"literal":true}]},
+   {"when":":focus","properties":[{"property":"background","vars":["--qt-sidebar-item-hover-bg"]},{"property":"box-shadow","vars":["--color-ring"]},{"property":"outline","vars":[],"literal":true}]},
+   {"when":":hover","properties":[{"property":"background","vars":["--qt-sidebar-item-hover-bg"]},{"property":"outline","vars":[],"literal":true}]},
+   {"when":"state: Not available now (Brahma with no connection profile); the reason is shown under the label (aria-disabled=\"true\")","properties":[{"property":"cursor","vars":[],"literal":true}]}
+  ],
+  "qt-left-sidebar-menu-item-icon": [
+   {"when":"","properties":[{"property":"flex-shrink","vars":[],"literal":true}]},
+   {"when":"inside .qt-left-sidebar-menu-item","properties":[{"property":"opacity","vars":[],"literal":true}]}
+  ],
+  "qt-left-sidebar-menu-item-text": [
+   {"when":"","properties":[{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true}]}
+  ],
+  "qt-left-sidebar-menu-item-label": [
+   {"when":"","properties":[{"property":"overflow","vars":[],"literal":true},{"property":"text-overflow","vars":[],"literal":true},{"property":"white-space","vars":[],"literal":true}]},
+   {"when":"inside .qt-left-sidebar-menu-item","properties":[{"property":"opacity","vars":[],"literal":true}]}
+  ],
+  "qt-left-sidebar-menu-item-reason": [
+   {"when":"","properties":[{"property":"color","vars":["--color-muted-foreground"]},{"property":"font-size","vars":["--text-xs"]},{"property":"line-height","vars":["--text-xs--line-height"]}]}
   ],
   "qt-left-sidebar-profile": [
    {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"border-radius","vars":["--theme-radius-md"]},{"property":"cursor","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"gap","vars":["--spacing"]},{"property":"padding","vars":["--spacing"]},{"property":"transition-duration","vars":[],"literal":true},{"property":"transition-property","vars":[],"literal":true},{"property":"transition-timing-function","vars":[],"literal":true}]},

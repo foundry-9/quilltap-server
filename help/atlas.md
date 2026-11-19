@@ -12,7 +12,7 @@ The Atlas has no tools for the characters and no voice of its own. It does not s
 
 ## Where to find it
 
-- **The left rail's Atlas button** (the folded map), just below the Inventory. In the workspace it opens as a tab; in a Salon chat it opens with the chat's project selected (or Quilltap General, for a chat with no project); anywhere else it opens on Quilltap General.
+- Open **Objects** and choose **The Atlas**. In the workspace it opens as a tab; in a Salon chat it opens with the chat's project selected (or Quilltap General, for a chat with no project); anywhere else it opens on Quilltap General.
 - **On a project's page in Prospero**, the **Atlas** card browses the project's own pages (see [Project Atlas](project-atlas.md)).
 - **On a character's page in Aurora**, the **Atlas** card in the **Appearance** section opens that character's private pages.
 

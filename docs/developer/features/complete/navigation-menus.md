@@ -1,6 +1,6 @@
 # Navigation menus: one registry, a grouped rail and the shell's menu bar
 
-Status: **proposed** 2026-11-19. Nothing here is built. Decided so far: the rail stays in both the browser and the Electron shell; the shell adds a native menu bar beside it; Scenarios sits under Conversations; Characters is a plain button; the theme picker is always offered. Open decisions are in §11.
+Status: **built** 2026-11-19 (phases 1–3, this repo). Phase 4, the native menu itself, belongs to quilltap-shell. Decided: the rail stays in both the browser and the Electron shell; the shell adds a native menu bar beside it; Scenarios sits under Conversations; Characters is a plain button; the theme picker is always offered. Open decisions are in §11; what the build settled beyond the text is in §12.
 
 The left rail has grown one button at a time to 19 icon-only buttons in two hand-written lists. This spec replaces the lists with one navigation registry, groups the rail into four flyout menus, and gives the Electron shell what it needs to build a native menu bar from the same table, so that "open **Objects** and choose **The Atlas**" is the right instruction everywhere.
 
@@ -42,7 +42,7 @@ What already works and is kept:
 - No layout switch between browser and shell. The same rail renders in both.
 - No change to the workspace's tabs, panes or toolbar.
 - No change to the Settings registry or its deep links.
-- No keyboard accelerators in the first version (§11).
+- No new keyboard accelerators in the first version (§11). The shell's six existing ones carry over.
 - No user-customisable rail.
 
 ## 3. The registry
@@ -140,7 +140,7 @@ Reasons for the placements that are not obvious:
 
 ## 6. The shell's menu bar
 
-The server side is small. The menu itself is built in the quilltap-shell repo, which this spec does not design in detail.
+The server side is small. The menu itself is built in the quilltap-shell repo. Everything the shell needs (the listing, the preload and main-process wiring, fallbacks, versions and a checklist) is in [navigation-menus-shell-contract.md](navigation-menus-shell-contract.md).
 
 **Listing.** `GET /api/v1/system/navigation` returns the registry:
 
@@ -172,7 +172,7 @@ Loading a URL is only the fallback because a real navigation unmounts the worksp
 
 **Capability.** The shell advertises `NATIVE_NAV_MENU` in `QUILLTAP_SHELL_CAPABILITIES`. Nothing in the server branches on it in this version; it is there so a later "hide the rail in the shell" setting has something to read.
 
-**Versions.** An older shell ignores the endpoint and shows no navigation menu. A newer shell against an older server gets a 404 and shows none. Neither breaks.
+**Versions.** An older shell ignores the endpoint and keeps its own hard-coded Navigate menu. A newer shell against an older server gets a 404 and keeps that same legacy Navigate menu (decided 2026-11-19, after reading the shell; see the contract §6). Neither breaks.
 
 ## 7. Theme hooks
 
@@ -211,6 +211,18 @@ Phase 1 is a refactor that can ship alone. Phases 2 and 3 are independent of eac
 
 ## 11. Open decisions
 
-1. **Accelerators.** Cmd/Ctrl+1 to 4 for the groups would suit the native menu, but they must not collide with the workspace's tab shortcuts or the composer. Left out of the first version.
+1. **Accelerators.** Cmd/Ctrl+1 to 4 for the groups would suit the native menu, but they must not collide with the workspace's tab shortcuts or the composer. Left out of the first version. The shell's six existing accelerators carry over, keyed by item id (§12).
 2. **Hiding the rail in the shell.** Decided against for now. If wanted later, it is an Appearance setting read with the `NATIVE_NAV_MENU` capability.
 3. **The Studio name.** "Studio" is a plain word that does not clash with a persona. "Atelier" is already the theme editor's name, so it cannot be the group's.
+
+## 12. As built
+
+- **Files.** Registry `lib/navigation/registry.ts` (`NAV_TOP`, `NAV_GROUPS`, `NAV_PINNED`, and `NAV_PROFILE` for the profile button's menu); the shell's listing `lib/navigation/listing.ts`; activators `components/layout/left-sidebar/activators.ts` (`ACTION_ACTIVATORS` is a full record over `NAV_ACTION_IDS`, `DESTINATION_ACTIVATORS` the overrides); rail state, `activate(id)` and the `onNavigate` registration in `nav-rail-context.tsx`; the flyout in `nav-flyout.tsx`.
+- **Item ids.** Every old `data-nav` value survives; Open Document… keeps `document-mode` and Theme… keeps `themes`. New ids: `new-chat`, `generate-image`, `atelier`, `theme-gallery`, `profile`, `about`; group ids `conversations`, `objects`, `library`, `studio`; the profile button is `profile-menu`.
+- **Brahma** keeps its floating-console dialog outside the workspace, as Wardrobe, Inventory and the Atlas keep theirs. Inside the workspace all four open tabs.
+- **Panels.** Theme… and Quick-hide open a panel (`role="dialog"`) in the same flyout slot, so one flyout is open at a time across menus and panels. Theme… hangs from the Studio button.
+- **Hooks.** `HOOK_CATALOGUE_VERSION` is 2: `qt-collapsed-nav-button` and `qt-left-sidebar-item` lost the values that moved into flyouts. New hooks `qt-left-sidebar-menu-heading`, `-menu`, `-menu-item`, `-menu-item-icon`, `-menu-item-text`, `-menu-item-label`, `-menu-item-reason`; `qt-left-sidebar-popout` gained `data-nav-menu` and the `qt-left-sidebar-popout-sheet` state.
+- **Settings** carries `aria-current` like the group buttons.
+- **Help.** `help/sidebar.md` became `help/navigation.md`; `__tests__/unit/help/navigation-phrases.test.ts` holds every "open **X** and choose **Y**" to the registry.
+- **Tests.** `__tests__/unit/lib/navigation/` (registry, single source), `__tests__/unit/components/layout/left-sidebar.test.tsx`, `__tests__/unit/app/api/v1/system/navigation/route.test.ts`.
+- **The shell's contract** is a separate page, [navigation-menus-shell-contract.md](navigation-menus-shell-contract.md). Writing it against quilltap-shell 4.2.6 settled two things this spec had left open or got wrong. The shell already ships a hard-coded **Navigate** menu that reloads the page, so **Go** and the four groups replace it in place (between Edit and View), and it stays as the fallback when the listing is unavailable. It also has six accelerators (⇧⌘H, ⇧⌘P, ⇧⌘F, ⇧⌘C, ⇧⌘S, ⌘,), so they carry over, keyed by item id. §11.1 now concerns only adding new ones.

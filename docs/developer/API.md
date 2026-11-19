@@ -430,7 +430,7 @@ Returns updated profile (same format as GET).
 
 Read the user's theme preference. Chat settings are created with defaults on first read if absent.
 
-**Response**: `200 OK` — `{ activeThemeId, colorMode, showNavThemeSelector }`.
+**Response**: `200 OK` — `{ activeThemeId, colorMode, customOverrides? }`. (`showNavThemeSelector` was retired in 4.14: the theme picker is always in the rail's Studio menu. A stored preference or an old client that still carries the key parses; the key is dropped.)
 
 #### `PUT /api/v1/user/profile?action=theme-preference`
 
@@ -482,8 +482,7 @@ Get chat settings for the current user. A user with no saved settings gets the d
   "imageDescriptionProfileId": null,
   "themePreference": {
     "activeThemeId": null,
-    "colorMode": "system",
-    "showNavThemeSelector": false
+    "colorMode": "system"
   },
   "defaultRoleplayTemplateId": null,
   "sidebarWidth": 320,
@@ -6573,6 +6572,39 @@ Marks migration warnings as acknowledged. Call after displaying notifications to
   "message": "Migration warnings marked as notified"
 }
 ```
+
+---
+
+### System Navigation
+
+The navigation registry (`lib/navigation/registry.ts`) as the Electron shell reads it, to build a native menu bar. Unauthenticated, like startup-status: the listing is static and carries no user data. Design of record: [navigation-menus.md](features/complete/navigation-menus.md); what the shell must implement: [navigation-menus-shell-contract.md](features/complete/navigation-menus-shell-contract.md).
+
+#### `GET /api/v1/system/navigation`
+
+**Response**: `200 OK`
+
+```json
+{
+  "version": 1,
+  "top": [
+    { "id": "home", "label": "Home", "type": "destination", "href": "/" },
+    { "id": "characters", "label": "Characters", "type": "destination", "href": "/aurora" }
+  ],
+  "groups": [
+    { "id": "objects", "label": "Objects", "items": [
+      { "id": "atlas", "label": "The Atlas", "type": "destination", "href": "/workspace?open=atlas" }
+    ] }
+  ],
+  "pinned": [
+    { "id": "help", "label": "Help", "type": "action" },
+    { "id": "about", "label": "About", "type": "destination", "href": "/about" }
+  ]
+}
+```
+
+`groups` is the four menus in rail order (Conversations, Objects, Library, Studio); `pinned` is Help, Quick-hide, Settings, then the profile menu's Profile and About. No icon, tab kind or activator detail is included. `version` rises only when an existing field changes meaning or goes away.
+
+**Activation.** A menu click sends the item **id** to the page through `window.quilltap.onNavigate(handler)` (declared in `types/quilltap-bridge.d.ts`; the shell's preload supplies it). The page runs the same activator a rail click runs. When the page has registered no handler (starting up, the unlock screen), the shell loads a destination's `href` and does nothing for an action.
 
 ---
 

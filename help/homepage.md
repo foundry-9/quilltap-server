@@ -62,19 +62,19 @@ This section shows your favorite characters at a glance:
 
 ## Navigation Tips
 
-- Use the **sidebar** on the left to navigate between different sections of Quilltap
+- Use the **rail** on the left to navigate between different sections of Quilltap
 - Use the **search bar** at the top to quickly find chats, characters, or other content
 - Use the **width toggle** button to adjust how much space the main content area takes up
 - Your recent chats section shows your most active conversations, making it easy to pick up where you left off
 
 ## Getting Started
 
-1. **Create your first character** using the Quick Actions or the sidebar
+1. **Create your first character** using the Quick Actions or the rail
 2. **Start a chat** with your character to begin creating stories
 3. **Organize your work** into projects to keep related content together
 4. **Use the search bar** to quickly find anything across your workspace
 
-Need help with a specific feature? Check the help resources for the sidebar, search, or other components.
+Need help with a specific feature? Check the help resources for the rail, search, or other components.
 
 ## In-Chat Navigation
 

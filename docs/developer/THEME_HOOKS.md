@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE — DO NOT EDIT BY HAND. Source: lib/themes/hooks/. Regenerate with `npm run generate:theme-hooks-doc`. -->
 
-The structural hooks a theme's custom CSS may rely on — catalogue version **1**, 219 hooks. Anything not listed here is an implementation detail and may change without notice. The catalogue lives in `lib/themes/hooks/`; `npm run lint` fails when the markup and the catalogue drift apart.
+The structural hooks a theme's custom CSS may rely on — catalogue version **2**, 226 hooks. Anything not listed here is an implementation detail and may change without notice. The catalogue lives in `lib/themes/hooks/`; `npm run lint` fails when the markup and the catalogue drift apart.
 
 ## Conventions
 
@@ -75,13 +75,20 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-left-sidebar` | Left rail. The permanent icon rail down the left of the window. | `.qt-app-layout` |  | `.qt-left-sidebar-collapsed` — Collapsed (always, today: the rail has no expanded form) |
 | `.qt-left-sidebar-content` | Rail navigation area | `.qt-left-sidebar` |  |  |
 | `.qt-collapsed-nav` | Rail navigation | `.qt-left-sidebar-content` |  |  |
-| `.qt-collapsed-nav-button` | Rail navigation item. An icon link. Its name is in `title` / `aria-label`; there is no text label in the markup. | `.qt-collapsed-nav` | `data-nav`: `home`, `projects`, `files`, `scriptorium`, `characters`, `photos`, `scenarios`, `custom-tools`, `chats` | `aria-current="page"` — The item for the focused workspace pane's active tab (none when nothing corresponds) |
+| `.qt-collapsed-nav-button` | Rail navigation button. An icon link (Home, Characters) or a group button that opens its flyout menu (Conversations, Objects, Library, Studio). Its name is in `title` / `aria-label`; the text label is in the flyout. | `.qt-collapsed-nav` | `data-nav`: `home`, `characters`, `conversations`, `objects`, `library`, `studio` | `aria-current="page"` — The button for the focused workspace pane's active tab — for a group, when one of its rows is (none when nothing corresponds)<br>`aria-expanded="true"` / `aria-expanded="false"` — A group button's flyout is open |
 | `.qt-left-sidebar-footer` | Rail footer | `.qt-left-sidebar` |  |  |
 | `.qt-left-sidebar-footer-actions` | Rail footer buttons | `.qt-left-sidebar-footer` |  |  |
-| `.qt-left-sidebar-item` | Rail footer button | `.qt-left-sidebar-footer-actions` | `data-nav`: `help`, `brahma`, `wardrobe`, `inventory`, `atlas`, `document-mode`, `settings`, `themes`, `quick-hide` | `aria-expanded="true"` / `aria-expanded="false"` — Its popout is open (themes, quick-hide) |
+| `.qt-left-sidebar-item` | Rail footer button. A pinned button: Help, Quick-hide, Settings. | `.qt-left-sidebar-footer-actions` | `data-nav`: `help`, `quick-hide`, `settings` | `aria-expanded="true"` / `aria-expanded="false"` — Its flyout is open (quick-hide)<br>`aria-current="page"` — Settings, when it is the focused pane's active tab |
 | `.qt-left-sidebar-item-icon` | Rail footer button icon | `.qt-left-sidebar-item` |  |  |
-| `.qt-left-sidebar-popout` | Rail popout menu. The menu a footer button or the profile button opens (themes, quick-hide, profile). | `.qt-left-sidebar-footer` |  |  |
-| `.qt-left-sidebar-profile` | Profile button | `.qt-left-sidebar-footer` |  | `aria-expanded="true"` / `aria-expanded="false"` — The profile menu is open |
+| `.qt-left-sidebar-popout` | Rail flyout. The flyout a rail button opens: a group menu, the profile menu, or a panel (theme, quick-hide). Portalled to `<body>`, beside the rail; at phone width a sheet along the bottom of the screen. |  | `data-nav-menu`: `conversations`, `objects`, `library`, `studio`, `profile-menu`, `themes`, `quick-hide` | `.qt-left-sidebar-popout-sheet` — Shown as a bottom sheet (phone width) |
+| `.qt-left-sidebar-menu-heading` | Rail flyout heading. The flyout's name: the group's label, Profile, Theme or Quick-hide. | `.qt-left-sidebar-popout` |  |  |
+| `.qt-left-sidebar-menu` | Rail flyout menu. The `role="menu"` list of rows in a group or profile flyout. | `.qt-left-sidebar-popout` |  |  |
+| `.qt-left-sidebar-menu-item` | Rail flyout row. One navigation item: an icon and a text label. A destination is a link, an action a button. | `.qt-left-sidebar-menu` | `data-nav`: `chats`, `new-chat`, `scenarios`, `brahma`, `wardrobe`, `inventory`, `atlas`, `custom-tools`, `projects`, `files`, `scriptorium`, `photos`, `document-mode`, `generate-image`, `atelier`, `theme-gallery`, `themes`, `profile`, `about` | `aria-disabled="true"` — Not available now (Brahma with no connection profile); the reason is shown under the label |
+| `.qt-left-sidebar-menu-item-icon` | Rail flyout row icon | `.qt-left-sidebar-menu-item` |  |  |
+| `.qt-left-sidebar-menu-item-text` | Rail flyout row text. Holds the label and, when the row is disabled, its reason. | `.qt-left-sidebar-menu-item` |  |  |
+| `.qt-left-sidebar-menu-item-label` | Rail flyout row label | `.qt-left-sidebar-menu-item-text` |  |  |
+| `.qt-left-sidebar-menu-item-reason` | Rail flyout row disabled reason. Why a disabled row cannot be chosen, in text under its label. | `.qt-left-sidebar-menu-item-text` |  |  |
+| `.qt-left-sidebar-profile` | Profile button | `.qt-left-sidebar-footer` | `data-nav`: `profile-menu` | `aria-expanded="true"` / `aria-expanded="false"` — The profile menu is open |
 | `.qt-left-sidebar-profile-avatar` | Profile picture | `.qt-left-sidebar-profile` |  |  |
 
 ## The Salon

@@ -43,7 +43,7 @@ A character may have many items in each slot, and equip multiple of them at once
 
 ## Creating Wardrobe Items
 
-To furnish a character's wardrobe, open the **Wardrobe** dialog — the clothes-hanger icon on the left sidebar, reachable from any page that bears the sidebar (Salon, Aurora, Prospero, and so on). Opening it from a character's Aurora page conveniently preselects that character.
+To furnish a character's wardrobe, open the **Wardrobe** dialog — to be had by opening **Objects** and choosing **Wardrobe**, from any page that bears the rail (Salon, Aurora, Prospero, and so on). Opening it from a character's Aurora page conveniently preselects that character.
 
 1. Pick a wardrobe from the dropdown at the top of the dialog — a character, Quilltap General, a project, or a group (if one isn't already selected)
 2. Click **+ New Item**
@@ -57,7 +57,7 @@ You may edit or remove your personal items at any time via each row's `⋮` menu
 
 ## The Wardrobe Control Dialog
 
-For day-to-day fussing-about with what a character is wearing, there is a more direct instrument than the Aurora page's tabs and panels: the **Wardrobe** dialog. A small clothes-hanger icon dwells on the left sidebar (between Themes, when shown, and Settings) and is accessible from every page that bears the sidebar — Salon, Aurora, Prospero, the Foundry, and so on.
+For day-to-day fussing-about with what a character is wearing, there is a more direct instrument than the Aurora page's tabs and panels: the **Wardrobe** dialog. It is reached by opening **Objects** and choosing **Wardrobe**, from every page that bears the rail — Salon, Aurora, Prospero, the Foundry, and so on.
 
 What the dialog allows you to do, with the directness of a valet pulling out the morning's tweeds:
 
@@ -82,7 +82,7 @@ For those moments when visual inspiration strikes --- a photograph discovered in
 
 To use this feature:
 
-1. Open the **Wardrobe** dialog (the clothes-hanger icon on the left sidebar) and select the character
+1. Open the **Wardrobe** dialog (open **Objects** and choose **Wardrobe**) and select the character
 2. Click **Import from image** (it sits beside **+ New Item** at the foot of the wardrobe list)
 3. Drop an image file into the upload zone, or click to browse (JPEG, PNG, WebP, or GIF, up to 10 MB)
 4. Choose who reads it under **Reading the photograph** --- a list of every connection profile whose model reads pictures *and* whose provider will actually deliver one, preset to the profile the dialog would have chosen for you

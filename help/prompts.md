@@ -26,7 +26,7 @@ By creating templates, you can:
 
 ## Accessing Prompts
 
-1. Click **Settings** (gear icon) in the left sidebar
+1. Click **Settings** (gear icon) on the rail
 2. Click the **Prompts** tab
 3. You'll see two sections: **Sample Prompts** and **My Prompts**
 

@@ -6,7 +6,7 @@ url: /photos
 
 A character may keep a photograph in their album with `keep_image`, but you, the gentle reader, ought to have a parlour cabinet of your own — a place where the pictures you find worth a second glance are filed tidily away, searchable, and ready to be brought out again whenever the conversation calls for one.
 
-That parlour cabinet is **My Photos**. You'll find it tucked into the collapsed sidebar, between Characters and Scenarios, behind a small framed-picture icon.
+That parlour cabinet is **My Photos**. You'll find it by opening **Library** and choosing **My Photos**.
 
 ## How a photograph finds its way into the cabinet
 

@@ -126,9 +126,8 @@ should a character ask to draw your eye to a passage — by way of the Librarian
 
 ## Document Mode without a conversation
 
-Not every manuscript wants an audience. The left rail carries a **Document
-Mode** button of its own (the little page with a plus sign, seated just above
-Settings), and pressing it opens the very same Open Document dialog you know
+Not every manuscript wants an audience. Open **Library** and choose
+**Open Document…**, and you are given the very same Open Document dialog you know
 from the composer — save that, having no conversation to defer to, it looks
 **everywhere** from the start: every character vault, every document store, the
 general library, and your recent documents across all conversations.
@@ -174,7 +173,7 @@ tab being frozen at the hour you left it. See
 
 This Help remains a floating window, so it may follow you wherever you roam and
 send you straight to the page you need. The **Wardrobe** opens as a roomy tab
-when summoned from the left rail (for browsing and tailoring), but keeps its
+when summoned from the rail (for browsing and tailoring), but keeps its
 familiar dialog when opened from within a conversation, where it can change what
 a character is presently wearing.
 

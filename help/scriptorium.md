@@ -44,7 +44,7 @@ Should you wish to rechristen a document, click the title at the top of the edit
 
 Should a volume have outlived its usefulness, the header also offers a small trash-can button beside Close. A single click, a polite request for confirmation, and the underlying file is removed — whether it resides on disk or in a database-backed vault — the document pane is closed, and the Librarian announces the deletion in the chat so present characters know the volume is gone from the shelves. The action is irreversible; do reserve it for files you truly mean to dismiss.
 
-Nor must a conversation always be in attendance: the left rail offers a **Document Mode** button of its own, which opens the same dialog and the same editor with no chat attached — and, having no audience, makes no announcements. The particulars are set out in [The Tabbed Workspace](tabbed-workspace.md).
+Nor must a conversation always be in attendance: open **Library** and choose **Open Document…**, which opens the same dialog and the same editor with no chat attached — and, having no audience, makes no announcements. The particulars are set out in [The Tabbed Workspace](tabbed-workspace.md).
 
 ### The Open Document picker
 

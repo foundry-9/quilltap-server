@@ -135,9 +135,6 @@ export function ThemeProvider({
     lastPreviewRef.current = previewState;
     setThemeRevision((n) => n + 1);
   }, [shownCss, previewState]);
-  const [showNavThemeSelector, setShowNavThemeSelectorState] = useState<boolean>(
-    initialPreference?.showNavThemeSelector ?? false
-  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -219,7 +216,6 @@ export function ThemeProvider({
       if (preference) {
         setActiveThemeId(preference.activeThemeId);
         setColorModeState(preference.colorMode);
-        setShowNavThemeSelectorState(preference.showNavThemeSelector);
 
         // If a theme is selected, load it; if it cannot be worn (refused or
         // gone), the default stands in and the operator is told once.
@@ -298,19 +294,6 @@ export function ThemeProvider({
     await loadAvailableThemes();
   }, [loadAvailableThemes]);
 
-  const setShowNavThemeSelector = useCallback(
-    async (show: boolean) => {
-      // Update local state immediately
-      setShowNavThemeSelectorState(show);
-
-      // Persist to server
-      if (status === 'authenticated') {
-        await saveThemePreference({ showNavThemeSelector: show });
-      }
-    },
-    [status]
-  );
-
   const setPreview = useCallback((value: ThemePreview | null) => {
     setPreviewState(value);
   }, []);
@@ -331,11 +314,9 @@ export function ThemeProvider({
       themeRevision,
       isLoading,
       error,
-      showNavThemeSelector,
       subsystems: shownSubsystems,
       setTheme,
       setColorMode,
-      setShowNavThemeSelector,
       refreshThemes,
       preview,
       setPreview,
@@ -350,11 +331,9 @@ export function ThemeProvider({
       themeRevision,
       isLoading,
       error,
-      showNavThemeSelector,
       shownSubsystems,
       setTheme,
       setColorMode,
-      setShowNavThemeSelector,
       refreshThemes,
       preview,
       setPreview,

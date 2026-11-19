@@ -191,7 +191,6 @@ export async function fetchAvailableThemes(): Promise<{
 export async function fetchThemePreference(): Promise<{
   activeThemeId: string | null;
   colorMode: ColorMode;
-  showNavThemeSelector: boolean;
 } | null> {
   try {
     const response = await fetch('/api/v1/user/profile?action=theme-preference');
@@ -201,7 +200,6 @@ export async function fetchThemePreference(): Promise<{
       return {
         activeThemeId: preference.activeThemeId ?? null,
         colorMode: preference.colorMode ?? 'system',
-        showNavThemeSelector: preference.showNavThemeSelector ?? false,
       };
     } else if (response.status === 401) {
       // Not authenticated, return null
@@ -221,7 +219,6 @@ export async function saveThemePreference(
   preference: Partial<{
     activeThemeId: string | null;
     colorMode: ColorMode;
-    showNavThemeSelector: boolean;
   }>
 ): Promise<void> {
   try {

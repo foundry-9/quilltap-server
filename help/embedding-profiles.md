@@ -23,7 +23,7 @@ For example, a search for "cat" would find memories mentioning "feline" because 
 
 Embedding profiles are filed with the providers that compute them, under **Settings → Connections → Providers**:
 
-1. Click **Settings** (gear icon) in the left sidebar
+1. Click **Settings** (gear icon) on the rail
 2. Choose the **Connections** group and open the **Providers** card
 3. With the view set to **By provider** (the default), open the card of the provider that does your embedding — OpenAI, Ollama, NanoGPT, OpenRouter, or **BUILTIN** for the in-house clerk who needs no provider at all
 

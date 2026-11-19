@@ -60,7 +60,7 @@ Theme bundles require no build tools, npm packages, or JavaScript code -- they a
 
 #### Installing a Theme Bundle
 
-1. Open **Settings** from the sidebar
+1. Click **Settings** on the rail
 2. Go to the **Appearance** tab
 3. Click the **Install Theme** button
 4. Select a `.qtap-theme` file from your computer
@@ -118,67 +118,25 @@ In addition to choosing a theme, you can select your preferred **color mode**:
 
 ### Quick Theme Switcher
 
-The theme quick-switcher is a convenient way to change themes from the sidebar:
+The theme picker is always at hand, and needs no enabling:
 
-1. Look at the **sidebar footer** (bottom left of the screen)
-2. Find the **palette icon** (paintbrush/colors)
-3. Click to open the theme menu
-4. Select a theme from the list
-5. Your theme changes instantly
-
-The quick-switcher only appears if you've enabled it in Settings (see below).
+1. Open **Studio** and choose **Theme…**
+2. See all available themes with colour previews
+3. Select a theme from the list
+4. Your theme changes instantly
+5. Below the themes, choose light, dark or system colour mode
 
 ### Through Settings
 
 You can also change themes in the Appearance settings:
 
-1. Open **Settings** from the sidebar
+1. Click **Settings** on the rail
 2. Go to the **Appearance** tab
 3. In the **Theme Selection** section, choose your preferred theme
 4. See a preview of the selected theme
 5. Changes apply immediately
 
-### Through the Menu
-
-When the quick-switcher is enabled:
-
-1. Click the palette icon in the sidebar footer
-2. See all available themes with color previews
-3. Click any theme to switch
-4. See color mode options below the themes
-5. Click to change light/dark/system preference
-
-## Theme Quick-Switcher Feature
-
-The theme quick-switcher is an optional sidebar button that gives you instant access to theme and color mode selection.
-
-### Enabling the Quick-Switcher
-
-1. Open **Settings** from the sidebar
-2. Go to the **Appearance** tab
-3. Find the **Show theme selector in navigation** toggle
-4. Turn it **ON**
-5. The palette icon appears in the sidebar footer
-
-### Disabling the Quick-Switcher
-
-1. Open **Settings** → **Appearance**
-2. Find the **Show theme selector in navigation** toggle
-3. Turn it **OFF**
-4. The palette icon disappears from the sidebar
-
-### Using the Quick-Switcher
-
-When enabled:
-
-1. **Locate the icon** — Look for the palette (paintbrush/colors) icon in the sidebar footer
-2. **Click to open** — Click the icon to open the theme menu
-3. **Select a theme** — Click any theme name to switch instantly
-4. **See colors** — Each theme shows color swatches for preview
-5. **Change color mode** — Below themes, toggle between Light, Dark, and System modes
-6. **Close menu** — Click elsewhere or press Escape to close
-
-### Theme Quick-Switcher Features
+### Theme Picker Features
 
 - **Color previews** — See the theme's primary colors before switching
 - **Font preview** — Theme names display in the theme's heading font
@@ -186,7 +144,6 @@ When enabled:
 - **Color mode options** — Quick access to light/dark/system modes
 - **Instant switching** — Changes apply immediately
 - **Mobile friendly** — Works on all screen sizes
-- **Collapsible sidebar** — Icon-only view in collapsed sidebar mode
 
 ## Understanding Your Theme
 
@@ -257,7 +214,7 @@ The **Appearance** group in Settings gives you full control:
 - **Garments Left at the Door** — Themes made for an earlier Quilltap, with an explanation and, for bundles, an Uninstall button
 - **Theme Preview** — See how each theme looks
 - **Color Mode** — Light, Dark, or System preference
-- **Quick-Switcher Toggle** — Enable/disable the sidebar quick-switcher
+- **Theme picker** — Always available as Studio → Theme…
 
 ### Theme Details
 
@@ -490,7 +447,7 @@ Registry indexes are JSON files listing available themes with download URLs, SHA
 2. **Consider color mode** — Choose light for daytime, dark for evening, system for automatic
 3. **Test readability** — Make sure text is easy to read in your preferred theme
 4. **Match your workflow** — Some themes may feel better for different types of work
-5. **Use quick-switcher** — Enable it if you like switching themes frequently
+5. **Use the theme picker** — Open **Studio** and choose **Theme…** when you like switching themes frequently
 6. **Adjust sidebar width** — Combined with theme changes, this can transform your interface
 
 ## Theme Persistence

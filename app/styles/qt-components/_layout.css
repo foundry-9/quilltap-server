@@ -539,6 +539,11 @@
     padding: var(--qt-sidebar-item-padding-y) var(--qt-sidebar-item-padding-x);
   }
 
+  .qt-left-sidebar-item:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
   .qt-left-sidebar-item:hover {
     background: var(--qt-sidebar-item-hover-bg);
   }
@@ -587,8 +592,90 @@
     color: var(--color-foreground);
   }
 
-  .qt-collapsed-nav-button:hover {
+  .qt-collapsed-nav-button:hover,
+  .qt-collapsed-nav-button[aria-expanded="true"] {
     background: var(--qt-sidebar-item-hover-bg);
+  }
+
+  /**
+   * Rail flyout - a group menu, the profile menu or a panel (theme,
+   * quick-hide). Portalled to <body>; placed beside its button by the rail.
+   */
+  .qt-left-sidebar-popout {
+    width: 15rem;
+    background-color: var(--qt-popover-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg, 0.5rem);
+    box-shadow: var(--qt-dialog-shadow, 0 10px 25px hsl(225 18% 10% / 0.15), 0 4px 10px hsl(225 18% 10% / 0.08));
+    z-index: var(--qt-floating-layer-z);
+    max-height: calc(100vh - 1rem);
+    overflow-y: auto;
+    outline: none;
+  }
+
+  /* Phone width: a sheet along the bottom of the screen. */
+  .qt-left-sidebar-popout-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 70vh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .qt-left-sidebar-menu-heading {
+    @apply px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-left-sidebar-menu {
+    @apply flex flex-col gap-0.5 p-1.5 pt-0;
+  }
+
+  .qt-left-sidebar-menu-item {
+    @apply flex items-center gap-3 w-full px-3 py-2 rounded-md text-left text-sm;
+    @apply transition-colors duration-150;
+    color: var(--color-foreground);
+    cursor: pointer;
+  }
+
+  .qt-left-sidebar-menu-item:hover,
+  .qt-left-sidebar-menu-item:focus-visible {
+    background: var(--qt-sidebar-item-hover-bg);
+    outline: none;
+  }
+
+  .qt-left-sidebar-menu-item:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--color-ring);
+  }
+
+  .qt-left-sidebar-menu-item[aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  .qt-left-sidebar-menu-item[aria-disabled="true"] .qt-left-sidebar-menu-item-icon,
+  .qt-left-sidebar-menu-item[aria-disabled="true"] .qt-left-sidebar-menu-item-label {
+    opacity: 0.5;
+  }
+
+  .qt-left-sidebar-menu-item-icon {
+    @apply flex-shrink-0;
+  }
+
+  .qt-left-sidebar-menu-item-text {
+    @apply flex flex-col min-w-0;
+  }
+
+  .qt-left-sidebar-menu-item-label {
+    @apply truncate;
+  }
+
+  .qt-left-sidebar-menu-item-reason {
+    @apply text-xs;
+    color: var(--color-muted-foreground);
   }
 
   /**

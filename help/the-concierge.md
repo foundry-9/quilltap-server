@@ -242,7 +242,7 @@ If you want the Concierge's badges and blur but never want an uncensored model c
 
 ## Quick-Hide Integration
 
-The **Dangerous Chats** toggle in the quick-hide menu (the eye icon in the sidebar footer, under **Content Filters**) hides every chat on the uncensored road — every **Unmoderated** chat, whoever put it there — from the sidebar, the projects section and the all-chats page. Locked and Moderated chats stay where they are. The preference is kept in your browser's local storage. See [Quick-Hide](quick-hide.md).
+The **Dangerous Chats** toggle in the quick-hide menu (the eye on the rail, under **Content Filters**) hides every chat on the uncensored road — every **Unmoderated** chat, whoever put it there — from the sidebar, the projects section and the all-chats page. Locked and Moderated chats stay where they are. The preference is kept in your browser's local storage. See [Quick-Hide](quick-hide.md).
 
 ## In-Chat Settings Access
 

@@ -6,7 +6,7 @@ tags: [help, chat, console, llm, model, tools, brahma, writing assistant, attach
 
 # The Brahma Console
 
-> **The Brahma Console is summoned by the bright round button at the bottom-left of every page, just to the right of the sidebar — or, in the workspace, opened as a tab from the console mark in the sidebar.**
+> The Brahma Console is summoned by the bright round button at the bottom-left of every page, just to the right of the rail — or, in the workspace, opened as a tab: open **Conversations** and choose **Brahma Console**.
 
 Where the Help Chat sends you a well-mannered concierge — a *character*, with a personality and a fondness for the house documentation — the Brahma Console dispenses with all such ceremony. It is, quite simply, a direct line to a large language model: no persona, no costume, no scene to play. You choose an engine, and you speak to it plainly. Think of it as the telegraph key in the corner of the workshop, ready at any hour for a frank word with the machine.
 
@@ -16,7 +16,7 @@ The Console keeps two doors.
 
 ### The ever-present button
 
-At the very foot of every page, just to the right of the sidebar, there sits a round, brightly lacquered button bearing the **tetra-radial console mark** — a ring of four nodes wired to a central hub. It is never dimmed and never out of reach. A single press and the Console floats into view: a draggable, resizable window you may haul about by its title bar and stretch by its lower corner. Press the button again (it wears an inverted, *pressed-in* look while the Console is showing) and the window tucks itself away.
+At the very foot of every page, just to the right of the rail, there sits a round, brightly lacquered button bearing the **tetra-radial console mark** — a ring of four nodes wired to a central hub. It is never dimmed and never out of reach. A single press and the Console floats into view: a draggable, resizable window you may haul about by its title bar and stretch by its lower corner. Press the button again (it wears an inverted, *pressed-in* look while the Console is showing) and the window tucks itself away.
 
 This floating Console rides **above everything else in the house** — above any form, picker or confirmation box you happen to have open. Halfway through filling out a new connection profile and uncertain what a setting means? Press the button, put your question to the engine, and carry on with the form; working in the Console never dismisses the dialog beneath it. Pressing **Escape** while you are typing in the Console hides only the Console; pressing it in the form beneath closes only the form.
 
@@ -24,7 +24,7 @@ Hiding the window does not hang up the line. Should a reply still be on the wire
 
 ### The workspace tab
 
-Inside the workspace, the **console mark in the sidebar** (just beneath the Help question-mark) opens the Console as a tab of its own, for longer sittings. The tab and the floating window keep their own places: each remembers its own conversation, so the tab may hold one line of inquiry while the floating window is busy with another.
+Inside the workspace, open **Conversations** and choose **Brahma Console**, and the Console arrives as a tab of its own, for longer sittings. The tab and the floating window keep their own places: each remembers its own conversation, so the tab may hold one line of inquiry while the floating window is busy with another.
 
 ### Past conversations
 
@@ -38,7 +38,7 @@ Every Console conversation talks to exactly one **connection profile** (your con
 
 Switching the engine **continues the same conversation**. The transcript carries on uninterrupted; only the machine answering from that point forward has changed. Should you wish to put the same question to two different engines, simply ask, switch, and ask again.
 
-> A connection profile is the one prerequisite. With none established, the sidebar's console mark sits dimmed and the floating Console opens only to say it wants for an engine; visit the Foundry's system settings to add one, then return.
+> A connection profile is the one prerequisite. With none established, the **Brahma Console** menu entry sits dimmed and the floating Console opens only to say it wants for an engine; visit the Foundry's system settings to add one, then return.
 
 ## What the Console can do
 
@@ -178,7 +178,7 @@ The Console is, by design, an amnesiac of impeccable discretion:
 
 ## In-Chat Navigation
 
-To direct the user to the home page (the floating Console button sits at the bottom-left of every page, and the sidebar's console mark opens it as a workspace tab):
+To direct the user to the home page (the floating Console button sits at the bottom-left of every page, and open **Conversations** and choose **Brahma Console** to have it as a workspace tab):
 ```
 help_navigate(url: "/")
 ```
@@ -191,7 +191,7 @@ help_navigate(url: "/settings?section=brahma-console")
 ## Related Pages
 
 - [Help Chat](help-chat.md) --- The in-character assistant, by contrast
-- [Left Sidebar](sidebar.md) --- Where the Console mark lives
+- [The Rail and Its Menus](navigation.md) --- Where the Console menu entry lives
 - [Connection Profiles](connection-profiles.md) --- Establish the engines the Console can call upon
 - [The Scriptorium](scriptorium.md) --- The document stores the Console can read and write
 - [Carina](carina.md) --- Reaching the Console by name (`@Brahma`) from inside a Salon

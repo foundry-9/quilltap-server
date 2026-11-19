@@ -97,7 +97,7 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
       'tags-customization',
       'quick-hide',
       'width-toggle',
-      'sidebar',
+      'navigation',
     ],
   },
   {

@@ -27,7 +27,13 @@ import { WORKSPACE_HOOKS } from './workspace'
 
 export type * from './types'
 
-export const HOOK_CATALOGUE_VERSION = 1
+/**
+ * 2 (2026-11-19): the rail became four group menus (navigation registry).
+ * `qt-collapsed-nav-button` and `qt-left-sidebar-item` lost the `data-nav`
+ * values that moved into a flyout; those items are `qt-left-sidebar-menu-item`
+ * rows now, with the same `data-nav` values.
+ */
+export const HOOK_CATALOGUE_VERSION = 2
 
 /** Surfaces in the order the reference document presents them. */
 export const HOOK_SURFACES: readonly HookSurface[] = [

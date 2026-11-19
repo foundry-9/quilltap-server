@@ -190,8 +190,9 @@ export const ThemePreferenceSchema = z.object({
   /** Custom token overrides (user tweaks on top of selected theme) */
   customOverrides: z.record(z.string(), z.string()).optional(),
 
-  /** Whether to show theme selector in the navigation bar */
-  showNavThemeSelector: z.boolean().default(false),
+  // `showNavThemeSelector` was retired in 4.14 (the theme picker is always in
+  // the rail's Studio menu). A stored or backed-up preference carrying it
+  // still parses: the key is stripped.
 });
 
 export type ThemePreference = z.infer<typeof ThemePreferenceSchema>;
@@ -249,6 +250,5 @@ export function createDefaultThemePreference(): ThemePreference {
   return {
     activeThemeId: null,
     colorMode: 'system',
-    showNavThemeSelector: false,
   };
 }

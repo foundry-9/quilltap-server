@@ -10,7 +10,7 @@ The Roleplay Templates card (in the Characters & Prompts group of Settings) is w
 
 ## Accessing Roleplay Templates Settings
 
-1. Click **Settings** in the sidebar (gear icon)
+1. Click **Settings** (gear icon) on the rail
 2. Open the **Characters & Prompts** group and find the **Roleplay Templates** card
 3. You'll see three main sections: Default Template, Built-in Templates, and My Templates
 

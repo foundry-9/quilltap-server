@@ -118,7 +118,7 @@ The quick-hide feature lets you temporarily hide content tagged with specific ta
 
 ### How Quick-Hide Works
 
-1. Look for the **Quick-Hide icon** (eye icon) in the sidebar footer
+1. Look for the **Quick-Hide icon** (eye icon) on the rail
 2. Click it to open the quick-hide menu
 3. You'll see a list of all tags marked as "quick-hide enabled"
 4. Click any tag to toggle its visibility:

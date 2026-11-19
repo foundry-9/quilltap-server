@@ -64,9 +64,6 @@ export interface ThemeContextValue {
   /** Any error that occurred during theme loading */
   error: string | null;
 
-  /** Whether to show theme selector in the navigation bar */
-  showNavThemeSelector: boolean;
-
   /** Subsystem display overrides from the active theme (null = no overrides) */
   subsystems: Record<string, SubsystemOverride> | null;
 
@@ -75,9 +72,6 @@ export interface ThemeContextValue {
 
   /** Set the color mode preference */
   setColorMode: (mode: ColorMode) => Promise<void>;
-
-  /** Set whether to show theme selector in the navigation bar */
-  setShowNavThemeSelector: (show: boolean) => Promise<void>;
 
   /** Refresh available themes list */
   refreshThemes: () => Promise<void>;

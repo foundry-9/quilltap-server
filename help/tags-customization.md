@@ -12,7 +12,7 @@ The **Tags** card in the Appearance group of Settings is where you control how t
 
 ### Navigate to Settings
 
-1. Click the **Settings icon** in the sidebar footer
+1. Click **Settings** (the gear) on the rail
 2. Open the **Appearance** group and find the **Tags** card
 3. You'll see all your tags listed with their current customization
 

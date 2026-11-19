@@ -28,7 +28,7 @@ You can create multiple profiles for different purposes, such as:
 
 Connection profiles live with the providers they telephone, under **Settings → Connections → Providers**:
 
-1. Click **Settings** (gear icon) in the left sidebar
+1. Click **Settings** (gear icon) on the rail
 2. Choose the **Connections** group and open the **Providers** card
 3. With the view set to **By provider** (the default), open the card of the provider in question — Anthropic, OpenAI, Ollama, and so forth
 

@@ -213,7 +213,7 @@ Now that you have an API key (or Ollama installed), let's add it to Quilltap.
 ### For Cloud Providers (OpenRouter, OpenAI, Anthropic, etc.)
 
 1. **Open Settings**
-   - Click **Settings** (gear icon) in the left sidebar
+   - Click **Settings** (gear icon) on the rail
    - Or go to: **Settings** (`/settings?group=connections`)
 
 2. **Add a New API Key**
@@ -417,7 +417,7 @@ You're ready to chat! Quilltap comes with a starter character, or you can create
 ### Chat with the Default Character
 
 1. **Go to Characters**
-   - Click **Characters** in the left sidebar
+   - Click **Characters** on the rail
    - Or go to: [Characters](/aurora)
 
 2. **Find a Character**

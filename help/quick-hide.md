@@ -16,7 +16,7 @@ Quick-hide lets you toggle the visibility of characters and content based on the
 
 ### Location
 
-The quick-hide control is located in the **sidebar footer** (bottom left of your screen):
+The quick-hide control is located in the **rail** (the eye, near the foot of the left edge):
 
 - Look for the **eye icon** with crossed lines (closed eye) or an open eye
 - Click this icon to open the quick-hide menu
@@ -31,7 +31,7 @@ When nothing is hidden, the icon shows an **open eye**, indicating everything is
 
 ### Opening the Menu
 
-1. Click the **quick-hide icon** in the sidebar footer
+1. Click the **quick-hide icon** on the rail
 2. A dropdown menu appears showing all available quick-hide tags
 3. Each tag has a visibility toggle (eye icon) next to it
 
@@ -175,7 +175,7 @@ Particulars:
 - Nothing is deleted, regenerated or re-fetched; the Lantern goes on painting backgrounds in the ordinary way, and they reappear the moment you lift the curtain
 - Your preference is saved across sessions, like the other quick-hide choices
 
-Because this toggle is always of use, the eye icon is always present in the sidebar footer.
+Because this toggle is always of use, the eye icon is always present on the rail.
 
 ## Quick-Hide vs. Other Features
 
