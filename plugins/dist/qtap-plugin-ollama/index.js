@@ -1474,7 +1474,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "7.57.0";
+var VERSION = "7.60.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -14065,8 +14065,9 @@ var TurnState = class {
     return true;
   }
   /** Checks session termination after updating the selected turn state. */
-  terminal(event) {
-    return event.type === "agent.session.failed" || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _TurnState_turnEnded, "f");
+  terminal(event, sessionID) {
+    const type = event.type;
+    return event.type === "agent.session.failed" || type === "agent.session.budget_reached" && "session" in event && event.session?.id === sessionID && (__classPrivateFieldGet(this, _TurnState_turnID, "f") === void 0 || __classPrivateFieldGet(this, _TurnState_turnEnded, "f")) || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _TurnState_turnEnded, "f");
   }
   /** Returns each tool call once for the full invocation, including subagent turns. */
   call(event) {
@@ -14455,12 +14456,13 @@ var AgentTurnResultCollector = class {
     if (this.ready) {
       return;
     }
-    if ("session" in event) {
+    if ("session" in event && event.session) {
       __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionID, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionID, "f") ?? event.session.id, "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_requiredActions, structuredClone(event.session.required_actions ?? []), "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_checkedActionsFor, void 0, "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionFailed, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionFailed, "f") || event.type === "agent.session.failed", "f");
-      __classPrivateFieldSet(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f") || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f"), "f");
+      const type = event.type;
+      __classPrivateFieldSet(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f") || (event.type === "agent.session.idle" && __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") || type === "agent.session.budget_reached" && event.session.id === __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionID, "f") && (!__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f") || __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f"))), "f");
     }
     if (event.type === "agent.session.turn.created" && event.turn.subagent_id === null && !__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f")) {
       __classPrivateFieldSet(this, _AgentTurnResultCollector_turn, structuredClone(event.turn), "f");
@@ -14494,7 +14496,7 @@ var AgentTurnResultCollector = class {
     __classPrivateFieldSet(this, _AgentTurnResultCollector_checkedActionsFor, canHandle, "f");
   }
   get ready() {
-    return __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") && __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f");
+    return __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f");
   }
   release() {
     __classPrivateFieldGet(this, _AgentTurnResultCollector_messages, "f").clear();
@@ -14750,7 +14752,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
       if (!state2.accept(event)) {
         continue;
       }
-      const terminal = state2.terminal(event);
+      const terminal = state2.terminal(event, __classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"));
       const dispatch = __classPrivateFieldGet(this, _AgentSessionStream_dispatcher, "f").prepare(state2.call(event), __classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"));
       if (terminal) {
         __classPrivateFieldGet(this, _AgentSessionStream_stream, "f").controller.abort();

@@ -102,7 +102,7 @@ var init_errors = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/core/error.mjs
-var AnthropicError, APIError, APIUserAbortError, APIConnectionError, APIConnectionTimeoutError, RetryableError, BadRequestError, AuthenticationError, PermissionDeniedError, NotFoundError, RequestTimeoutError, ConflictError, PreconditionFailedError, ContentTooLargeError, UnprocessableEntityError, RateLimitError, RequestHeaderFieldsTooLargeError, ClientClosedRequestError, InternalServerError, NotImplementedError, ServiceUnavailableError, GatewayTimeoutError, OverloadedError, STATUS_ERROR_CLASSES;
+var AnthropicError, APIError, APIUserAbortError, APIConnectionError, APIConnectionTimeoutError, RetryableError, BadRequestError, AuthenticationError, PaymentRequiredError, PermissionDeniedError, NotFoundError, RequestTimeoutError, ConflictError, PreconditionFailedError, ContentTooLargeError, UnprocessableEntityError, RateLimitError, RequestHeaderFieldsTooLargeError, ClientClosedRequestError, InternalServerError, NotImplementedError, ServiceUnavailableError, GatewayTimeoutError, OverloadedError, STATUS_ERROR_CLASSES;
 var init_error = __esm({
   "node_modules/@anthropic-ai/sdk/core/error.mjs"() {
     init_errors();
@@ -216,6 +216,12 @@ var init_error = __esm({
       AuthenticationError3._errorName = "AuthenticationError";
       return AuthenticationError3;
     })();
+    PaymentRequiredError = /* @__PURE__ */ (() => {
+      class PaymentRequiredError2 extends APIError {
+      }
+      PaymentRequiredError2._errorName = "PaymentRequiredError";
+      return PaymentRequiredError2;
+    })();
     PermissionDeniedError = /* @__PURE__ */ (() => {
       class PermissionDeniedError3 extends APIError {
       }
@@ -309,6 +315,7 @@ var init_error = __esm({
     STATUS_ERROR_CLASSES = /* @__PURE__ */ new Map([
       [400, BadRequestError],
       [401, AuthenticationError],
+      [402, PaymentRequiredError],
       [403, PermissionDeniedError],
       [404, NotFoundError],
       [408, RequestTimeoutError],
@@ -403,7 +410,7 @@ var init_sleep = __esm({
 var VERSION;
 var init_version = __esm({
   "node_modules/@anthropic-ai/sdk/version.mjs"() {
-    VERSION = "1.8.0";
+    VERSION = "1.10.0";
   }
 });
 
@@ -4710,7 +4717,7 @@ var init_files = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/shared.mjs
-var ClaudeCodeKeyCreatorNotMemberError, ClaudeCodeVersionTooOldError, CMEKKeyDisabledError, CMEKKeyNetworkBlockedError, OrganizationOnHoldError, OrganizationTypeNotSupportedError, RequestBodyEncodingInvalidError, RequestBodyEncodingUnsupportedError, SandboxEgressRestrictedError, RequestBodyTooLargeAfterDecodingError, EnforcedSpendLimitReachedError, RampLimitExceededError, CMEKContextUnavailableError, CMEKKeyUnreachableError;
+var ClaudeCodeKeyCreatorNotMemberError, ClaudeCodeVersionTooOldError, CMEKKeyDisabledError, CMEKKeyNetworkBlockedError, OrganizationOnHoldError, OrganizationTypeNotSupportedError, ParentOrganizationRequiredError, RequestBodyEncodingInvalidError, RequestBodyEncodingUnsupportedError, LinkedOrganizationBillingUnavailableError, LinkedOrganizationSpendLimitReachedError, SandboxEgressRestrictedError, RequestBodyTooLargeAfterDecodingError, ContractSpendLimitReachedError, EnforcedSpendLimitReachedError, RampLimitExceededError, CMEKContextUnavailableError, CMEKKeyUnreachableError;
 var init_shared = __esm({
   "node_modules/@anthropic-ai/sdk/resources/shared.mjs"() {
     init_error();
@@ -4750,6 +4757,12 @@ var init_shared = __esm({
       OrganizationTypeNotSupportedError2._errorName = "OrganizationTypeNotSupportedError";
       return OrganizationTypeNotSupportedError2;
     })();
+    ParentOrganizationRequiredError = /* @__PURE__ */ (() => {
+      class ParentOrganizationRequiredError2 extends BadRequestError {
+      }
+      ParentOrganizationRequiredError2._errorName = "ParentOrganizationRequiredError";
+      return ParentOrganizationRequiredError2;
+    })();
     RequestBodyEncodingInvalidError = /* @__PURE__ */ (() => {
       class RequestBodyEncodingInvalidError2 extends BadRequestError {
       }
@@ -4762,6 +4775,18 @@ var init_shared = __esm({
       RequestBodyEncodingUnsupportedError2._errorName = "RequestBodyEncodingUnsupportedError";
       return RequestBodyEncodingUnsupportedError2;
     })();
+    LinkedOrganizationBillingUnavailableError = /* @__PURE__ */ (() => {
+      class LinkedOrganizationBillingUnavailableError2 extends PaymentRequiredError {
+      }
+      LinkedOrganizationBillingUnavailableError2._errorName = "LinkedOrganizationBillingUnavailableError";
+      return LinkedOrganizationBillingUnavailableError2;
+    })();
+    LinkedOrganizationSpendLimitReachedError = /* @__PURE__ */ (() => {
+      class LinkedOrganizationSpendLimitReachedError2 extends PaymentRequiredError {
+      }
+      LinkedOrganizationSpendLimitReachedError2._errorName = "LinkedOrganizationSpendLimitReachedError";
+      return LinkedOrganizationSpendLimitReachedError2;
+    })();
     SandboxEgressRestrictedError = /* @__PURE__ */ (() => {
       class SandboxEgressRestrictedError2 extends PermissionDeniedError {
       }
@@ -4773,6 +4798,12 @@ var init_shared = __esm({
       }
       RequestBodyTooLargeAfterDecodingError2._errorName = "RequestBodyTooLargeAfterDecodingError";
       return RequestBodyTooLargeAfterDecodingError2;
+    })();
+    ContractSpendLimitReachedError = /* @__PURE__ */ (() => {
+      class ContractSpendLimitReachedError2 extends RateLimitError {
+      }
+      ContractSpendLimitReachedError2._errorName = "ContractSpendLimitReachedError";
+      return ContractSpendLimitReachedError2;
     })();
     EnforcedSpendLimitReachedError = /* @__PURE__ */ (() => {
       class EnforcedSpendLimitReachedError2 extends RateLimitError {
@@ -6326,6 +6357,15 @@ var require_dist = __commonJS({
       }
     };
     exports2.WebhookVerificationError = WebhookVerificationError;
+    function payloadBytes(payload) {
+      if (typeof payload === "string") {
+        return new TextEncoder().encode(payload);
+      }
+      if (ArrayBuffer.isView(payload) && payload.BYTES_PER_ELEMENT === 1) {
+        return new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+      }
+      throw new Error("Expected payload to be of type string, Buffer or Uint8Array.");
+    }
     var Webhook2 = class _Webhook {
       constructor(secret, options) {
         if ((options === null || options === void 0 ? void 0 : options.format) === "raw") {
@@ -6361,41 +6401,47 @@ var require_dist = __commonJS({
           throw new WebhookVerificationError("Missing required headers");
         }
         const timestamp = this.verifyTimestamp(msgTimestamp);
-        const computedSignature = this.sign(msgId, timestamp, payload);
-        const expectedSignature = computedSignature.split(",")[1];
-        const passedSignatures = msgSignature.split(" ");
+        const bytes = payloadBytes(payload);
         const encoder = new globalThis.TextEncoder();
-        for (const versionedSignature of passedSignatures) {
-          const [version, signature] = versionedSignature.split(",");
-          if (version !== "v1") {
-            continue;
-          }
-          if ((0, timing_safe_equal_1.timingSafeEqual)(encoder.encode(signature), encoder.encode(expectedSignature))) {
-            const payloadString = payload.toString();
-            if (payloadString === "") {
-              return void 0;
-            }
-            if (jsonParse) {
-              return JSON.parse(payloadString);
-            } else {
-              return void 0;
-            }
-          }
+        const expectedSignature = encoder.encode(this.sign(msgId, timestamp, bytes));
+        const passedSignatures = msgSignature.split(" ");
+        if (!passedSignatures.some((versionedSignature) => (0, timing_safe_equal_1.timingSafeEqual)(encoder.encode(versionedSignature), expectedSignature))) {
+          throw new WebhookVerificationError("No matching signature found");
         }
-        throw new WebhookVerificationError("No matching signature found");
+        if (bytes.length === 0) {
+          return void 0;
+        }
+        if (jsonParse) {
+          return JSON.parse(typeof payload === "string" ? payload : new TextDecoder().decode(bytes));
+        } else {
+          return void 0;
+        }
       }
       sign(msgId, timestamp, payload) {
-        if (typeof payload === "string") {
-        } else if (payload.constructor.name === "Buffer") {
-          payload = payload.toString();
-        } else {
-          throw new Error("Expected payload to be of type string or Buffer.");
-        }
-        const encoder = new TextEncoder();
+        const bytes = payloadBytes(payload);
         const timestampNumber = Math.floor(timestamp.getTime() / 1e3);
-        const toSign = encoder.encode(`${msgId}.${timestampNumber}.${payload}`);
+        const prefix = new TextEncoder().encode(`${msgId}.${timestampNumber}.`);
+        const toSign = new Uint8Array(prefix.length + bytes.length);
+        toSign.set(prefix);
+        toSign.set(bytes, prefix.length);
         const expectedSignature = base64.encode(sha256.hmac(this.key, toSign));
         return `v1,${expectedSignature}`;
+      }
+      endpointVerificationResponse(challenge) {
+        const encoder = new TextEncoder();
+        const verificationKey = sha256.hmac(this.key, encoder.encode("wev-v1"));
+        const signature = base64.encode(sha256.hmac(verificationKey, encoder.encode(challenge)));
+        return `v1,${signature}`;
+      }
+      verifyEndpointVerificationResponse(challenge, header) {
+        if (!header) {
+          throw new WebhookVerificationError("Missing challenge response");
+        }
+        const encoder = new globalThis.TextEncoder();
+        const expectedSignature = encoder.encode(this.endpointVerificationResponse(challenge));
+        if (!(0, timing_safe_equal_1.timingSafeEqual)(encoder.encode(header), expectedSignature)) {
+          throw new WebhookVerificationError("No matching signature found");
+        }
       }
       verifyTimestamp(timestampHeader) {
         const now = Math.floor(Date.now() / 1e3);
@@ -7139,6 +7185,9 @@ function endsTurn(ev) {
     return false;
   return ev.stop_reason?.type !== "requires_action";
 }
+function isIdleNeutral(ev) {
+  return ev.type === "user.tool_confirmation" || ev.type === "session.thread_status_terminated";
+}
 function buildResultEvent(ev, isError, content) {
   if (ev.type === "agent.custom_tool_use") {
     return { type: "user.custom_tool_result", custom_tool_use_id: ev.id, is_error: isError, content };
@@ -7166,7 +7215,7 @@ function toSessionContent(content) {
   });
   return out.length > 0 ? out : [{ type: "text", text: "(no output)" }];
 }
-var _IdleClock_maxIdleMs, _IdleClock_onExpire, _IdleClock_blockers, _IdleClock_armPending, _IdleClock_timer, _SessionToolRunner_instances, _SessionToolRunner_consumed, _SessionToolRunner_controller, _SessionToolRunner_detachExternal, _SessionToolRunner_requestOpts, _SessionToolRunner_toolByName, _SessionToolRunner_logger, _SessionToolRunner_seen, _SessionToolRunner_answered, _SessionToolRunner_confirmationVerdicts, _SessionToolRunner_awaitingConfirmation, _SessionToolRunner_results, _SessionToolRunner_inFlightCount, _SessionToolRunner_sendRetryWindowMs, _SessionToolRunner_onIdle, _SessionToolRunner_idleClock, _SessionToolRunner_otelContext, _SessionToolRunner_primaryThreadId, _SessionToolRunner_historyRead, _SessionToolRunner_requestOptions, _SessionToolRunner_streamLoop, _SessionToolRunner_reconcile, _SessionToolRunner_ingestHistory, _SessionToolRunner_notePrimaryThread, _SessionToolRunner_handleStreamEvent, _SessionToolRunner_routeToolEvent, _SessionToolRunner_noteConfirmation, _SessionToolRunner_applyVerdict, _SessionToolRunner_surfaceCall, _SessionToolRunner_execute, _SessionToolRunner_sendResult, _SessionToolRunner_drain, STREAM_BACKOFF_START_MS, STREAM_BACKOFF_CAP_MS, TOOL_TIMEOUT_MS, DRAIN_TIMEOUT_MS, SEND_BACKOFF_START_MS, SEND_BACKOFF_CAP_MS, SEND_RETRY_WINDOW_MS, DEFAULT_MAX_IDLE_MS, IdleClock, SessionToolRunner;
+var _IdleClock_maxIdleMs, _IdleClock_onExpire, _IdleClock_blockers, _IdleClock_armPending, _IdleClock_idleMayBeStale, _IdleClock_timer, _SessionToolRunner_instances, _SessionToolRunner_consumed, _SessionToolRunner_controller, _SessionToolRunner_detachExternal, _SessionToolRunner_requestOpts, _SessionToolRunner_toolByName, _SessionToolRunner_logger, _SessionToolRunner_seen, _SessionToolRunner_answered, _SessionToolRunner_confirmationVerdicts, _SessionToolRunner_awaitingConfirmation, _SessionToolRunner_terminatedThreads, _SessionToolRunner_results, _SessionToolRunner_inFlightCount, _SessionToolRunner_sendRetryWindowMs, _SessionToolRunner_onIdle, _SessionToolRunner_idleClock, _SessionToolRunner_otelContext, _SessionToolRunner_primaryThreadId, _SessionToolRunner_historyRead, _SessionToolRunner_requestOptions, _SessionToolRunner_streamLoop, _SessionToolRunner_reconcile, _SessionToolRunner_ingestHistory, _SessionToolRunner_notePrimaryThread, _SessionToolRunner_handleStreamEvent, _SessionToolRunner_inTerminatedThread, _SessionToolRunner_releaseTerminatedHolds, _SessionToolRunner_routeToolEvent, _SessionToolRunner_noteConfirmation, _SessionToolRunner_applyVerdict, _SessionToolRunner_surfaceCall, _SessionToolRunner_execute, _SessionToolRunner_sendResult, _SessionToolRunner_drain, STREAM_BACKOFF_START_MS, STREAM_BACKOFF_CAP_MS, TOOL_TIMEOUT_MS, DRAIN_TIMEOUT_MS, SEND_BACKOFF_START_MS, SEND_BACKOFF_CAP_MS, SEND_RETRY_WINDOW_MS, DEFAULT_MAX_IDLE_MS, IdleClock, SessionToolRunner;
 var init_SessionToolRunner = __esm({
   "node_modules/@anthropic-ai/sdk/lib/tools/SessionToolRunner.mjs"() {
     init_tslib();
@@ -7196,24 +7245,28 @@ var init_SessionToolRunner = __esm({
           _IdleClock_onExpire.set(this, void 0);
           _IdleClock_blockers.set(this, /* @__PURE__ */ new Set());
           _IdleClock_armPending.set(this, false);
+          _IdleClock_idleMayBeStale.set(this, false);
           _IdleClock_timer.set(this, void 0);
           __classPrivateFieldSet(this, _IdleClock_maxIdleMs, maxIdleMs, "f");
           __classPrivateFieldSet(this, _IdleClock_onExpire, onExpire, "f");
         }
         /**
-         * Arm on an idle that ends the turn; disarm otherwise. `user.tool_confirmation`
-         * is neutral: it signals neither agent activity nor an idle, and its effect
-         * on the clock flows through {@link block} / {@link unblock} instead —
-         * disarming here would discard the pending arm the verdict is about to
-         * settle.
+         * Arm on an idle that ends the turn; disarm on any other event that is not {@link isIdleNeutral},
+         * and on a session thread's termination while `#idleMayBeStale` is true.
          */
         noteEvent(ev) {
-          if (ev.type === "user.tool_confirmation")
+          if (__classPrivateFieldGet(this, _IdleClock_idleMayBeStale, "f") && ev.type === "session.thread_status_terminated")
+            this.disarm();
+          if (isIdleNeutral(ev))
             return;
+          __classPrivateFieldSet(this, _IdleClock_idleMayBeStale, false, "f");
           if (endsTurn(ev))
             this.arm();
           else
             this.disarm();
+        }
+        noteHistoryRead(succeeded) {
+          __classPrivateFieldSet(this, _IdleClock_idleMayBeStale, !succeeded, "f");
         }
         /** Register gated work that must resolve before an idle countdown starts. */
         block(toolUseId) {
@@ -7232,6 +7285,12 @@ var init_SessionToolRunner = __esm({
           __classPrivateFieldGet(this, _IdleClock_blockers, "f").delete(toolUseId);
           if (__classPrivateFieldGet(this, _IdleClock_blockers, "f").size === 0 && __classPrivateFieldGet(this, _IdleClock_armPending, "f"))
             this.arm();
+        }
+        /** Retire gated work that can no longer resolve, and drop a pending arm that may be stale rather than apply it. */
+        abandon(toolUseId) {
+          if (__classPrivateFieldGet(this, _IdleClock_idleMayBeStale, "f"))
+            this.disarm();
+          this.unblock(toolUseId);
         }
         /**
          * (Re)start the idle countdown — or, while blockers are outstanding, hold
@@ -7263,7 +7322,7 @@ var init_SessionToolRunner = __esm({
           }
         }
       }
-      _IdleClock_maxIdleMs = /* @__PURE__ */ new WeakMap(), _IdleClock_onExpire = /* @__PURE__ */ new WeakMap(), _IdleClock_blockers = /* @__PURE__ */ new WeakMap(), _IdleClock_armPending = /* @__PURE__ */ new WeakMap(), _IdleClock_timer = /* @__PURE__ */ new WeakMap();
+      _IdleClock_maxIdleMs = /* @__PURE__ */ new WeakMap(), _IdleClock_onExpire = /* @__PURE__ */ new WeakMap(), _IdleClock_blockers = /* @__PURE__ */ new WeakMap(), _IdleClock_armPending = /* @__PURE__ */ new WeakMap(), _IdleClock_idleMayBeStale = /* @__PURE__ */ new WeakMap(), _IdleClock_timer = /* @__PURE__ */ new WeakMap();
       return IdleClock2;
     })();
     SessionToolRunner = /* @__PURE__ */ (() => {
@@ -7280,6 +7339,7 @@ var init_SessionToolRunner = __esm({
           _SessionToolRunner_answered.set(this, /* @__PURE__ */ new Set());
           _SessionToolRunner_confirmationVerdicts.set(this, /* @__PURE__ */ new Map());
           _SessionToolRunner_awaitingConfirmation.set(this, /* @__PURE__ */ new Map());
+          _SessionToolRunner_terminatedThreads.set(this, /* @__PURE__ */ new Set());
           _SessionToolRunner_results.set(this, new AsyncQueue());
           _SessionToolRunner_inFlightCount.set(this, 0);
           _SessionToolRunner_sendRetryWindowMs.set(this, SEND_RETRY_WINDOW_MS);
@@ -7322,7 +7382,7 @@ var init_SessionToolRunner = __esm({
         _setSendRetryWindow(ms) {
           __classPrivateFieldSet(this, _SessionToolRunner_sendRetryWindowMs, ms, "f");
         }
-        async *[(_SessionToolRunner_consumed = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_controller = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_detachExternal = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_requestOpts = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_toolByName = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_logger = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_seen = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_answered = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_confirmationVerdicts = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_awaitingConfirmation = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_results = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_inFlightCount = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_sendRetryWindowMs = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_onIdle = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_idleClock = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_otelContext = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_primaryThreadId = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_historyRead = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_instances = /* @__PURE__ */ new WeakSet(), Symbol.asyncIterator)]() {
+        async *[(_SessionToolRunner_consumed = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_controller = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_detachExternal = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_requestOpts = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_toolByName = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_logger = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_seen = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_answered = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_confirmationVerdicts = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_awaitingConfirmation = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_terminatedThreads = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_results = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_inFlightCount = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_sendRetryWindowMs = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_onIdle = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_idleClock = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_otelContext = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_primaryThreadId = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_historyRead = /* @__PURE__ */ new WeakMap(), _SessionToolRunner_instances = /* @__PURE__ */ new WeakSet(), Symbol.asyncIterator)]() {
           if (__classPrivateFieldGet(this, _SessionToolRunner_consumed, "f")) {
             throw new AnthropicError("Cannot iterate over a consumed SessionToolRunner");
           }
@@ -7419,7 +7479,7 @@ var init_SessionToolRunner = __esm({
         try {
           for await (const ev of this.client.beta.sessions.events.list(this.sessionId, { limit: 1e3 }, __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_requestOptions).call(this))) {
             __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_ingestHistory).call(this, ev, pending);
-            if (ev.type !== "user.tool_confirmation")
+            if (!isIdleNeutral(ev))
               lastEndedTurn = endsTurn(ev);
           }
         } catch (e) {
@@ -7427,9 +7487,13 @@ var init_SessionToolRunner = __esm({
           __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").warn("reconcile list failed", { error: String(e) });
           for (const ev of pending)
             __classPrivateFieldGet(this, _SessionToolRunner_seen, "f").delete(ev.id);
+          __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").noteHistoryRead(false);
+          __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_releaseTerminatedHolds).call(this);
           return;
         }
         __classPrivateFieldSet(this, _SessionToolRunner_historyRead, true, "f");
+        __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").noteHistoryRead(true);
+        __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_releaseTerminatedHolds).call(this);
         const unanswered = pending.filter((ev) => !__classPrivateFieldGet(this, _SessionToolRunner_answered, "f").has(ev.id));
         __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").disarm();
         for (const ev of unanswered)
@@ -7439,7 +7503,7 @@ var init_SessionToolRunner = __esm({
           if (verdict !== void 0)
             await __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_applyVerdict).call(this, held, verdict);
         }
-        const outstanding = unanswered.filter((ev) => !__classPrivateFieldGet(this, _SessionToolRunner_answered, "f").has(ev.id) && !__classPrivateFieldGet(this, _SessionToolRunner_awaitingConfirmation, "f").has(ev.id));
+        const outstanding = unanswered.filter((ev) => !__classPrivateFieldGet(this, _SessionToolRunner_answered, "f").has(ev.id) && !__classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_inTerminatedThread).call(this, ev) && !__classPrivateFieldGet(this, _SessionToolRunner_awaitingConfirmation, "f").has(ev.id));
         if (lastEndedTurn && outstanding.length === 0)
           __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").arm();
         else
@@ -7457,6 +7521,8 @@ var init_SessionToolRunner = __esm({
         } else if (ev.type === "user.tool_confirmation") {
           if (!__classPrivateFieldGet(this, _SessionToolRunner_answered, "f").has(ev.tool_use_id))
             __classPrivateFieldGet(this, _SessionToolRunner_confirmationVerdicts, "f").set(ev.tool_use_id, ev.result);
+        } else if (ev.type === "session.thread_status_terminated") {
+          __classPrivateFieldGet(this, _SessionToolRunner_terminatedThreads, "f").add(ev.session_thread_id);
         }
       }, _SessionToolRunner_notePrimaryThread = function _SessionToolRunner_notePrimaryThread2(ev) {
         if (!this.client._tracer || __classPrivateFieldGet(this, _SessionToolRunner_primaryThreadId, "f") !== void 0)
@@ -7490,6 +7556,10 @@ var init_SessionToolRunner = __esm({
           case "user.custom_tool_result":
             __classPrivateFieldGet(this, _SessionToolRunner_answered, "f").add(ev.custom_tool_use_id);
             return false;
+          case "session.thread_status_terminated":
+            __classPrivateFieldGet(this, _SessionToolRunner_terminatedThreads, "f").add(ev.session_thread_id);
+            __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_releaseTerminatedHolds).call(this);
+            return false;
           case "session.status_terminated":
           case "session.deleted":
             __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").info("session terminated", {
@@ -7501,15 +7571,42 @@ var init_SessionToolRunner = __esm({
           default:
             return false;
         }
+      }, _SessionToolRunner_inTerminatedThread = function _SessionToolRunner_inTerminatedThread2(ev) {
+        return !!ev.session_thread_id && __classPrivateFieldGet(this, _SessionToolRunner_terminatedThreads, "f").has(ev.session_thread_id);
+      }, _SessionToolRunner_releaseTerminatedHolds = function _SessionToolRunner_releaseTerminatedHolds2() {
+        for (const held of __classPrivateFieldGet(this, _SessionToolRunner_awaitingConfirmation, "f").values()) {
+          if (!__classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_inTerminatedThread).call(this, held))
+            continue;
+          __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").info("session thread terminated; not executing", {
+            component: "session-tool-runner",
+            session_id: this.sessionId,
+            session_thread_id: held.session_thread_id,
+            tool: held.name,
+            tool_use_id: held.id
+          });
+          __classPrivateFieldGet(this, _SessionToolRunner_awaitingConfirmation, "f").delete(held.id);
+          __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").abandon(held.id);
+        }
       }, _SessionToolRunner_routeToolEvent = // ===== confirmation gating (always_ask tools) =====
       /**
        * Dispatch `ev`, honoring its evaluated permission. A call the server gated
        * (`evaluated_permission == "ask"`) is held until its `user.tool_confirmation`
        * arrives. Fails closed: only an explicit `allow` verdict releases a gated
        * call; a server-side `deny` overrides any recorded verdict; an unrecognized
-       * permission is held like `ask` and an unrecognized verdict is denied.
+       * permission is held like `ask` and an unrecognized verdict is denied. A call
+       * of a terminated session thread is dropped.
        */
       async function _SessionToolRunner_routeToolEvent2(ev) {
+        if (__classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_inTerminatedThread).call(this, ev)) {
+          __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").debug("session thread terminated; not executing", {
+            component: "session-tool-runner",
+            session_id: this.sessionId,
+            session_thread_id: ev.session_thread_id,
+            tool: ev.name,
+            tool_use_id: ev.id
+          });
+          return;
+        }
         const permission = ev.evaluated_permission;
         const verdict = permission === "deny" ? "deny" : __classPrivateFieldGet(this, _SessionToolRunner_confirmationVerdicts, "f").get(ev.id);
         if (verdict === void 0) {
@@ -7802,12 +7899,20 @@ var init_node = __esm({
 
 // node_modules/@anthropic-ai/sdk/tools/agent-toolset/fs-util.mjs
 function isWithin(root, p) {
+  const from = path2.resolve(root);
+  const to = path2.resolve(p);
+  return to === from || to.startsWith(from.endsWith(path2.sep) ? from : from + path2.sep);
+}
+function isWithinAnyCase(root, p) {
   const rel = path2.relative(root, p);
   return rel === "" || !rel.startsWith(".." + path2.sep) && rel !== ".." && !path2.isAbsolute(rel);
 }
-async function containingRoot(roots, target) {
+function isWithinFolded(root, p) {
+  return isWithin(root.toLowerCase().normalize("NFC"), p.toLowerCase().normalize("NFC"));
+}
+async function containingRoot(roots, target, contains = isWithin) {
   for (const root of roots) {
-    if (isWithin(await canonicalize(path2.resolve(root)), target))
+    if (contains(await canonicalize(path2.resolve(root)), target))
       return root;
   }
   return void 0;
@@ -7832,11 +7937,11 @@ async function canonicalize(abs) {
         const code = errnoCode(lstatErr);
         if (code !== "ENOENT" && code !== "ENOTDIR")
           throw lstatErr;
-        const parent = path2.dirname(prefix);
-        if (parent === prefix)
+        const parent2 = path2.dirname(prefix);
+        if (parent2 === prefix)
           throw lstatErr;
         tail.push(path2.basename(prefix));
-        prefix = parent;
+        prefix = parent2;
         continue;
       }
       if (!isLink)
@@ -7844,7 +7949,8 @@ async function canonicalize(abs) {
       if (++hops > MAX_SYMLINK_HOPS) {
         throw Object.assign(new Error("too many levels of symbolic links"), { code: "ELOOP" });
       }
-      prefix = path2.resolve(path2.dirname(prefix), await fs2.readlink(prefix));
+      const parent = await fs2.realpath(path2.dirname(prefix));
+      prefix = path2.resolve(parent, await fs2.readlink(prefix), ...tail.splice(0).reverse());
       continue;
     }
     return tail.length ? path2.join(real, ...tail.reverse()) : real;
@@ -7913,10 +8019,60 @@ function fsErrorMessage(err, file) {
       return `${file}: ${code !== void 0 ? `i/o error (${code})` : "i/o error"}`;
   }
 }
+async function findExecutable(name, notInside = [], searchPath = readEnv("PATH") ?? "") {
+  for (const dir of absolutePathEntries(searchPath)) {
+    const candidate = path2.join(dir, name);
+    try {
+      await fs2.access(candidate, fs.constants.X_OK);
+      if (!(await fs2.stat(candidate)).isFile())
+        continue;
+      if (notInside.length === 0)
+        return candidate;
+      const real = await fs2.realpath(candidate);
+      if (await containingRoot(notInside, real, isWithinFolded) === void 0)
+        return real;
+    } catch {
+    }
+  }
+  return null;
+}
+async function searchPathOutside(notInside, helpers) {
+  const resolve2 = (p) => fs2.realpath(p).catch(() => void 0);
+  const isInside = async (real) => await containingRoot(notInside, real, isWithinFolded) !== void 0;
+  let outside = null;
+  nextEntry: for (const dir of absolutePathEntries(readEnv("PATH") ?? "")) {
+    const real = await resolve2(dir);
+    if (await isInside(real ?? await canonicalize(dir).catch(() => dir)))
+      continue;
+    outside ?? (outside = []);
+    if (real === void 0 || real.includes(path2.delimiter))
+      continue;
+    for (const name of helpers) {
+      const helper = await resolve2(path2.join(real, name));
+      if (helper !== void 0 && await isInside(helper))
+        continue nextEntry;
+    }
+    outside.push(real);
+  }
+  return outside && outside.join(path2.delimiter);
+}
+function absolutePathEntries(searchPath) {
+  return searchPath.split(path2.delimiter).filter((dir) => path2.isAbsolute(dir) && path2.resolve(dir) === path2.join(dir, "."));
+}
+function scrubbedShellEnv() {
+  const env = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.toUpperCase().startsWith("ANTHROPIC_"))
+      continue;
+    env[key] = value;
+  }
+  return env;
+}
 var fs2, DIR_CREATE_MODE, FILE_CREATE_MODE, MAX_SYMLINK_HOPS;
 var init_fs_util = __esm({
   "node_modules/@anthropic-ai/sdk/tools/agent-toolset/fs-util.mjs"() {
     init_node();
+    init_env();
     init_ToolError();
     fs2 = fs.promises;
     DIR_CREATE_MODE = 448;
@@ -7960,7 +8116,7 @@ async function setupSkills(ctx) {
       await fs3.rm(dest, { recursive: true, force: true });
       await fs3.mkdir(dest, { recursive: true, mode: DIR_CREATE_MODE });
       created.push(dest);
-      await extractSkillArchive(resp, dest);
+      await extractArchive(resp, dest, [ctx.workdir, ...ctx.allowedRoots ?? []]);
       log.info("downloaded skill", {
         component: "agent-tool-context",
         skill_id: skill.skill_id,
@@ -8029,16 +8185,62 @@ async function assertOnlyPlainEntries(dir) {
       throw new AnthropicError(INCONSISTENT_LISTING);
   }
 }
-async function runArchiveTool(cmd, args) {
-  try {
-    const { stdout } = await execFileAsync(cmd, args);
-    return stdout;
-  } catch (e) {
-    if (errnoCode(e) === "ENOENT") {
-      throw new AnthropicError(`skill extraction requires the \`${cmd}\` command, but it was not found on PATH`);
+async function normalizeEntryModes(dir) {
+  await fs3.chmod(dir, DIR_CREATE_MODE);
+  for (const entry of await fs3.readdir(dir, { withFileTypes: true })) {
+    const entryPath = path2.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await normalizeEntryModes(entryPath);
+    } else if (entry.isFile()) {
+      const { mode, nlink } = await fs3.lstat(entryPath);
+      if (nlink > 1)
+        throw new AnthropicError(INCONSISTENT_LISTING);
+      await fs3.chmod(entryPath, mode & 73 ? 493 : 420);
     }
-    throw e;
   }
+}
+async function runArchiveTool(cmd, args, notInside) {
+  const onWindows = process.platform === "win32";
+  const name = onWindows ? `${cmd}.exe` : cmd;
+  const helpers = ARCHIVE_TOOL_HELPERS.flatMap((helper) => onWindows ? [helper, `${helper}.exe`] : [helper]);
+  const searchPath = notInside.length > 0 ? await searchPathOutside(notInside, helpers) : null;
+  const file = searchPath === null ? await findExecutable(name) : await findExecutable(name, notInside, searchPath);
+  if (!file) {
+    throw new AnthropicError(`skill extraction requires the \`${cmd}\` command, but it was not found on PATH` + (searchPath === null ? "" : " outside `workdir` and `allowedRoots`"));
+  }
+  const env = scrubbedShellEnv();
+  if (searchPath !== null)
+    env["PATH"] = searchPath;
+  return new Promise((resolve2, reject) => {
+    const proc = child_process.spawn(file, args, {
+      // A link called `tar` may lead to a program that goes by the name it was started under.
+      argv0: cmd,
+      // Windows looks in the current directory first, for a program and for a helper it starts.
+      cwd: path2.dirname(file),
+      env
+    });
+    const output = { stdout: "", stderr: "" };
+    let overLimit = false;
+    for (const pipe of ["stdout", "stderr"]) {
+      proc[pipe].setEncoding("utf8").on("data", (chunk) => {
+        output[pipe] += chunk;
+        if (output[pipe].length <= ARCHIVE_TOOL_OUTPUT_LIMIT)
+          return;
+        overLimit = true;
+        proc.kill();
+      });
+    }
+    proc.on("error", reject);
+    proc.on("close", (code, signal) => {
+      if (overLimit) {
+        reject(new AnthropicError(`skill archive lists too many members: \`${cmd}\` printed more than ${ARCHIVE_TOOL_OUTPUT_LIMIT} characters`));
+      } else if (code !== 0) {
+        reject(new AnthropicError(`\`${cmd}\` failed (${signal ?? `exit ${code}`}): ${output.stderr.trim()}`));
+      } else {
+        resolve2(output.stdout);
+      }
+    });
+  });
 }
 function archiveTopDir(names) {
   let top;
@@ -8058,27 +8260,32 @@ function archiveTopDir(names) {
   return top !== void 0 && nested ? top : "";
 }
 async function extractSkillArchive(resp, dest) {
-  const tmp = path2.join(dest, `.skill-archive-${process.pid}-${Date.now()}`);
+  await extractArchive(resp, dest, []);
+}
+async function extractArchive(resp, dest, toolsNotInside) {
+  dest = path2.resolve(dest);
   if (!resp.body) {
     throw new AnthropicError("skill download response had no body");
   }
-  await stream.promises.pipeline(stream.Readable.fromWeb(resp.body), fs.createWriteStream(tmp));
-  const stage = path2.join(path2.dirname(dest), `.skill-stage-${process.pid}-${Date.now()}`);
-  const excludeFile = path2.join(path2.dirname(dest), `.skill-exclude-${process.pid}-${Date.now()}`);
+  const work = await fs3.mkdtemp(path2.join(path2.dirname(dest), ".skill-stage-"));
   try {
+    const tmp = path2.join(work, "archive");
+    const stage = path2.join(work, "stage");
+    await stream.promises.pipeline(stream.Readable.fromWeb(resp.body), fs.createWriteStream(tmp, { flags: "wx", mode: FILE_CREATE_MODE }));
     const head = await readHead(tmp, 4);
     const isZip = head.length >= 4 && head[0] === 80 && head[1] === 75 && head[2] === 3 && head[3] === 4;
     const archiveCmd = isZip ? "unzip" : "tar";
-    const names = await runArchiveTool(archiveCmd, isZip ? ["-Z1", tmp] : ["-tf", tmp]);
-    const typed = await runArchiveTool(archiveCmd, isZip ? ["-Z", "--h", "--t", tmp] : ["-tvf", tmp]);
+    const names = await runArchiveTool(archiveCmd, isZip ? ["-Z1", tmp] : ["-tf", tmp], toolsNotInside);
+    const typed = await runArchiveTool(archiveCmd, isZip ? ["-Z", "--h", "--t", tmp] : ["-tvf", tmp], toolsNotInside);
     const { plain, special } = classifyArchiveListing(archiveCmd, names, typed);
     assertSafeMemberNames([...plain, ...special]);
     const top = archiveTopDir(plain);
-    await fs3.mkdir(stage, { recursive: true, mode: DIR_CREATE_MODE });
+    await fs3.mkdir(stage, { mode: DIR_CREATE_MODE });
     if (plain.length > 0) {
-      await runArchiveTool(archiveCmd, await extractArgs(archiveCmd, tmp, stage, special, excludeFile));
+      await runArchiveTool(archiveCmd, await extractArgs(archiveCmd, tmp, stage, special, path2.join(work, "exclude")), toolsNotInside);
     }
     await assertOnlyPlainEntries(stage);
+    await normalizeEntryModes(stage);
     const srcRoot = top ? path2.join(stage, top) : stage;
     const entries = await fs3.readdir(srcRoot).catch((e) => {
       throw errnoCode(e) === "ENOENT" ? new AnthropicError(INCONSISTENT_LISTING) : e;
@@ -8087,9 +8294,7 @@ async function extractSkillArchive(resp, dest) {
       await fs3.rename(path2.join(srcRoot, entry), path2.join(dest, entry));
     }
   } finally {
-    await fs3.rm(tmp, { force: true });
-    await fs3.rm(excludeFile, { force: true });
-    await fs3.rm(stage, { recursive: true, force: true });
+    await fs3.rm(work, { recursive: true, force: true });
   }
 }
 async function extractArgs(cmd, archive, stage, special, excludeFile) {
@@ -8097,10 +8302,11 @@ async function extractArgs(cmd, archive, stage, special, excludeFile) {
   if (cmd === "unzip") {
     return ["-oq", archive, "-d", stage, ...patterns.length > 0 ? ["-x", ...patterns] : []];
   }
+  const args = ["-xf", archive, "-C", stage, "--no-same-owner", "--no-same-permissions"];
   if (patterns.length === 0)
-    return ["-xf", archive, "-C", stage];
+    return args;
   await fs3.writeFile(excludeFile, patterns.join("\n") + "\n", { flag: "wx", mode: 384 });
-  return ["-xf", archive, "-C", stage, "-X", excludeFile];
+  return [...args, "-X", excludeFile];
 }
 async function readHead(file, n) {
   const handle = await fs3.open(file, "r");
@@ -8112,7 +8318,7 @@ async function readHead(file, n) {
     await handle.close();
   }
 }
-var fs3, execFileAsync, INCONSISTENT_LISTING, PLAIN_TYPE_CHARS;
+var fs3, INCONSISTENT_LISTING, PLAIN_TYPE_CHARS, ARCHIVE_TOOL_OUTPUT_LIMIT, ARCHIVE_TOOL_HELPERS;
 var init_skills = __esm({
   "node_modules/@anthropic-ai/sdk/tools/agent-toolset/skills.mjs"() {
     init_node();
@@ -8120,9 +8326,22 @@ var init_skills = __esm({
     init_log();
     init_fs_util();
     fs3 = fs.promises;
-    execFileAsync = util.promisify(child_process.execFile);
     INCONSISTENT_LISTING = "skill archive listing is inconsistent; refusing to extract";
     PLAIN_TYPE_CHARS = { unzip: /* @__PURE__ */ new Set(["-", "d", "?"]), tar: /* @__PURE__ */ new Set(["-", "d", "C"]) };
+    ARCHIVE_TOOL_OUTPUT_LIMIT = 1024 * 1024;
+    ARCHIVE_TOOL_HELPERS = [
+      "bzip2",
+      "compress",
+      "grzip",
+      "gzip",
+      "lrzip",
+      "lz4",
+      "lzip",
+      "lzma",
+      "lzop",
+      "xz",
+      "zstd"
+    ];
   }
 });
 
@@ -9356,16 +9575,7 @@ async function resolvePath(ctx, p) {
   return confineToRoot(ctx.workdir, p, { allowedRoots: ctx.allowedRoots ?? [] });
 }
 function readOnlyRootFor(ctx, target) {
-  return containingRoot(ctx.readOnlyRoots ?? [], target);
-}
-function scrubbedShellEnv() {
-  const env = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key.startsWith("ANTHROPIC_"))
-      continue;
-    env[key] = value;
-  }
-  return env;
+  return containingRoot(ctx.readOnlyRoots ?? [], target, isWithinAnyCase);
 }
 function betaBashTool(ctx) {
   rejectUnrestrictedPaths(ctx.unrestrictedPaths);
@@ -9666,14 +9876,17 @@ function betaGrepTool(ctx) {
       let searchPath = path3.resolve(ctx.workdir);
       if (p)
         searchPath = await resolvePath(ctx, p);
-      const rg = await findRg();
+      const rg = await findExecutable("rg", [ctx.workdir, ...ctx.allowedRoots ?? []]);
       return rg ? runRipgrep(rg, pattern, searchPath, context2?.signal) : runWalkGrep(pattern, searchPath, context2?.signal);
     }
   });
 }
 function runRipgrep(rg, pattern, searchPath, signal) {
   return new Promise((resolve2, reject) => {
-    const proc = cp.spawn(rg, ["-n", "--no-heading", "-e", pattern, "--", searchPath], {
+    const proc = cp.spawn(rg, ["--no-config", "-n", "--no-heading", "-e", pattern, "--", searchPath], {
+      // A link called `rg` may lead to a program that goes by the name it was started under.
+      argv0: "rg",
+      env: scrubbedShellEnv(),
       ...signal ? { signal } : {}
     });
     let out = "";
@@ -9716,6 +9929,11 @@ async function runWalkGrep(pattern, root, signal) {
   } catch (e) {
     throw new ToolError(`grep: invalid regex: ${e instanceof Error ? e.message : String(e)}`);
   }
+  if (signal?.aborted)
+    throw new ToolError("grep: aborted");
+  const { done } = await grepSlots.next(signal ?? void 0);
+  if (done)
+    throw new ToolError("grep: aborted");
   const hits = [];
   let budget = GREP_OUTPUT_LIMIT;
   const push = (line) => {
@@ -9727,35 +9945,133 @@ async function runWalkGrep(pattern, root, signal) {
     hits.push(line);
     return true;
   };
-  const stat2 = await fs4.stat(root).catch(() => null);
-  if (stat2?.isFile()) {
-    await grepFile(root, re2, push);
-  } else {
-    await walk2(root, "", (rel) => grepFile(path3.join(root, rel), re2, push), signal);
+  const stop = new AbortController();
+  const unlink = linkAbort(signal, stop);
+  const timer = setTimeout(() => stop.abort(), GREP_TIMEOUT_MS);
+  const match = lineMatcher(re2, stop.signal);
+  const grepPath = (rel) => grepFile(path3.join(root, rel), match, push, stop.signal);
+  const search = async () => {
+    const stat2 = await fs4.stat(root).catch(() => null);
+    return stat2?.isFile() ? grepPath("") : walk2(root, "", grepPath, stop.signal);
+  };
+  try {
+    await Promise.race([search(), (0, import_node_events.once)(stop.signal, "abort")]);
+    if (signal?.aborted)
+      throw new ToolError("grep: aborted");
+    if (stop.signal.aborted) {
+      if (hits.length === 0)
+        throw new ToolError(`grep: timed out after ${GREP_TIMEOUT_MS / 1e3}s`);
+      hits.push(`[the search was cut short after ${GREP_TIMEOUT_MS} ms]`);
+    }
+  } finally {
+    clearTimeout(timer);
+    unlink();
+    stop.abort();
+    grepSlots.push();
   }
-  if (signal?.aborted)
-    throw new ToolError("grep: aborted");
   if (hits.length === 0)
     return "no matches";
   return hits.join("\n");
 }
-async function grepFile(file, re2, push) {
+async function grepFile(file, match, push, signal) {
   const stream2 = fssync.createReadStream(file, { encoding: "utf8" });
-  const rl = readline.createInterface({ input: stream2, crlfDelay: Infinity });
-  let i = 0;
+  stream2.on("error", () => {
+  });
+  const rl = readline.createInterface({ input: stream2, crlfDelay: Infinity, signal });
+  stream2.on("data", (chunk) => {
+    if (chunk.includes("\0"))
+      rl.close();
+  });
   try {
-    for await (const line of rl) {
-      i++;
-      if (line.length > GREP_MAX_LINE_LENGTH)
-        continue;
-      if (re2.test(line) && !push(`${file}:${i}:${line}`))
-        return false;
+    for await (const { numbers, lines } of lineBatches(rl)) {
+      const matched = await match(lines);
+      for (const [i, line] of lines.entries()) {
+        if (matched[i] && !push(`${file}:${numbers[i]}:${line}`))
+          return false;
+      }
+      if (matched.length < lines.length)
+        break;
     }
-  } catch {
   } finally {
+    rl.close();
     stream2.destroy();
   }
   return true;
+}
+async function* lineBatches(input) {
+  let i = 0;
+  let numbers = [];
+  let lines = [];
+  try {
+    for await (const line of input) {
+      i++;
+      if (line.length > GREP_MAX_LINE_LENGTH)
+        continue;
+      numbers.push(i);
+      if (lines.push(line) < GREP_BATCH_LINES)
+        continue;
+      yield { numbers, lines };
+      numbers = [];
+      lines = [];
+    }
+  } catch {
+  }
+  if (lines.length > 0)
+    yield { numbers, lines };
+}
+function lineMatcher(re2, signal) {
+  let reply = promiseWithResolvers();
+  const fail = (cause) => {
+    reply.promise.catch(() => {
+    });
+    reply.reject(Object.assign(new ToolError(`grep: search failed: ${cause.message}`), { cause }));
+  };
+  const start = async () => {
+    try {
+      const worker = new import_node_worker_threads.Worker(GREP_WORKER_SOURCE, {
+        eval: true,
+        workerData: re2.source,
+        // keep this process's credentials and preloads out of the thread
+        env: {},
+        execArgv: [],
+        // otherwise a thread that can't start leaks listeners on this process's streams
+        stdout: true,
+        stderr: true,
+        // the default stack is smaller than the main thread's, and V8 crashes compiling a deeply nested regex on it
+        resourceLimits: { stackSizeMb: 8 }
+      });
+      signal.addEventListener("abort", () => void worker.terminate(), { once: true });
+      worker.on("message", (matched) => {
+        reply.resolve(matched);
+        reply = promiseWithResolvers();
+      });
+      worker.on("error", fail);
+      worker.on("exit", (code) => fail(new AnthropicError(`worker exited with code ${code}`)));
+      await reply.promise;
+      return worker;
+    } catch {
+      return null;
+    }
+  };
+  let starting;
+  return async (lines) => {
+    if (signal.aborted)
+      return [];
+    const worker = await (starting ?? (starting = start()));
+    if (signal.aborted)
+      return [];
+    if (worker) {
+      worker.postMessage(lines);
+      return reply.promise;
+    }
+    const matched = [];
+    try {
+      for (const line of lines)
+        matched.push(re2.test(line));
+    } catch {
+    }
+    return matched;
+  };
 }
 async function walk2(root, rel, fn, signal) {
   let remaining = WALK_MAX_ENTRIES;
@@ -9790,19 +10106,7 @@ async function walk2(root, rel, fn, signal) {
   }
   await inner(rel, 0);
 }
-async function findRg() {
-  const dirs = (process.env["PATH"] ?? "").split(path3.delimiter);
-  for (const d of dirs) {
-    const candidate = path3.join(d, "rg");
-    try {
-      await fs4.access(candidate, fssync.constants.X_OK);
-      return candidate;
-    } catch {
-    }
-  }
-  return null;
-}
-var fs4, fssync, path3, cp, crypto3, readline, _BashSession_instances, _BashSession_proc, _BashSession_buf, _BashSession_truncated, _BashSession_closed, _BashSession_waiting, _BashSession_append, _LineRangeCollector_instances, _LineRangeCollector_filePath, _LineRangeCollector_startLine, _LineRangeCollector_endLine, _LineRangeCollector_start, _LineRangeCollector_end, _LineRangeCollector_limit, _LineRangeCollector_line, _LineRangeCollector_collected, _LineRangeCollector_collectedBytes, _LineRangeCollector_collect, _LineRangeCollector_overLimitError, BASH_OUTPUT_LIMIT, BASH_DEFAULT_TIMEOUT_MS, DEFAULT_MAX_FILE_BYTES, READ_STREAM_CHUNK_BYTES, NEWLINE, GREP_OUTPUT_LIMIT, GREP_MAX_LINE_LENGTH, GLOB_RESULT_LIMIT, BashTimeoutError, ANSI_RE, fsGlob, BashSession, LineRangeCollector, WALK_MAX_DEPTH, WALK_MAX_ENTRIES;
+var fs4, fssync, path3, cp, crypto3, readline, import_node_events, import_node_worker_threads, _BashSession_instances, _BashSession_proc, _BashSession_buf, _BashSession_truncated, _BashSession_closed, _BashSession_waiting, _BashSession_append, _LineRangeCollector_instances, _LineRangeCollector_filePath, _LineRangeCollector_startLine, _LineRangeCollector_endLine, _LineRangeCollector_start, _LineRangeCollector_end, _LineRangeCollector_limit, _LineRangeCollector_line, _LineRangeCollector_collected, _LineRangeCollector_collectedBytes, _LineRangeCollector_collect, _LineRangeCollector_overLimitError, BASH_OUTPUT_LIMIT, BASH_DEFAULT_TIMEOUT_MS, DEFAULT_MAX_FILE_BYTES, READ_STREAM_CHUNK_BYTES, NEWLINE, GREP_OUTPUT_LIMIT, GREP_TIMEOUT_MS, GREP_MAX_LINE_LENGTH, GREP_BATCH_LINES, GREP_MAX_SEARCHES, GLOB_RESULT_LIMIT, BashTimeoutError, ANSI_RE, fsGlob, BashSession, LineRangeCollector, grepSlots, GREP_WORKER_SOURCE, WALK_MAX_DEPTH, WALK_MAX_ENTRIES;
 var init_node2 = __esm({
   "node_modules/@anthropic-ai/sdk/tools/agent-toolset/node.mjs"() {
     init_tslib();
@@ -9812,9 +10116,13 @@ var init_node2 = __esm({
     cp = __toESM(require("node:child_process"), 1);
     crypto3 = __toESM(require("node:crypto"), 1);
     readline = __toESM(require("node:readline"), 1);
+    import_node_events = require("node:events");
+    import_node_worker_threads = require("node:worker_threads");
     init_error();
     init_ToolError();
     init_json_schema();
+    init_abort();
+    init_async_queue();
     init_promise();
     init_fs_util();
     init_skills();
@@ -9825,7 +10133,10 @@ var init_node2 = __esm({
     READ_STREAM_CHUNK_BYTES = 64 * 1024;
     NEWLINE = Buffer.from("\n");
     GREP_OUTPUT_LIMIT = 100 * 1024;
+    GREP_TIMEOUT_MS = 6e4;
     GREP_MAX_LINE_LENGTH = 2e3;
+    GREP_BATCH_LINES = 1e3;
+    GREP_MAX_SEARCHES = 4;
     GLOB_RESULT_LIMIT = 200;
     BashTimeoutError = /* @__PURE__ */ (() => {
       class BashTimeoutError2 extends AnthropicError {
@@ -10023,6 +10334,22 @@ ${out}`;
       };
       return LineRangeCollector2;
     })();
+    grepSlots = new AsyncQueue();
+    for (let i = 0; i < GREP_MAX_SEARCHES; i++)
+      grepSlots.push();
+    GREP_WORKER_SOURCE = `
+const { parentPort, workerData } = require('node:worker_threads');
+let re;
+parentPort.on('message', (lines) => {
+  re ??= new RegExp(workerData);
+  const matched = [];
+  try {
+    for (const line of lines) matched.push(re.test(line));
+  } catch {}
+  parentPort.postMessage(matched);
+});
+parentPort.postMessage([]);
+`;
     WALK_MAX_DEPTH = 40;
     WALK_MAX_ENTRIES = 5e4;
   }
@@ -10259,7 +10586,9 @@ var init_worker = __esm({
          * environment key resolved. Throws `SessionMemoryError` when the
          * session has memory stores attached but they cannot be mounted — the work
          * item carried no sessions token (unless `memorySyncIntervalMs` turned
-         * memory off), or a store failed to download.
+         * memory off), or a store failed to download. When the session has already
+         * terminated, which includes an archived one, nothing is downloaded, no tools
+         * run, and `SessionMemoryError` is not thrown.
          *
          * `workSecret` is the work item's per-item `secret` payload from the poll
          * response, falling back to `ANTHROPIC_WORK_SECRET`; unlike the others it is
@@ -10298,7 +10627,8 @@ var init_worker = __esm({
        * The per-item body shared by {@link EnvironmentWorker.run}'s poll loop and
        * {@link EnvironmentWorker.handleItem}: run a {@link SessionToolRunner} for the
        * work item's session while heartbeating its lease, force-stopping on exit
-       * unless the lease was lost. Non-session work items are ignored.
+       * unless the lease was lost. Non-session work items, and the work item of a
+       * session that has already terminated, run no tools.
        *
        * When the poll response carried a per-item `secret` (a short-lived payload
        * scoped to this work item), the sessions token extracted from it is
@@ -10345,6 +10675,13 @@ var init_worker = __esm({
             return;
           }
           const session = await sessionClient.beta.sessions.retrieve(sessionId);
+          if (session.status === "terminated") {
+            log.info("skipping the work item of a terminated session", {
+              session_id: sessionId,
+              work_id: work.id
+            });
+            return;
+          }
           if (sessionsToken === null && this.memorySyncIntervalMs !== null && hasMemoryStore(session)) {
             throw new agentToolset.SessionMemoryError(`cannot mount the session's memories: the work item carried no sessions token (work_id=${work.id}, session_id=${sessionId}); the memory endpoints reject the environment key, so the poller must issue a per-item \`secret\` carrying \`sessions_token\`, or set \`memorySyncIntervalMs: null\` to run without memory`);
           }
@@ -10482,12 +10819,14 @@ var init_work = __esm({
     Work = /* @__PURE__ */ (() => {
       class Work2 extends APIResource {
         /**
-         * Note: these endpoints are called automatically by the pre-built environment
-         * worker provided in the SDKs and CLI, for orchestrating sessions with self-hosted
-         * sandbox environments. They are included here as a reference; you do not need to
-         * invoke them directly.
-         *
          * Retrieve detailed information about a specific work item.
+         *
+         * This endpoint accepts a Claude API key. It rejects the environment key and the
+         * work item's `secret`. On
+         * [Claude Platform on AWS](https://platform.claude.com/docs/en/build-with-claude/claude-platform-on-aws)
+         * or
+         * [Claude Models on Google Cloud (Anthropic managed)](https://platform.claude.com/docs/en/build-with-claude/claude-models-on-google-cloud/anthropic-managed),
+         * use that platform's credentials instead.
          *
          * @throws {ClaudeCodeKeyCreatorNotMemberError}
          * @throws {OrganizationOnHoldError}
@@ -10519,12 +10858,14 @@ var init_work = __esm({
           });
         }
         /**
-         * Note: these endpoints are called automatically by the pre-built environment
-         * worker provided in the SDKs and CLI, for orchestrating sessions with self-hosted
-         * sandbox environments. They are included here as a reference; you do not need to
-         * invoke them directly.
-         *
          * Update work item metadata with merge semantics.
+         *
+         * This endpoint accepts a Claude API key. It rejects the environment key and the
+         * work item's `secret`. On
+         * [Claude Platform on AWS](https://platform.claude.com/docs/en/build-with-claude/claude-platform-on-aws)
+         * or
+         * [Claude Models on Google Cloud (Anthropic managed)](https://platform.claude.com/docs/en/build-with-claude/claude-models-on-google-cloud/anthropic-managed),
+         * use that platform's credentials instead.
          *
          * @throws {ClaudeCodeKeyCreatorNotMemberError}
          * @throws {BetaInvalidMetadataError}
@@ -10559,12 +10900,14 @@ var init_work = __esm({
           });
         }
         /**
-         * Note: these endpoints are called automatically by the pre-built environment
-         * worker provided in the SDKs and CLI, for orchestrating sessions with self-hosted
-         * sandbox environments. They are included here as a reference; you do not need to
-         * invoke them directly.
-         *
          * List work items in an environment.
+         *
+         * This endpoint accepts the environment key as a bearer token. It rejects a Claude
+         * API key. On
+         * [Claude Platform on AWS](https://platform.claude.com/docs/en/build-with-claude/claude-platform-on-aws)
+         * or
+         * [Claude Models on Google Cloud (Anthropic managed)](https://platform.claude.com/docs/en/build-with-claude/claude-models-on-google-cloud/anthropic-managed),
+         * use that platform's credentials instead.
          *
          * @example
          * ```ts
@@ -10729,11 +11072,6 @@ var init_work = __esm({
           });
         }
         /**
-         * Note: these endpoints are called automatically by the pre-built environment
-         * worker provided in the SDKs and CLI, for orchestrating sessions with self-hosted
-         * sandbox environments. They are included here as a reference; you do not need to
-         * invoke them directly.
-         *
          * Stop a work item, initiating graceful or forced shutdown.
          *
          * @throws {ClaudeCodeKeyCreatorNotMemberError}
@@ -11680,7 +12018,7 @@ var init_batches = __esm({
           ...options,
           headers: buildHeaders([
             {
-              "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString(),
+              ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0,
               ...user_profile_id != null ? { "anthropic-user-profile-id": user_profile_id } : void 0,
               ...workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0
             },
@@ -11720,7 +12058,7 @@ var init_batches = __esm({
           ...options,
           headers: buildHeaders([
             {
-              "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString(),
+              ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0,
               ...workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0
             },
             options?.headers
@@ -11757,7 +12095,7 @@ var init_batches = __esm({
           ...options,
           headers: buildHeaders([
             {
-              "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString(),
+              ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0,
               ...workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0
             },
             options?.headers
@@ -11795,7 +12133,7 @@ var init_batches = __esm({
           ...options,
           headers: buildHeaders([
             {
-              "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString(),
+              ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0,
               ...workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0
             },
             options?.headers
@@ -11838,7 +12176,7 @@ var init_batches = __esm({
           ...options,
           headers: buildHeaders([
             {
-              "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString(),
+              ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0,
               ...workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0
             },
             options?.headers
@@ -11884,8 +12222,8 @@ var init_batches = __esm({
           ...options,
           headers: buildHeaders([
             {
-              "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString(),
               Accept: "application/binary",
+              ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0,
               ...workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0
             },
             options?.headers
@@ -12049,18 +12387,17 @@ var init_beta_messages_request = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs
-var tokenize, strip, unstrip, generate, partialParse;
+var LITERALS, isWhitespace, isTruncatedLiteral, tokenize, strip, unstrip, isScalar, generate, partialParse;
 var init_parser = __esm({
   "node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs"() {
+    LITERALS = ["true", "false", "null"];
+    isWhitespace = (char) => char === " " || char === "	" || char === "\n" || char === "\r";
+    isTruncatedLiteral = (word, rest) => LITERALS.some((literal) => literal !== word && literal.startsWith(word)) && [...rest].every(isWhitespace);
     tokenize = (input) => {
       let current = 0;
       let tokens = [];
       while (current < input.length) {
         let char = input[current];
-        if (char === "\\") {
-          current++;
-          continue;
-        }
         if (char === "{") {
           tokens.push({
             type: "brace",
@@ -12140,8 +12477,7 @@ var init_parser = __esm({
           }
           continue;
         }
-        let WHITESPACE = /\s/;
-        if (char && WHITESPACE.test(char)) {
+        if (isWhitespace(char)) {
           current++;
           continue;
         }
@@ -12175,18 +12511,17 @@ var init_parser = __esm({
             value += char;
             char = input[++current];
           }
-          if (value == "true" || value == "false" || value === "null") {
+          if (LITERALS.includes(value)) {
             tokens.push({
               type: "name",
               value
             });
-          } else {
-            current++;
-            continue;
+          } else if (!isTruncatedLiteral(value, input.slice(current))) {
+            return null;
           }
           continue;
         }
-        current++;
+        return null;
       }
       return tokens;
     };
@@ -12233,22 +12568,18 @@ var init_parser = __esm({
     };
     unstrip = (tokens) => {
       let tail = [];
-      tokens.map((token) => {
-        if (token.type === "brace") {
-          if (token.value === "{") {
-            tail.push("}");
-          } else {
-            tail.splice(tail.lastIndexOf("}"), 1);
-          }
+      for (const token of tokens) {
+        if (token.type !== "brace" && token.type !== "paren") {
+          continue;
         }
-        if (token.type === "paren") {
-          if (token.value === "[") {
-            tail.push("]");
-          } else {
-            tail.splice(tail.lastIndexOf("]"), 1);
-          }
+        if (token.value === "{") {
+          tail.push("}");
+        } else if (token.value === "[") {
+          tail.push("]");
+        } else if (tail.pop() !== token.value) {
+          return null;
         }
-      });
+      }
       if (tail.length > 0) {
         tail.reverse().map((item) => {
           if (item === "}") {
@@ -12266,9 +12597,13 @@ var init_parser = __esm({
       }
       return tokens;
     };
+    isScalar = (token) => token?.type === "string" || token?.type === "number" || token?.type === "name";
     generate = (tokens) => {
       let output = "";
-      tokens.map((token) => {
+      tokens.map((token, index) => {
+        if (isScalar(tokens[index - 1]) && isScalar(token)) {
+          output += " ";
+        }
         switch (token.type) {
           case "string":
             output += '"' + token.value + '"';
@@ -12280,7 +12615,11 @@ var init_parser = __esm({
       });
       return output;
     };
-    partialParse = (input) => JSON.parse(generate(unstrip(strip(tokenize(input)))));
+    partialParse = (input) => {
+      const tokens = tokenize(input);
+      const completed = tokens && unstrip(strip(tokens));
+      return JSON.parse(completed ? generate(completed) : input);
+    };
   }
 });
 
@@ -14091,6 +14430,748 @@ var init_analytics = __esm({
   }
 });
 
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-channels.mjs
+var SlackChannels;
+var init_slack_channels = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-channels.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    SlackChannels = class extends APIResource {
+      /**
+       * Set a Slack channel up for Claude Tag and return it with its identifier. If the
+       * channel is already set up, whether in claude.ai, by Claude's first use in it or
+       * by an earlier request, the existing channel is returned, so the request can be
+       * repeated. `settings`, when sent, is applied as an update applies it. Before a
+       * channel is set up, Claude's Slack app confirms with Slack that the channel is in
+       * the workspace, is not archived and is visible to the app; a channel that fails
+       * the confirmation returns 404. Setting the channel up and applying `settings` are
+       * two steps: when the second is refused, the response is the refusal, the channel
+       * stays set up with every setting unset, and the error's
+       * `details.slack_channel_id` holds the channel's identifier.
+       *
+       * @throws {BetaSlackChannelSetUpSettingsRefusedError}
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       * @throws {BetaEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpSettingsConflictError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagSlackChannel =
+       *   await client.beta.organization.claudeTag.slackChannels.create(
+       *     { slack: { channel_id: 'xx', workspace_id: 'xx' } },
+       *   );
+       * ```
+       */
+      create(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/organizations/claude_tag/slack_channels", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.create", options, {
+            route: "/v1/organizations/claude_tag/slack_channels",
+            createdIDAttribute: "anthropic.organization.claude_tag.slack_channel.id"
+          })
+        });
+      }
+      /**
+       * Get one Slack channel and its settings. By default `settings` holds what the
+       * channel itself stores: a setting that is null there is not set on the channel
+       * and is inherited. With `include_inherited=true`, `settings` holds what applies
+       * in the channel once the settings levels above it are taken into account, and the
+       * request fails with 503 rather than resolve against a settings level that could
+       * not be read. Either way `sources` names the settings level each value comes
+       * from, so a caller tells the channel's own value from an inherited one by its
+       * source, not by whether it is null.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagSlackChannel =
+       *   await client.beta.organization.claudeTag.slackChannels.retrieve(
+       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
+       *   );
+       * ```
+       */
+      retrieve(id, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.get(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.retrieve", options, {
+            route: "/v1/organizations/claude_tag/slack_channels/{id}",
+            queryParams: ["include_inherited"],
+            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
+          })
+        });
+      }
+      /**
+       * Change the settings a Slack channel stores. The update is partial: a setting
+       * left out is unchanged, and a setting sent as null is cleared, so the channel
+       * inherits it. If any value is refused, no setting in the request is stored. A
+       * group direct message takes no settings and returns 400.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       * @throws {BetaEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpSettingsConflictError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagSlackChannel =
+       *   await client.beta.organization.claudeTag.slackChannels.update(
+       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
+       *     { settings: {} },
+       *   );
+       * ```
+       */
+      update(id, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.update", options, {
+            route: "/v1/organizations/claude_tag/slack_channels/{id}",
+            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
+          })
+        });
+      }
+      /**
+       * List the set-up Slack channels of one Slack workspace, newest first by
+       * `created_at`. A channel that is not set up is not listed: Slack holds the full
+       * list of a workspace's channels. Pass `slack_channel_id` as well to look one
+       * channel up by its Slack identifiers: `data` then holds that channel, or is empty
+       * when it is not set up, and `limit` and `page` are ignored. A workspace that the
+       * organization owns only through a Slack Enterprise Grid returns 404 until it is
+       * set up. With `include_inherited=true` each channel's `settings` holds what
+       * applies in it, and the request fails with 503 rather than resolve against a
+       * settings level that could not be read. A `page` cursor resumes only a request
+       * with the same `include_inherited`.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaClaudeTagSlackChannel of client.beta.organization.claudeTag.slackChannels.list(
+       *   { slack_workspace_id: 'slack_workspace_id' },
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params, options) {
+        const { betas, ...query } = params;
+        return this._client.getAPIList("/v1/organizations/claude_tag/slack_channels", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.list", options, {
+            route: "/v1/organizations/claude_tag/slack_channels",
+            queryParams: ["include_inherited", "limit", "page", "slack_channel_id", "slack_workspace_id"]
+          })
+        });
+      }
+      /**
+       * Remove a Slack channel from Claude Tag. This deletes the channel's stored
+       * settings and its Bundle Targets at once, and then, in the background, the
+       * channel's sessions and their transcripts, its memory, its routines and the
+       * artifacts published from it. None of it can be restored. The channel in Slack
+       * and its messages are unchanged. The request is refused with 400 and
+       * `error.details.error_code` `slack_channel_enabled` while `enabled` resolves to
+       * `true` for the channel, as a read with `include_inherited=true` returns it: set
+       * `enabled` to `false` on the channel first. This guards against removing a
+       * channel in use by mistake; it is not a way to keep Claude out, because the
+       * removal deletes the channel's own `enabled: false` with its other settings,
+       * after which the channel inherits again and Claude's next use of it can set it up
+       * anew with a new identifier. The identifier returns 404 as soon as the request
+       * returns, so a repeated removal returns 404. A group direct message returns 400,
+       * and so does a channel that holds configuration this API does not manage.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       * @throws {BetaSlackChannelSetUpSettingsConflictError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagDeletedSlackChannel =
+       *   await client.beta.organization.claudeTag.slackChannels.delete(
+       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
+       *   );
+       * ```
+       */
+      delete(id, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.delete(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.delete", options, {
+            route: "/v1/organizations/claude_tag/slack_channels/{id}",
+            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-workspaces.mjs
+var SlackWorkspaces;
+var init_slack_workspaces = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-workspaces.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    SlackWorkspaces = class extends APIResource {
+      /**
+       * Get one Slack workspace and its settings. By default `settings` holds what the
+       * workspace itself stores: a setting that is null there is not set on the
+       * workspace and is inherited. With `include_inherited=true`, `settings` holds what
+       * applies in the workspace once the organization's Slack defaults are taken into
+       * account, and the request fails with 503 rather than resolve against a settings
+       * level that could not be read. Either way `sources` names the settings level each
+       * value comes from.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagSlackWorkspace =
+       *   await client.beta.organization.claudeTag.slackWorkspaces.retrieve(
+       *     'slws_01Hq8TzW5mKc2YbX7vNd4RfJ',
+       *   );
+       * ```
+       */
+      retrieve(id, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.get(path`/v1/organizations/claude_tag/slack_workspaces/${id}`, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.retrieve", options, {
+            route: "/v1/organizations/claude_tag/slack_workspaces/{id}",
+            queryParams: ["include_inherited"],
+            attributes: { "anthropic.organization.claude_tag.slack_workspace.id": id }
+          })
+        });
+      }
+      /**
+       * Change the settings a Slack workspace stores. The update is partial: a setting
+       * left out is unchanged, and a setting sent as null is cleared, so the workspace
+       * inherits it. If any value is refused, no setting in the request is stored.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       * @throws {BetaEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpSettingsConflictError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagSlackWorkspace =
+       *   await client.beta.organization.claudeTag.slackWorkspaces.update(
+       *     'slws_01Hq8TzW5mKc2YbX7vNd4RfJ',
+       *     { settings: {} },
+       *   );
+       * ```
+       */
+      update(id, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/claude_tag/slack_workspaces/${id}`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.update", options, {
+            route: "/v1/organizations/claude_tag/slack_workspaces/{id}",
+            attributes: { "anthropic.organization.claude_tag.slack_workspace.id": id }
+          })
+        });
+      }
+      /**
+       * List the set-up Slack workspaces the organization owns, newest first by
+       * `created_at`. Pass `slack_workspace_id` to look one workspace up by its Slack
+       * identifier: `data` then holds that workspace, or is empty when it is not set up.
+       * A workspace of a Slack Enterprise Grid the organization has connected returns
+       * 404 until it is set up. With `include_inherited=true` each workspace's
+       * `settings` holds what applies in it, and the request fails with 503 rather than
+       * resolve against a settings level that could not be read. A `page` cursor resumes
+       * only a request with the same `include_inherited`.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaClaudeTagSlackWorkspace of client.beta.organization.claudeTag.slackWorkspaces.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/organizations/claude_tag/slack_workspaces", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.list", options, {
+            route: "/v1/organizations/claude_tag/slack_workspaces",
+            queryParams: ["include_inherited", "limit", "page", "slack_workspace_id"]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/targets.mjs
+var Targets;
+var init_targets = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/targets.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    Targets = class extends APIResource {
+      /**
+       * Attach a Bundle to a Slack channel or a Slack workspace. A Bundle attached to a
+       * workspace can be used in the workspace and in every channel in it. Attaching a
+       * Bundle to a channel or workspace it is already attached to returns the existing
+       * Bundle Target. The channel or workspace must be set up: attaching never sets a
+       * channel up. A group direct message takes no Bundle and returns 400.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagBundleTarget =
+       *   await client.beta.organization.claudeTag.bundles.targets.create(
+       *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
+       *     {
+       *       target: {
+       *         slack_channel_id: 'xxxxxxxx',
+       *         type: 'slack_channel',
+       *       },
+       *     },
+       *   );
+       * ```
+       */
+      create(bundleID, params, options) {
+        const { target, betas } = params;
+        return this._client.post(path`/v1/organizations/claude_tag/bundles/${bundleID}/targets`, {
+          body: target,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.create", options, {
+            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets",
+            attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
+          })
+        });
+      }
+      /**
+       * Get one Bundle Target. Returns 404 when `target_id` is the identifier of another
+       * Bundle's Bundle Target, or the Bundle Target was detached.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagBundleTarget =
+       *   await client.beta.organization.claudeTag.bundles.targets.retrieve(
+       *     'btgt_01SvpyRQK3nN6eH9uhRA7n1qHq8TzW5mKc2YbX7vNd4RfJ',
+       *     { bundle_id: 'capp_011CZkZjLP1cWxj5EtMmdgbq' },
+       *   );
+       * ```
+       */
+      retrieve(targetID, params, options) {
+        const { bundle_id, betas } = params;
+        return this._client.get(path`/v1/organizations/claude_tag/bundles/${bundle_id}/targets/${targetID}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.retrieve", options, {
+            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets/{target_id}",
+            attributes: {
+              "anthropic.organization.claude_tag.bundle.id": bundle_id,
+              "anthropic.organization.claude_tag.bundle.target.id": targetID
+            }
+          })
+        });
+      }
+      /**
+       * List the Slack channels and Slack workspaces a Bundle is attached to, newest
+       * first by `created_at`. Only channels and workspaces the organization owns are
+       * listed; a Bundle that is attached to anything else has no Bundle Target for it.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaClaudeTagBundleTarget of client.beta.organization.claudeTag.bundles.targets.list(
+       *   'capp_011CZkZjLP1cWxj5EtMmdgbq',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(bundleID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path`/v1/organizations/claude_tag/bundles/${bundleID}/targets`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.list", options, {
+            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets",
+            queryParams: ["limit", "page"],
+            attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
+          })
+        });
+      }
+      /**
+       * Detach a Bundle from a Slack channel or a Slack workspace. A repeated detach
+       * returns 404.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagDeletedBundleTarget =
+       *   await client.beta.organization.claudeTag.bundles.targets.delete(
+       *     'btgt_01SvpyRQK3nN6eH9uhRA7n1qHq8TzW5mKc2YbX7vNd4RfJ',
+       *     { bundle_id: 'capp_011CZkZjLP1cWxj5EtMmdgbq' },
+       *   );
+       * ```
+       */
+      delete(targetID, params, options) {
+        const { bundle_id, betas } = params;
+        return this._client.delete(path`/v1/organizations/claude_tag/bundles/${bundle_id}/targets/${targetID}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.delete", options, {
+            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets/{target_id}",
+            attributes: {
+              "anthropic.organization.claude_tag.bundle.id": bundle_id,
+              "anthropic.organization.claude_tag.bundle.target.id": targetID
+            }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/bundles.mjs
+var Bundles;
+var init_bundles = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/bundles.mjs"() {
+    init_resource();
+    init_targets();
+    init_targets();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    Bundles = /* @__PURE__ */ (() => {
+      class Bundles2 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.targets = new Targets(this._client);
+        }
+        /**
+         * Get one Bundle. What the Bundle grants (connectors, repositories and
+         * credentials) is never returned.
+         *
+         * @throws {BetaAPIKeyScopeMissingError}
+         * @throws {BetaClaudeTagWritesNotEnabledError}
+         * @throws {BetaComplianceConfigurationRestrictedError}
+         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+         *
+         * @example
+         * ```ts
+         * const betaClaudeTagBundle =
+         *   await client.beta.organization.claudeTag.bundles.retrieve(
+         *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
+         *   );
+         * ```
+         */
+        retrieve(bundleID, params = {}, options) {
+          const { betas } = params ?? {};
+          return this._client.get(path`/v1/organizations/claude_tag/bundles/${bundleID}`, {
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.retrieve", options, {
+              route: "/v1/organizations/claude_tag/bundles/{bundle_id}",
+              attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
+            })
+          });
+        }
+        /**
+         * Change a Bundle's instructions. The update is partial: a field left out is
+         * unchanged, and `instructions` sent as null or as an empty string clears them.
+         * The later of two updates wins. Sessions that start after the change use the new
+         * instructions; sessions already running keep the ones they started with. Some
+         * Bundles are managed in claude.ai, and an update of one returns 400.
+         *
+         * @throws {BetaBundleAttachmentNotSupportedError}
+         * @throws {BetaBundleOnCallError}
+         * @throws {BetaAPIKeyScopeMissingError}
+         * @throws {BetaClaudeTagWritesNotEnabledError}
+         * @throws {BetaComplianceConfigurationRestrictedError}
+         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+         * @throws {BetaSlackChannelSetUpSettingsConflictError}
+         *
+         * @example
+         * ```ts
+         * const betaClaudeTagBundle =
+         *   await client.beta.organization.claudeTag.bundles.update(
+         *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
+         *     {},
+         *   );
+         * ```
+         */
+        update(bundleID, params, options) {
+          const { betas, ...body } = params;
+          return this._client.post(path`/v1/organizations/claude_tag/bundles/${bundleID}`, {
+            body,
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.update", options, {
+              route: "/v1/organizations/claude_tag/bundles/{bundle_id}",
+              attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
+            })
+          });
+        }
+        /**
+         * List the organization's Bundles, newest first by `created_at`. A Bundle that
+         * Claude Tag manages for itself is not listed.
+         *
+         * @throws {BetaAPIKeyScopeMissingError}
+         * @throws {BetaClaudeTagWritesNotEnabledError}
+         * @throws {BetaComplianceConfigurationRestrictedError}
+         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+         *
+         * @example
+         * ```ts
+         * // Automatically fetches more pages as needed.
+         * for await (const betaClaudeTagBundle of client.beta.organization.claudeTag.bundles.list()) {
+         *   // ...
+         * }
+         * ```
+         */
+        list(params = {}, options) {
+          const { betas, ...query } = params ?? {};
+          return this._client.getAPIList("/v1/organizations/claude_tag/bundles", PageCursor, {
+            query,
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.list", options, {
+              route: "/v1/organizations/claude_tag/bundles",
+              queryParams: ["limit", "page"]
+            })
+          });
+        }
+      }
+      Bundles2.Targets = Targets;
+      return Bundles2;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/claude-tag.mjs
+var BetaBundleAttachmentNotSupportedError, BetaBundleOnCallError, BetaSlackChannelSetUpSettingsRefusedError, BetaAPIKeyScopeMissingError, BetaClaudeTagWritesNotEnabledError, BetaComplianceConfigurationRestrictedError, BetaOrganizationLevelScopedAPIKeyRequiredError, BetaSlackChannelSetUpEnvironmentNotFoundError, BetaSlackChannelSetUpSettingsConflictError, ClaudeTag;
+var init_claude_tag = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/claude-tag.mjs"() {
+    init_resource();
+    init_slack_channels();
+    init_slack_channels();
+    init_slack_workspaces();
+    init_slack_workspaces();
+    init_bundles();
+    init_bundles();
+    init_error();
+    BetaBundleAttachmentNotSupportedError = /* @__PURE__ */ (() => {
+      class BetaBundleAttachmentNotSupportedError2 extends BadRequestError {
+      }
+      BetaBundleAttachmentNotSupportedError2._errorName = "BetaBundleAttachmentNotSupportedError";
+      return BetaBundleAttachmentNotSupportedError2;
+    })();
+    BetaBundleOnCallError = /* @__PURE__ */ (() => {
+      class BetaBundleOnCallError2 extends BadRequestError {
+      }
+      BetaBundleOnCallError2._errorName = "BetaBundleOnCallError";
+      return BetaBundleOnCallError2;
+    })();
+    BetaSlackChannelSetUpSettingsRefusedError = /* @__PURE__ */ (() => {
+      class BetaSlackChannelSetUpSettingsRefusedError2 extends BadRequestError {
+      }
+      BetaSlackChannelSetUpSettingsRefusedError2._errorName = "BetaSlackChannelSetUpSettingsRefusedError";
+      return BetaSlackChannelSetUpSettingsRefusedError2;
+    })();
+    BetaAPIKeyScopeMissingError = /* @__PURE__ */ (() => {
+      class BetaAPIKeyScopeMissingError2 extends PermissionDeniedError {
+      }
+      BetaAPIKeyScopeMissingError2._errorName = "BetaAPIKeyScopeMissingError";
+      return BetaAPIKeyScopeMissingError2;
+    })();
+    BetaClaudeTagWritesNotEnabledError = /* @__PURE__ */ (() => {
+      class BetaClaudeTagWritesNotEnabledError2 extends PermissionDeniedError {
+      }
+      BetaClaudeTagWritesNotEnabledError2._errorName = "BetaClaudeTagWritesNotEnabledError";
+      return BetaClaudeTagWritesNotEnabledError2;
+    })();
+    BetaComplianceConfigurationRestrictedError = /* @__PURE__ */ (() => {
+      class BetaComplianceConfigurationRestrictedError2 extends PermissionDeniedError {
+      }
+      BetaComplianceConfigurationRestrictedError2._errorName = "BetaComplianceConfigurationRestrictedError";
+      return BetaComplianceConfigurationRestrictedError2;
+    })();
+    BetaOrganizationLevelScopedAPIKeyRequiredError = /* @__PURE__ */ (() => {
+      class BetaOrganizationLevelScopedAPIKeyRequiredError2 extends PermissionDeniedError {
+      }
+      BetaOrganizationLevelScopedAPIKeyRequiredError2._errorName = "BetaOrganizationLevelScopedAPIKeyRequiredError";
+      return BetaOrganizationLevelScopedAPIKeyRequiredError2;
+    })();
+    BetaSlackChannelSetUpEnvironmentNotFoundError = /* @__PURE__ */ (() => {
+      class BetaSlackChannelSetUpEnvironmentNotFoundError2 extends NotFoundError {
+      }
+      BetaSlackChannelSetUpEnvironmentNotFoundError2._errorName = "BetaSlackChannelSetUpEnvironmentNotFoundError";
+      return BetaSlackChannelSetUpEnvironmentNotFoundError2;
+    })();
+    BetaSlackChannelSetUpSettingsConflictError = /* @__PURE__ */ (() => {
+      class BetaSlackChannelSetUpSettingsConflictError2 extends ConflictError {
+      }
+      BetaSlackChannelSetUpSettingsConflictError2._errorName = "BetaSlackChannelSetUpSettingsConflictError";
+      return BetaSlackChannelSetUpSettingsConflictError2;
+    })();
+    ClaudeTag = /* @__PURE__ */ (() => {
+      class ClaudeTag2 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.slackChannels = new SlackChannels(this._client);
+          this.slackWorkspaces = new SlackWorkspaces(this._client);
+          this.bundles = new Bundles(this._client);
+        }
+      }
+      ClaudeTag2.BetaBundleAttachmentNotSupportedError = BetaBundleAttachmentNotSupportedError;
+      ClaudeTag2.BetaBundleOnCallError = BetaBundleOnCallError;
+      ClaudeTag2.BetaSlackChannelSetUpSettingsRefusedError = BetaSlackChannelSetUpSettingsRefusedError;
+      ClaudeTag2.BetaAPIKeyScopeMissingError = BetaAPIKeyScopeMissingError;
+      ClaudeTag2.BetaClaudeTagWritesNotEnabledError = BetaClaudeTagWritesNotEnabledError;
+      ClaudeTag2.BetaComplianceConfigurationRestrictedError = BetaComplianceConfigurationRestrictedError;
+      ClaudeTag2.BetaOrganizationLevelScopedAPIKeyRequiredError = BetaOrganizationLevelScopedAPIKeyRequiredError;
+      ClaudeTag2.BetaSlackChannelSetUpEnvironmentNotFoundError = BetaSlackChannelSetUpEnvironmentNotFoundError;
+      ClaudeTag2.BetaSlackChannelSetUpSettingsConflictError = BetaSlackChannelSetUpSettingsConflictError;
+      ClaudeTag2.SlackChannels = SlackChannels;
+      ClaudeTag2.SlackWorkspaces = SlackWorkspaces;
+      ClaudeTag2.Bundles = Bundles;
+      return ClaudeTag2;
+    })();
+  }
+});
+
 // node_modules/@anthropic-ai/sdk/resources/beta/organization/users.mjs
 var BetaCannotSignOutPrimaryOwnerError, BetaCannotSignOutSelfError, BetaCannotSignOutManagedMemberError, BetaCannotSignOutMembershipAdminError, BetaCannotSignOutOwnerError, BetaCannotSignOutPrivilegedMemberError, Users2;
 var init_users2 = __esm({
@@ -14930,8 +16011,12 @@ var init_plugins2 = __esm({
         /**
          * Change which stored version of an organization-owned Plugin is served to
          * members, for example to roll back to an earlier one. This pins the served
-         * version: later uploads are stored but no longer change what is served, and
-         * pinning cannot currently be undone, here or in claude.ai.
+         * version: later uploads through this API are stored but no longer change what is
+         * served, and pinning cannot currently be undone, here or in claude.ai.
+         *
+         * A version from claude.ai might still change what is served: see
+         * [Versions and the served version](/docs/en/manage-claude/plugins-api#versions-and-the-served-version)
+         * in the Plugins API guide.
          *
          * Pass the version as `served_version_id`: an earlier one to roll back, a later
          * one to start serving a version that was stored without being served, or the one
@@ -15112,694 +16197,6 @@ var init_plugins2 = __esm({
       Plugins4.InstallationSettings = InstallationSettings;
       Plugins4.Shares = Shares;
       return Plugins4;
-    })();
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-channels.mjs
-var SlackChannels;
-var init_slack_channels = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-channels.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    SlackChannels = class extends APIResource {
-      /**
-       * Set a Slack channel up for Claude Tag and return it with its identifier. If the
-       * channel is already set up, whether in claude.ai, by Claude's first use in it or
-       * by an earlier request, the existing channel is returned, so the request can be
-       * repeated. `settings`, when sent, is applied as an update applies it. Before a
-       * channel is set up, Claude's Slack app confirms with Slack that the channel is in
-       * the workspace, is not archived and is visible to the app; a channel that fails
-       * the confirmation returns 404. Setting the channel up and applying `settings` are
-       * two steps: when the second is refused, the response is the refusal, the channel
-       * stays set up with every setting unset, and the error's
-       * `details.slack_channel_id` holds the channel's identifier.
-       *
-       * @throws {BetaSlackChannelSetUpSettingsRefusedError}
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       * @throws {BetaEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpSettingsConflictError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagSlackChannel =
-       *   await client.beta.organization.claudeTag.slackChannels.create(
-       *     { slack: { channel_id: 'xx', workspace_id: 'xx' } },
-       *   );
-       * ```
-       */
-      create(params, options) {
-        const { betas, ...body } = params;
-        return this._client.post("/v1/organizations/claude_tag/slack_channels", {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.create", options, {
-            route: "/v1/organizations/claude_tag/slack_channels",
-            createdIDAttribute: "anthropic.organization.claude_tag.slack_channel.id"
-          })
-        });
-      }
-      /**
-       * Get one Slack channel and its settings. By default `settings` holds what the
-       * channel itself stores: a setting that is null there is not set on the channel
-       * and is inherited. With `include_inherited=true`, `settings` holds what applies
-       * in the channel once the settings levels above it are taken into account, and the
-       * request fails with 503 rather than resolve against a settings level that could
-       * not be read. Either way `sources` names the settings level each value comes
-       * from, so a caller tells the channel's own value from an inherited one by its
-       * source, not by whether it is null.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagSlackChannel =
-       *   await client.beta.organization.claudeTag.slackChannels.retrieve(
-       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
-       *   );
-       * ```
-       */
-      retrieve(id, params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.get(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.retrieve", options, {
-            route: "/v1/organizations/claude_tag/slack_channels/{id}",
-            queryParams: ["include_inherited"],
-            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
-          })
-        });
-      }
-      /**
-       * Change the settings a Slack channel stores. The update is partial: a setting
-       * left out is unchanged, and a setting sent as null is cleared, so the channel
-       * inherits it. If any value is refused, no setting in the request is stored. A
-       * group direct message takes no settings and returns 400.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       * @throws {BetaEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpSettingsConflictError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagSlackChannel =
-       *   await client.beta.organization.claudeTag.slackChannels.update(
-       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
-       *     { settings: {} },
-       *   );
-       * ```
-       */
-      update(id, params, options) {
-        const { betas, ...body } = params;
-        return this._client.post(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.update", options, {
-            route: "/v1/organizations/claude_tag/slack_channels/{id}",
-            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
-          })
-        });
-      }
-      /**
-       * List the set-up Slack channels of one Slack workspace, newest first by
-       * `created_at`. A channel that is not set up is not listed: Slack holds the full
-       * list of a workspace's channels. Pass `slack_channel_id` as well to look one
-       * channel up by its Slack identifiers: `data` then holds that channel, or is empty
-       * when it is not set up, and `limit` and `page` are ignored. A workspace that the
-       * organization owns only through a Slack Enterprise Grid returns 404 until it is
-       * set up. With `include_inherited=true` each channel's `settings` holds what
-       * applies in it, and the request fails with 503 rather than resolve against a
-       * settings level that could not be read. A `page` cursor resumes only a request
-       * with the same `include_inherited`.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaClaudeTagSlackChannel of client.beta.organization.claudeTag.slackChannels.list(
-       *   { slack_workspace_id: 'slack_workspace_id' },
-       * )) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(params, options) {
-        const { betas, ...query } = params;
-        return this._client.getAPIList("/v1/organizations/claude_tag/slack_channels", PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.list", options, {
-            route: "/v1/organizations/claude_tag/slack_channels",
-            queryParams: ["include_inherited", "limit", "page", "slack_channel_id", "slack_workspace_id"]
-          })
-        });
-      }
-      /**
-       * Remove a Slack channel from Claude Tag. This deletes the channel's stored
-       * settings and its Bundle Targets at once, and then, in the background, the
-       * channel's sessions and their transcripts, its memory, its routines and the
-       * artifacts published from it. None of it can be restored. The channel in Slack
-       * and its messages are unchanged. The request is refused with 400 and
-       * `error.details.error_code` `slack_channel_enabled` while `enabled` resolves to
-       * `true` for the channel, as a read with `include_inherited=true` returns it: set
-       * `enabled` to `false` on the channel first. This guards against removing a
-       * channel in use by mistake; it is not a way to keep Claude out, because the
-       * removal deletes the channel's own `enabled: false` with its other settings,
-       * after which the channel inherits again and Claude's next use of it can set it up
-       * anew with a new identifier. The identifier returns 404 as soon as the request
-       * returns, so a repeated removal returns 404. A group direct message returns 400,
-       * and so does a channel that holds configuration this API does not manage.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       * @throws {BetaSlackChannelSetUpSettingsConflictError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagDeletedSlackChannel =
-       *   await client.beta.organization.claudeTag.slackChannels.delete(
-       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
-       *   );
-       * ```
-       */
-      delete(id, params = {}, options) {
-        const { betas } = params ?? {};
-        return this._client.delete(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.delete", options, {
-            route: "/v1/organizations/claude_tag/slack_channels/{id}",
-            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-workspaces.mjs
-var SlackWorkspaces;
-var init_slack_workspaces = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-workspaces.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    SlackWorkspaces = class extends APIResource {
-      /**
-       * Get one Slack workspace and its settings. By default `settings` holds what the
-       * workspace itself stores: a setting that is null there is not set on the
-       * workspace and is inherited. With `include_inherited=true`, `settings` holds what
-       * applies in the workspace once the organization's Slack defaults are taken into
-       * account, and the request fails with 503 rather than resolve against a settings
-       * level that could not be read. Either way `sources` names the settings level each
-       * value comes from.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagSlackWorkspace =
-       *   await client.beta.organization.claudeTag.slackWorkspaces.retrieve(
-       *     'slws_01Hq8TzW5mKc2YbX7vNd4RfJ',
-       *   );
-       * ```
-       */
-      retrieve(id, params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.get(path`/v1/organizations/claude_tag/slack_workspaces/${id}`, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.retrieve", options, {
-            route: "/v1/organizations/claude_tag/slack_workspaces/{id}",
-            queryParams: ["include_inherited"],
-            attributes: { "anthropic.organization.claude_tag.slack_workspace.id": id }
-          })
-        });
-      }
-      /**
-       * Change the settings a Slack workspace stores. The update is partial: a setting
-       * left out is unchanged, and a setting sent as null is cleared, so the workspace
-       * inherits it. If any value is refused, no setting in the request is stored.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       * @throws {BetaEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpSettingsConflictError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagSlackWorkspace =
-       *   await client.beta.organization.claudeTag.slackWorkspaces.update(
-       *     'slws_01Hq8TzW5mKc2YbX7vNd4RfJ',
-       *     { settings: {} },
-       *   );
-       * ```
-       */
-      update(id, params, options) {
-        const { betas, ...body } = params;
-        return this._client.post(path`/v1/organizations/claude_tag/slack_workspaces/${id}`, {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.update", options, {
-            route: "/v1/organizations/claude_tag/slack_workspaces/{id}",
-            attributes: { "anthropic.organization.claude_tag.slack_workspace.id": id }
-          })
-        });
-      }
-      /**
-       * List the set-up Slack workspaces the organization owns, newest first by
-       * `created_at`. Pass `slack_workspace_id` to look one workspace up by its Slack
-       * identifier: `data` then holds that workspace, or is empty when it is not set up.
-       * A workspace of a Slack Enterprise Grid the organization has connected returns
-       * 404 until it is set up. With `include_inherited=true` each workspace's
-       * `settings` holds what applies in it, and the request fails with 503 rather than
-       * resolve against a settings level that could not be read. A `page` cursor resumes
-       * only a request with the same `include_inherited`.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaClaudeTagSlackWorkspace of client.beta.organization.claudeTag.slackWorkspaces.list()) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.getAPIList("/v1/organizations/claude_tag/slack_workspaces", PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.list", options, {
-            route: "/v1/organizations/claude_tag/slack_workspaces",
-            queryParams: ["include_inherited", "limit", "page", "slack_workspace_id"]
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/targets.mjs
-var Targets;
-var init_targets = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/targets.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    Targets = class extends APIResource {
-      /**
-       * Attach a Bundle to a Slack channel or a Slack workspace. A Bundle attached to a
-       * workspace can be used in the workspace and in every channel in it. Attaching a
-       * Bundle to a channel or workspace it is already attached to returns the existing
-       * Bundle Target. The channel or workspace must be set up: attaching never sets a
-       * channel up. A group direct message takes no Bundle and returns 400.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagBundleTarget =
-       *   await client.beta.organization.claudeTag.bundles.targets.create(
-       *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
-       *     {
-       *       target: {
-       *         slack_channel_id: 'xxxxxxxx',
-       *         type: 'slack_channel',
-       *       },
-       *     },
-       *   );
-       * ```
-       */
-      create(bundleID, params, options) {
-        const { target, betas } = params;
-        return this._client.post(path`/v1/organizations/claude_tag/bundles/${bundleID}/targets`, {
-          body: target,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.create", options, {
-            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets",
-            attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
-          })
-        });
-      }
-      /**
-       * Get one Bundle Target. Returns 404 when `target_id` is the identifier of another
-       * Bundle's Bundle Target, or the Bundle Target was detached.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagBundleTarget =
-       *   await client.beta.organization.claudeTag.bundles.targets.retrieve(
-       *     'btgt_01SvpyRQK3nN6eH9uhRA7n1qHq8TzW5mKc2YbX7vNd4RfJ',
-       *     { bundle_id: 'capp_011CZkZjLP1cWxj5EtMmdgbq' },
-       *   );
-       * ```
-       */
-      retrieve(targetID, params, options) {
-        const { bundle_id, betas } = params;
-        return this._client.get(path`/v1/organizations/claude_tag/bundles/${bundle_id}/targets/${targetID}`, {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.retrieve", options, {
-            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets/{target_id}",
-            attributes: {
-              "anthropic.organization.claude_tag.bundle.id": bundle_id,
-              "anthropic.organization.claude_tag.bundle.target.id": targetID
-            }
-          })
-        });
-      }
-      /**
-       * List the Slack channels and Slack workspaces a Bundle is attached to, newest
-       * first by `created_at`. Only channels and workspaces the organization owns are
-       * listed; a Bundle that is attached to anything else has no Bundle Target for it.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaClaudeTagBundleTarget of client.beta.organization.claudeTag.bundles.targets.list(
-       *   'capp_011CZkZjLP1cWxj5EtMmdgbq',
-       * )) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(bundleID, params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path`/v1/organizations/claude_tag/bundles/${bundleID}/targets`, PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.list", options, {
-            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets",
-            queryParams: ["limit", "page"],
-            attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
-          })
-        });
-      }
-      /**
-       * Detach a Bundle from a Slack channel or a Slack workspace. A repeated detach
-       * returns 404.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagDeletedBundleTarget =
-       *   await client.beta.organization.claudeTag.bundles.targets.delete(
-       *     'btgt_01SvpyRQK3nN6eH9uhRA7n1qHq8TzW5mKc2YbX7vNd4RfJ',
-       *     { bundle_id: 'capp_011CZkZjLP1cWxj5EtMmdgbq' },
-       *   );
-       * ```
-       */
-      delete(targetID, params, options) {
-        const { bundle_id, betas } = params;
-        return this._client.delete(path`/v1/organizations/claude_tag/bundles/${bundle_id}/targets/${targetID}`, {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.delete", options, {
-            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets/{target_id}",
-            attributes: {
-              "anthropic.organization.claude_tag.bundle.id": bundle_id,
-              "anthropic.organization.claude_tag.bundle.target.id": targetID
-            }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/bundles.mjs
-var Bundles;
-var init_bundles = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/bundles.mjs"() {
-    init_resource();
-    init_targets();
-    init_targets();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    Bundles = /* @__PURE__ */ (() => {
-      class Bundles2 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.targets = new Targets(this._client);
-        }
-        /**
-         * Get one Bundle. What the Bundle grants (connectors, repositories and
-         * credentials) is never returned.
-         *
-         * @throws {BetaAPIKeyScopeMissingError}
-         * @throws {BetaClaudeTagWritesNotEnabledError}
-         * @throws {BetaComplianceConfigurationRestrictedError}
-         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-         *
-         * @example
-         * ```ts
-         * const betaClaudeTagBundle =
-         *   await client.beta.organization.claudeTag.bundles.retrieve(
-         *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
-         *   );
-         * ```
-         */
-        retrieve(bundleID, params = {}, options) {
-          const { betas } = params ?? {};
-          return this._client.get(path`/v1/organizations/claude_tag/bundles/${bundleID}`, {
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.retrieve", options, {
-              route: "/v1/organizations/claude_tag/bundles/{bundle_id}",
-              attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
-            })
-          });
-        }
-        /**
-         * List the organization's Bundles, newest first by `created_at`. A Bundle that
-         * Claude Tag manages for itself is not listed.
-         *
-         * @throws {BetaAPIKeyScopeMissingError}
-         * @throws {BetaClaudeTagWritesNotEnabledError}
-         * @throws {BetaComplianceConfigurationRestrictedError}
-         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-         *
-         * @example
-         * ```ts
-         * // Automatically fetches more pages as needed.
-         * for await (const betaClaudeTagBundle of client.beta.organization.claudeTag.bundles.list()) {
-         *   // ...
-         * }
-         * ```
-         */
-        list(params = {}, options) {
-          const { betas, ...query } = params ?? {};
-          return this._client.getAPIList("/v1/organizations/claude_tag/bundles", PageCursor, {
-            query,
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.list", options, {
-              route: "/v1/organizations/claude_tag/bundles",
-              queryParams: ["limit", "page"]
-            })
-          });
-        }
-      }
-      Bundles2.Targets = Targets;
-      return Bundles2;
-    })();
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/claude-tag.mjs
-var BetaSlackChannelSetUpSettingsRefusedError, BetaAPIKeyScopeMissingError, BetaClaudeTagWritesNotEnabledError, BetaComplianceConfigurationRestrictedError, BetaOrganizationLevelScopedAPIKeyRequiredError, BetaSlackChannelSetUpEnvironmentNotFoundError, BetaSlackChannelSetUpSettingsConflictError, ClaudeTag;
-var init_claude_tag = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/claude-tag.mjs"() {
-    init_resource();
-    init_slack_channels();
-    init_slack_channels();
-    init_slack_workspaces();
-    init_slack_workspaces();
-    init_bundles();
-    init_bundles();
-    init_error();
-    BetaSlackChannelSetUpSettingsRefusedError = /* @__PURE__ */ (() => {
-      class BetaSlackChannelSetUpSettingsRefusedError2 extends BadRequestError {
-      }
-      BetaSlackChannelSetUpSettingsRefusedError2._errorName = "BetaSlackChannelSetUpSettingsRefusedError";
-      return BetaSlackChannelSetUpSettingsRefusedError2;
-    })();
-    BetaAPIKeyScopeMissingError = /* @__PURE__ */ (() => {
-      class BetaAPIKeyScopeMissingError2 extends PermissionDeniedError {
-      }
-      BetaAPIKeyScopeMissingError2._errorName = "BetaAPIKeyScopeMissingError";
-      return BetaAPIKeyScopeMissingError2;
-    })();
-    BetaClaudeTagWritesNotEnabledError = /* @__PURE__ */ (() => {
-      class BetaClaudeTagWritesNotEnabledError2 extends PermissionDeniedError {
-      }
-      BetaClaudeTagWritesNotEnabledError2._errorName = "BetaClaudeTagWritesNotEnabledError";
-      return BetaClaudeTagWritesNotEnabledError2;
-    })();
-    BetaComplianceConfigurationRestrictedError = /* @__PURE__ */ (() => {
-      class BetaComplianceConfigurationRestrictedError2 extends PermissionDeniedError {
-      }
-      BetaComplianceConfigurationRestrictedError2._errorName = "BetaComplianceConfigurationRestrictedError";
-      return BetaComplianceConfigurationRestrictedError2;
-    })();
-    BetaOrganizationLevelScopedAPIKeyRequiredError = /* @__PURE__ */ (() => {
-      class BetaOrganizationLevelScopedAPIKeyRequiredError2 extends PermissionDeniedError {
-      }
-      BetaOrganizationLevelScopedAPIKeyRequiredError2._errorName = "BetaOrganizationLevelScopedAPIKeyRequiredError";
-      return BetaOrganizationLevelScopedAPIKeyRequiredError2;
-    })();
-    BetaSlackChannelSetUpEnvironmentNotFoundError = /* @__PURE__ */ (() => {
-      class BetaSlackChannelSetUpEnvironmentNotFoundError2 extends NotFoundError {
-      }
-      BetaSlackChannelSetUpEnvironmentNotFoundError2._errorName = "BetaSlackChannelSetUpEnvironmentNotFoundError";
-      return BetaSlackChannelSetUpEnvironmentNotFoundError2;
-    })();
-    BetaSlackChannelSetUpSettingsConflictError = /* @__PURE__ */ (() => {
-      class BetaSlackChannelSetUpSettingsConflictError2 extends ConflictError {
-      }
-      BetaSlackChannelSetUpSettingsConflictError2._errorName = "BetaSlackChannelSetUpSettingsConflictError";
-      return BetaSlackChannelSetUpSettingsConflictError2;
-    })();
-    ClaudeTag = /* @__PURE__ */ (() => {
-      class ClaudeTag2 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.slackChannels = new SlackChannels(this._client);
-          this.slackWorkspaces = new SlackWorkspaces(this._client);
-          this.bundles = new Bundles(this._client);
-        }
-      }
-      ClaudeTag2.BetaSlackChannelSetUpSettingsRefusedError = BetaSlackChannelSetUpSettingsRefusedError;
-      ClaudeTag2.BetaAPIKeyScopeMissingError = BetaAPIKeyScopeMissingError;
-      ClaudeTag2.BetaClaudeTagWritesNotEnabledError = BetaClaudeTagWritesNotEnabledError;
-      ClaudeTag2.BetaComplianceConfigurationRestrictedError = BetaComplianceConfigurationRestrictedError;
-      ClaudeTag2.BetaOrganizationLevelScopedAPIKeyRequiredError = BetaOrganizationLevelScopedAPIKeyRequiredError;
-      ClaudeTag2.BetaSlackChannelSetUpEnvironmentNotFoundError = BetaSlackChannelSetUpEnvironmentNotFoundError;
-      ClaudeTag2.BetaSlackChannelSetUpSettingsConflictError = BetaSlackChannelSetUpSettingsConflictError;
-      ClaudeTag2.SlackChannels = SlackChannels;
-      ClaudeTag2.SlackWorkspaces = SlackWorkspaces;
-      ClaudeTag2.Bundles = Bundles;
-      return ClaudeTag2;
     })();
   }
 });
@@ -17427,8 +17824,9 @@ var init_webhooks2 = __esm({
        *   await client.beta.organization.webhooks.create({
        *     enabled_events: [
        *       'user_profile.enforcement_action_opened',
+       *       'user_profile.enforcement_action_resolved',
        *     ],
-       *     url: 'x',
+       *     url: 'https://example.com/anthropic-webhooks',
        *   });
        * ```
        */
@@ -17905,6 +18303,10 @@ var init_permissions = __esm({
        *
        * The RBAC Roles API is available to Claude Enterprise organizations only.
        *
+       * @throws {OrganizationTypeNotSupportedError}
+       * @throws {ParentOrganizationRequiredError}
+       * @throws {RBACRoleNotFoundError}
+       *
        * @example
        * ```ts
        * // Automatically fetches more pages as needed.
@@ -17952,6 +18354,10 @@ var init_rbac_roles = __esm({
          *
          * The RBAC Roles API is available to Claude Enterprise organizations only.
          *
+         * @throws {OrganizationTypeNotSupportedError}
+         * @throws {ParentOrganizationRequiredError}
+         * @throws {RBACRoleNotFoundError}
+         *
          * @example
          * ```ts
          * const betaRBACRole =
@@ -17974,6 +18380,9 @@ var init_rbac_roles = __esm({
          * List RBAC Roles in the organization.
          *
          * The RBAC Roles API is available to Claude Enterprise organizations only.
+         *
+         * @throws {OrganizationTypeNotSupportedError}
+         * @throws {ParentOrganizationRequiredError}
          *
          * @example
          * ```ts
@@ -19245,7 +19654,7 @@ var init_workspaces4 = __esm({
          * ```ts
          * const betaWorkspace =
          *   await client.beta.organization.workspaces.create({
-         *     name: 'x',
+         *     name: 'Workspace Name',
          *   });
          * ```
          */
@@ -19486,6 +19895,8 @@ var init_organization = __esm({
       Organization4.TelemetryDestinations = TelemetryDestinations;
       Organization4.Webhooks = Webhooks2;
       Organization4.ClaudeTag = ClaudeTag;
+      Organization4.BetaBundleAttachmentNotSupportedError = BetaBundleAttachmentNotSupportedError;
+      Organization4.BetaBundleOnCallError = BetaBundleOnCallError;
       Organization4.BetaSlackChannelSetUpSettingsRefusedError = BetaSlackChannelSetUpSettingsRefusedError;
       Organization4.BetaAPIKeyScopeMissingError = BetaAPIKeyScopeMissingError;
       Organization4.BetaClaudeTagWritesNotEnabledError = BetaClaudeTagWritesNotEnabledError;
@@ -26772,6 +27183,10 @@ var init_permissions2 = __esm({
        *
        * The RBAC Roles API is available to Claude Enterprise organizations only.
        *
+       * @throws {OrganizationTypeNotSupportedError}
+       * @throws {ParentOrganizationRequiredError}
+       * @throws {RBACRoleNotFoundError}
+       *
        * @example
        * ```ts
        * // Automatically fetches more pages as needed.
@@ -26818,6 +27233,10 @@ var init_rbac_roles2 = __esm({
          *
          * The RBAC Roles API is available to Claude Enterprise organizations only.
          *
+         * @throws {OrganizationTypeNotSupportedError}
+         * @throws {ParentOrganizationRequiredError}
+         * @throws {RBACRoleNotFoundError}
+         *
          * @example
          * ```ts
          * const rbacRole =
@@ -26839,6 +27258,9 @@ var init_rbac_roles2 = __esm({
          * List RBAC Roles in the organization.
          *
          * The RBAC Roles API is available to Claude Enterprise organizations only.
+         *
+         * @throws {OrganizationTypeNotSupportedError}
+         * @throws {ParentOrganizationRequiredError}
          *
          * @example
          * ```ts
@@ -27862,7 +28284,7 @@ var init_workspaces7 = __esm({
          * ```ts
          * const workspace =
          *   await client.organization.workspaces.create({
-         *     name: 'x',
+         *     name: 'Workspace Name',
          *   });
          * ```
          */
@@ -27982,7 +28404,7 @@ var init_workspaces7 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/organization/organization.mjs
-var OrgMemberLimitExceededError, ConcurrentMembershipChangeError, Organization2;
+var OrgMemberLimitExceededError, RBACRoleNotFoundError, ConcurrentMembershipChangeError, Organization2;
 var init_organization2 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/organization/organization.mjs"() {
     init_resource();
@@ -28019,6 +28441,12 @@ var init_organization2 = __esm({
       }
       OrgMemberLimitExceededError2._errorName = "OrgMemberLimitExceededError";
       return OrgMemberLimitExceededError2;
+    })();
+    RBACRoleNotFoundError = /* @__PURE__ */ (() => {
+      class RBACRoleNotFoundError2 extends NotFoundError {
+      }
+      RBACRoleNotFoundError2._errorName = "RBACRoleNotFoundError";
+      return RBACRoleNotFoundError2;
     })();
     ConcurrentMembershipChangeError = /* @__PURE__ */ (() => {
       class ConcurrentMembershipChangeError2 extends ConflictError {
@@ -28064,6 +28492,7 @@ var init_organization2 = __esm({
         }
       }
       Organization4.OrgMemberLimitExceededError = OrgMemberLimitExceededError;
+      Organization4.RBACRoleNotFoundError = RBACRoleNotFoundError;
       Organization4.ConcurrentMembershipChangeError = ConcurrentMembershipChangeError;
       Organization4.APIKeys = APIKeys2;
       Organization4.OrgAPIKeyLimitExceededError = OrgAPIKeyLimitExceededError;
@@ -28419,7 +28848,7 @@ var init_action_urls2 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/user-profiles/user-profiles.mjs
-var UserProfileNotFoundError, UserProfiles2;
+var UserProfileNotFoundError, UserProfileRequiredError, UserProfileBillingNotAuthorizedError, UserProfileNotBillableError, UserProfiles2;
 var init_user_profiles2 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/user-profiles/user-profiles.mjs"() {
     init_resource();
@@ -28435,6 +28864,24 @@ var init_user_profiles2 = __esm({
       }
       UserProfileNotFoundError2._errorName = "UserProfileNotFoundError";
       return UserProfileNotFoundError2;
+    })();
+    UserProfileRequiredError = /* @__PURE__ */ (() => {
+      class UserProfileRequiredError2 extends BadRequestError {
+      }
+      UserProfileRequiredError2._errorName = "UserProfileRequiredError";
+      return UserProfileRequiredError2;
+    })();
+    UserProfileBillingNotAuthorizedError = /* @__PURE__ */ (() => {
+      class UserProfileBillingNotAuthorizedError2 extends PermissionDeniedError {
+      }
+      UserProfileBillingNotAuthorizedError2._errorName = "UserProfileBillingNotAuthorizedError";
+      return UserProfileBillingNotAuthorizedError2;
+    })();
+    UserProfileNotBillableError = /* @__PURE__ */ (() => {
+      class UserProfileNotBillableError2 extends PermissionDeniedError {
+      }
+      UserProfileNotBillableError2._errorName = "UserProfileNotBillableError";
+      return UserProfileNotBillableError2;
     })();
     UserProfiles2 = /* @__PURE__ */ (() => {
       class UserProfiles3 extends APIResource {
@@ -28567,6 +29014,9 @@ var init_user_profiles2 = __esm({
         }
       }
       UserProfiles3.UserProfileNotFoundError = UserProfileNotFoundError;
+      UserProfiles3.UserProfileRequiredError = UserProfileRequiredError;
+      UserProfiles3.UserProfileBillingNotAuthorizedError = UserProfileBillingNotAuthorizedError;
+      UserProfiles3.UserProfileNotBillableError = UserProfileNotBillableError;
       UserProfiles3.ActionURLs = ActionURLs2;
       return UserProfiles3;
     })();
@@ -28599,6 +29049,8 @@ var init_error_classes = __esm({
     ERROR_CODE_CLASSES = /* @__PURE__ */ new Map([
       ["400 already_member", AlreadyMemberError],
       ["400 available_tools_limit_exceeded", AvailableToolsLimitExceededError],
+      ["400 bundle_attachment_not_supported", BetaBundleAttachmentNotSupportedError],
+      ["400 bundle_on_call", BetaBundleOnCallError],
       ["400 cannot_invite_emails_with_unverified_domains", CannotInviteEmailsWithUnverifiedDomainsError],
       ["400 cannot_remove_last_member", CannotRemoveLastMemberError],
       ["400 cannot_sign_out_primary_owner", BetaCannotSignOutPrimaryOwnerError],
@@ -28630,6 +29082,7 @@ var init_error_classes = __esm({
       ["400 organization_not_enrolled_in_beta", BetaOrganizationNotEnrolledInBetaError],
       ["400 organization_on_hold", OrganizationOnHoldError],
       ["400 organization_type_not_supported", OrganizationTypeNotSupportedError],
+      ["400 parent_organization_required", ParentOrganizationRequiredError],
       ["400 rbac_group_grants_owner_access", RBACGroupGrantsOwnerAccessError],
       ["400 rbac_group_owner_access_unconfirmed", RBACGroupOwnerAccessUnconfirmedError],
       ["400 request_body_encoding_invalid", RequestBodyEncodingInvalidError],
@@ -28645,9 +29098,12 @@ var init_error_classes = __esm({
       ["400 tool_reference_unresolved", ToolReferenceUnresolvedError],
       ["400 unsupported_charset", BetaUnsupportedCharsetError],
       ["400 user_profile_not_found", UserProfileNotFoundError],
+      ["400 user_profile_required", UserProfileRequiredError],
       ["400 workspace_api_key_limit_exceeded", WorkspaceAPIKeyLimitExceededError],
       ["400 workspace_member_limit_exceeded", WorkspaceMemberLimitExceededError],
       ["400 workspace_policy_violation", WorkspacePolicyViolationError],
+      ["402 linked_organization_billing_unavailable", LinkedOrganizationBillingUnavailableError],
+      ["402 linked_organization_spend_limit_reached", LinkedOrganizationSpendLimitReachedError],
       ["403 api_key_scope_missing", BetaAPIKeyScopeMissingError],
       ["403 cannot_sign_out_managed_member", BetaCannotSignOutManagedMemberError],
       ["403 cannot_sign_out_membership_admin", BetaCannotSignOutMembershipAdminError],
@@ -28660,8 +29116,11 @@ var init_error_classes = __esm({
       ["403 organization_level_scoped_api_key_required", BetaOrganizationLevelScopedAPIKeyRequiredError],
       ["403 sandbox_egress_restricted", SandboxEgressRestrictedError],
       ["403 spend_limits_admin_api_writes_not_enabled", BetaSpendLimitsAdminAPIWritesNotEnabledError],
+      ["403 user_profile_billing_not_authorized", UserProfileBillingNotAuthorizedError],
+      ["403 user_profile_not_billable", UserProfileNotBillableError],
       ["404 environment_not_found", BetaEnvironmentNotFoundError],
       ["404 file_expired", FileExpiredError],
+      ["404 rbac_role_not_found", RBACRoleNotFoundError],
       ["404 slack_channel_set_up_environment_not_found", BetaSlackChannelSetUpEnvironmentNotFoundError],
       ["404 thread_not_found", ThreadNotFoundError],
       ["409 concurrent_membership_change", ConcurrentMembershipChangeError],
@@ -28673,6 +29132,7 @@ var init_error_classes = __esm({
       ["409 slack_channel_set_up_settings_conflict", BetaSlackChannelSetUpSettingsConflictError],
       ["412 heartbeat_precondition_failed", BetaHeartbeatPreconditionFailedError],
       ["413 request_body_too_large_after_decoding", RequestBodyTooLargeAfterDecodingError],
+      ["429 contract_spend_limit_reached", ContractSpendLimitReachedError],
       ["429 enforced_spend_limit_reached", EnforcedSpendLimitReachedError],
       ["429 ramp_limit_exceeded", RampLimitExceededError],
       ["503 cmek_context_unavailable", CMEKContextUnavailableError],
@@ -30652,6 +31112,7 @@ var init_client = __esm({
       BaseAnthropic2.InternalServerError = InternalServerError;
       BaseAnthropic2.NotImplementedError = NotImplementedError;
       BaseAnthropic2.GatewayTimeoutError = GatewayTimeoutError;
+      BaseAnthropic2.PaymentRequiredError = PaymentRequiredError;
       BaseAnthropic2.ContentTooLargeError = ContentTooLargeError;
       BaseAnthropic2.PermissionDeniedError = PermissionDeniedError;
       BaseAnthropic2.PreconditionFailedError = PreconditionFailedError;
@@ -30703,8 +31164,12 @@ var init_client = __esm({
       Anthropic2.SkillReadBlockedUndecryptableError = SkillReadBlockedUndecryptableError;
       Anthropic2.UserProfiles = UserProfiles2;
       Anthropic2.UserProfileNotFoundError = UserProfileNotFoundError;
+      Anthropic2.UserProfileRequiredError = UserProfileRequiredError;
+      Anthropic2.UserProfileBillingNotAuthorizedError = UserProfileBillingNotAuthorizedError;
+      Anthropic2.UserProfileNotBillableError = UserProfileNotBillableError;
       Anthropic2.Organization = Organization2;
       Anthropic2.OrgMemberLimitExceededError = OrgMemberLimitExceededError;
+      Anthropic2.RBACRoleNotFoundError = RBACRoleNotFoundError;
       Anthropic2.ConcurrentMembershipChangeError = ConcurrentMembershipChangeError;
       Anthropic2.Beta = Beta;
       Anthropic2.BetaOrganizationNotEnrolledInBetaError = BetaOrganizationNotEnrolledInBetaError;
@@ -30715,10 +31180,14 @@ var init_client = __esm({
       Anthropic2.CMEKKeyNetworkBlockedError = CMEKKeyNetworkBlockedError;
       Anthropic2.OrganizationOnHoldError = OrganizationOnHoldError;
       Anthropic2.OrganizationTypeNotSupportedError = OrganizationTypeNotSupportedError;
+      Anthropic2.ParentOrganizationRequiredError = ParentOrganizationRequiredError;
       Anthropic2.RequestBodyEncodingInvalidError = RequestBodyEncodingInvalidError;
       Anthropic2.RequestBodyEncodingUnsupportedError = RequestBodyEncodingUnsupportedError;
+      Anthropic2.LinkedOrganizationBillingUnavailableError = LinkedOrganizationBillingUnavailableError;
+      Anthropic2.LinkedOrganizationSpendLimitReachedError = LinkedOrganizationSpendLimitReachedError;
       Anthropic2.SandboxEgressRestrictedError = SandboxEgressRestrictedError;
       Anthropic2.RequestBodyTooLargeAfterDecodingError = RequestBodyTooLargeAfterDecodingError;
+      Anthropic2.ContractSpendLimitReachedError = ContractSpendLimitReachedError;
       Anthropic2.EnforcedSpendLimitReachedError = EnforcedSpendLimitReachedError;
       Anthropic2.RampLimitExceededError = RampLimitExceededError;
       Anthropic2.CMEKContextUnavailableError = CMEKContextUnavailableError;
@@ -32101,10 +32570,10 @@ var SSEDecoder = class {
     return this.decode("");
   }
 };
-function partition(str, delimiter2) {
-  const index = str.indexOf(delimiter2);
+function partition(str, delimiter) {
+  const index = str.indexOf(delimiter);
   if (index !== -1) {
-    return [str.slice(0, index), delimiter2, str.slice(index + delimiter2.length)];
+    return [str.slice(0, index), delimiter, str.slice(index + delimiter.length)];
   }
   return [str, "", ""];
 }
@@ -32178,7 +32647,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION3 = "7.57.0";
+var VERSION3 = "7.60.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -44769,8 +45238,9 @@ var TurnState = class {
     return true;
   }
   /** Checks session termination after updating the selected turn state. */
-  terminal(event) {
-    return event.type === "agent.session.failed" || event.type === "agent.session.idle" && __classPrivateFieldGet2(this, _TurnState_turnEnded, "f");
+  terminal(event, sessionID) {
+    const type = event.type;
+    return event.type === "agent.session.failed" || type === "agent.session.budget_reached" && "session" in event && event.session?.id === sessionID && (__classPrivateFieldGet2(this, _TurnState_turnID, "f") === void 0 || __classPrivateFieldGet2(this, _TurnState_turnEnded, "f")) || event.type === "agent.session.idle" && __classPrivateFieldGet2(this, _TurnState_turnEnded, "f");
   }
   /** Returns each tool call once for the full invocation, including subagent turns. */
   call(event) {
@@ -45159,12 +45629,13 @@ var AgentTurnResultCollector = class {
     if (this.ready) {
       return;
     }
-    if ("session" in event) {
+    if ("session" in event && event.session) {
       __classPrivateFieldSet2(this, _AgentTurnResultCollector_sessionID, __classPrivateFieldGet2(this, _AgentTurnResultCollector_sessionID, "f") ?? event.session.id, "f");
       __classPrivateFieldSet2(this, _AgentTurnResultCollector_requiredActions, structuredClone(event.session.required_actions ?? []), "f");
       __classPrivateFieldSet2(this, _AgentTurnResultCollector_checkedActionsFor, void 0, "f");
       __classPrivateFieldSet2(this, _AgentTurnResultCollector_sessionFailed, __classPrivateFieldGet2(this, _AgentTurnResultCollector_sessionFailed, "f") || event.type === "agent.session.failed", "f");
-      __classPrivateFieldSet2(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet2(this, _AgentTurnResultCollector_idle, "f") || event.type === "agent.session.idle" && __classPrivateFieldGet2(this, _AgentTurnResultCollector_terminal, "f"), "f");
+      const type = event.type;
+      __classPrivateFieldSet2(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet2(this, _AgentTurnResultCollector_idle, "f") || (event.type === "agent.session.idle" && __classPrivateFieldGet2(this, _AgentTurnResultCollector_terminal, "f") || type === "agent.session.budget_reached" && event.session.id === __classPrivateFieldGet2(this, _AgentTurnResultCollector_sessionID, "f") && (!__classPrivateFieldGet2(this, _AgentTurnResultCollector_turn, "f") || __classPrivateFieldGet2(this, _AgentTurnResultCollector_terminal, "f"))), "f");
     }
     if (event.type === "agent.session.turn.created" && event.turn.subagent_id === null && !__classPrivateFieldGet2(this, _AgentTurnResultCollector_turn, "f")) {
       __classPrivateFieldSet2(this, _AgentTurnResultCollector_turn, structuredClone(event.turn), "f");
@@ -45198,7 +45669,7 @@ var AgentTurnResultCollector = class {
     __classPrivateFieldSet2(this, _AgentTurnResultCollector_checkedActionsFor, canHandle, "f");
   }
   get ready() {
-    return __classPrivateFieldGet2(this, _AgentTurnResultCollector_terminal, "f") && __classPrivateFieldGet2(this, _AgentTurnResultCollector_idle, "f");
+    return __classPrivateFieldGet2(this, _AgentTurnResultCollector_idle, "f");
   }
   release() {
     __classPrivateFieldGet2(this, _AgentTurnResultCollector_messages, "f").clear();
@@ -45454,7 +45925,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
       if (!state2.accept(event)) {
         continue;
       }
-      const terminal = state2.terminal(event);
+      const terminal = state2.terminal(event, __classPrivateFieldGet2(this, _AgentSessionStream_sessionID, "f"));
       const dispatch = __classPrivateFieldGet2(this, _AgentSessionStream_dispatcher, "f").prepare(state2.call(event), __classPrivateFieldGet2(this, _AgentSessionStream_sessionID, "f"));
       if (terminal) {
         __classPrivateFieldGet2(this, _AgentSessionStream_stream, "f").controller.abort();

@@ -4,6 +4,12 @@
 
 ### 4.14-dev
 
+#### Dependencies: npm update across root, packages and plugins
+
+- Ran `npm update -S` in the root project, every package and every plugin. Notable bumps: `better-sqlite3-multiple-ciphers` 13.2.0 (root and CLI), `openai` 7.60, `@anthropic-ai/sdk` 1.10, `@openrouter/sdk` 1.5.120, `@tanstack/react-query` / `react-query-devtools` / `eslint-plugin-query` 5.108.1, `@testing-library/user-event` 14.6.13
+- The root, plugin-utils and all plugins now require `@quilltap/plugin-types` ^2.12.0
+- plugin-utils 2.7.7; patch bumps to all 15 plugins (`package.json` and `manifest.json`), rebuilt. The curl plugin's dependencies did not change, but its bundle picks up the root `openai`, so it was bumped too
+
 #### Stale-chat asset collapse: no longer deletes a character's default avatar
 
 - Fixed the stale-chat asset sweep (`lib/background-jobs/maintenance/collapse-stale-chat-assets.ts`) deleting a character's default avatar when that avatar had first been generated in a chat that later went stale. The default is stored as a vault link id, so `findByDefaultImageId(files.id)` missed it. The album/vault check matched on `files.sha256`, which disagrees with the vault's own hash for about a fifth of generated images, so it missed too. Deleting a `mount-blob:` file removes every link to its blob, `photos/` included
