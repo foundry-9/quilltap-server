@@ -46,7 +46,7 @@ export function HomeView({
 }: HomeViewProps) {
   return (
     <div
-      className="qt-homepage-container"
+      className={backgroundUrl ? 'qt-homepage-container qt-homepage-backdrop' : 'qt-homepage-container'}
       style={backgroundUrl ? { '--story-background-url': `url('${backgroundUrl}')` } as CSSProperties : undefined}
     >
       {/* Welcome section */}

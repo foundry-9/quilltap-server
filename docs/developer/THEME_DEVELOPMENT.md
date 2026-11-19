@@ -158,6 +158,8 @@ What the loader does and refuses:
 - `@media`, `@supports`, `@container` and `@layer` are kept. `@font-face`, `@import`, `@charset`, `@namespace` and every other at-rule are refused. Fonts go in the manifest.
 - `url()` must be a path to an image in the bundle (rewritten to the theme's asset route) or a `data:image/…` URI. Remote, rooted and protocol-relative URLs are refused, in CSS and in tokens alike.
 
+A picture you paint yourself behind the home page (a `::before` on `.qt-homepage-container`, say) must stand aside for a dynamic-backgrounds collage, as the app's page background does. The app adds the `qt-homepage-backdrop` state class while one is showing, so guard the rule: `.qt-homepage-container:not(.qt-homepage-backdrop)::before { … }`. Madman's Box is the worked example.
+
 ### Hooks and `hooksVersion`
 
 Custom CSS should target **hooks**: the `qt-*` classes and data attributes the app sets on purpose and keeps stable. The catalogue, with what each hook marks and where it appears, is [THEME_HOOKS.md](./THEME_HOOKS.md).

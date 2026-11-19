@@ -1,8 +1,10 @@
-/* The home page sits in front of the cabin's own photograph, half lit. */
+/* The home page sits in front of the cabin's own photograph, half lit — unless a
+   dynamic-backgrounds collage is showing (qt-homepage-backdrop), which takes
+   precedence. */
 .qt-homepage-container {
   position: relative;
 }
-.qt-homepage-container::before {
+.qt-homepage-container:not(.qt-homepage-backdrop)::before {
   content: '';
   position: fixed;
   inset: 0;

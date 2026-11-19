@@ -54,7 +54,7 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 
 | Class | What it is | Inside | Variants | States |
 |---|---|---|---|---|
-| `.qt-homepage-container` | Home page |  |  |  |
+| `.qt-homepage-container` | Home page. A picture a theme paints behind the home page should stand aside while `qt-homepage-backdrop` is set: a dynamic-backgrounds collage is showing instead. |  |  | `.qt-homepage-backdrop` — A dynamic background is showing |
 | `.qt-homepage-welcome` | Welcome block. The greeting at the top of the home page. | `.qt-homepage-container` |  |  |
 | `.qt-quick-actions` | Quick actions row | `.qt-homepage-container` |  |  |
 | `.qt-homepage-grid` | Home card grid. Holds the three home cards side by side. | `.qt-homepage-container` |  |  |

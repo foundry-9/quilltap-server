@@ -15,6 +15,9 @@ export const HOME_HOOKS: readonly HookDef[] = [
     className: 'qt-homepage-container',
     surface: 'home',
     label: 'Home page',
+    description:
+      'A picture a theme paints behind the home page should stand aside while `qt-homepage-backdrop` is set: a dynamic-backgrounds collage is showing instead.',
+    states: [{ kind: 'class', className: 'qt-homepage-backdrop', label: 'A dynamic background is showing' }],
     since: 1,
   },
   {
