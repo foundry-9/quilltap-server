@@ -20,9 +20,9 @@ export const lookupMessagesToolInputSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'Words to find. Whole words and word prefixes match, case- and accent-insensitive; every ' +
-      'word must appear in the message. Put a phrase in double quotes to require it verbatim. ' +
-      'Keep it to the 1–3 most distinctive words.'
+      'Words to find, case- and accent-insensitive; whole words and word beginnings match. The words ' +
+      'are first matched together in the order given; if no message has them that way, messages ' +
+      'holding every word in any order are returned instead. Keep it to the 1–3 most distinctive words.'
     ),
   character: z
     .string()
@@ -39,6 +39,18 @@ export const lookupMessagesToolInputSchema = z.object({
   until: z
     .string()
     .describe('Only messages written on or before this date (YYYY-MM-DD or ISO timestamp).')
+    .optional(),
+  conversation: z
+    .string()
+    .min(1)
+    .describe('Search inside this one conversation only (its id or exact title).')
+    .optional(),
+  group_by: z
+    .enum(['conversation'])
+    .describe(
+      '"conversation": one line per conversation (title, dates, hit count, the best snippet) instead of one ' +
+      'per message — the way to answer "which conversation".'
+    )
     .optional(),
   limit: llmNumber(
     z.number().int().min(1).max(30).describe('How many hits to return, newest first (default 10, max 30).')
@@ -60,8 +72,9 @@ export const lookupMessagesToolDefinition = {
     description:
       'Full-text search across every conversation. Each hit gives the conversation (id, title, ' +
       'date), the message id, when it was written, who said it, and a snippet around the match. ' +
-      'Use it to answer "in which conversation did X happen?", then read_messages to see the ' +
-      'surrounding lines. Much faster than searching chat_messages with run_sql.',
+      'Use `group_by: "conversation"` to answer "in which conversation did X happen?", `conversation` ' +
+      'to search inside one, then read_messages to see the surrounding lines. To look for a detail, ' +
+      'search the conversation; do not read it whole.',
     parameters: zodToOpenAISchema(lookupMessagesToolInputSchema),
   },
 };

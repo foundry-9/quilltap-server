@@ -35,11 +35,24 @@ function fileBacked(db: DatabaseType): boolean {
   return typeof name === 'string' && name.length > 0 && name !== ':memory:' && !name.startsWith('file::memory:');
 }
 
+export interface ReadonlyQueryClientOptions {
+  /**
+   * Runs once, when the connection is first opened, before `query_only` is
+   * switched on: the one moment temporary objects (a `TEMP VIEW`) can be made
+   * on a read-only connection. A failure is logged and the connection is
+   * still used.
+   */
+  prepare?: (db: DatabaseType) => void;
+}
+
 /**
  * Return a read-only connection to the same file as `rwHandle`, or `null`
  * when the handle is not file-backed or the read-only open fails.
  */
-export function getReadonlyQueryClient(rwHandle: DatabaseType): DatabaseType | null {
+export function getReadonlyQueryClient(
+  rwHandle: DatabaseType,
+  options: ReadonlyQueryClientOptions = {},
+): DatabaseType | null {
   if (!fileBacked(rwHandle)) return null;
   const path = rwHandle.name;
   const existing = cache().get(path);
@@ -51,6 +64,16 @@ export function getReadonlyQueryClient(rwHandle: DatabaseType): DatabaseType | n
       applySqlcipherKey(db);
       registerTextCodecFunction(db);
       db.pragma('busy_timeout = 5000');
+      if (options.prepare) {
+        try {
+          options.prepare(db);
+        } catch (error) {
+          log.warn('Read-only query connection preparation failed; continuing without it', {
+            path,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
       db.pragma('query_only = ON');
       // Verify probe: forces decryption of page 1.
       db.prepare('SELECT count(*) AS cnt FROM sqlite_master').get();

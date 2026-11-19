@@ -586,8 +586,9 @@ export async function handleGrep(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocGrepOutput; error?: string; formattedText?: string }> {
   // A pre-built mount pool (Scenario Builder) stands in for the project: a
-  // General-only scene has no project and must still be able to grep.
-  if (!context.projectId && !context.mountPool) {
+  // General-only scene has no project and must still be able to grep. The
+  // operator surface (Brahma Console, the builders) reaches every store.
+  if (!context.projectId && !context.mountPool && context.operatorOverride !== true) {
     return { success: false, error: 'Grep requires a project context' };
   }
   const input = applyQtapUriToInput(rawInput);
@@ -806,6 +807,7 @@ export async function handleGrep(
       extraCharacterIds: guardOwnVault ? undefined : peerCharacterIds,
       guardOwnVault,
       mountPool: context.mountPool,
+      operatorOverride: context.operatorOverride,
     });
 
     for (const mp of mountPoints) {
@@ -911,8 +913,9 @@ export async function handleListFiles(
   rawInput: DocListFilesInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocListFilesOutput; error?: string; formattedText?: string }> {
-  // See doc_grep: a pre-built mount pool stands in for the project.
-  if (!context.projectId && !context.mountPool) {
+  // See doc_grep: a pre-built mount pool, or the operator surface, stands in
+  // for the project.
+  if (!context.projectId && !context.mountPool && context.operatorOverride !== true) {
     return { success: false, error: 'List files requires a project context' };
   }
 
@@ -1031,6 +1034,7 @@ export async function handleListFiles(
       extraCharacterIds: guardOwnVault ? undefined : peerCharacterIds,
       guardOwnVault,
       mountPool: context.mountPool,
+      operatorOverride: context.operatorOverride,
     });
     for (const mp of mountPoints) {
       if (mountPointFilter && mp.name.toLowerCase() !== mountPointFilter.toLowerCase() && mp.id !== mountPointFilter) {

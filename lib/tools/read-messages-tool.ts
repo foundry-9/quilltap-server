@@ -45,6 +45,10 @@ export const readMessagesToolInputSchema = z.object({
   )
     .default(10)
     .optional(),
+  full: z
+    .boolean()
+    .describe('Return every line whole. Without it, a line longer than 1,500 characters is cut, with a marker.')
+    .optional(),
 });
 
 export type ReadMessagesInput = z.infer<typeof readMessagesToolInputSchema>;
@@ -61,7 +65,8 @@ export const readMessagesToolDefinition = {
       "Read a few lines of one conversation, labelled by speaker and timestamp, with the " +
       "conversation's title, dates and cast. Centre on a message id from lookup_messages, or " +
       'read by position (the opening, or the last few lines). Only spoken lines are returned — ' +
-      'no system notices.',
+      'no system notices. Read the slice around a hit; to look for a detail, search the ' +
+      'conversation (lookup_messages with `conversation`) instead.',
     parameters: zodToOpenAISchema(readMessagesToolInputSchema),
   },
 };

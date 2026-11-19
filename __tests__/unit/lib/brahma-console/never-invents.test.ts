@@ -48,9 +48,11 @@ describe('the Brahma brief', () => {
   })
 
   it('says never, says to report where it looked, and allows invention only on request', () => {
-    expect(BRAHMA_ACCURACY_RULE).toContain('Never make anything up.')
+    expect(BRAHMA_ACCURACY_RULE).toContain('Never make up a fact.')
     expect(BRAHMA_ACCURACY_RULE).toContain('say so plainly and say where you looked')
-    expect(BRAHMA_ACCURACY_RULE).toContain('Invent only when the operator asks you to')
+    expect(BRAHMA_ACCURACY_RULE).toContain('Invent outright only when the operator asks you to')
+    // Reasoning from the record is not invention (research kit §7.2).
+    expect(BRAHMA_ACCURACY_RULE).toContain('an inference is not an invention')
     expect(BRAHMA_WRITING_ACCURACY_RULE).toContain('never from invention')
   })
 })
@@ -67,6 +69,7 @@ describe('console code stays off the story latitude', () => {
     'lib/services/help-chat',
     'lib/help-chat',
     'lib/services/agent-loop',
+    'lib/research',
   ]
   const FORBIDDEN = /story-character-section|carina\/reference-query|['"]\.\/reference-query['"]/
 

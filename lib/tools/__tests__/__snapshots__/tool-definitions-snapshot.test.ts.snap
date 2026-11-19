@@ -31,6 +31,7 @@ exports[`tool definitions: declared effects effects snapshot (static effect, or 
   "doc_write_blob": "write",
   "doc_write_file": "write",
   "edit_custom_tool": "computed (max write)",
+  "find_documents": "read",
   "generate_image": "write",
   "help_navigate": "read",
   "help_search": "read",
@@ -45,14 +46,20 @@ exports[`tool definitions: declared effects effects snapshot (static effect, or 
   "inventory_unequip": "write",
   "inventory_update": "write",
   "keep_image": "write",
+  "list_documents": "read",
   "list_images": "read",
   "list_mail": "read",
   "log_create_entry": "write",
   "log_grep": "read",
   "log_read": "read",
+  "lookup_atlas": "read",
   "lookup_character": "read",
+  "lookup_conversations": "read",
+  "lookup_group": "read",
   "lookup_memories": "read",
   "lookup_messages": "read",
+  "lookup_project": "read",
+  "lookup_wardrobe": "read",
   "project_info": "read",
   "read_conversation": "read",
   "read_mail": "read",
@@ -1133,6 +1140,46 @@ exports[`tool definitions: derived OpenAI parameters editCustomTool: parameters 
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters findDocuments: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "folder": {
+      "description": "Narrow to a folder, e.g. "Wardrobe" or "Conversation Summaries".",
+      "minLength": 1,
+      "type": "string",
+    },
+    "limit": {
+      "description": "Files to return (default 10, at most 30).",
+      "maximum": 30,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "modified_since": {
+      "description": "Only files changed on or after this date (YYYY-MM-DD).",
+      "minLength": 1,
+      "type": "string",
+    },
+    "name": {
+      "description": "Words that must appear in the file's path or name, e.g. "blazer" or "chapter 9".",
+      "minLength": 1,
+      "type": "string",
+    },
+    "store": {
+      "description": "Narrow to one store: its name, or \`character:Name\`, \`project:Name\`, \`group:Name\`, \`general\`. Omit to search everything in reach. The shorthand is for this argument only: a qtap:// address names the store itself (as results print it), never \`character:Name\`.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "text": {
+      "description": "Words to find in the content; put a phrase in "double quotes" to find it whole. Every word or phrase must appear. Case, accents and curly quotes are ignored.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters helpNavigate: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1634,6 +1681,31 @@ exports[`tool definitions: derived OpenAI parameters keepImage: parameters snaps
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters listDocuments: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "depth": {
+      "description": "How many folder levels to open (default 2). A folder of more than 25 files is shown as one line.",
+      "maximum": 5,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "folder": {
+      "description": "List only this folder of the store, e.g. "Wardrobe".",
+      "minLength": 1,
+      "type": "string",
+    },
+    "store": {
+      "description": "The store to list: its name, or \`character:Name\`, \`project:Name\`, \`group:Name\`, \`general\`. Omit for the list of every store in reach.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters listImages: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1755,6 +1827,25 @@ exports[`tool definitions: derived OpenAI parameters logRead: parameters snapsho
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters lookupAtlas: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "description": "The thing's name or one of its aliases. Omit to list the names in a tier.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "owner": {
+      "description": "Whose Atlas: \`character:Name\`, \`project:Name\`, \`group:Name\` or \`general\`. Omit to look in every tier.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters lookupCharacter: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1764,9 +1855,83 @@ exports[`tool definitions: derived OpenAI parameters lookupCharacter: parameters
       "minLength": 1,
       "type": "string",
     },
+    "fields": {
+      "description": "Return only these parts (any of identity, description, personality, manifesto, physical, conversations, stores). Name, pronouns, aliases and counts always come back. Omit for everything.",
+      "items": {
+        "enum": [
+          "identity",
+          "description",
+          "personality",
+          "manifesto",
+          "physical",
+          "conversations",
+          "stores",
+        ],
+        "type": "string",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
   },
   "required": [
     "character",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters lookupConversations: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "character": {
+      "description": "Only conversations this character took part in (name, alias or id).",
+      "minLength": 1,
+      "type": "string",
+    },
+    "conversation": {
+      "description": "One conversation by id or exact title: returns its whole summary and an outline.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "limit": {
+      "description": "Conversations to return (default 10, at most 30).",
+      "maximum": 30,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "query": {
+      "description": "Words in the conversation's title or summary.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "since": {
+      "description": "Only conversations active on or after this date (YYYY-MM-DD).",
+      "minLength": 1,
+      "type": "string",
+    },
+    "until": {
+      "description": "Only conversations begun on or before this date (YYYY-MM-DD).",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters lookupGroup: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "group": {
+      "description": "The group: its name or id. Case-insensitive.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "group",
   ],
   "type": "object",
 }
@@ -1784,9 +1949,13 @@ exports[`tool definitions: derived OpenAI parameters lookupMemories: parameters 
       "description": "Whose memories to search — the character who HOLDS them (name, alias or id). Omit to search every character and merge the best hits.",
       "type": "string",
     },
+    "full": {
+      "description": "Return each memory whole. Without it, each hit is its summary and the first 300 characters.",
+      "type": "boolean",
+    },
     "limit": {
-      "default": 10,
-      "description": "How many memories to return (default 10, max 30).",
+      "default": 8,
+      "description": "How many memories to return (default 8, max 30).",
       "maximum": 30,
       "minimum": 1,
       "type": "integer",
@@ -1820,6 +1989,18 @@ exports[`tool definitions: derived OpenAI parameters lookupMessages: parameters 
       "description": "Only conversations this character took part in (name, alias or id).",
       "type": "string",
     },
+    "conversation": {
+      "description": "Search inside this one conversation only (its id or exact title).",
+      "minLength": 1,
+      "type": "string",
+    },
+    "group_by": {
+      "description": ""conversation": one line per conversation (title, dates, hit count, the best snippet) instead of one per message — the way to answer "which conversation".",
+      "enum": [
+        "conversation",
+      ],
+      "type": "string",
+    },
     "limit": {
       "default": 10,
       "description": "How many hits to return, newest first (default 10, max 30).",
@@ -1828,7 +2009,7 @@ exports[`tool definitions: derived OpenAI parameters lookupMessages: parameters 
       "type": "integer",
     },
     "query": {
-      "description": "Words to find. Whole words and word prefixes match, case- and accent-insensitive; every word must appear in the message. Put a phrase in double quotes to require it verbatim. Keep it to the 1–3 most distinctive words.",
+      "description": "Words to find, case- and accent-insensitive; whole words and word beginnings match. The words are first matched together in the order given; if no message has them that way, messages holding every word in any order are returned instead. Keep it to the 1–3 most distinctive words.",
       "minLength": 1,
       "type": "string",
     },
@@ -1847,6 +2028,49 @@ exports[`tool definitions: derived OpenAI parameters lookupMessages: parameters 
   },
   "required": [
     "query",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters lookupProject: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "description": "The project: its name or id. Case-insensitive.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "project",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters lookupWardrobe: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "include_archived": {
+      "description": "Include archived pieces (default false).",
+      "type": "boolean",
+    },
+    "owner": {
+      "description": "Whose wardrobe: a character's name (every piece they can reach, with their dressing instructions), or \`project:Name\`, \`group:Name\`, \`general\` for that tier's rail alone.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "query": {
+      "description": "Only pieces with these words in their title or description.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "owner",
   ],
   "type": "object",
 }
@@ -1952,6 +2176,10 @@ exports[`tool definitions: derived OpenAI parameters readMessages: parameters sn
       "maximum": 20,
       "minimum": 1,
       "type": "integer",
+    },
+    "full": {
+      "description": "Return every line whole. Without it, a line longer than 1,500 characters is cut, with a marker.",
+      "type": "boolean",
     },
     "offset": {
       "default": 0,
@@ -3364,6 +3592,7 @@ exports[`tool definitions: the tool picker picker snapshot (listed category, or 
   "doc_write_blob": "unlisted",
   "doc_write_file": "documents [documentStores]",
   "edit_custom_tool": "pascal",
+  "find_documents": "unlisted",
   "generate_image": "media [imageProfile]",
   "help_navigate": "help",
   "help_search": "help",
@@ -3378,14 +3607,20 @@ exports[`tool definitions: the tool picker picker snapshot (listed category, or 
   "inventory_unequip": "inventory [canManageInventory]",
   "inventory_update": "inventory [canManageInventory]",
   "keep_image": "photos",
+  "list_documents": "unlisted",
   "list_images": "photos",
   "list_mail": "utility",
   "log_create_entry": "log",
   "log_grep": "log",
   "log_read": "log",
+  "lookup_atlas": "unlisted",
   "lookup_character": "unlisted",
+  "lookup_conversations": "unlisted",
+  "lookup_group": "unlisted",
   "lookup_memories": "unlisted",
   "lookup_messages": "unlisted",
+  "lookup_project": "unlisted",
+  "lookup_wardrobe": "unlisted",
   "project_info": "project [project]",
   "read_conversation": "search",
   "read_mail": "utility",

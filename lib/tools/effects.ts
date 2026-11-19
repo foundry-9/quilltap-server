@@ -83,6 +83,11 @@ import { rngToolEffect } from './rng-tool';
 import { runCustomToolEffect } from './run-custom-tool';
 import { runSqlToolEffect } from './run-sql-tool';
 import { lookupCharacterToolEffect } from './lookup-character-tool';
+import { findDocumentsToolEffect } from './find-documents-tool';
+import { listDocumentsToolEffect } from './list-documents-tool';
+import { lookupConversationsToolEffect } from './lookup-conversations-tool';
+import { lookupGroupToolEffect, lookupProjectToolEffect } from './lookup-group-tool';
+import { lookupAtlasToolEffect, lookupWardrobeToolEffect } from './lookup-wardrobe-tool';
 import { lookupMemoriesToolEffect } from './lookup-memories-tool';
 import { lookupMessagesToolEffect } from './lookup-messages-tool';
 import { readMessagesToolEffect } from './read-messages-tool';
@@ -174,6 +179,14 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
   lookup_memories: lookupMemoriesToolEffect,
   lookup_messages: lookupMessagesToolEffect,
   read_messages: readMessagesToolEffect,
+  // The research kit (lib/research/): every tool reads.
+  find_documents: findDocumentsToolEffect,
+  list_documents: listDocumentsToolEffect,
+  lookup_conversations: lookupConversationsToolEffect,
+  lookup_group: lookupGroupToolEffect,
+  lookup_project: lookupProjectToolEffect,
+  lookup_wardrobe: lookupWardrobeToolEffect,
+  lookup_atlas: lookupAtlasToolEffect,
   theme_read_draft: themeReadDraftToolEffect,
   theme_lookup_tokens: themeLookupTokensToolEffect,
   theme_lookup_hooks: themeLookupHooksToolEffect,
@@ -287,9 +300,13 @@ export function offeredTools(names: Iterable<string>): ToolOffer {
 export const OPERATOR_TOOL_OFFER: ToolOffer = Object.freeze({ kind: 'operator' as const });
 
 /**
- * Tools that only ever run on the operator surface (the Brahma Console):
- * read-only SQL and the lookup shortcuts, which read every character's
- * memories and every conversation. Refused off that surface whatever the offer.
+ * Tools that only ever run on the operator surface (the Brahma Console and the
+ * builders that run for the operator): read-only SQL, the lookup shortcuts
+ * and the research kit's record tools, which read every character's memories,
+ * every conversation, every group and project. Refused off that surface
+ * whatever the offer. (The kit's document tools, `find_documents` and
+ * `list_documents`, also run under a Scenario Builder mount pool, so they are
+ * not here.)
  */
 export const OPERATOR_SURFACE_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'run_sql',
@@ -297,6 +314,11 @@ export const OPERATOR_SURFACE_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'lookup_memories',
   'lookup_messages',
   'read_messages',
+  'lookup_conversations',
+  'lookup_group',
+  'lookup_project',
+  'lookup_wardrobe',
+  'lookup_atlas',
 ]);
 
 /** Everything the permit needs beyond the call itself. */

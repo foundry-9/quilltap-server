@@ -105,6 +105,8 @@ import {
   executeReadMessagesTool,
   type BrahmaLookupResult,
 } from '@/lib/tools/handlers/brahma-lookup-handler';
+import { RESEARCH_KIT_HANDLERS } from '@/lib/tools/handlers/research-kit-handler';
+import { researchKitResult } from '@/lib/research/result';
 import { THEME_ASSIST_HANDLERS } from '@/lib/tools/handlers/theme-assist-handler';
 import { THEME_ASSIST_TOOL_NAMES } from '@/lib/tools/theme-assist-tools';
 import {
@@ -289,6 +291,10 @@ const BRAHMA_LOOKUP_HANDLERS: Record<
   read_messages: executeReadMessagesTool,
 };
 const BRAHMA_LOOKUP_TOOL_NAMES = Object.keys(BRAHMA_LOOKUP_HANDLERS);
+// The research kit's new tools (find_documents, list_documents and the record
+// lookups). Documents work under the operator surface or a mount pool; records
+// need the operator surface (the permit and the handler both refuse elsewhere).
+const RESEARCH_KIT_TOOL_NAMES_LOCAL = Object.keys(RESEARCH_KIT_HANDLERS);
 
 // Built-in tool names that are handled directly by this module
 // These should NOT be routed to the plugin registry.
@@ -321,6 +327,7 @@ const BUILT_IN_TOOLS = new Set<string>([
   // Brahma Console — read-only SQL access + lookup shortcuts (operator surface only)
   'run_sql',
   ...BRAHMA_LOOKUP_TOOL_NAMES,
+  ...RESEARCH_KIT_TOOL_NAMES_LOCAL,
   // Calliope — the theme draft's references and proposals (her surface only)
   ...THEME_ASSIST_TOOL_NAMES,
   // Wardrobe tools
@@ -1083,6 +1090,23 @@ export async function executeToolCallWithContext(
         toolName: toolCall.name,
         success: result.success,
         result: result.success ? result : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // The research kit's tools (lib/research/). Text results travel as text.
+    const researchKit = RESEARCH_KIT_HANDLERS[toolCall.name]
+    if (researchKit) {
+      const result = await researchKit(toolCall.arguments, {
+        userId,
+        operatorSurface: context.operatorSurface,
+        mountPool: context.mountPool,
+      });
+
+      return {
+        toolName: toolCall.name,
+        success: result.success,
+        result: result.success ? researchKitResult(result.text) : null,
         error: result.success ? undefined : result.error,
       };
     }

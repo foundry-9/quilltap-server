@@ -50,6 +50,8 @@ Writing an entry by hand is a fine thing when the particulars live in your head.
 3. **Further details** (optional) — facts he should take as given, where to look, what to leave out, how long you would like it.
 4. **Model** — Brahma's own engine is chosen for you (the project's Brahma engine for a project's Atlas, else the one set in [the Console's settings](brahma-console.md#choosing-the-engine-for-brahma), else your default). Any other profile may be chosen; while searching is on, profiles with tool use switched off are not offered.
 
+Before he lifts a finger, Brahma is handed what a first look already turned up — the documents that mention your subject, a few lines from each, and the conversations where it was spoken of — so he begins by opening the two or three that matter rather than hunting for them. He works to the same research discipline as [the Console](brahma-console.md#how-the-console-researches), and stops once he has enough.
+
 Press **Draft the entry** and his searches tick by as he makes them. What comes back is a draft of everything but the picture: a **name**, the other words it is **also called** (he is told which names the shelf already uses, and steers clear of them), a **graphic prompt** if the sources say what it looks like, and **what is known**. Ask for changes in the **Revise** box ("shorter, and find out what became of it after the war") as often as you like.
 
 Nothing is filed until you say so. **Open in the editor** carries the draft into the ordinary new-entry editor, on the shelf and in the folder you were browsing, where you may amend any of it before pressing **Save**. Add a picture once it is saved, as below.

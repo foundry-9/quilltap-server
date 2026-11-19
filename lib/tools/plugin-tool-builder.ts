@@ -56,6 +56,11 @@ import { lookupCharacterToolDefinition } from '@/lib/tools/lookup-character-tool
 import { lookupMemoriesToolDefinition } from '@/lib/tools/lookup-memories-tool';
 import { lookupMessagesToolDefinition } from '@/lib/tools/lookup-messages-tool';
 import { readMessagesToolDefinition } from '@/lib/tools/read-messages-tool';
+import { findDocumentsToolDefinition } from '@/lib/tools/find-documents-tool';
+import { listDocumentsToolDefinition } from '@/lib/tools/list-documents-tool';
+import { lookupConversationsToolDefinition } from '@/lib/tools/lookup-conversations-tool';
+import { lookupGroupToolDefinition, lookupProjectToolDefinition } from '@/lib/tools/lookup-group-tool';
+import { lookupAtlasToolDefinition, lookupWardrobeToolDefinition } from '@/lib/tools/lookup-wardrobe-tool';
 import {
   wardrobeListToolDefinition,
 } from '@/lib/tools/wardrobe-list-tool';
@@ -194,6 +199,12 @@ function applyImageConstraintsToTool(
 
 /** Which `doc_*` tools a surface is offered. See `BuildToolsOptions.docToolsMode`. */
 export type DocToolsMode = 'off' | 'read' | 'full';
+
+/** Which research-kit tools a surface is offered. See `BuildToolsOptions.researchKit`. */
+export type ResearchKitMode = 'off' | 'documents' | 'full';
+
+/** The doc_* tools the research kit replaces; withheld wherever the kit is on. */
+export const KIT_REPLACED_DOC_TOOLS: ReadonlySet<string> = new Set(['doc_grep', 'doc_list_files']);
 
 /**
  * Options for building tools for a provider ({@link buildToolsForProvider}). The nine `inventory_*` flags
@@ -348,11 +359,22 @@ export interface BuildToolsOptions extends InventoryToolFlags {
 
   /**
    * When true, include the `run_sql` tool — read-only SQL access to the three
-   * Quilltap databases. Offered on the **Brahma Console** surface only;
-   * execution is additionally gated on `operatorSurface` in the tool executor.
-   * Defaults to `false`.
+   * Quilltap databases — and nothing else. Offered on the operator's surfaces
+   * only; execution is additionally gated on `operatorSurface` in the tool
+   * executor. Defaults to `false`.
    */
   sqlAccess?: boolean;
+
+  /**
+   * The research kit (docs/developer/features/research-kit.md §5.2):
+   * `'documents'` offers `find_documents` and `list_documents`; `'full'` adds
+   * the record lookups (`lookup_character`, `lookup_memories`,
+   * `lookup_messages`, `read_messages`, `lookup_conversations`,
+   * `lookup_group`, `lookup_project`, `lookup_wardrobe`, `lookup_atlas`).
+   * When the kit is on, `doc_grep` and `doc_list_files` are withheld — a weak
+   * model gets one way to do each thing. Defaults to `'off'`.
+   */
+  researchKit?: ResearchKitMode;
 
   /**
    * A surface's whole slate: exactly these definitions (plus
@@ -426,6 +448,7 @@ export async function buildToolsForProvider(
       includePluginTools: options.includePluginTools,
       askCarina: options.askCarina,
       sqlAccess: options.sqlAccess,
+      researchKit: options.researchKit ?? 'off',
     },
   });
 
@@ -553,18 +576,30 @@ export async function buildToolsForProvider(
     );
   }
 
-  // Read-only SQL access — Brahma Console only. Execution is additionally gated
-  // on `operatorSurface` in the tool executor, so a leaked tool name can never
-  // run from a character surface.
-  if (options.sqlAccess) {
-    // The lookup shortcuts ride on the same switch: they are the operator's
-    // inspection tools, answering the common questions (who is X, what does X
-    // remember, where was Y said) in one call each before the console falls
-    // back to hand-written SQL. Executor-gated on `operatorSurface` likewise.
+  // The research kit. The document tools work under the operator surface or a
+  // mount pool; the record lookups are the operator's inspection tools and are
+  // executor-gated on `operatorSurface` (OPERATOR_SURFACE_ONLY_TOOLS).
+  const researchKit: ResearchKitMode = options.researchKit ?? 'off';
+  if (researchKit === 'documents' || researchKit === 'full') {
+    universalTools.push(findDocumentsToolDefinition as UniversalTool);
+    universalTools.push(listDocumentsToolDefinition as UniversalTool);
+  }
+  if (researchKit === 'full') {
     universalTools.push(lookupCharacterToolDefinition as UniversalTool);
     universalTools.push(lookupMemoriesToolDefinition as UniversalTool);
     universalTools.push(lookupMessagesToolDefinition as UniversalTool);
     universalTools.push(readMessagesToolDefinition as UniversalTool);
+    universalTools.push(lookupConversationsToolDefinition as UniversalTool);
+    universalTools.push(lookupGroupToolDefinition as UniversalTool);
+    universalTools.push(lookupProjectToolDefinition as UniversalTool);
+    universalTools.push(lookupWardrobeToolDefinition as UniversalTool);
+    universalTools.push(lookupAtlasToolDefinition as UniversalTool);
+  }
+
+  // Read-only SQL access — the operator's surfaces only. Execution is
+  // additionally gated on `operatorSurface` in the tool executor, so a leaked
+  // tool name can never run from a character surface.
+  if (options.sqlAccess) {
     universalTools.push(runSqlToolDefinition as UniversalTool);
   }
 
@@ -627,10 +662,14 @@ export async function buildToolsForProvider(
   // and nothing else — no writes, no document-UI tools (they need a real chat
   // row), no photo tools.
   const docToolsMode: DocToolsMode = options.docToolsMode ?? 'off';
+  // With the research kit on, find_documents / list_documents replace these two.
+  const kitReplacesDocSearch = researchKit !== 'off';
   if (docToolsMode === 'read') {
     universalTools.push(docReadFileTool as UniversalTool);
-    universalTools.push(docGrepTool as UniversalTool);
-    universalTools.push(docListFilesTool as UniversalTool);
+    if (!kitReplacesDocSearch) {
+      universalTools.push(docGrepTool as UniversalTool);
+      universalTools.push(docListFilesTool as UniversalTool);
+    }
     universalTools.push(docReadFrontmatterTool as UniversalTool);
     universalTools.push(docReadHeadingTool as UniversalTool);
   } else if (docToolsMode === 'full') {
@@ -638,8 +677,10 @@ export async function buildToolsForProvider(
     universalTools.push(docWriteFileTool as UniversalTool);
     universalTools.push(docStrReplaceTool as UniversalTool);
     universalTools.push(docInsertTextTool as UniversalTool);
-    universalTools.push(docGrepTool as UniversalTool);
-    universalTools.push(docListFilesTool as UniversalTool);
+    if (!kitReplacesDocSearch) {
+      universalTools.push(docGrepTool as UniversalTool);
+      universalTools.push(docListFilesTool as UniversalTool);
+    }
     universalTools.push(docReadFrontmatterTool as UniversalTool);
     universalTools.push(docUpdateFrontmatterTool as UniversalTool);
     universalTools.push(docReadHeadingTool as UniversalTool);

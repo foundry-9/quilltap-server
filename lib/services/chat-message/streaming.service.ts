@@ -7,7 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
-import { buildToolsForProvider, checkModelSupportsTools, type DocToolsMode } from '@/lib/tools'
+import { buildToolsForProvider, checkModelSupportsTools, type DocToolsMode, type ResearchKitMode } from '@/lib/tools'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
@@ -244,10 +244,17 @@ export interface BuildToolsOptions {
    */
   excludeMemorySearch?: boolean
   /**
-   * When true, include the read-only `run_sql` tool (Brahma Console only).
-   * Execution is additionally gated on `operatorSurface` in the tool executor.
+   * When true, include the read-only `run_sql` tool, and nothing else (the
+   * operator's surfaces only). Execution is additionally gated on
+   * `operatorSurface` in the tool executor.
    */
   sqlAccess?: boolean
+  /**
+   * The research kit (`lib/research/`): `'documents'` offers `find_documents`
+   * and `list_documents`; `'full'` adds the record lookups. When on,
+   * `doc_grep` and `doc_list_files` are withheld. Default `'off'`.
+   */
+  researchKit?: ResearchKitMode
   /**
    * Pascal's custom-tool roster perspective — the RESPONDING character's, since
    * a character-tier store shadows the farther tiers. Pass it to offer
@@ -327,6 +334,7 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     includeWorkspaceTools,
     excludeMemorySearch,
     sqlAccess,
+    researchKit,
     customToolContext,
     pluginToolAllowlist,
     documentsOnlySearch,
@@ -430,6 +438,7 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     includeWorkspaceTools: includeWorkspaceTools !== false,
     excludeMemorySearch: !!excludeMemorySearch,
     sqlAccess: !!sqlAccess,
+    researchKit: researchKit ?? 'off',
     customTools,
     // The editor rides on the same switch as the roster, not on the roster's
     // contents: an empty table is exactly when a first tool needs writing.

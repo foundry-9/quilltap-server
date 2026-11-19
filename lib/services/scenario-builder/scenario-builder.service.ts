@@ -17,6 +17,7 @@
  * @module services/scenario-builder/scenario-builder.service
  */
 
+import { buildScenarioBrief } from '@/lib/research/brief'
 import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { randomUUID } from 'crypto'
 import { createServiceLogger } from '@/lib/logging/create-logger'
@@ -143,6 +144,7 @@ export async function runScenarioBuilder(
       canCreateOutfits: false,
       canManageInventory: false, // no inventory_* tools here
       docToolsMode: 'read', // reads only
+      researchKit: 'documents', // find_documents / list_documents inside the pool
       askCarinaEnabled: false,
       includeWorkspaceTools: false,
       excludeMemorySearch: true, // narrowed further by documentsOnlySearch
@@ -154,6 +156,7 @@ export async function runScenarioBuilder(
     const toolInstructions = buildOneShotToolInstructions({
       connectionProfile,
       built,
+      agentKind: 'drafting',
       maxAgentTurns: SCENARIO_BUILDER_MAX_AGENT_TURNS,
       textBlockOptions: {
         imageGeneration: false,
@@ -177,6 +180,7 @@ export async function runScenarioBuilder(
         wardrobeUpdate: false,
         wardrobeArchive: false,
         ...inventoryToolFlags(false),
+        researchKit: 'documents',
       },
     })
 
@@ -186,7 +190,10 @@ export async function runScenarioBuilder(
       toolInstructions,
       now: new Date(),
     })
+    // What a first search of the pool already found, so the loop starts from it.
+    const brief = await buildScenarioBrief({ kind: 'pool', pool: mountPool }, input.location, { userId })
     const userMessage = buildScenarioBuilderUserMessage({
+      brief,
       mode: input.mode,
       location: input.location,
       time: input.time,
@@ -210,6 +217,7 @@ export async function runScenarioBuilder(
 
     const result = await runOneShotToolLoop({
       repos,
+      agentKind: 'drafting',
       userId,
       chatId,
       connectionProfile,

@@ -16,6 +16,7 @@ import { WARDROBE_IMAGE_PROMPT_MAX_LENGTH } from '@/lib/wardrobe/image-prompt-li
 import { HAIR_PHYSICAL_BOUNDARY, HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance'
 import type { ProposedOutfit, ProposedWardrobeItem } from '@/lib/wardrobe/proposal/types'
 import { WARDROBE_DESIGN_MAX_ITEMS } from './request-schema'
+import { researchDiscipline } from '@/lib/research/discipline'
 
 /** What the run can reach, as resolved by the service. */
 export interface WardrobeDesignReach {
@@ -34,7 +35,7 @@ function researchSection(reach: WardrobeDesignReach): string {
 
   if (reach.stores) {
     paragraphs.push(
-      "**The operator's own material.** Look before you design whenever the instructions point at the story — a scene, a period, a place, a faction, a rank, something a character wore or was given. Use `search` (documents and knowledge) and open the most promising documents with the `doc_*` read tools; use `lookup_character`, `lookup_messages`, `read_messages` and `run_sql` for people and for what was said in conversations. What these sources say is true of this story: follow it over what you would otherwise assume.",
+      "**The operator's own material.** Look before you design whenever the instructions point at the story — a scene, a period, a place, a faction, a rank, something a character wore or was given. Use `find_documents` and open the most promising documents with `doc_read_file`; use `lookup_character`, `lookup_wardrobe`, `lookup_conversations`, `lookup_messages` and `read_messages` for people, for what they wear and for what was said in conversations. What these sources say is true of this story: follow it over what you would otherwise assume.",
     )
   }
 
@@ -60,11 +61,14 @@ function researchSection(reach: WardrobeDesignReach): string {
     )
   } else {
     paragraphs.push(
-      'Not every request needs research: "a plain grey travelling cloak" needs none. Look only for what the design depends on, and stop once you can design with confidence.',
+      'Not every request needs research: "a plain grey travelling cloak" needs none. Look only for what the design depends on.',
     )
   }
 
-  return `## Research\n\n${paragraphs.join('\n\n')}`
+  const section = `## Research\n\n${paragraphs.join('\n\n')}`
+  // With the stores open, the research kit's shared discipline says how to
+  // research and when to stop; nothing here repeats it.
+  return reach.stores ? `${section}\n\n${researchDiscipline('drafting', 'full')}` : section
 }
 
 export function buildWardrobeDesignSystemPrompt(opts: {

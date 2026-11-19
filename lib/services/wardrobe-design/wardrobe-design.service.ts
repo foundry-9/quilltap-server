@@ -165,6 +165,7 @@ export async function runWardrobeInstructionDesign(
             includeWorkspaceTools: false,
             excludeMemorySearch: true,
             sqlAccess: reach.stores,
+            researchKit: reach.stores ? 'full' : 'off',
             webSearch: reach.webSearch,
             pluginToolAllowlist: reach.webFetch ? ['curl'] : [],
             effectCeiling: 'read',
@@ -175,6 +176,7 @@ export async function runWardrobeInstructionDesign(
     const toolInstructions = buildOneShotToolInstructions({
       connectionProfile,
       built,
+      agentKind: 'drafting',
       maxAgentTurns: WARDROBE_DESIGN_MAX_AGENT_TURNS,
       textBlockOptions: {
         imageGeneration: false,
@@ -198,6 +200,7 @@ export async function runWardrobeInstructionDesign(
         wardrobeUpdate: false,
         wardrobeArchive: false,
         ...inventoryToolFlags(false),
+        researchKit: reach.stores ? 'full' : 'off',
       },
     })
 
@@ -245,6 +248,7 @@ export async function runWardrobeInstructionDesign(
 
     const result = await runOneShotToolLoop({
       repos,
+      agentKind: 'drafting',
       userId,
       chatId,
       connectionProfile,

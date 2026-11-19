@@ -44,6 +44,8 @@ jest.mock('@/lib/brahma-console/system-prompt-builder', () => ({
 }))
 jest.mock('@/lib/services/console-engine/loop-guard', () => ({
   normalizeToolCallSignature: jest.fn(() => 'sig'),
+  // The research guards are exercised in loop-guard.test.ts; off here.
+  researchGuardFor: jest.fn(() => null),
 }))
 jest.mock('../inline-profile', () => ({
   resolveInlineBrahmaConnectionProfile: jest.fn(),

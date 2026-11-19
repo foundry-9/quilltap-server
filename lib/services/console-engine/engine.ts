@@ -69,7 +69,7 @@ import { profileParams } from '@/lib/llm/cheap-llm'
 import { resolveToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils'
 import { applyImageTransportBudget } from '@/lib/chat/image-transport-budget'
 import { loadConsoleTurnAttachments, composeAttachmentContent } from './turn-attachments'
-import { normalizeToolCallSignature } from './loop-guard'
+import { normalizeToolCallSignature, researchGuardFor } from './loop-guard'
 import type { ConsolePersona, ConsoleRepos, ConsoleTurnPlanBase } from './persona'
 
 const logger = createServiceLogger('ConsoleEngine')
@@ -332,11 +332,19 @@ async function processConsoleResponse<Plan extends ConsoleTurnPlanBase>(
   let runReasoning = ''
   let unsavedReasoning = ''
 
+  // The research kit's soft guards (checkpoint, declared sufficiency, repeated
+  // miss, repeated error) — only for the research kinds. Each adds one message
+  // to the next model call; none ends the run.
+  const researchGuard = researchGuardFor(plan.agentKind, { maxAgentTurns, surface: persona.surface })
+
   while (agentTurnCount <= maxAgentTurns) {
     agentTurnCount++
 
     if (agentTurnCount === maxAgentTurns) {
       conversationMessages.push({ role: 'user', content: buildForceFinalMessage(plan.agentKind) })
+    } else if (researchGuard) {
+      const nudge = researchGuard.takeNudge()
+      if (nudge) conversationMessages.push({ role: 'user', content: nudge })
     }
 
     let currentResponse = ''
@@ -388,6 +396,7 @@ async function processConsoleResponse<Plan extends ConsoleTurnPlanBase>(
 
     totalUsage.promptTokens += streamUsage?.promptTokens || 0
     totalUsage.completionTokens += streamUsage?.completionTokens || 0
+    researchGuard?.afterModelCall()
 
     // Detect tool calls
     let hasToolCalls = false
@@ -524,6 +533,11 @@ async function processConsoleResponse<Plan extends ConsoleTurnPlanBase>(
         encoder,
         { characterName: persona.label, characterId: '' },
       )
+      researchGuard?.afterToolStep({
+        thinking: `${turnReasoning}\n${currentResponse}`,
+        callCount: toolCallsToProcess.length,
+        results: toolResult.toolMessages,
+      })
 
       if (toolResult.toolMessages.length > 0) {
         await saveToolMessages(
@@ -626,6 +640,8 @@ async function processConsoleResponse<Plan extends ConsoleTurnPlanBase>(
       systemKind: answer.systemKind ?? null,
       salvaged,
       chars: fullResponse.length,
+      turns: agentTurnCount,
+      guardsFired: researchGuard?.history ?? [],
     })
 
     const costResult = await estimateMessageCost(

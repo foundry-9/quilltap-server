@@ -13,6 +13,7 @@
  */
 
 import { ATLAS_GRAPHIC_PROMPT_SOFT_LIMIT } from '@/lib/schemas/atlas.types'
+import { researchDiscipline } from '@/lib/research/discipline'
 import type { AtlasLoreDraft } from './request-schema'
 
 /** How many existing names the user message lists, at most. */
@@ -41,12 +42,10 @@ export function buildAtlasLoreSystemPrompt(opts: {
   if (searchStores) {
     sections.push(`## Research
 
-Everything you need is in the operator's own material. Before you write, look:
+Everything you need is in the operator's own material. The user message opens with what a first search of the stores and conversations already found; start from it rather than repeating it. Then open the two or three documents that matter most (\`doc_read_file\` on their URIs), and use \`find_documents\`, \`lookup_atlas\`, \`lookup_character\`, \`lookup_conversations\` or \`read_messages\` only for what the brief left open.
 
-- \`search\` (documents and knowledge) for the subject's name and any likely variants, then open the most promising documents with the \`doc_*\` read tools.
-- The lookup shortcuts and \`run_sql\` for anything recorded in the database — characters who own or use the thing, conversations in which it appears.
-
-Search more than once if the first search is thin. Write only what the sources support; where they are silent, leave the gap rather than invent. If the operator's details add facts, take them as true. If you find nothing at all, draft the entry from the subject and the details alone, and say so in the knowledge in one line at the end ("Nothing further was found in the stores.").`)
+Write only what the sources support; where they are silent, leave the gap rather than invent. If the operator's details add facts, take them as true. If you find nothing at all, draft the entry from the subject and the details alone, and say so in the knowledge in one line at the end ("Nothing further was found in the stores.").`)
+    sections.push(researchDiscipline('drafting', 'full'))
   } else {
     sections.push(`## Research
 
@@ -90,6 +89,12 @@ export interface AtlasLoreUserMessageInput {
   priorDraft?: AtlasLoreDraft | null
   /** Revise: the instruction. Travels with `priorDraft`. */
   revision?: string | null
+  /**
+   * What a first search of the stores and conversations found
+   * (`buildLoreBrief`, `lib/research/brief.ts`). Stores open only; '' or
+   * absent adds nothing.
+   */
+  brief?: string | null
 }
 
 export function buildAtlasLoreUserMessage(input: AtlasLoreUserMessageInput): string {
@@ -108,6 +113,10 @@ export function buildAtlasLoreUserMessage(input: AtlasLoreUserMessageInput): str
     blocks.push(
       `Names and aliases already used by other entries there (the new entry's name must not be one of these; avoid them as aliases too):\n${listed.join('; ')}${more > 0 ? `; and ${more} more` : ''}`,
     )
+  }
+
+  if (input.brief && input.brief.trim()) {
+    blocks.push(input.brief.trim())
   }
 
   if (input.priorDraft != null && input.revision != null) {

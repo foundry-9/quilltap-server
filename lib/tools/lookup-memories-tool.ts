@@ -47,9 +47,13 @@ export const lookupMemoriesToolInputSchema = z.object({
     .describe('Only memories of events on or before this date (YYYY-MM-DD or ISO timestamp).')
     .optional(),
   limit: llmNumber(
-    z.number().int().min(1).max(30).describe('How many memories to return (default 10, max 30).')
+    z.number().int().min(1).max(30).describe('How many memories to return (default 8, max 30).')
   )
-    .default(10)
+    .default(8)
+    .optional(),
+  full: z
+    .boolean()
+    .describe('Return each memory whole. Without it, each hit is its summary and the first 300 characters.')
     .optional(),
 });
 
@@ -64,10 +68,10 @@ export const lookupMemoriesToolDefinition = {
   function: {
     name: 'lookup_memories',
     description:
-      "Search characters' memories by meaning. Returns each memory's text, who holds it, who it " +
-      'is about, when it happened, its importance, and the conversation it came from (id and ' +
-      'title). Inspection only — it does not count as the character remembering anything. ' +
-      'Prefer this over querying the memories table with run_sql.',
+      "Search characters' memories by meaning. Returns each memory's summary and opening, who holds " +
+      'it, who it is about, when it happened, and the conversation it came from (id and title); ' +
+      '`full: true` for whole memories. Inspection only — it does not count as the character ' +
+      'remembering anything. Prefer this over querying the memories table with run_sql.',
     parameters: zodToOpenAISchema(lookupMemoriesToolInputSchema),
   },
 };

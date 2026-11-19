@@ -127,7 +127,7 @@ To engage her:
 2. Click **Import from instructions** (beside **Import from image** at the foot of the wardrobe list). Should you be standing in a folder of that wardrobe, the new pieces will be filed there.
 3. Under **What shall Aurora design?**, write what you want. A sentence will do; a paragraph of particulars does better.
 4. Decide what she may consult:
-   - **Search the stores and records** --- Aurora may read your documents, your characters and your conversations, which is how she finds the dress described in chapter nine or the livery a faction was given three scenes ago. She reads; she alters nothing.
+   - **Search the stores and records** --- Aurora may read your documents, your characters and your conversations, which is how she finds the dress described in chapter nine or the livery a faction was given three scenes ago. She keeps to the same research discipline as [the Brahma Console](brahma-console.md#how-the-console-researches): the quickest look-up first, nothing searched for twice, and a stop once she can design with what she has. She reads; she alters nothing.
    - **Consult the wider web** --- Aurora may look up real uniforms, periods, makers and costumes, and open the pages she finds. Her enquiries go to your search provider, and she is under strict instruction to ask about *the subject* and never about *your story*: no character's name, no line of your prose, travels with them.
 5. Choose the **Model**, and click **Set Aurora to work**.
 

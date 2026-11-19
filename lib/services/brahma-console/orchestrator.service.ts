@@ -29,7 +29,7 @@ import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadata, ConnectionProfile } from '@/lib/schemas/types'
 import type { BrahmaConsoleSendOptions } from './types'
 import { buildTools } from '@/lib/services/chat-message/streaming.service'
-import { WRITING_FINISH_NOW } from '@/lib/services/chat-message/agent-mode-resolver.service'
+import { INQUIRY_FINISH_NOW, WRITING_FINISH_NOW } from '@/lib/services/chat-message/agent-mode-resolver.service'
 import { buildBrahmaSystemPrompt } from '@/lib/brahma-console/system-prompt-builder'
 import { resolveConsoleContext, renderConsoleContextManifest } from '@/lib/brahma-console/writing-context'
 import { normalizeWritingOutput, WRITING_OUTPUT_KIND } from '@/lib/brahma-console/writing-output'
@@ -71,8 +71,8 @@ export function buildConsoleTurnPlan(chat: Pick<ChatMetadata, 'consoleMode'>): C
     writing: false,
     docToolsMode: 'full',
     effectCeiling: undefined,
-    agentKind: 'research',
-    stuckNudge: 'You have already gathered this data (a repeated call or repeated identical results). You already have what you need — do NOT call any more tools. Please call the submit_final_response tool NOW with your answer based on the data you already received.',
+    agentKind: 'inquiry',
+    stuckNudge: `You have already gathered this data (a repeated call or repeated identical results). ${INQUIRY_FINISH_NOW}`,
   }
 }
 
@@ -126,6 +126,7 @@ export const BRAHMA_CONSOLE_PERSONA: ConsolePersona<ConsoleTurnPlan> = {
       includeWorkspaceTools: false, // stripped for the console
       excludeMemorySearch: true, // no memory source
       sqlAccess: true, // the console gets read-only run_sql
+      researchKit: 'full', // the research kit's search tools in place of the old grep and file list
       // Writing Assistant: drop what the read ceiling would refuse anyway, so
       // the model is not offered tools it cannot use. The executor's check on
       // the tool context is the guarantee.
@@ -155,6 +156,7 @@ export const BRAHMA_CONSOLE_PERSONA: ConsolePersona<ConsoleTurnPlan> = {
     wardrobeUpdate: false,
     wardrobeArchive: false,
     ...inventoryToolFlags(false),
+    researchKit: 'full',
   }),
   // Operator surface: character-less, all stores.
   toolContext: () => ({ operatorSurface: true }),

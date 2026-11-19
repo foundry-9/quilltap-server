@@ -103,6 +103,8 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions, Invento
   wardrobeCreate: boolean
   wardrobeUpdate: boolean
   wardrobeArchive: boolean
+  /** The research kit's tools (`buildTools`' `researchKit`); absent = off. */
+  researchKit?: 'off' | 'documents' | 'full'
 }
 
 /**
@@ -171,6 +173,7 @@ export function buildTextBlockSystemInstructions(
     wardrobeUpdate: enabledOptions.wardrobeUpdate,
     wardrobeArchive: enabledOptions.wardrobeArchive,
     ...pickInventoryToolFlags(enabledOptions),
+    researchKit: enabledOptions.researchKit,
   }
   return buildTextBlockInstructions(options)
 }

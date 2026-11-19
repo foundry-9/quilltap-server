@@ -315,6 +315,7 @@ export {
   buildToolsForProvider,
   type BuildToolsOptions,
   type DocToolsMode,
+  type ResearchKitMode,
 } from './plugin-tool-builder';
 
 // Wardrobe Tools (Modular Wardrobe System)
@@ -531,6 +532,22 @@ export { themeProposeToolDefinition, validateThemeProposeInput } from './theme-p
 export { lookupCharacterToolDefinition, validateLookupCharacterInput } from './lookup-character-tool';
 export { lookupMemoriesToolDefinition, validateLookupMemoriesInput } from './lookup-memories-tool';
 export { lookupMessagesToolDefinition, validateLookupMessagesInput } from './lookup-messages-tool';
+// The research kit (lib/research/): document tools and record lookups
+export { findDocumentsToolDefinition, validateFindDocumentsInput } from './find-documents-tool';
+export { listDocumentsToolDefinition, validateListDocumentsInput } from './list-documents-tool';
+export { lookupConversationsToolDefinition, validateLookupConversationsInput } from './lookup-conversations-tool';
+export {
+  lookupGroupToolDefinition,
+  validateLookupGroupInput,
+  lookupProjectToolDefinition,
+  validateLookupProjectInput,
+} from './lookup-group-tool';
+export {
+  lookupWardrobeToolDefinition,
+  validateLookupWardrobeInput,
+  lookupAtlasToolDefinition,
+  validateLookupAtlasInput,
+} from './lookup-wardrobe-tool';
 export { readMessagesToolDefinition, validateReadMessagesInput } from './read-messages-tool';
 export {
   executeLookupCharacterTool,

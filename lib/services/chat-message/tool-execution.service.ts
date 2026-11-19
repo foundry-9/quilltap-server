@@ -5,6 +5,7 @@
  * including processing results and saving tool messages.
  */
 
+import { isResearchKitResult } from '@/lib/research/result'
 import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext, type LoadedMemoriesContext } from '@/lib/chat/tool-executor'
@@ -140,6 +141,9 @@ export async function processToolCalls(
       resultText = `Generated ${(toolResult.result as unknown[])?.length || 1} image(s)`
     } else if (toolResult.toolName === 'attach_image') {
       resultText = `Attached ${(toolResult.result as unknown[])?.length || 1} kept image(s)`
+    } else if (isResearchKitResult(toolResult.result)) {
+      // The research kit answers in text, already cut under its ceiling.
+      resultText = toolResult.result.kitText
     } else {
       resultText = JSON.stringify(toolResult.result, null, 2)
     }

@@ -915,6 +915,11 @@ export interface AccessibleMountPointsQuery {
   guardOwnVault?: boolean;
   /** A pre-built pool that is the accessible set (see `PathResolutionContext.mountPool`). */
   mountPool?: TieredMountPool;
+  /**
+   * The operator "look everywhere" override: every enabled store (see
+   * `PathResolutionContext.operatorOverride`). Never combined with `mountPool`.
+   */
+  operatorOverride?: boolean;
 }
 
 /**
@@ -931,13 +936,14 @@ export async function getAccessibleMountPoints(
 ): Promise<AccessibleMountPoint[]> {
   try {
     const repos = getRepositories();
-    const { projectId, characterId, extraCharacterIds, guardOwnVault, mountPool } = query;
+    const { projectId, characterId, extraCharacterIds, guardOwnVault, mountPool, operatorOverride } = query;
     const ids = await collectAccessibleMountPointIds({
       projectId,
       characterId,
       characterIds: extraCharacterIds && extraCharacterIds.length > 0 ? extraCharacterIds : undefined,
       guardOwnVault,
       mountPool,
+      operatorOverride,
     });
 
     if (ids.length === 0) {

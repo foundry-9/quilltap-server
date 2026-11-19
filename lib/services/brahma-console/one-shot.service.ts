@@ -108,6 +108,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     includeWorkspaceTools: false, // stripped for the console
     excludeMemorySearch: true, // no memory source
     sqlAccess: true, // read-only run_sql
+    researchKit: 'full', // the research kit, as in the console
     effectCeiling, // the asking turn's ceiling travels with the query
   })
 
@@ -117,6 +118,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
   const toolInstructions = buildOneShotToolInstructions({
     connectionProfile,
     built,
+    agentKind: 'inquiry',
     maxAgentTurns,
     textBlockOptions: {
       imageGeneration: false,
@@ -140,6 +142,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
       wardrobeUpdate: false,
       wardrobeArchive: false,
       ...inventoryToolFlags(false),
+      researchKit: 'full',
     },
   })
 
@@ -168,6 +171,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
   // the Salon transcript. No controller: nothing is surfaced live.
   const result = await runOneShotToolLoop({
     repos,
+    agentKind: 'inquiry',
     userId,
     chatId,
     connectionProfile,

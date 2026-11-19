@@ -2,11 +2,13 @@
  * Brahma SQL Access — system-prompt section.
  *
  * The verbatim instruction appended to the Brahma Console's system prompt when
- * the read-only `run_sql` tool is enabled (the console always enables it). It
- * teaches the model how and when to translate the operator's questions into
- * read-only SQL across the three Quilltap databases, and resolves the apparent
- * tension with "no memory access" — reading the `memories` table is inspection,
- * not recall.
+ * the research kit and the read-only `run_sql` tool are enabled (the console
+ * always enables them). It names the kit's lookup tools first, then teaches
+ * `run_sql` as the fallback for counts, aggregates, costs and settings, and
+ * resolves the apparent tension with "no memory access" — reading the
+ * `memories` table is inspection, not recall. How to research — routes,
+ * budgets, when to stop — is the shared discipline
+ * (`lib/research/discipline.ts`), not this section.
  *
  * The prompt is the model's instruction, so it stays in plain English (the
  * project's steampunk/Wodehouse voice applies to user-facing chrome, not to
@@ -20,75 +22,54 @@ import {
   CHARACTER_PROMPTS_FOLDER,
   CHARACTER_PROPERTIES_JSON_PATH,
   CHARACTER_SCENARIOS_FOLDER,
-  CHARACTER_VAULT_FILE_PATHS,
 } from '@/lib/characters/vault/layout';
 
-export const BRAHMA_SQL_PROMPT = `## Reach for the lookup shortcuts first
+export const BRAHMA_SQL_PROMPT = `## Your lookup tools
 
-Most questions about characters and conversations are answered fastest by four read-only shortcuts. Each answers in names, titles and dates — no schema to learn, no IDs to carry between databases — so use them before writing any SQL:
+These answer in names, titles, paths and dates — no schema to learn, no ids to carry between databases. Each one searches everything unless you narrow it, so a wide first call is the right first call.
 
-- \`lookup_character\` — who someone is: core fields (identity, description, personality, manifesto), physical description, pronouns, aliases, how many memories they hold, and their conversations (count, first, most recent). Start here for any question about a character.
-- \`lookup_memories\` — what characters remember, searched by meaning. Narrow with \`character\` (whose memories), \`about\` (who they are about), \`since\` / \`until\`. Omit \`character\` to search everyone. Each hit names its source conversation (id, title, date). This is inspection, like reading the table: it is not recall and changes nothing.
-- \`lookup_messages\` — where something was said: full-text search over every conversation, with the conversation's id, title and date, the speaker, and a snippet. Narrow with \`character\` (conversations they were in) or \`speaker\` (lines they spoke).
-- \`read_messages\` — the lines around a \`lookup_messages\` hit (\`around_message_id\`), or a conversation's opening or closing lines by position.
+- \`find_documents\` — files in any store by what they say (\`text\`), what they are called (\`name\`), or both; ranked, one line per file with the matching lines. Narrow with \`store\` (a store name, or \`character:Name\`, \`project:Name\`, \`group:Name\`, \`general\`) or \`folder\`.
+- \`list_documents\` — what a store or folder holds; with no \`store\`, the list of every store.
+- \`lookup_character\` — who someone is: core fields, physical description, pronouns, aliases, their vault, groups, projects, wardrobe size, memories held and conversations. Ask for part of it with \`fields\`.
+- \`lookup_group\` / \`lookup_project\` — a group's or project's instructions, store and every member (or the roster) in one line each.
+- \`lookup_conversations\` — which conversation: by words in its title or summary, who took part, and a date window.
+- \`lookup_messages\` — where something was said: full-text search over the conversations. \`group_by: "conversation"\` gives one line per conversation; \`conversation\` searches inside one.
+- \`read_messages\` — the lines around a hit, or a conversation's opening or closing lines.
+- \`lookup_memories\` — what characters remember, searched by meaning; inspection, not recall.
+- \`lookup_wardrobe\` / \`lookup_atlas\` — the clothes someone can wear; an Atlas entry or a tier's Atlas names.
+- \`doc_read_file\` — read one file in full, by the \`uri\` a result gave you.
 
-Typical routes: "How old is X?" → \`lookup_character\`, then \`lookup_memories\` (character X, query "age birthday born years old"), then \`lookup_messages\` if still unsure. "When / in which conversation did Y happen?" → \`lookup_memories\` (its hits carry the conversation), then \`lookup_messages\` + \`read_messages\` to confirm and date it. When the evidence disagrees, report every answer with where it came from.
+Use \`run_sql\` only for counts, aggregates, costs, settings, and anything these do not cover.
 
-Fall back to \`run_sql\` for counts, aggregates, costs, settings, and anything the shortcuts don't cover.
+## Read-only SQL (\`run_sql\`)
 
-## You can also run read-only SQL
-
-In addition to everything above, you can run **read-only SQL** against the databases that back this Quilltap instance, using the \`run_sql\` tool. Use this to answer questions the operator asks in the language of their world — about characters, memories, documents, conversations, models, costs — by translating those questions into queries, running them, reading the JSON back, and answering in their terms. The operator does not think in tables; you do.
-
-\`run_sql\` is **read-only at the tool layer** — writes and schema changes are rejected before they run, so query freely and let the tool be the guardrail. Reading a table for analysis (including the \`memories\` table, e.g. to summarize importance) is inspection, not recall: it changes nothing and is not remembered after this conversation. You still form no persistent memories and your \`search\` tool still cannot use memories as a source; \`run_sql\` is a separate, read-only window for answering questions about the data.
-
-Always prefer running a query and reading real rows over guessing. When a query errors or returns nothing, treat it as a clue, adjust, and try again — trial and error is expected. In particular, a \`no such column\` or \`no such table\` error means you guessed the schema wrong: do **not** retry variations of the same guess — stop and inspect the real schema first (see *Confirm the schema before you guess*, below), then write the query against the columns that actually exist.
+\`run_sql\` runs **read-only** SQL against the databases behind this instance; writes and schema changes are refused before they run. Reading a table (the \`memories\` table included) is inspection, not recall: it changes nothing and is not remembered after this conversation. Answer in the operator's terms — names, not ids; plain language, not JSON.
 
 ### Three separate databases (no cross-database JOINs)
 
-Pick the \`database\` argument per call. They are physically separate files — you cannot JOIN across them in one query. When a question spans databases, query one, carry the IDs in your reasoning, and query the next with \`WHERE … IN (…)\`.
+Pick the \`database\` argument per call. When a question spans databases, query one, carry the ids, and query the next with \`WHERE … IN (…)\`.
 
 - **main** — characters, chats, chat_messages, memories, connection_profiles, projects, groups, files, folders, settings, jobs.
-- **llm-logs** — the \`llm_logs\` table: full request/response JSON, token usage, cost, duration, per model call; and the \`log_entries\` table (\`id\`, \`message\`, \`chatId\`, \`characterId\`, \`createdAt\`, \`updatedAt\`): the lines characters and custom tools write to the log. \`REGEXP\` works in this database (\`message REGEXP 'pattern'\`, JavaScript regex).
-- **mount-index** — the document stores, and the **actual text of every document, including all character/project/group vault content**.
+- **llm-logs** — \`llm_logs\` (request/response JSON, token usage, cost, duration per model call) and \`log_entries\` (\`id\`, \`message\`, \`chatId\`, \`characterId\`, \`createdAt\`, \`updatedAt\`). \`REGEXP\` works here.
+- **mount-index** — the document stores and the text of every document, vaults included. The view \`qt_documents(store, storeId, path, text, modifiedAt, fileId)\` has one row per file in a store with its text; query it instead of joining the link, file and document tables.
 
-### Confirm the schema before you guess
-Guessing column names is the single biggest cause of failed queries here — columns are camelCase and easy to misremember (\`createdAt\` not \`created_at\`, \`modelName\` not \`model\`). So, for any table you have **not already inspected this conversation**, look before you leap:
-- **List the tables** in a database: \`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;\`
-- **List a table's real columns** (names + types): \`PRAGMA table_info(<table>);\` — or just \`SELECT * FROM <table> LIMIT 1;\` to see one real row.
-
-Run the inspection first, read the actual column names back, then write your real query against them. This costs one cheap call and saves a string of \`no such column\` failures. Don't write a multi-column or JOINed query against a table whose columns you haven't confirmed.
+A wrong column or table name is answered with the real names; read them and write the query again.
 
 ### Conventions
-- Columns are **camelCase** (\`createdAt\`, \`chatType\`, \`aboutCharacterId\`); most table names are snake_case (\`chat_messages\`, \`doc_mount_file_links\`). When unsure, confirm with \`PRAGMA table_info(<table>)\` (above) rather than guessing.
-- IDs are UUID strings; timestamps are ISO 8601 strings that sort and compare directly (\`ORDER BY createdAt DESC\`, \`WHERE createdAt >= '2026-06-01'\`).
-- Many TEXT columns hold JSON (e.g. \`chats.participants\`, \`characters.tags\`, \`memories.keywords\`). Use \`json_extract(col,'$.x')\`, \`json_each(col)\`, \`json_array_length(col)\`.
-- Almost no foreign keys are enforced; orphan rows can exist — LEFT JOIN and check for NULL when it matters.
-- BLOB columns (embeddings, blobs) come back as a \`<blob: N bytes>\` placeholder, not bytes — test presence with \`embedding IS NOT NULL\`.
-- \`llm_logs.request\`/\`response\` can be very large — select narrow columns and use \`json_extract(...)\`, \`length(...)\`, or \`substr(...)\` rather than dumping them. Keep result sets small; prefer aggregates.
+- Columns are **camelCase** (\`createdAt\`, \`chatType\`, \`aboutCharacterId\`); most table names are snake_case (\`chat_messages\`).
+- IDs are UUID strings; timestamps are ISO 8601 strings that sort and compare directly.
+- Many TEXT columns hold JSON (\`chats.participants\`, \`characters.tags\`). Use \`json_extract\`, \`json_each\`, \`json_array_length\`.
+- Almost no foreign keys are enforced; LEFT JOIN and check for NULL when it matters.
+- BLOB columns come back as a \`<blob: N bytes>\` placeholder.
+- Keep result sets small; prefer aggregates. \`llm_logs.request\`/\`response\` are very large — select \`length(...)\` or \`json_extract(...)\`, never the whole column.
 
-### The vault trap — read before querying character content
-The \`characters\` row in **main** holds only identity scaffolding, flags, and a pointer. The actual content — identity, description, personality, manifesto, example dialogues, scenarios, system prompts, physical descriptions, wardrobe, pronouns, aliases, title, first message — lives in each character's **document vault**, a database-backed store in **mount-index**. So "what is X's personality?" is a two-database operation:
-1. **main:** \`SELECT id, name, characterDocumentMountPointId FROM characters WHERE name LIKE '%X%';\`
-2. **mount-index:** the vault file at a known relativePath; its text is in \`doc_mount_documents.content\`, reached by joining links → files → documents:
-   \`\`\`sql
-   SELECT l.relativePath, COALESCE(d.content, l.extractedText) AS text
-   FROM doc_mount_file_links l
-   LEFT JOIN doc_mount_documents d ON d.fileId = l.fileId
-   WHERE l.mountPointId = :mountPointId AND l.relativePath = '${CHARACTER_PERSONALITY_MD_PATH}';
-   \`\`\`
-Vault paths: ${CHARACTER_VAULT_FILE_PATHS.filter((p) => p !== CHARACTER_PROPERTIES_JSON_PATH).join(', ')}, ${CHARACTER_PROPERTIES_JSON_PATH} (pronouns/aliases/title/firstMessage/talkativeness), ${CHARACTER_PROMPTS_FOLDER}/<name>.md, ${CHARACTER_SCENARIOS_FOLDER}/<title>.md, Wardrobe/*.md. The same pattern applies to projects (\`projects.officialMountPointId\`) and groups (\`groups.officialMountPointId\`) — the slim row only carries the pointer. If a content column you expect is missing from \`characters\`, that is the vault trap: go read the vault.
+### Characters live in vaults
+A \`characters\` row holds only scaffolding; the content (identity, description, personality, manifesto, prompts, scenarios, physical descriptions, wardrobe, ${CHARACTER_PROPERTIES_JSON_PATH}) is in the character's vault, a store in **mount-index** — read it with \`lookup_character\`, or \`find_documents\` with \`store: "character:Name"\` (files such as ${CHARACTER_PERSONALITY_MD_PATH}, ${CHARACTER_PROMPTS_FOLDER}/, ${CHARACTER_SCENARIOS_FOLDER}/). Projects and groups keep their content in their stores the same way.
 
 ### Memories (the importance question)
-\`memories\` columns that matter: \`characterId\` (the holder), \`aboutCharacterId\` (who it's about — equal to holder = self-knowledge; different = about another character/user persona; NULL = legacy), \`content\`, \`summary\`, \`importance\` (raw REAL, default 0.5), \`reinforcedImportance\` (REAL — the score recall actually uses, and the default sort), \`reinforcementCount\`, \`source\` ('AUTO'|'MANUAL'|'CONSOLIDATED' digests), \`tier\` ('hot'|'cold' — cold rows are consolidated members hidden from recall; \`supersededById\` names the row that replaced one — usually the digest it was folded into, or the newer side of a contradiction, \`consolidatedFrom\` is a digest's JSON member ids), \`chatId\`/\`projectId\` (provenance), \`witnessedContext\`, \`relatedMemoryIds\` (JSON graph), \`embedding\` (BLOB). When asked about "importance," show both \`importance\` and \`reinforcedImportance\` and say which is which; lead with \`reinforcedImportance\`. For a distribution, resolve the holder's id in main, then one aggregate over \`memories\` with \`CASE\` buckets, \`AVG\`, \`MIN\`, \`MAX\`, and \`source\` splits — return the histogram, not raw rows.
+\`memories\` columns that matter: \`characterId\` (the holder), \`aboutCharacterId\` (who it is about; equal to the holder = self-knowledge), \`content\`, \`summary\`, \`importance\` (raw), \`reinforcedImportance\` (what recall uses — lead with it, and say which is which), \`reinforcementCount\`, \`source\` ('AUTO'|'MANUAL'|'CONSOLIDATED'), \`tier\` ('hot'|'cold'; cold rows are consolidated members hidden from recall), \`chatId\`/\`projectId\` (provenance). For a distribution, one aggregate with \`CASE\` buckets, not raw rows.
 
 ### Chats and messages
-\`chats.chatType\` is 'salon' | 'help' | 'autonomous' | 'brahma'. "My chats/conversations" almost always means \`chatType = 'salon'\` — filter to it unless they mean otherwise. \`chats.participants\` is a JSON array (each entry has a \`characterId\`). \`chat_messages\` carries \`chatId\`, \`role\`, \`content\`, \`participantId\`, token/cost columns; system/feature messages set \`systemSender\` (lantern/aurora/host/prospero/carina/…) — filter \`WHERE systemSender IS NULL\` for only real conversational turns. **\`chat_messages.content\` (also \`opaqueContent\`, \`description\`, \`context\`), \`conversation_chunks.content\` and \`llm_logs.request\`/\`response\` are stored compressed:** read them as \`qt_text("content")\`, and never compare or \`LIKE\` the bare column — that matches the compressed bytes, not the words. **Never search message text with \`qt_text(content) LIKE …\`** — it decompresses every message in the instance and takes a very long time; use \`lookup_messages\`, which uses the full-text index. \`chat_messages.participantId\` is a *seat* in that one chat, not a character id: map it through that chat's \`chats.participants\` JSON (each entry's \`id\` → \`characterId\`).
+\`chats.chatType\` is 'salon' | 'help' | 'autonomous' | 'brahma'; "my conversations" means 'salon' unless the operator says otherwise. \`chat_messages.content\` (and \`opaqueContent\`, \`description\`, \`context\`), \`conversation_chunks.content\` and \`llm_logs.request\`/\`response\` are stored compressed: read them as \`qt_text("content")\`, never compare or \`LIKE\` the bare column, and **never search message text in SQL** — use \`lookup_messages\`, which uses the full-text index. \`chat_messages.participantId\` is a seat in that chat; map it through \`chats.participants\` (each entry's \`id\` → \`characterId\`). Filter \`systemSender IS NULL\` for real conversational turns.
 
-### How to work a question
-1. Translate the question to rows/databases/joins. If it names a character/chat/project, first resolve the name → UUID (names are fuzzy; say what you matched).
-2. Mind boundaries: content → vault (main → mount-index); cross-database → stage it and carry IDs.
-3. Explore cheaply first: confirm the schema of any unfamiliar table (\`PRAGMA table_info(<table>)\`), then LIMIT 5 / COUNT(*) / inspect one row before the real query.
-4. Compute in SQL (aggregates) rather than dumping rows.
-5. Answer in the operator's terms — UUIDs back to names, scores into plain language, JSON into readable facts. Offer the query if useful; don't make them read SQL unless they ask.
-6. Be honest about empty results, orphans, NULLs, missing vault files. Never fabricate rows, counts, or content.`;
+Be honest about empty results and NULLs. Never fabricate rows, counts or content.`;

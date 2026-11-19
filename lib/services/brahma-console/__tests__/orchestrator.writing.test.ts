@@ -220,7 +220,7 @@ describe('buildConsoleTurnPlan', () => {
 
   it('is the ordinary Console otherwise', () => {
     const plan = buildConsoleTurnPlan({ consoleMode: null })
-    expect(plan).toMatchObject({ writing: false, docToolsMode: 'full', effectCeiling: undefined, agentKind: 'research' })
+    expect(plan).toMatchObject({ writing: false, docToolsMode: 'full', effectCeiling: undefined, agentKind: 'inquiry' })
   })
 })
 

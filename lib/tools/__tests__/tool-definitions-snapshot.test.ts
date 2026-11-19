@@ -59,6 +59,11 @@ import { runCustomToolDefinition } from '../run-custom-tool'
 import { editCustomToolToolDefinition } from '../edit-custom-tool-tool'
 import { runSqlToolDefinition } from '../run-sql-tool'
 import { lookupCharacterToolDefinition } from '../lookup-character-tool'
+import { findDocumentsToolDefinition } from '../find-documents-tool'
+import { listDocumentsToolDefinition } from '../list-documents-tool'
+import { lookupConversationsToolDefinition } from '../lookup-conversations-tool'
+import { lookupGroupToolDefinition, lookupProjectToolDefinition } from '../lookup-group-tool'
+import { lookupAtlasToolDefinition, lookupWardrobeToolDefinition } from '../lookup-wardrobe-tool'
 import { lookupMemoriesToolDefinition } from '../lookup-memories-tool'
 import { lookupMessagesToolDefinition } from '../lookup-messages-tool'
 import { readMessagesToolDefinition } from '../read-messages-tool'
@@ -162,6 +167,13 @@ const ALL_TOOLS = {
   lookupMemories: lookupMemoriesToolDefinition,
   lookupMessages: lookupMessagesToolDefinition,
   readMessages: readMessagesToolDefinition,
+  findDocuments: findDocumentsToolDefinition,
+  listDocuments: listDocumentsToolDefinition,
+  lookupConversations: lookupConversationsToolDefinition,
+  lookupGroup: lookupGroupToolDefinition,
+  lookupProject: lookupProjectToolDefinition,
+  lookupWardrobe: lookupWardrobeToolDefinition,
+  lookupAtlas: lookupAtlasToolDefinition,
   themeReadDraft: themeReadDraftToolDefinition,
   themeLookupTokens: themeLookupTokensToolDefinition,
   themeLookupHooks: themeLookupHooksToolDefinition,

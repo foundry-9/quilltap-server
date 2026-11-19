@@ -59,11 +59,14 @@ import {
   buildAgentModeInstructions,
   buildForceFinalMessage,
   extractSubmitFinalResponseFromText,
+  type AgentInstructionKind,
 } from '@/lib/services/chat-message/agent-mode-resolver.service'
-// The duplicate-call signature is the streaming Brahma console's; one rule for both loops.
-import { normalizeToolCallSignature } from '@/lib/services/console-engine/loop-guard'
+// The duplicate-call signature and the research guards are the streaming
+// console's too; one rule for both loops.
+import { normalizeToolCallSignature, researchGuardFor } from '@/lib/services/console-engine/loop-guard'
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
 import { profileParams } from '@/lib/llm/cheap-llm'
+import { extractFinishReason, isTruncatedFinishReason } from '@/lib/llm/extract-finish-reason'
 
 const logger = createServiceLogger('OneShotToolLoop')
 
@@ -111,8 +114,11 @@ export function buildOneShotToolInstructions(opts: {
   built: BuiltTools
   textBlockOptions: TextBlockEnabledToolOptions
   maxAgentTurns: number
+  /** Which agent-mode instructions the model hears. Defaults to `'research'`. */
+  agentKind?: AgentInstructionKind
 }): string {
   const { connectionProfile, built, textBlockOptions, maxAgentTurns } = opts
+  const agentKind = opts.agentKind ?? 'research'
   const useTextBlockTools = resolveOneShotUsesTextBlockTools(connectionProfile, built)
 
   let toolInstructions = ''
@@ -122,7 +128,7 @@ export function buildOneShotToolInstructions(opts: {
     toolInstructions = buildNativeToolSystemInstructions('assistant')
   }
 
-  const agentInstructions = buildAgentModeInstructions(maxAgentTurns, 'research')
+  const agentInstructions = buildAgentModeInstructions(maxAgentTurns, agentKind)
   return toolInstructions ? `${toolInstructions}\n\n${agentInstructions}` : agentInstructions
 }
 
@@ -150,6 +156,13 @@ export interface RunOneShotToolLoopOptions {
   onReasoning?: (reasoning: string) => void
   /** A short label for log lines (e.g. `Brahma one-shot`). */
   logLabel?: string
+  /**
+   * Which forced-final wording the model hears, and — for the research kit's
+   * kinds (`inquiry`, `drafting`, `writing`) — whether the research loop
+   * guards run. Defaults to `'research'`. Pass the same kind given to
+   * `buildOneShotToolInstructions`.
+   */
+  agentKind?: AgentInstructionKind
 }
 
 /**
@@ -173,6 +186,9 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
     onReasoning,
     logLabel = 'One-shot loop',
   } = opts
+  const agentKind: AgentInstructionKind = opts.agentKind ?? 'research'
+  // The research kit's soft guards: each adds a message, none ends the run.
+  const researchGuard = researchGuardFor(agentKind, { maxAgentTurns, surface: logLabel })
 
   const useTextBlockTools = resolveOneShotUsesTextBlockTools(connectionProfile, built)
   const modelSupportsNativeTools = built.modelSupportsNativeTools
@@ -190,6 +206,7 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
 
   let agentTurnCount = 0
   let fullResponse = ''
+  let lastFinishReason: string | null = null
   let toolsExecuted = 0
   const usage: OneShotUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
   const toolCallHistory: string[] = []
@@ -207,6 +224,8 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
     useTextBlockTools,
     maxAgentTurns,
     logType: logType ?? 'CHAT_MESSAGE',
+    agentKind,
+    researchGuards: !!researchGuard,
   })
 
   while (agentTurnCount <= maxAgentTurns) {
@@ -217,7 +236,10 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
     agentTurnCount++
 
     if (agentTurnCount === maxAgentTurns) {
-      conversationMessages.push({ role: 'user', content: buildForceFinalMessage('research') })
+      conversationMessages.push({ role: 'user', content: buildForceFinalMessage(agentKind) })
+    } else if (researchGuard) {
+      const nudge = researchGuard.takeNudge()
+      if (nudge) conversationMessages.push({ role: 'user', content: nudge })
     }
 
     let currentResponse = ''
@@ -255,6 +277,8 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
       // Providers may repeat usage across chunks; the last one is the turn's.
       if (chunk.usage) turnUsage = chunk.usage
     }
+
+    researchGuard?.afterModelCall()
 
     if (turnUsage) {
       usage.promptTokens += turnUsage.promptTokens ?? 0
@@ -327,9 +351,12 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
         // Content-only assistant turn — we are NOT executing these calls, so an
         // attached tool-use block would be left unanswered for strict providers.
         conversationMessages.push({ role: 'assistant', content: currentResponse })
+        const finishNow = researchGuard
+          ? buildForceFinalMessage(agentKind)
+          : 'You already have what you need — do NOT call any more tools. Please call the submit_final_response tool NOW with your answer based on the data you already received.'
         conversationMessages.push({
           role: 'user',
-          content: `You have already gathered this data (a repeated call or repeated identical results). You already have what you need — do NOT call any more tools. Please call the submit_final_response tool NOW with your answer based on the data you already received.${toolDataReminder}`,
+          content: `You have already gathered this data (a repeated call or repeated identical results). ${finishNow}${toolDataReminder}`,
         })
         continue
       }
@@ -357,6 +384,11 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
         statusContext,
       )
       toolsExecuted += toolCallsToProcess.length
+      researchGuard?.afterToolStep({
+        thinking: `${turnReasoning}\n${currentResponse}`,
+        callCount: toolCallsToProcess.length,
+        results: toolResult.toolMessages,
+      })
 
       if (toolResult.toolMessages.length > 0) {
         conversationMessages.push(...buildToolResultMessages(toolResult.toolMessages))
@@ -378,6 +410,7 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
 
     // No tool calls or final response — done.
     fullResponse = currentResponse
+    lastFinishReason = extractFinishReason(rawResponse)
     break
   }
 
@@ -391,12 +424,23 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
   // `submit_final_response` leaves `fullResponse` empty. Rather than report a
   // bare failure after spending real budget, synthesise an explanatory answer
   // from the last tool result. With no tool data there is nothing to return.
+  // Name the real cause: a run that stopped early with an empty answer did
+  // not exhaust its budget, and one cut off at the output-token limit says so.
   if (!finalAnswer && lastToolResultText) {
-    finalAnswer = `I reached my ${maxAgentTurns}-turn budget before I could compose a final answer.\n\nHere is what I gathered before I stopped:\n\n${lastToolResultText}`
-    logger.warn(`${logLabel} exhausted its turn budget without a final response`, {
-      chatId,
-      maxAgentTurns,
-    })
+    const onBudget = agentTurnCount >= maxAgentTurns
+    const truncated = isTruncatedFinishReason(lastFinishReason)
+    const why = onBudget
+      ? `I reached my ${maxAgentTurns}-turn budget before I could compose a final answer.`
+      : truncated
+        ? `The model ran out of output tokens (the connection profile's maximum) before it wrote an answer, after ${agentTurnCount} of ${maxAgentTurns} turns. Raise the profile's max tokens, or choose another model.`
+        : `The model stopped without writing an answer, after ${agentTurnCount} of ${maxAgentTurns} turns.`
+    finalAnswer = `${why}\n\nHere is what I gathered before I stopped:\n\n${lastToolResultText}`
+    logger.warn(
+      onBudget
+        ? `${logLabel} exhausted its turn budget without a final response`
+        : `${logLabel} ended with an empty answer before its turn budget`,
+      { chatId, maxAgentTurns, turns: agentTurnCount, finishReason: lastFinishReason },
+    )
   }
 
   if (!finalAnswer) {
@@ -409,6 +453,7 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
     turns: agentTurnCount,
     toolsExecuted,
     answerLength: finalAnswer.length,
+    guardsFired: researchGuard?.history ?? [],
   })
   return { ok: true, answer: finalAnswer, toolsExecuted, usage }
 }

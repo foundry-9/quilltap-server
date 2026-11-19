@@ -368,6 +368,17 @@ function resolveParamAliases(toolName: string, params: Record<string, string>): 
  * Maps tool name aliases, parameter aliases, and content to the appropriate
  * tool argument using per-tool mappings.
  */
+/**
+ * Parameters that stay text even when they look like a number or a boolean:
+ * search words, names and dates ("1968", "2026-11-18") are not numbers.
+ */
+const TEXT_ONLY_PARAMS = new Set([
+  'query', 'message', 'prompt', 'content', 'target',
+  // The research kit's lookups (lib/research/).
+  'text', 'name', 'store', 'folder', 'character', 'owner', 'conversation',
+  'group', 'project', 'since', 'until', 'modified_since', 'fields',
+])
+
 /** The only non-text parameters the `inventory_*` tools take. */
 const INVENTORY_BOOLEAN_PARAMS = new Set(['archived', 'equip'])
 const INVENTORY_NUMBER_PARAMS = new Set(['max_equipped'])
@@ -409,7 +420,7 @@ export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): Tool
         args[key] = false
       } else {
         const num = Number(value)
-        if (!isNaN(num) && value.trim() !== '' && key !== 'query' && key !== 'message' && key !== 'prompt' && key !== 'content' && key !== 'target') {
+        if (!isNaN(num) && value.trim() !== '' && !TEXT_ONLY_PARAMS.has(key)) {
           args[key] = num
         }
       }

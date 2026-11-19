@@ -16,6 +16,17 @@ import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
+/** The parts `lookup_character` can be asked for. */
+export const LOOKUP_CHARACTER_FIELDS = [
+  'identity',
+  'description',
+  'personality',
+  'manifesto',
+  'physical',
+  'conversations',
+  'stores',
+] as const;
+
 export const lookupCharacterToolInputSchema = z.object({
   character: z
     .string()
@@ -24,6 +35,14 @@ export const lookupCharacterToolInputSchema = z.object({
       "The character to look up: their name, one of their aliases, or their id. Case-insensitive. " +
       'If the name is ambiguous the tool lists the candidates instead.'
     ),
+  fields: z
+    .array(z.enum(LOOKUP_CHARACTER_FIELDS))
+    .min(1)
+    .describe(
+      'Return only these parts (any of identity, description, personality, manifesto, physical, ' +
+      'conversations, stores). Name, pronouns, aliases and counts always come back. Omit for everything.'
+    )
+    .optional(),
 });
 
 export type LookupCharacterInput = z.infer<typeof lookupCharacterToolInputSchema>;
@@ -39,10 +58,10 @@ export const lookupCharacterToolDefinition = {
     description:
       "Look up a character in ONE call: id, name, aliases, pronouns, title, birthday, their core files " +
       '(identity — opening with their age, public progressions and pronouns — description, ' +
-      'personality, manifesto), physical descriptions, how many memories ' +
-      'they hold, and their conversation count with the most recent conversations (id, title, ' +
-      'dates). Use this FIRST for any question about a character — it replaces several run_sql ' +
-      'calls and the vault lookup.',
+      'personality, manifesto), physical descriptions, their vault (store name and outline), groups, ' +
+      'projects, wardrobe size, how many memories they hold, and their conversation count with the ' +
+      'most recent conversations. Ask for part of it with `fields`. Use this FIRST for any question ' +
+      'about a character — it replaces several run_sql calls and the vault lookup.',
     parameters: zodToOpenAISchema(lookupCharacterToolInputSchema),
   },
 };

@@ -57,7 +57,7 @@ async function resolveBlobMountPointForRead(
   mountPointRef: string,
   context: DocEditToolContext
 ): Promise<{ id: string; name: string; ownVaultGuarded?: boolean } | null> {
-  if (!context.projectId && !context.characterId && !context.mountPool) return null;
+  if (!context.projectId && !context.characterId && !context.mountPool && context.operatorOverride !== true) return null;
   // Translate the reserved self-token to the acting character's own vault ID so
   // `mount_point: "self"` resolves here too, mirroring the path resolver.
   const effectiveRef = await resolveMountPointRef(mountPointRef, context.characterId);
@@ -72,6 +72,7 @@ async function resolveBlobMountPointForRead(
     extraCharacterIds: guardOwnVault ? undefined : peerCharacterIds,
     guardOwnVault,
     mountPool: context.mountPool,
+    operatorOverride: context.operatorOverride,
   });
   const needle = effectiveRef.toLowerCase();
   const found = mountPoints.find(
@@ -84,7 +85,7 @@ async function resolveBlobMountPointForWrite(
   mountPointRef: string,
   context: DocEditToolContext
 ): Promise<{ id: string; name: string; ownVaultGuarded?: boolean } | null> {
-  if (!context.projectId && !context.characterId && !context.mountPool) return null;
+  if (!context.projectId && !context.characterId && !context.mountPool && context.operatorOverride !== true) return null;
   // Translate the reserved self-token before matching. "self" is always the
   // acting character's own vault, never a peer's, so the peer-vault guard below
   // can run against the original reference unchanged.
@@ -100,6 +101,7 @@ async function resolveBlobMountPointForWrite(
     characterId: context.characterId,
     guardOwnVault,
     mountPool: context.mountPool,
+    operatorOverride: context.operatorOverride,
   });
   const needle = effectiveRef.toLowerCase();
   const found = mountPoints.find(

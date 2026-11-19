@@ -20,6 +20,7 @@
  * @module services/atlas-lore/atlas-lore.service
  */
 
+import { buildLoreBrief } from '@/lib/research/brief'
 import { randomUUID } from 'crypto'
 import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { createServiceLogger } from '@/lib/logging/create-logger'
@@ -153,6 +154,7 @@ export async function runAtlasLoreDraft(
             includeWorkspaceTools: false,
             excludeMemorySearch: true,
             sqlAccess: true,
+            researchKit: 'full',
             webSearch: false,
             pluginToolAllowlist: [],
             effectCeiling: 'read',
@@ -163,6 +165,7 @@ export async function runAtlasLoreDraft(
     const toolInstructions = buildOneShotToolInstructions({
       connectionProfile,
       built,
+      agentKind: 'drafting',
       maxAgentTurns,
       textBlockOptions: {
         imageGeneration: false,
@@ -186,6 +189,7 @@ export async function runAtlasLoreDraft(
         wardrobeUpdate: false,
         wardrobeArchive: false,
         ...inventoryToolFlags(false),
+        researchKit: input.searchStores ? 'full' : 'off',
       },
     })
 
@@ -194,7 +198,10 @@ export async function runAtlasLoreDraft(
       sqlPrompt: BRAHMA_SQL_PROMPT,
       toolInstructions,
     })
+    // Stores open: what a first search already found, so the loop starts from it.
+    const brief = input.searchStores ? await buildLoreBrief(input.subject, { userId }) : ''
     const userMessage = buildAtlasLoreUserMessage({
+      brief,
       subject: input.subject,
       details: input.details,
       targetLabel: target.label,
@@ -218,6 +225,7 @@ export async function runAtlasLoreDraft(
 
     const result = await runOneShotToolLoop({
       repos,
+      agentKind: 'drafting',
       userId,
       chatId,
       connectionProfile,
