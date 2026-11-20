@@ -13,9 +13,8 @@
  * Design of record: docs/developer/features/complete/navigation-menus.md.
  */
 
-import { NextResponse } from 'next/server';
 import { buildNavigationListing } from '@/lib/navigation/listing';
-import { serverError } from '@/lib/api/responses';
+import { serverError, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +26,7 @@ export async function GET() {
       version: listing.version,
       groups: listing.groups.length,
     });
-    return NextResponse.json(listing);
+    return successResponse(listing);
   } catch (error) {
     logger.error('[api.v1.system.navigation] Failed to build the navigation listing', { error });
     return serverError('Failed to build the navigation listing');

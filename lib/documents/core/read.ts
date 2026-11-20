@@ -10,9 +10,8 @@
  * @module lib/documents/core/read
  */
 
-import fs from 'node:fs/promises';
 import { logger } from '@/lib/logger';
-import { readFileWithMtime, statResolvedFile, type ResolvedPath } from '@/lib/doc-edit';
+import { readFileWithMtime, readResolvedFileBytes, statResolvedFile, type ResolvedPath } from '@/lib/doc-edit';
 import {
   readDatabaseBlobForDocument,
   readDatabaseBlobBytes,
@@ -99,8 +98,8 @@ export async function readDocumentBytes(resolved: ResolvedPath): Promise<Documen
     });
     return { data, mtime: doc.mtime, size: data.length, source: 'document' };
   }
-  const [data, stats] = await Promise.all([fs.readFile(resolved.absolutePath), fs.stat(resolved.absolutePath)]);
-  return { data, mtime: stats.mtimeMs, size: data.length, source: 'document' };
+  const file = await readResolvedFileBytes(resolved);
+  return { ...file, source: 'document' };
 }
 
 /**

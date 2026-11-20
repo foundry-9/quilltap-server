@@ -1,7 +1,7 @@
 /**
  * Group Scenarios for the New Chat dialog — participant-union aggregation.
  *
- * GET /api/v1/groups/scenarios?characterIds=<id,id,...>&includeArchived=true
+ * GET /api/v1/groups?action=scenarios&characterIds=<id,id,...>&includeArchived=true
  *
  * Returns, for every group that ANY of the supplied (prospective) participants
  * is a member of, that group's `Scenarios/` entries — grouped under the group's

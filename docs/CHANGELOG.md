@@ -8,6 +8,30 @@
 
 - Regression tests for four fixes that had none: the home-tab dynamic background marker and the hidden-tab exclusion in the page-background rule (`page-background-precedence.test.ts`, `home-view-dynamic-background.test.tsx`), the Madman's Box home photograph guard, the sticky Markdown editor toolbar and the `cqh`-sized Atelier panels (`scroll-surface-layout.test.ts`). Each fails with its fix reverted
 - New coverage for modules added in 4.14: the `add-dynamic-backgrounds-settings-field-v1` and `add-file-generation-moderation-column-v1` migrations, `generated-image-kind`, theme `bundle-paths`, draft `api-errors`, engine `css-text`, snapshot `var-substitute`, the research-kit handler maps, the Calliope API routes and `useProposalImport`
+#### Dev tooling: "since the last release" ranges and branch rules for agents
+
+- New `scripts/last-release-tag.sh` prints the base for "since the last release" ranges: the newest `rel/X.Y.Z` anchor on main-line branches, or the commit where `X.Y.Z` merged into bugfix. It unshallows and fetches tags in cloud checkouts; `--name` prints the version
+- The release checklists used `git describe --match '[0-9]*.[0-9]*.[0-9]*'`, which also matches dev tags, so every audit covered only the commits since the last dev build. They now call the script
+- `tag-for-release` no longer claims `git log X.Y.Z..main` lists the work since a release; the release commit is a squash, so that range lists the whole history. Ranges use the `rel/` anchor
+- CLAUDE.md gains "Commits and branches" (no commit on `main` without `/commit`; other branches, worktrees and cloud sessions commit to their own branch) and "The last release". The checklists' "Do not commit" now points to it; `tag-for-release` and `remove-old-dev-tags` refuse to run outside the human's local checkout
+- `/commit` picks the CHANGELOG section from the `package.json` version instead of the branch, and says which sources trigger a version bump
+- `scripts/update_version.sh` keeps the `bugfix` channel on a session branch cut from bugfix (it read the branch name only, so such a branch was stamped `-dev`)
+
+#### Document core: disk bytes read through the doc-edit backend
+
+- `readDocumentBytes` (`lib/documents/core/read.ts`) no longer calls `fs` directly for a filesystem store. It uses the new `readResolvedFileBytes` in `lib/doc-edit/path-resolver.ts`, next to `statResolvedFile` / `moveResolvedFile` / `deleteResolvedFile`. The core chokepoint test now fails if anything under `lib/documents/core/` imports `fs`
+
+#### Atlas: listings ignore a leading "The"
+
+- The Atlas browser now sorts entries the way scenario lists do: case-insensitive, with a leading "The" ignored ("The Covenant" sorts under C). The rule moved from `lib/scenarios/sort.ts` into `lib/utils/title-sort.ts` (`titleSortKey`, `compareTitles`); `scenarioSortKey` is now an alias for it
+
+#### API: removed the 4.13 deprecated paths; unknown actions refused on more verbs
+
+- Removed the old route paths that answered for one release after 4.13 moved their actions to `?action=`: `wardrobe/analyze-image`, `wardrobe/preview-avatar`, `wardrobe/transfers`, `atlas/transfers`, `inventory/transfers`, `groups/scenarios`, `system/browse-directory`, `system/plugins/initialize` and `system/plugins/upgrades`. Use the `?action=` forms on the parent routes (listed in `docs/developer/API.md`)
+- Removed the body-discriminator aliases `POST /api/v1/chats/[id]?action=turn` and `POST /api/v1/system/tools?action=tasks-queue`; both are now unknown actions (400). Use `turn-nudge|turn-queue|turn-dequeue|turn-query|turn-skip-user` and `tasks-queue-start|tasks-queue-stop`
+- Removed `lib/api/deprecated-path.ts` and the `'from-body'` mode of the wardrobe, atlas and inventory transfer handlers
+- `DELETE` on `calliope/[id]`, `connection-profiles/[id]` and `themes/[themeId]`, and `GET`/`POST` on `calliope`, `calliope/[id]` and `calliope/[id]/messages`, now go through `dispatchAction`, so an unknown `?action=` is a 400 instead of running the default verb
+- `connection-profiles/[id]`, `chats/[id]` DELETE and `system/navigation` answer through the `@/lib/api/responses` helpers instead of `NextResponse.json`
 
 #### Atlas lore wizard: quoted phrases inside a search query display correctly
 

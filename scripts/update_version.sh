@@ -38,7 +38,9 @@ fi
 if [[ "$CURRENT_BRANCH" == "release" || "$CURRENT_BRANCH" == release/* ]]; then
   CHANNEL=""
   BADGE_COLOR="green"
-elif [[ "$CURRENT_BRANCH" == "bugfix" || "$CURRENT_BRANCH" == bugfix/* ]]; then
+elif [[ "$CURRENT_BRANCH" == "bugfix" || "$CURRENT_BRANCH" == bugfix/* || "$CURRENT_VERSION" == *-bugfix.* ]]; then
+  # A session or worktree branch cut from bugfix (claude/…, a detached HEAD) has
+  # no "bugfix" in its name; the version it inherited says which line it is on.
   CHANNEL="bugfix"
   BADGE_COLOR="yellow"
 else
