@@ -40,9 +40,12 @@ jest.mock('@/lib/atlas/item-images', () => {
 import { NextRequest } from 'next/server'
 import { addCharacter, getFakeRepos, pathsIn, resetStore, GENERAL_MP } from '@/__tests__/helpers/inventory-fake-store'
 import { computeAtlasOverlaps, createAtlasCollectionHandlers, createAtlasItemHandlers } from '@/lib/atlas/routes/atlas-route-factory'
-import { POST as transfer } from '@/app/api/v1/atlas/transfers/route'
+import { handleAtlasTransfer } from '@/lib/atlas/routes/transfer'
 
 type Handler = (req: NextRequest, ctx: unknown, params: unknown) => Promise<Response>
+/** `?action=move-to-tier` / `copy-to-tier`, chosen here from the test body's `action`. */
+const transfer: Handler = async (r, c) =>
+  handleAtlasTransfer(((await r.clone().json()) as { action: 'move' | 'copy' }).action)(r, c as never)
 const project = createAtlasCollectionHandlers<{ id: string }>({ scope: 'project', paramsToId: ({ id }) => id, logTag: '[t]', logIdKey: 'projectId' }) as unknown as Record<'GET' | 'POST', Handler>
 const projectItem = createAtlasItemHandlers<{ id: string; entryId: string }>({ scope: 'project', paramsToId: ({ id }) => id, logTag: '[t]', logIdKey: 'projectId' }) as unknown as Record<'GET' | 'PUT' | 'DELETE', Handler>
 const general = createAtlasCollectionHandlers<Record<string, never>>({ scope: 'general', paramsToId: () => null, logTag: '[t]', logIdKey: 'generalId' }) as unknown as Record<'GET' | 'POST', Handler>

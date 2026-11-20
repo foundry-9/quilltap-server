@@ -146,7 +146,7 @@ GET /api/v1/characters/[id]?action=export  # Export character
 ```
 
 
-**Path-segment actions moved (4.13).** Every action that used to be a path segment or a body discriminator is now `?action=` on its parent route: `wardrobe?action=analyze-image|preview-avatar|move-to-tier|copy-to-tier`, `atlas?action=move-to-tier|copy-to-tier`, `inventory?action=move-to-tier|copy-to-tier`, `groups?action=scenarios`, `system/plugins?action=state|initialize|upgrades|mark-upgrades-notified`, `system/directories` (a plain read), `chats/[id]?action=turn-*` and `system/tools?action=tasks-queue-start|stop`. The old forms answer until 4.14 through `deprecatedPath` (`lib/api/deprecated-path.ts`), which logs a warning once and sets `Deprecation: true` and `Link: <replacement>; rel="successor-version"`.
+**Path-segment actions moved (4.13).** Every action that used to be a path segment or a body discriminator is now `?action=` on its parent route: `wardrobe?action=analyze-image|preview-avatar|move-to-tier|copy-to-tier`, `atlas?action=move-to-tier|copy-to-tier`, `inventory?action=move-to-tier|copy-to-tier`, `groups?action=scenarios`, `system/plugins?action=state|initialize|upgrades|mark-upgrades-notified`, `system/directories` (a plain read), `chats/[id]?action=turn-*` and `system/tools?action=tasks-queue-start|stop`. The old forms (and `lib/api/deprecated-path.ts`, which kept them answering) were removed in 4.14; an old body-discriminator action (`chats/[id]?action=turn`, `POST system/tools?action=tasks-queue`) is now an unknown action, a 400.
 
 **Accepted exceptions.** `GET /api/v1/files/proxy/[...key]` and `GET /api/v1/chats/[id]/qtap-target` are byte routes: the page CSP is lifted from them by path in `next.config.js` (a query string cannot be matched there), and `files/proxy` URLs are written into stored content. `/api/v1/search-replace?action=preview|execute` is a feature route that already dispatches on `?action=`.
 ### Legacy Routes Removed
@@ -2312,7 +2312,7 @@ or `{ "error": "…", "errorType": "wardrobe_design_failed" | "wardrobe_design_u
 
 #### `POST /api/v1/wardrobe?action=analyze-image`
 
-(`GET ?action=analyze-image` lists the vision profiles the dialog may offer.) Formerly `/api/v1/wardrobe/analyze-image`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+(`GET ?action=analyze-image` lists the vision profiles the dialog may offer.) Formerly `/api/v1/wardrobe/analyze-image`. The old path was removed in 4.14.
 
 Analyze an image using a vision LLM to suggest wardrobe items.
 
@@ -2339,7 +2339,7 @@ Analyze an image using a vision LLM to suggest wardrobe items.
 
 #### `POST /api/v1/wardrobe?action=preview-avatar`
 
-Formerly `/api/v1/wardrobe/preview-avatar`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `/api/v1/wardrobe/preview-avatar`. The old path was removed in 4.14.
 
 Generate a one-off character avatar against an arbitrary equipped-slot snapshot (the state a wardrobe dialog is currently showing). The result is saved as a regular generated image (downloadable from the dialog) but is **not** persisted onto the character's `avatarOverrides` or any chat's `characterAvatars` — out-of-chat avatars never overwrite the canonical character avatar.
 
@@ -2349,7 +2349,7 @@ Generate a one-off character avatar against an arbitrary equipped-slot snapshot 
 
 #### `POST /api/v1/wardrobe?action=move-to-tier` / `?action=copy-to-tier`
 
-Formerly `POST /api/v1/wardrobe/transfers` with `action: 'move' | 'copy'` in the body; the action is now the query and the body carries the rest. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `POST /api/v1/wardrobe/transfers` with `action: 'move' | 'copy'` in the body; the action is now the query and the body carries the rest. The old path was removed in 4.14.
 
 Move or copy one wardrobe item between wardrobe tiers. The rules live in `transferWardrobeItem` (`lib/wardrobe/transfers.ts`); the route only parses and maps refusals (404 when the item is in none of the tiers probed, 400 for an invalid destination, the same source and destination, or an id already taken there, 409 for an archived character). The former `GET` (destination options) was removed in 4.12; clients read the characters, projects and groups lists instead. The source is given one of two ways: `sourceCharacterId` (character-view probing — the item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General), or an explicit `source: { scope: 'character'|'project'|'group'|'general', id? }` naming the container directly (used when the wardrobe dialog is browsing a shared container). Destinations are named explicitly by `{scope, id}`.
 
@@ -2507,7 +2507,7 @@ One `.json` file per object under a tier's `Inventory/` folder; four tiers, one 
 
 #### `POST /api/v1/inventory?action=move-to-tier` / `?action=copy-to-tier`
 
-Formerly `POST /api/v1/inventory/transfers` with `action` in the body. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `POST /api/v1/inventory/transfers` with `action` in the body. The old path was removed in 4.14.
 
 `{ itemId, from: { scope, id }, to: { scope, id } }`. A move keeps the id (equipped sets and kits still name it); a copy mints one and is refused when the object's resolved `canCopy` is false. Folder path kept; pictures travel. Answers `{ item }`.
 
@@ -2546,7 +2546,7 @@ One `.md` file per entry under a tier's `Atlas/` folder (frontmatter: `id`, `nam
 
 #### `POST /api/v1/atlas?action=move-to-tier` / `?action=copy-to-tier`
 
-Formerly `POST /api/v1/atlas/transfers` with `action` in the body. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `POST /api/v1/atlas/transfers` with `action` in the body. The old path was removed in 4.14.
 
 `{ entryId, from: { scope, id }, to: { scope, id } }`. A move keeps the id, a copy mints one; folder path kept; pictures travel. A live entry of the same name at the destination is `NAME_TAKEN`. Answers `{ entry }`.
 
@@ -7906,7 +7906,7 @@ For the single-scenario endpoints, `[scenarioPath]` is the URL-encoded filename 
 
 #### `GET /api/v1/groups?action=scenarios&characterIds=<id,id,...>[&includeArchived=true]`
 
-Formerly `/api/v1/groups/scenarios`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `/api/v1/groups/scenarios`. The old path was removed in 4.14.
 
 The New Chat dialog's participant-union aggregation: for every group that **any** of the supplied prospective participants belongs to, returns that group's `Scenarios/` entries grouped under the group's name. This is the one sanctioned exception to a group's otherwise strict per-responding-character isolation — scenarios are a chat-creation-time menu, not a per-turn access grant, so this route must never feed the per-turn tier resolver.
 
@@ -8180,7 +8180,7 @@ List every autonomous room owned by the authenticated user, with enough context 
 
 #### `GET /api/v1/system/directories?path=/some/path`
 
-Formerly `/api/v1/system/browse-directory` (a verb in the path). The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `/api/v1/system/browse-directory` (a verb in the path). The old path was removed in 4.14.
 
 List the immediate subdirectories of the given path for the directory-picker UI. Returns the resolved path and its subdirectories. With no `path`, lists the user's home directory.
 
@@ -8270,7 +8270,7 @@ latency problem rather than a correctness one.
 
 #### `GET /api/v1/system/plugins?action=state`
 
-Formerly `GET /api/v1/system/plugins/initialize`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `GET /api/v1/system/plugins/initialize`. The old path was removed in 4.14.
 
 Returns the current plugin initialization status without triggering initialization.
 
@@ -8287,7 +8287,7 @@ Returns the current plugin initialization status without triggering initializati
 
 #### `POST /api/v1/system/plugins?action=initialize`
 
-Formerly `POST /api/v1/system/plugins/initialize`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `POST /api/v1/system/plugins/initialize`. The old path was removed in 4.14.
 
 Triggers plugin system initialization. Scans and loads all plugins. This endpoint is idempotent.
 
@@ -8314,7 +8314,7 @@ Plugin upgrade notification management. Unauthenticated as it runs during startu
 
 #### `GET /api/v1/system/plugins?action=upgrades`
 
-Formerly `GET /api/v1/system/plugins/upgrades`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `GET /api/v1/system/plugins/upgrades`. The old path was removed in 4.14.
 
 Returns pending upgrade notifications from server startup. Returns null results if already notified or no upgrades occurred.
 
@@ -8346,7 +8346,7 @@ Returns pending upgrade notifications from server startup. Returns null results 
 
 #### `POST /api/v1/system/plugins?action=mark-upgrades-notified`
 
-Formerly `POST /api/v1/system/plugins/upgrades`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `POST /api/v1/system/plugins/upgrades`. The old path was removed in 4.14.
 
 Mark upgrade notifications as acknowledged. Call this after showing toast notifications to prevent re-notification.
 

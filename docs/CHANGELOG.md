@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Tests: release checklist 2 (coverage and regression tests)
+
+- Regression tests for four fixes that had none: the home-tab dynamic background marker and the hidden-tab exclusion in the page-background rule (`page-background-precedence.test.ts`, `home-view-dynamic-background.test.tsx`), the Madman's Box home photograph guard, the sticky Markdown editor toolbar and the `cqh`-sized Atelier panels (`scroll-surface-layout.test.ts`). Each fails with its fix reverted
+- New coverage for modules added in 4.14: the `add-dynamic-backgrounds-settings-field-v1` and `add-file-generation-moderation-column-v1` migrations, `generated-image-kind`, theme `bundle-paths`, draft `api-errors`, engine `css-text`, snapshot `var-substitute`, the research-kit handler maps, the Calliope API routes and `useProposalImport`
 #### Dev tooling: "since the last release" ranges and branch rules for agents
 
 - New `scripts/last-release-tag.sh` prints the base for "since the last release" ranges: the newest `rel/X.Y.Z` anchor on main-line branches, or the commit where `X.Y.Z` merged into bugfix. It unshallows and fetches tags in cloud checkouts; `--name` prints the version
@@ -20,6 +24,14 @@
 #### Atlas: listings ignore a leading "The"
 
 - The Atlas browser now sorts entries the way scenario lists do: case-insensitive, with a leading "The" ignored ("The Covenant" sorts under C). The rule moved from `lib/scenarios/sort.ts` into `lib/utils/title-sort.ts` (`titleSortKey`, `compareTitles`); `scenarioSortKey` is now an alias for it
+
+#### API: removed the 4.13 deprecated paths; unknown actions refused on more verbs
+
+- Removed the old route paths that answered for one release after 4.13 moved their actions to `?action=`: `wardrobe/analyze-image`, `wardrobe/preview-avatar`, `wardrobe/transfers`, `atlas/transfers`, `inventory/transfers`, `groups/scenarios`, `system/browse-directory`, `system/plugins/initialize` and `system/plugins/upgrades`. Use the `?action=` forms on the parent routes (listed in `docs/developer/API.md`)
+- Removed the body-discriminator aliases `POST /api/v1/chats/[id]?action=turn` and `POST /api/v1/system/tools?action=tasks-queue`; both are now unknown actions (400). Use `turn-nudge|turn-queue|turn-dequeue|turn-query|turn-skip-user` and `tasks-queue-start|tasks-queue-stop`
+- Removed `lib/api/deprecated-path.ts` and the `'from-body'` mode of the wardrobe, atlas and inventory transfer handlers
+- `DELETE` on `calliope/[id]`, `connection-profiles/[id]` and `themes/[themeId]`, and `GET`/`POST` on `calliope`, `calliope/[id]` and `calliope/[id]/messages`, now go through `dispatchAction`, so an unknown `?action=` is a 400 instead of running the default verb
+- `connection-profiles/[id]`, `chats/[id]` DELETE and `system/navigation` answer through the `@/lib/api/responses` helpers instead of `NextResponse.json`
 
 #### Atlas lore wizard: quoted phrases inside a search query display correctly
 

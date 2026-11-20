@@ -1,8 +1,6 @@
 /**
  * Wardrobe transfer — the handler behind
- * `POST /api/v1/wardrobe?action=move-to-tier` / `?action=copy-to-tier`
- * (and, for one release, the old `POST /api/v1/wardrobe/transfers`, which took
- * `action` in the body).
+ * `POST /api/v1/wardrobe?action=move-to-tier` / `?action=copy-to-tier`.
  *
  *   Moves or copies one wardrobe item between wardrobe tiers — a thin
  *   wrapper over `transferWardrobeItem` (`lib/wardrobe/transfers.ts`), which
@@ -25,14 +23,13 @@ import {
 
 /**
  * Transfer one item. `mode` comes from the action (`move-to-tier` /
- * `copy-to-tier`); `'from-body'` is the deprecated path, where the body named
- * it.
+ * `copy-to-tier`).
  */
-export function handleWardrobeTransfer(mode: 'move' | 'copy' | 'from-body') {
+export function handleWardrobeTransfer(mode: 'move' | 'copy') {
   return async (req: NextRequest, { user, repos }: RequestContext) => {
     try {
       const raw = (await req.json()) as Record<string, unknown>
-      const body = wardrobeTransferRequestSchema.parse(mode === 'from-body' ? raw : { ...raw, action: mode })
+      const body = wardrobeTransferRequestSchema.parse({ ...raw, action: mode })
       const { unresolvedComponentIds, ...result } = await transferWardrobeItem(repos, user.id, body)
       return successResponse({
         ...result,
