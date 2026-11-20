@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Atlas lore wizard: quoted phrases inside a search query display correctly
+
+- Brahma's activity lines (`describeBrahmaActivity`) no longer break the outer quotes when a query contains its own quoted phrase. `"Zbinden Trust" Osage Duchy` now shows as “‘Zbinden Trust’ Osage Duchy” instead of losing its leading quote and leaving an unbalanced one
+
 #### Connection profiles: Auto-Configure reads provider catalogs before guessing
 
 - Auto-Configure now looks up known facts before asking an LLM, strongest source first: the provider plugin's live model catalog (read with the profile's own key and base URL), the plugin's static model table, then OpenRouter's public catalog for upstream limits. Facts are never overruled by the LLM estimate. New module: `lib/llm/model-catalog.ts` (`lookupModelFacts`, cached per provider / base URL / key for an hour)

@@ -174,4 +174,15 @@ describe('describeBrahmaActivity', () => {
     expect(describeBrahmaActivity({ name: 'run_sql', arguments: {} })).toBe('Consulting the ledgers')
     expect(describeBrahmaActivity({ name: 'mystery', arguments: {} })).toBe('Working with mystery')
   })
+
+  it('gives a phrase quoted inside the query single quotes', () => {
+    expect(describeBrahmaActivity({ name: 'lookup_messages', arguments: { query: '"Zbinden Trust" Osage Duchy' } }))
+      .toBe('Searching the conversations for “‘Zbinden Trust’ Osage Duchy”')
+    expect(describeBrahmaActivity({ name: 'lookup_messages', arguments: { query: '"third signature" pawprint' } }))
+      .toBe('Searching the conversations for “‘third signature’ pawprint”')
+    expect(describeBrahmaActivity({ name: 'lookup_messages', arguments: { query: '“Duchy”' } }))
+      .toBe('Searching the conversations for “Duchy”')
+    expect(describeBrahmaActivity({ name: 'lookup_messages', arguments: { query: 'a "stray quote' } }))
+      .toBe('Searching the conversations for “a stray quote”')
+  })
 })

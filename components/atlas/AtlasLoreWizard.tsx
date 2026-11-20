@@ -78,11 +78,25 @@ const MESSAGES = {
   failed: 'Brahma could not finish the draft.',
 }
 
+/**
+ * A query as it sits inside our own double quotes: a wrapping pair is dropped,
+ * and a phrase quoted within it (`"Zbinden Trust" Osage Duchy`) takes single
+ * quotes, so the outer pair is never broken or doubled.
+ */
+function quoteInner(text: string): string {
+  const wrapped = /^["“']([^"“”']*)["”']$/.exec(text)
+  const body = wrapped ? wrapped[1] : text
+  return body
+    .replace(/["“]([^"“”]*)["”]/g, '‘$1’')
+    .replace(/["“”]/g, '')
+    .trim()
+}
+
 /** One line of Brahma's activity, by tool — the argument shown is the most telling one. */
 export function describeBrahmaActivity(call: Pick<AgentStreamToolCall, 'name' | 'arguments'>): string {
   const args = call.arguments ?? {}
   const str = (key: string) => (typeof args[key] === 'string' ? (args[key] as string).trim() : '')
-  const quoted = (key: string) => `“${str(key).replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')}”`
+  const quoted = (key: string) => `“${quoteInner(str(key))}”`
   switch (call.name) {
     case 'search':
       return `Searching the stores for ${quoted('query')}`
