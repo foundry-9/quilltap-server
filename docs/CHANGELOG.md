@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Theming: staff avatars and Atelier inline links follow the theme
+
+- The Brahma, Aurora and Host portraits in the Atlas lore wizard, Import from Instructions and the Scenario Builder now use `qt-avatar`, so a theme's avatar radius, border and background apply
+- New `qt-inline-link` utility (`_interactive.css`) for links and action buttons inside a sentence: keeps the surrounding text colour, always underlined. Applied to the seven bare `underline` links in the theme editor (`DraftEditor`, `TokenRow`, `FilesPanel`, `StylesReference`, `StylesSection`)
+
 #### CI: full test suite only on main and bugfix
 
 - The CI Test job now runs only on pushes to `main` and `bugfix`. Pull requests and pushes to other branches run lint and build only; the CI Summary treats a skipped Test job as passing

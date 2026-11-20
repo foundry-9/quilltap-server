@@ -415,7 +415,7 @@ export function ImportFromInstructionsModal({
       footer={footer}
     >
       <div className="flex items-start gap-3">
-        <img src={AURORA_AVATAR} alt="Aurora" className="w-10 h-10 rounded-full shrink-0" />
+        <img src={AURORA_AVATAR} alt="Aurora" className="qt-avatar w-10 h-10 object-cover" />
         <p className="text-sm qt-text-secondary">
           {view === 'inputs' &&
             'Tell Aurora what is wanted, and she will consult what the house knows, make her enquiries abroad where the matter calls for it, and lay out a design for your approval. Nothing is stitched until you say so.'}

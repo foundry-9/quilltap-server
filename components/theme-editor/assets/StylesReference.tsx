@@ -80,7 +80,7 @@ function HookEntry({ hook, onInsert }: { hook: HookDef; onInsert: (text: string)
       {inspect && notFound && (
         <p className="qt-text-xs qt-text-secondary mt-1" role="status">
           Nothing on the page wears it just now.{' '}
-          <button type="button" className="underline" onClick={() => inspect.showInGallery(hook.className)}>
+          <button type="button" className="qt-inline-link" onClick={() => inspect.showInGallery(hook.className)}>
             Show it in the gallery
           </button>
         </p>
