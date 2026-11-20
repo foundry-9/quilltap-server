@@ -409,6 +409,8 @@ import {
   realignFileEntrySha256Migration,
   realignFileEntrySha256V2Migration,
 } from './realign-file-entry-sha256';
+// The [Name] prefill off on profiles reaching Claude through another provider
+import { retirePrefillOnGatewayClaudeProfilesMigration } from './retire-prefill-on-gateway-claude-profiles';
 // Message route trail: routeTrail column on chat_messages (every model tried, in order)
 import { addRouteTrailMessageColumnMigration } from './add-route-trail-message-column-v1';
 // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
@@ -1002,6 +1004,8 @@ export const migrations: Migration[] = [
   addDynamicBackgroundsSettingsFieldMigration,
   // Files: sha256 realigned again for generated images that took the provider's raw-bytes hash
   realignFileEntrySha256V2Migration,
+  // Connection profiles: the [Name] prefill off where a gateway serves Claude
+  retirePrefillOnGatewayClaudeProfilesMigration,
 ];
 
 export {
@@ -1479,5 +1483,6 @@ export {
   addFileGenerationModerationColumnMigration,
   addDynamicBackgroundsSettingsFieldMigration,
   realignFileEntrySha256V2Migration,
+  retirePrefillOnGatewayClaudeProfilesMigration,
 };
 

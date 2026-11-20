@@ -13,7 +13,7 @@ import { ProviderOptionsPanel } from './ProviderOptionsPanel'
 import { AutoConfigureSources } from './AutoConfigureSources'
 import type { AutoConfigureResult } from '@/lib/services/auto-configure.service'
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names'
-import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
+import { defaultMultiCharacterPrefill, refusesAssistantPrefill } from '@/lib/llm/multi-character-prefill'
 import { evaluateThinkingTurn } from '@/lib/llm/thinking-turn'
 import { providerAcceptsApiKey } from '@/lib/llm/api-key-support'
 import { MAX_IMAGES_PER_REQUEST_CEILING, TOOL_RESULT_VERBATIM_TURNS_CEILING } from '@/lib/schemas/profile.types'
@@ -289,9 +289,10 @@ export function ProfileModal({
       model,
     })
   const runsThinkingTurn = thinkingTurnFor(getSelectedModelInfo())
-  // The provider's own prefill default, before the model's thinking habit is
-  // weighed in — the warnings below compare the user's choice against it.
-  const providerPrefillDefault = defaultMultiCharacterPrefill(form.formData.provider)
+  // Whether the model refuses an opened turn outright (Anthropic, or Claude
+  // through any other provider), before its thinking habit is weighed in —
+  // the warnings below compare the user's choice against it.
+  const modelRefusesPrefill = refusesAssistantPrefill(form.formData.provider, form.formData.modelName)
 
   // A stored row that never chose (null — pre-4.9, or an import) shows the
   // provider default until the model list arrives, because the thinking half
@@ -305,7 +306,7 @@ export function ProfileModal({
     if (!storedPrefillIsUnset || fetchedModelsWithInfo.length === 0) return
     form.setField(
       'multiCharacterPrefill',
-      defaultMultiCharacterPrefill(form.formData.provider, runsThinkingTurn)
+      defaultMultiCharacterPrefill(form.formData.provider, runsThinkingTurn, form.formData.modelName)
     )
     // Re-running on every keystroke would fight the checkbox; the model list
     // landing is the one event that changes the answer.
@@ -400,7 +401,7 @@ export function ProfileModal({
       const modelInfo = fetchedModelsWithInfo.find((m) => m.id === modelName) || null
       form.setField(
         'multiCharacterPrefill',
-        defaultMultiCharacterPrefill(form.formData.provider, thinkingTurnFor(modelInfo))
+        defaultMultiCharacterPrefill(form.formData.provider, thinkingTurnFor(modelInfo), modelName)
       )
     }
 
@@ -991,15 +992,16 @@ export function ProfileModal({
                   that spends its reply wondering whether the name was addressed to it.
                 </p>
                 {form.formData.multiCharacterPrefill &&
-                  !providerPrefillDefault && (
+                  modelRefusesPrefill && (
                     <p className="qt-text-xs qt-text-warning ml-6">
-                      Anthropic&apos;s recent models reject a request handed over mid-turn and will
+                      Recent Claude models — whether reached through Anthropic or by way of a
+                      go-between such as OpenRouter — reject a request handed over mid-turn and will
                       return an error on every multi-character reply. Leave this unticked unless you
                       know your model tolerates it.
                     </p>
                   )}
                 {form.formData.multiCharacterPrefill &&
-                  providerPrefillDefault &&
+                  !modelRefusesPrefill &&
                   runsThinkingTurn && (
                     <p className="qt-text-xs qt-text-warning ml-6">
                       This model reasons before it answers, and a turn handed over already opened

@@ -229,6 +229,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-pseudo-tool-mode-field-v1': 'Choosing the proper instrument for tool conversation',
   'add-profile-multi-character-prefill-field-v1': 'Deciding who is announced at the door',
   'retire-prefill-on-thinking-profiles-v1': 'Excusing the doorman where the guest prefers to announce themselves',
+  'retire-prefill-on-gateway-claude-profiles-v1': 'Excusing the doorman wherever Claude is the guest, by whichever door',
   'add-profile-fallback-fields-v1': 'Teaching each connection the name of its understudy',
   'recompute-chat-last-message-at-v1': 'Re-reading each conversation to find when a soul last actually spoke in it…',
   'collapse-duplicate-folders-v1': 'Sweeping up the duplicate folders that crept into the filing cabinet…',

@@ -183,16 +183,24 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     return conflict(`A connection profile named "${input.name}" already exists`);
   }
 
-  // Clients that don't send the field get the resolved default — off for
-  // Anthropic (4.6+ rejects an assistant tail) and off for a profile that
-  // will run a thinking turn (bug 85), on everywhere else.
+  // Clients that don't send the field (the setup wizard among them) get the
+  // resolved default — off for Anthropic and for Claude through any other
+  // provider (4.6+ rejects an assistant tail), off for a profile that will run
+  // a thinking turn (bug 85), on everywhere else.
   const multiCharacterPrefill =
     typeof input.multiCharacterPrefill === 'boolean'
       ? input.multiCharacterPrefill
       : defaultMultiCharacterPrefill(
           input.provider,
-          profileRunsThinkingTurn(input.provider, input.modelName, input.parameters)
+          profileRunsThinkingTurn(input.provider, input.modelName, input.parameters),
+          input.modelName
         );
+  logger.debug('Resolved multi-character prefill for new connection profile', {
+    provider: input.provider,
+    modelName: input.modelName,
+    multiCharacterPrefill,
+    sent: typeof input.multiCharacterPrefill === 'boolean',
+  });
 
   // Default supportsImageUpload from the historic per-provider capability map
   // so clients that don't send the field keep their current behavior on

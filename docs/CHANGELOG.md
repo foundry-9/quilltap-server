@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Fix: Claude through OpenRouter (or any gateway) failed every multi-character turn
+
+- The `[Name]` prefill default was off for the ANTHROPIC provider only. A profile reaching Claude through another provider — the setup wizard's OpenRouter `anthropic/claude-sonnet-5` profile, NanoGPT, an OpenAI-compatible proxy — was created with it on, and Anthropic 4.6+ rejected every multi-character turn ("This model does not support assistant message prefill"). A chat with a user character is multi-character, so the opening greeting failed silently and every reply failed
+- New `refusesAssistantPrefill` / `isClaudeModelName` (`lib/llm/multi-character-prefill.ts`): the default is now off for Anthropic and for any model id naming Claude. `defaultMultiCharacterPrefill` and `profileUsesNamePrefill` take the model name; the create route, the profile form and the profile editor pass it, and the editor's warning follows the model
+- Migration `retire-prefill-on-gateway-claude-profiles-v1` sets the stored `multiCharacterPrefill = 1` to 0 on non-Anthropic profiles whose model names Claude
+- Help: `connection-profiles.md`, `system-backup-restore.md`
+
 #### Fix: a new instance's second boot ran old migrations against current data
 
 - On a fresh database the migrations run before the app creates its tables and seeds its rows, so every historical data pass skipped with "nothing to do" and, writing no ledger row, stayed armed. The next boot ran up to 18 of them against rows written by current code: `migrate-character-photos-to-vault-v1` read the seeded avatars' vault link ids as missing `files` ids, nulled Lorian's and Riya's `defaultImageId` and garbage-collected the gallery's `files` rows (it was set off by the wardrobe portrait preview, which writes a character-tagged `files` row); `align-about-character-id-v1`/`v2` re-attributed seeded memories (a character's memories about another character flipped to be about themselves); obsolete columns were re-added to `characters` and `chat_settings`

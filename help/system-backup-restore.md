@@ -204,8 +204,9 @@ position, and both used to come back wrong.
 
 - **Announce the speaker in multi-character scenes.** An archive older than the
   checkbox returns with the matter left open, so the provider's own good sense
-  settles it — unticked for Anthropic, which refuses the `[Name]` prefill
-  outright, ticked elsewhere. Previously such a profile came back with the box
+  settles it — unticked for Anthropic, and for Claude reached through any
+  other provider, which refuse the `[Name]` prefill outright; ticked
+  elsewhere. Previously such a profile came back with the box
   ticked regardless, and an Anthropic profile so restored would decline every
   turn in a crowded room until you found the box yourself.
 - **Supports image attachments.** An archive older than *that* checkbox returns
