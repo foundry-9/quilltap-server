@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Tests: release checklist 2 (coverage and regression tests)
+
+- Regression tests for four fixes that had none: the home-tab dynamic background marker and the hidden-tab exclusion in the page-background rule (`page-background-precedence.test.ts`, `home-view-dynamic-background.test.tsx`), the Madman's Box home photograph guard, the sticky Markdown editor toolbar and the `cqh`-sized Atelier panels (`scroll-surface-layout.test.ts`). Each fails with its fix reverted
+- New coverage for modules added in 4.14: the `add-dynamic-backgrounds-settings-field-v1` and `add-file-generation-moderation-column-v1` migrations, `generated-image-kind`, theme `bundle-paths`, draft `api-errors`, engine `css-text`, snapshot `var-substitute`, the research-kit handler maps, the Calliope API routes and `useProposalImport`
+
 #### Atlas lore wizard: quoted phrases inside a search query display correctly
 
 - Brahma's activity lines (`describeBrahmaActivity`) no longer break the outer quotes when a query contains its own quoted phrase. `"Zbinden Trust" Osage Duchy` now shows as “‘Zbinden Trust’ Osage Duchy” instead of losing its leading quote and leaving an unbalanced one
