@@ -17,7 +17,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 1. Get the release version and the change surface:
    ```bash
    node -e "console.log(require('./package.json').version)"
-   LAST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)
+   LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
    git log --oneline "${LAST_TAG}"..HEAD
    ```
 2. Walk each file:
@@ -42,14 +42,14 @@ When `package.json` reads `X.Y.0-dev.N`, check `docs/releases/X.Y.0.md` first.
 ### Gather the change surface
 
 1. Release version: strip `-dev.N` from `package.json` (`4.11.0-dev.106` → `4.11.0`). The previous minor is `X.(Y-1).0`.
-2. Commits on main since the previous minor shipped — the `rel/` tag marks the merge of that release back into main:
+2. Commits since the previous minor shipped — the `rel/` tag marks the merge of that release back into main. Range to `HEAD`, not `main`: in a worktree or cloud session the work is on the current branch, and a cloud checkout may have no local `main` at all. Use `rel/X.(Y-1).0` (the minor), not `scripts/last-release-tag.sh` — after a patch release that prints `rel/X.(Y-1).N`, which would drop the early part of the cycle. If the tag is missing, the clone is shallow or tagless: `git fetch --unshallow --tags` (or `git fetch --tags`).
    ```bash
-   git log --no-merges --format='%h %ad %s' --date=short "rel/X.(Y-1).0"..main
+   git log --no-merges --format='%h %ad %s' --date=short "rel/X.(Y-1).0"..HEAD
    ```
    Read bodies (`git show --stat <sha>`) for anything whose subject is ambiguous.
-3. The `### X.Y-dev` section of [docs/CHANGELOG.md](../../docs/CHANGELOG.md) — the most complete account of what changed. Also skim feature specs moved into `docs/developer/features/complete/` this cycle, `help/*.md` changes (`git diff --stat "rel/X.(Y-1).0"..main -- help/`), and bugs closed this cycle (`gh issue list --state closed --label bug --search "closed:>=<previous release date>"`).
+3. The `### X.Y-dev` section of [docs/CHANGELOG.md](../../docs/CHANGELOG.md) — the most complete account of what changed. Also skim feature specs moved into `docs/developer/features/complete/` this cycle, `help/*.md` changes (`git diff --stat "rel/X.(Y-1).0"..HEAD -- help/`), and bugs closed this cycle (`gh issue list --state closed --label bug --search "closed:>=<previous release date>"`).
 4. Anything in the patch releases `X.(Y-1).1`, `X.(Y-1).2`, … was already announced in their own notes — don't re-announce it as new.
-5. Migrations added this cycle (`git diff --name-only "rel/X.(Y-1).0"..main -- migrations/scripts/`) — these feed the **Upgrading** section.
+5. Migrations added this cycle (`git diff --name-only "rel/X.(Y-1).0"..HEAD -- migrations/scripts/`) — these feed the **Upgrading** section.
 
 ### Read the precedent
 
@@ -87,8 +87,8 @@ Read the previous two minor releases' notes in full (`docs/releases/X.(Y-1).0.md
 
 ### Deliver
 
-Write the draft to `docs/releases/X.Y.0.md`, or edit it there if it already exists. Set `pubDate` and the signature date to the expected release date (ask if unknown), and tell the human it's a draft for their review. Don't commit — [tag-for-release](tag-for-release.md) commits it with the release.
+Write the draft to `docs/releases/X.Y.0.md`, or edit it there if it already exists. Set `pubDate` and the signature date to the expected release date (ask if unknown), and tell the human it's a draft for their review. On `main`, don't commit it — [tag-for-release](tag-for-release.md) commits it with the release. On any other branch (a worktree, a cloud session) commit it to that branch with the rest of the checklist work, so it isn't lost; it reaches the release when the branch is merged.
 
 ## Report
 
-Per file: **CURRENT** or **UPDATED** (with a one-line note). Explicitly confirm the `docs/releases/{version}.md` file exists and matches `package.json`, or flag that it's missing. Do not commit.
+Per file: **CURRENT** or **UPDATED** (with a one-line note). Explicitly confirm the `docs/releases/{version}.md` file exists and matches `package.json`, or flag that it's missing. Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

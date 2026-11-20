@@ -266,7 +266,7 @@ export function ScenarioBuilderDialog({
         footer={footer}
       >
         <div className="flex items-start gap-3 mb-4">
-          <img src={HOST_AVATAR} alt="The Host" className="w-10 h-10 rounded-full shrink-0" />
+          <img src={HOST_AVATAR} alt="The Host" className="qt-avatar w-10 h-10 object-cover" />
           <p className="text-sm qt-text-secondary">
             {view === 'inputs' &&
               'Tell me where and when, and I shall go and see what the place is like. The scene I bring back will leave the company out of it entirely — you may seat whomever you please.'}

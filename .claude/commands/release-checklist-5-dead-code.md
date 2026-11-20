@@ -24,4 +24,4 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 
 ## Report
 
-Summarize removed items (`file:line` or file), items kept-with-reason, and the final `npx tsc` / test status. Confirm DEAD-CODE-REPORT.md was updated. Do not commit.
+Summarize removed items (`file:line` or file), items kept-with-reason, and the final `npx tsc` / test status. Confirm DEAD-CODE-REPORT.md was updated. Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

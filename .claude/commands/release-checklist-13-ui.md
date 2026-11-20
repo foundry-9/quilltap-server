@@ -10,7 +10,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 - **Surfaces:** first-run/unlock (`/setup`, `/unlock`), dashboard, the Salon (`/salon/[id]`: composer, message list, whispers, Staff bubbles, Concierge danger styling, Terminal Mode pane, Document Mode), `/salon/new`, Aurora (`/aurora` list + character editor + wardrobe/inventory dialogs), Prospero, the Scriptorium, Pascal's Workbench (`/custom-tools`), Brahma's Console, `/workspace` (split panes, sticky toolbar), every `/settings?tab=…` tab, the help dialog, toasts, and `/about`.
 - **This cycle first:** start with what changed since the last tag, then sweep the rest:
   ```bash
-  LAST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)
+  LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
   git diff --name-only "${LAST_TAG}"..HEAD -- 'app/**/*.tsx' 'components/**/*.tsx' 'app/styles/**' 'themes/bundled/**' | grep -vE '__tests__|\.test\.|\.stories\.' | sort -u
   ```
 
@@ -53,5 +53,4 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 2. **Findings list** — one line each: severity (blocker / serious / minor / polish), WCAG success criterion (or "look-and-feel"), theme/mode if specific, surface, `file:line`, and **FIXED** or **FLAGGED**.
 3. **Look-and-feel notes** per theme — a few sentences on how each one reads overall, with screenshots of anything notable (send them with `SendUserFile`).
 4. Packages or themes whose versions you bumped.
-
-Do not commit.
+Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

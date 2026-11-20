@@ -272,6 +272,18 @@
     @apply text-foreground;
   }
 
+  /**
+   * Inline link - a link or action button sitting inside a sentence of
+   * help or status text. Keeps the surrounding text's colour (so it reads
+   * correctly inside a warning or destructive line) and is always underlined,
+   * since colour alone does not mark it as a link.
+   */
+  .qt-inline-link {
+    color: inherit;
+    text-decoration-line: underline;
+    cursor: pointer;
+  }
+
   /* ==========================================================================
      FORM LABELS
      ========================================================================== */

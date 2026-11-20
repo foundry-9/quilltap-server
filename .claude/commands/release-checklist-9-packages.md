@@ -10,7 +10,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 
 1. Detect which packages changed since the last release:
    ```bash
-   LAST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)
+   LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
    git diff --name-only "${LAST_TAG}"..HEAD -- 'packages/**' | sed -E 's#(packages/[^/]+)/.*#\1#' | sort -u
    ```
 2. For each changed package (except `packages/quilltap`):
@@ -30,4 +30,4 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 
 ## Report
 
-List changed packages, their new versions, published-status, and the consumers you updated. Flag anything awaiting a human `npm publish`. Do not commit.
+List changed packages, their new versions, published-status, and the consumers you updated. Flag anything awaiting a human `npm publish`. Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

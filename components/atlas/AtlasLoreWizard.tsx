@@ -255,7 +255,7 @@ export function AtlasLoreWizard({ container, containerLabel, onClose, onDraft }:
       footer={footer}
     >
       <div className="flex items-start gap-3 mb-4">
-        <img src={BRAHMA_AVATAR} alt="Brahma" className="w-10 h-10 rounded-full shrink-0" />
+        <img src={BRAHMA_AVATAR} alt="Brahma" className="qt-avatar w-10 h-10 object-cover" />
         <p className="text-sm qt-text-secondary">
           {view === 'inputs' &&
             'Name the thing, and Brahma will go through your papers and records and write it up for the Atlas — name, aliases, appearance and all that is known of it. The picture is left to you.'}

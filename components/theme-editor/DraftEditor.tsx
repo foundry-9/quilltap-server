@@ -971,7 +971,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
           </div>
           <p className="qt-text-xs qt-text-secondary">
             The author, licence, tags, dark mode and what the subsystems are called live under{' '}
-            <button type="button" className="underline" onClick={() => goToSection('asset-details')}>
+            <button type="button" className="qt-inline-link" onClick={() => goToSection('asset-details')}>
               Subsystems and details
             </button>
             .
@@ -993,7 +993,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
               {errors.map((e, i) => (
                 <li key={i}>
                   {e.message}{' '}
-                  <button type="button" className="underline qt-text-xs" onClick={() => askCalliope(issueHandOffText(e))}>
+                  <button type="button" className="qt-inline-link qt-text-xs" onClick={() => askCalliope(issueHandOffText(e))}>
                     Ask Calliope
                   </button>
                 </li>
@@ -1010,7 +1010,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
               {warnings.map((w, i) => (
                 <li key={i} className="break-words">
                   {w.message}{' '}
-                  <button type="button" className="underline qt-text-xs" onClick={() => askCalliope(issueHandOffText(w))}>
+                  <button type="button" className="qt-inline-link qt-text-xs" onClick={() => askCalliope(issueHandOffText(w))}>
                     Ask Calliope
                   </button>
                 </li>

@@ -1,7 +1,6 @@
 /**
  * Wardrobe Image Analysis — handlers for `/api/v1/wardrobe?action=analyze-image`
- * (formerly the `/api/v1/wardrobe/analyze-image` path, which still answers for
- * one release).
+ * (formerly the `/api/v1/wardrobe/analyze-image` path, removed in 4.14).
  *
  * POST ?action=analyze-image
  * Accepts a base64-encoded image and optional guidance text,

@@ -122,10 +122,7 @@ export function NavRailProvider({ children }: { children: ReactNode }) {
     const item = findNavItem(id)
     const current = depsRef.current
     if (!item) return
-    if (navAvailability(id, current).disabled) {
-      console.debug('[nav] Item not available, ignoring', { id })
-      return
-    }
+    if (navAvailability(id, current).disabled) return
     // A panel replaces the flyout it was chosen from; anything else closes it.
     if (item.target.type !== 'action' || (item.target.action !== 'themes' && item.target.action !== 'quick-hide')) {
       setOpenMenu(null)
