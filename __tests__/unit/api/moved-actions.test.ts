@@ -1,7 +1,6 @@
 /**
- * Path-segment actions moved to `?action=` (refactor 4.13 §4.6). Each new
- * action and its old path reach the same handler; the old path is marked
- * deprecated.
+ * Path-segment actions moved to `?action=` (refactor 4.13 §4.6). The old
+ * paths were removed in 4.14; the new actions answer, unknown ones are a 400.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
@@ -12,9 +11,7 @@ jest.mock('@/lib/startup/plugin-initialization', () => ({
 }))
 
 import * as plugins from '../../../app/api/v1/system/plugins/route'
-import * as pluginsInitialize from '../../../app/api/v1/system/plugins/initialize/route'
 import * as directories from '../../../app/api/v1/system/directories/route'
-import * as browseDirectory from '../../../app/api/v1/system/browse-directory/route'
 import { getServerSession } from '../../../lib/auth/session'
 import { getRepositories, getRepositoriesSafe } from '../../../lib/repositories/factory'
 import { createMockRepositoryContainer, setupAuthMocks } from '../lib/fixtures/mock-repositories'
@@ -33,13 +30,10 @@ beforeEach(() => {
 })
 
 describe('system plugins', () => {
-  it('?action=initialize and the old path both initialize; only the old one is deprecated', async () => {
+  it('?action=initialize initializes', async () => {
     const fresh = await plugins.POST(req('http://localhost/api/v1/system/plugins?action=initialize', 'POST'))
-    const old = await pluginsInitialize.POST()
     expect(fresh.status).toBe(200)
-    expect(old.status).toBe(200)
     expect(fresh.headers.get('Deprecation')).toBeNull()
-    expect(old.headers.get('Deprecation')).toBe('true')
   })
 
   it('?action=state answers without the request context', async () => {
@@ -53,12 +47,9 @@ describe('system plugins', () => {
 })
 
 describe('system directories', () => {
-  it('lists a directory at the new path and the old one', async () => {
+  it('lists a directory', async () => {
     const url = `?path=${encodeURIComponent(process.cwd())}`
     const fresh = await directories.GET(req(`http://localhost/api/v1/system/directories${url}`))
-    const old = await browseDirectory.GET(req(`http://localhost/api/v1/system/browse-directory${url}`))
     expect(fresh.status).toBe(200)
-    expect(old.status).toBe(200)
-    expect(old.headers.get('Link')).toContain('/api/v1/system/directories')
   })
 })

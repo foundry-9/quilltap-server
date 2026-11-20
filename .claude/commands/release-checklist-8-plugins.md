@@ -12,7 +12,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
    ```
 2. For each plugin (focus on ones changed since the last release), check for reach-ins to app internals instead of the sanctioned packages:
    ```bash
-   LAST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)
+   LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
    git diff --name-only "${LAST_TAG}"..HEAD -- 'plugins/**' | sort -u
    # Suspicious imports: deep relative paths escaping the plugin, or @/lib app internals
    grep -rnE "from '(\.\./){2,}|from '@/lib|require\('(\.\./){2,}" plugins/dist --include='*.ts' --include='*.js'
@@ -30,4 +30,4 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 
 ## Report
 
-Per plugin: **SELF-CONTAINED / USES PLUGIN-UTILS** or **FIXED** (with the reach-in removed). If any plugin changed, confirm the version bump and that `npm run build:plugins` ran clean. Do not commit.
+Per plugin: **SELF-CONTAINED / USES PLUGIN-UTILS** or **FIXED** (with the reach-in removed). If any plugin changed, confirm the version bump and that `npm run build:plugins` ran clean. Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

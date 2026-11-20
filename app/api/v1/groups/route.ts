@@ -36,8 +36,7 @@ const createGroupSchema = z.object({
 /**
  * GET /api/v1/groups — list groups (optionally `?characterIds=` members)
  * GET /api/v1/groups?action=scenarios&characterIds=… — the scenarios of those
- *   characters' groups (formerly `/api/v1/groups/scenarios`, which still answers
- *   for one release)
+ *   characters' groups (formerly `/api/v1/groups/scenarios`, removed in 4.14)
  */
 export const GET = createContextHandler((req: NextRequest, ctx: RequestContext) =>
   dispatchAction(req, { scenarios: () => handleGroupScenarios(req, ctx) }, () => handleListGroups(req, ctx))
@@ -47,7 +46,7 @@ async function handleListGroups(req: NextRequest, { user, repos }: RequestContex
   let groups = await repos.groups.findAll();
 
   // Optional membership filter. Only character ids this user can read are
-  // trusted (`repos.characters` is user-scoped), mirroring groups/scenarios.
+  // trusted (`repos.characters` is user-scoped), mirroring `?action=scenarios`.
   const rawCharacterIds = req.nextUrl.searchParams.get('characterIds');
   if (rawCharacterIds !== null) {
     const requested = rawCharacterIds.split(',').map((s) => s.trim()).filter(Boolean);

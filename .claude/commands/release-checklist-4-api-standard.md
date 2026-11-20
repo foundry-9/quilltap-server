@@ -25,7 +25,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
    - Uses response helpers from `@/lib/api/responses` (`successResponse`, `badRequest`, `notFound`, …).
    - Handles async request APIs correctly (`await params`, `await cookies()`, `await headers()`).
    ```bash
-   LAST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)
+   LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
    git diff --name-only "${LAST_TAG}"..HEAD -- 'app/api/**' | sort -u
    ```
 3. Fix any violation. Remember the UI-route renames don't move the API paths — characters/chats/projects APIs stay at `/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`.
@@ -33,4 +33,4 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 
 ## Report
 
-Confirm the non-v1 route list contains only the three sanctioned exceptions. For each new/changed route, mark **COMPLIANT** or **FIXED** (`file:line`). Do not commit.
+Confirm the non-v1 route list contains only the three sanctioned exceptions. For each new/changed route, mark **COMPLIANT** or **FIXED** (`file:line`). Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

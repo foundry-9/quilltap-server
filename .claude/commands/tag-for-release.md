@@ -1,6 +1,8 @@
 # Tag for Production Release
 
-This command builds the release commit with a tree-copy strategy (immune to stale merge bases) and then merges the tagged release back into main — and into the freshly restarted bugfix branch — so history stays connected. After a release is tagged, `git log <tag>..main` reflects everything done on main since that release, and `git log <tag>..bugfix` everything done on bugfix since.
+This command builds the release commit with a tree-copy strategy (immune to stale merge bases) and then merges the tagged release back into main — and into the freshly restarted bugfix branch — so history stays connected. After a release is tagged, `git log rel/<version>..main` reflects everything done on main since that release. Range from the `rel/` anchor, **not** the bare `<version>` tag: the release commit is a squash that contains none of main's or bugfix's commits, so `git log 4.13.0..main` lists the whole history (about 3,100 commits at 4.13.0, against 71 from `rel/4.13.0`). For "since the last release" anywhere, use `scripts/last-release-tag.sh`, which picks the right base on main-line and bugfix branches alike.
+
+**Where this runs:** only in the human's local checkout, on `main` or `bugfix` itself, after they have confirmed the [release checklist](../../docs/developer/DEVELOPMENT.md#checklist-before-release) is walked. Never in a cloud session, a worktree, or on any other branch — it rewrites `release`, `main` and `bugfix`, signs a tag with the human's key and pushes all three. If you are anywhere else, stop and say so.
 
 **Important:** Do not use sed commands with regexp group backreferences (like `\1`) in Bash tool calls — they get mangled. Instead, use the Edit tool to modify `package.json`, `README.md`, and other files directly. The instructions below describe *what* to change in each file, with examples.
 
@@ -30,7 +32,7 @@ Then include the standard installation section (copy from the most recent releas
 
 ### Major or minor releases (from `main` branch)
 
-Ask the developer: "Would you like to write the release notes yourself, or shall I draft them in the Quilltap style?" If they want you to write them, review all commits since the last release (`git log <last-tag>..HEAD`) and write substantial release notes in the standard prose style using the procedure in [release-checklist-14-docs](release-checklist-14-docs.md#drafting-release-notes-minor-or-major-release) (normally already drafted while walking the checklist). Include the standard installation section.
+Ask the developer: "Would you like to write the release notes yourself, or shall I draft them in the Quilltap style?" If they want you to write them, review all commits since the previous minor release (`git log rel/X.(Y-1).0..HEAD`) and write substantial release notes in the standard prose style using the procedure in [release-checklist-14-docs](release-checklist-14-docs.md#drafting-release-notes-minor-or-major-release) (normally already drafted while walking the checklist). Include the standard installation section.
 
 ## If current branch is `main`
 
@@ -101,7 +103,7 @@ git tag "rel/NEWRELEASE"
 
 (Replace NEWRELEASE with the actual version, e.g., `4.1.0`.)
 
-This brings the release commit and tag into main's history so `git log NEWRELEASE..main` reflects everything done on main since the release. Conflicts are rare in this direction — release was tree-copied from main — but if any appear, take release's version. The next step bumps version files anyway, so the merge's version-file state on main is transient.
+This brings the release commit and tag into main's history. (It does **not** make `git log NEWRELEASE..main` a useful range — see the top of this file; the `rel/` anchor below is what does.) Conflicts are rare in this direction — release was tree-copied from main — but if any appear, take release's version. The next step bumps version files anyway, so the merge's version-file state on main is transient.
 
 **The `rel/NEWRELEASE` anchor tag** is a lightweight tag placed on the merge-back commit, which lives on main's first-parent line. The official `NEWRELEASE` version tag lives on the squashed release branch, so `git describe` can't measure a meaningful distance against it (the squash severs ancestry, putting every release tag on a merge's *second* parent). The `rel/*` anchor fixes this: `git describe --tags --first-parent --match 'rel/*'` yields a real "commits on main since the release" distance, which the shell prompt uses. Keep the `rel/` prefix and namespace exactly — the prompt strips it for display and filters on it.
 
@@ -168,7 +170,7 @@ git commit --no-verify -m "merge: NEWRELEASE into bugfix"
 
 (Replace NEWRELEASE with the actual version, e.g., `4.1.0`.)
 
-This is the bugfix counterpart of Step 5's merge-back: afterwards `git log NEWRELEASE..bugfix` shows only the work done on bugfix since the release, and `git merge-base --is-ancestor NEWRELEASE bugfix` holds. The merge resolves to release's tree exactly (the tree-copy, not the merge strategy, decides the content), so a stale merge base can never leak old bugfix code into the new branch. Never resolve this merge any other way.
+This is the bugfix counterpart of Step 5's merge-back: afterwards `git merge-base --is-ancestor NEWRELEASE bugfix` holds, and this merge commit is where the release entered bugfix's first-parent line — `scripts/last-release-tag.sh` finds it and uses it as the "since the release" base on bugfix (the `rel/` anchors live on main and aren't reachable from here; `git log NEWRELEASE..bugfix` has the same squash problem as on main). The merge resolves to release's tree exactly (the tree-copy, not the merge strategy, decides the content), so a stale merge base can never leak old bugfix code into the new branch. Never resolve this merge any other way.
 
 **Edit `package.json`:** Set the version to the next patch with bugfix suffix.
 
@@ -259,7 +261,7 @@ git merge --no-ff release -m "merge: NEWRELEASE back into main"
 
 (Replace NEWRELEASE with the actual version, e.g., `4.0.2`.)
 
-This brings the release commit and tag into main's history so `git log NEWRELEASE..main` works. Expect conflicts here — main has been moving forward on its dev branch while the bugfix was prepared. Resolve them as follows:
+This brings the release commit and tag into main's history; the `rel/` anchor placed below is the base for "since this release" ranges. Expect conflicts here — main has been moving forward on its dev branch while the bugfix was prepared. Resolve them as follows:
 
 - **package.json, package-lock.json, README.md**: keep main's version (the in-progress dev version, e.g. `4.1.0-dev.N`). Do not downgrade main to the bugfix release version.
 - **docs/CHANGELOG.md**: keep both sets of entries — main's new dev-cycle entries above the bugfix entries.

@@ -30,4 +30,4 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 
 ## Report
 
-State the status of the latest Actions run (or that local lint/test/type-check pass as a proxy). List any failures found and the fixes applied. If CI can only be confirmed after pushing, say so. Do not commit or push — that's the release/commit flow's job.
+State the status of the latest Actions run (or that local lint/test/type-check pass as a proxy). List any failures found and the fixes applied. If CI can only be confirmed after pushing, say so. Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch. Never push `main`.

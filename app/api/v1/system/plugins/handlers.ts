@@ -1,8 +1,7 @@
 /**
  * The plugin system's operator endpoints, served by `/api/v1/system/plugins`
  * (`?action=state` / `upgrades` on GET, `initialize` / `mark-upgrades-notified`
- * on POST). The old `/system/plugins/initialize` and `/system/plugins/upgrades`
- * paths answer for one release through `deprecatedPath`.
+ * on POST).
  *
  * @module api/v1/system/plugins/handlers
  */
