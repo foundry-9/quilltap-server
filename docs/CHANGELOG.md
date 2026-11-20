@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Dependencies: root installs `@quilltap/plugin-utils` 2.7.7
+
+- Root `package.json` floor raised to `^2.7.7` and the lockfile updated from 2.7.6 to the published 2.7.7. `packages/plugin-utils/CHANGELOG.md` now has entries for 2.7.2 through 2.7.7 (all dependency-only releases)
+
 #### Atlas lore wizard: quoted phrases inside a search query display correctly
 
 - Brahma's activity lines (`describeBrahmaActivity`) no longer break the outer quotes when a query contains its own quoted phrase. `"Zbinden Trust" Osage Duchy` now shows as “‘Zbinden Trust’ Osage Duchy” instead of losing its leading quote and leaving an unbalanced one
