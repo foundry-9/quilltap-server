@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### CLI: theme bundle paths complete in the shell
+
+- `quilltap themes install` and `themes validate` now complete file and directory paths in bash, zsh and fish; before, only flags were offered after those verbs. Tests in `completion-behavior.test.js`
+
 #### Backup/restore: tests for 4.14 data-model additions
 
 - `restore-field-fidelity.test.ts` now runs a Calliope chat's `chatType` / `themeDraftId` and a generated file's `generationModeration` through `restore()`. `themeDraftId` was only tested at the remap step, and `generationModeration` had no restore test

@@ -428,6 +428,9 @@ _quilltap_themes() {
         registry)
           _quilltap_themes_registry
           ;;
+        install|validate)
+          _arguments $themes_opts '1:theme bundle:_files -g "*.qtap-theme(-.)"'
+          ;;
         *)
           _arguments $themes_opts
           ;;
