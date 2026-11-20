@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Tests: release checklist 2 (coverage and regression tests)
+
+- Regression tests for four fixes that had none: the home-tab dynamic background marker and the hidden-tab exclusion in the page-background rule (`page-background-precedence.test.ts`, `home-view-dynamic-background.test.tsx`), the Madman's Box home photograph guard, the sticky Markdown editor toolbar and the `cqh`-sized Atelier panels (`scroll-surface-layout.test.ts`). Each fails with its fix reverted
+- New coverage for modules added in 4.14: the `add-dynamic-backgrounds-settings-field-v1` and `add-file-generation-moderation-column-v1` migrations, `generated-image-kind`, theme `bundle-paths`, draft `api-errors`, engine `css-text`, snapshot `var-substitute`, the research-kit handler maps, the Calliope API routes and `useProposalImport`
 #### Dev tooling: "since the last release" ranges and branch rules for agents
 
 - New `scripts/last-release-tag.sh` prints the base for "since the last release" ranges: the newest `rel/X.Y.Z` anchor on main-line branches, or the commit where `X.Y.Z` merged into bugfix. It unshallows and fetches tags in cloud checkouts; `--name` prints the version
