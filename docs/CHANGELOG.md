@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Docs: 4.14.0 release notes
+
+- Added `docs/releases/4.14.0.md`
+
 #### Fix: Claude through OpenRouter (or any gateway) failed every multi-character turn
 
 - The `[Name]` prefill default was off for the ANTHROPIC provider only. A profile reaching Claude through another provider — the setup wizard's OpenRouter `anthropic/claude-sonnet-5` profile, NanoGPT, an OpenAI-compatible proxy — was created with it on, and Anthropic 4.6+ rejected every multi-character turn ("This model does not support assistant message prefill"). A chat with a user character is multi-character, so the opening greeting failed silently and every reply failed
