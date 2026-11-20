@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
-import { dispatchAction } from '@/lib/api/middleware/actions';
+import { withActionDispatch, dispatchAction } from '@/lib/api/middleware/actions';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { maskApiKey } from '@/lib/encryption';
 import { Provider } from '@/lib/schemas/types';
@@ -139,8 +139,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/api-keys/[id] - Delete an API key
  */
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (req, { user, repos }, { id }) => {
     try {
 
       // Verify key exists
@@ -163,7 +164,7 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       logger.error('[API Keys v1] Error deleting key', { keyId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete API key');
     }
-  }
+  })
 );
 
 /**

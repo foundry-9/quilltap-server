@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
-import { dispatchAction } from '@/lib/api/middleware/actions';
+import { withActionDispatch, dispatchAction } from '@/lib/api/middleware/actions';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logger } from '@/lib/logger';
@@ -129,7 +129,8 @@ export const GET = createContextParamsHandler<{ id: string }>(async (req, { user
 // DELETE Handler
 // ============================================================================
 
-export const DELETE = createContextParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
+export const DELETE = createContextParamsHandler<{ id: string }>(withActionDispatch<{ id: string }>({}, async (req, { user, repos }, { id }) => {
   try {
     // Check if image exists
     const image = await repos.files.findById(id);
@@ -232,7 +233,7 @@ export const DELETE = createContextParamsHandler<{ id: string }>(async (req, { u
     logger.error('[Images v1] Error deleting image', { imageId: (req as any).params?.id }, error instanceof Error ? error : undefined);
     return serverError('Failed to delete image');
   }
-});
+}));
 
 // ============================================================================
 // POST Handler - Actions

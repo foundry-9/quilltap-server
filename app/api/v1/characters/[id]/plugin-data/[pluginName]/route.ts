@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, badRequest } from '@/lib/api/responses';
 
@@ -80,8 +81,9 @@ export const PUT = createContextParamsHandler<{ id: string; pluginName: string }
 );
 
 // DELETE /api/v1/characters/[id]/plugin-data/[pluginName]
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string; pluginName: string }>(
-  async (req, { user, repos }, { id, pluginName }) => {
+  withActionDispatch<{ id: string; pluginName: string }>({}, async (req, { user, repos }, { id, pluginName }) => {
     const character = await repos.characters.findById(id);
 
     if (!exists(character)) {
@@ -108,5 +110,5 @@ export const DELETE = createContextParamsHandler<{ id: string; pluginName: strin
       }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete plugin data');
     }
-  }
+  })
 );

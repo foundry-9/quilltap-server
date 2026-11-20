@@ -282,8 +282,10 @@ export const PUT = createContextParamsHandler<Params>(
 // DELETE
 // ============================================================================
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
+// (`path` is a catch-all array, so `withActionDispatch`'s string params don't fit.)
 export const DELETE = createContextParamsHandler<Params>(
-  async (_req: NextRequest, { user }: RequestContext, { id, path }) => {
+  async (req: NextRequest, { user }: RequestContext, { id, path }) => dispatchAction(req, {}, async () => {
     // Raw (still-encoded) join for error-logging context until we can safely
     // decode; joinPath() may throw FileOpError on malformed encoding.
     let relativePath = path.join('/');
@@ -301,7 +303,7 @@ export const DELETE = createContextParamsHandler<Params>(
     } catch (error) {
       return handleFileOpError(error, 'delete file', { mountPointId: id, relativePath });
     }
-  }
+  })
 );
 
 // ============================================================================

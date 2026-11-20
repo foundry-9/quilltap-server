@@ -9,6 +9,7 @@
  */
 
 import { createContextParamsHandler } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { successResponse, notFound, badRequest, serverError } from '@/lib/api/responses';
 import {
@@ -32,8 +33,9 @@ export const GET = createContextParamsHandler<{ id: string }>(
   }
 );
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (_req, { user, repos }, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (_req, { user, repos }, { id }) => {
     try {
       if (!id) return badRequest('Missing gallery entry id');
 
@@ -49,5 +51,5 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       logger.error('[Photos v1] Error deleting gallery entry', { userId: user.id }, error instanceof Error ? error : undefined);
       return serverError(message);
     }
-  }
+  })
 );

@@ -15,6 +15,7 @@
 
 import { NextRequest } from 'next/server';
 import { createContextHandler } from '@/lib/api/middleware';
+import { withCollectionActionDispatch } from '@/lib/api/middleware/actions';
 import { successResponse, serverError, validationError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { stateBodySchema } from '@/lib/api/state-handlers';
@@ -49,7 +50,8 @@ export const PUT = createContextHandler(async (req: NextRequest) => {
   }
 });
 
-export const DELETE = createContextHandler(async () => {
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
+export const DELETE = createContextHandler(withCollectionActionDispatch({}, async () => {
   try {
     const previousState = await readGeneralState();
     await writeGeneralState({});
@@ -59,4 +61,4 @@ export const DELETE = createContextHandler(async () => {
     logger.error('[Settings v1] Error resetting general state', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to reset general state');
   }
-});
+}));

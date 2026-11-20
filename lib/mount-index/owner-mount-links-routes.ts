@@ -22,7 +22,7 @@
 
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, withActionDispatch, type RequestContext } from '@/lib/api/middleware';
 import { badRequest, created, notFound, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 
@@ -101,8 +101,9 @@ export function createOwnerMountLinkRoutes(config: MountLinkOwnerConfig) {
     }
   );
 
+  // No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
   const DELETE = createContextParamsHandler<{ id: string }>(
-    async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
+    withActionDispatch<{ id: string }>({}, async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
       const owner = await config.findOwner(repos, id);
       if (!owner) return notFound(label);
 
@@ -115,7 +116,7 @@ export function createOwnerMountLinkRoutes(config: MountLinkOwnerConfig) {
 
       log.info('Mount point unlinked', { ownerId: id, mountPointId, userId: user.id });
       return successResponse({ message: `Mount point unlinked from ${label.toLowerCase()}` });
-    }
+    })
   );
 
   return { GET, POST, DELETE };
