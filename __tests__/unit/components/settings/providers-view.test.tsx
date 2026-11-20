@@ -120,6 +120,8 @@ function route(path: string, action: string | null): { status: number; body: unk
         profiles: [
           { id: 'cp-1', name: 'GPT Daily', provider: 'OPENAI', apiKeyId: 'key-openai', modelName: 'gpt-5', parameters: {}, isDefault: true },
           { id: 'cp-2', name: 'Local Llama', provider: 'OLLAMA', modelName: 'llama3', parameters: {}, isDefault: false },
+          // A Courier profile whose informational provider field still says OPENAI.
+          { id: 'cp-3', name: 'Claude Desktop', provider: 'OPENAI', transport: 'courier', modelName: 'Manual (clipboard)', parameters: {}, isDefault: false },
         ],
       })
     }
@@ -245,6 +247,29 @@ describe('Providers → By provider', () => {
     expect(within(menu).getByRole('menuitem', { name: 'API key' })).toBeDisabled()
     expect(within(menu).getByRole('menuitem', { name: 'Image profile' })).toBeDisabled()
     expect(within(menu).getByRole('menuitem', { name: 'Connection profile' })).toBeEnabled()
+  })
+
+  it('lists Courier profiles under their own card, after the API providers, whatever provider they name', async () => {
+    renderWithQuery(<ProvidersCard />)
+
+    const openai = await openProviderCard('OpenAI')
+    expect(within(openai).queryByText('Claude Desktop')).not.toBeInTheDocument()
+
+    const order = Array.from(document.querySelectorAll('section[data-provider]')).map((el) => el.getAttribute('data-provider'))
+    expect(order).toEqual(['OLLAMA', 'OPENAI', 'COURIER'])
+
+    const courier = await openProviderCard('The Courier')
+    expect(within(courier).getByText('carried by hand · 1 profile')).toBeInTheDocument()
+    expect(within(courier).getByText('Claude Desktop')).toBeInTheDocument()
+
+    // Only a connection profile can be added; it opens with the Courier preselected
+    fireEvent.click(within(courier).getByRole('button', { name: 'Add to The Courier' }))
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getByRole('menuitem', { name: 'API key' })).toBeDisabled()
+    expect(within(menu).getByRole('menuitem', { name: 'Image profile' })).toBeDisabled()
+    expect(within(menu).getByRole('menuitem', { name: 'Embedding profile' })).toBeDisabled()
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Connection profile' }))
+    expect(await screen.findByRole('dialog', { name: 'connection modal' })).toHaveTextContent('connection modal for COURIER')
   })
 
   it('ends with an Add a provider card offering the key modal and the Setup Wizard', async () => {

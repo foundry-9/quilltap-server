@@ -15,6 +15,7 @@ import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
 import { evaluateThinkingTurn } from '@/lib/llm/thinking-turn'
 import { providerAcceptsApiKey } from '@/lib/llm/api-key-support'
 import { MAX_IMAGES_PER_REQUEST_CEILING, TOOL_RESULT_VERBATIM_TURNS_CEILING } from '@/lib/schemas/profile.types'
+import { COURIER_PROVIDER_GROUP } from '@/components/settings/cards/provider-groups'
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -356,6 +357,11 @@ export function ProfileModal({
   // Preselect the provider on opening a new profile from a provider card.
   useEffect(() => {
     if (!isOpen || profile?.id || !initialProvider) return
+    // The Courier's card opens a Courier profile, not a provider-backed one.
+    if (initialProvider === COURIER_PROVIDER_GROUP) {
+      form.setField('transport', 'courier')
+      return
+    }
     handleProviderChange(initialProvider)
     const keysForProvider = apiKeys.filter((k) => k.provider === initialProvider)
     if (keysForProvider.length === 1) {

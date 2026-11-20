@@ -34,6 +34,8 @@ Connection profiles live with the providers they telephone, under **Settings →
 
 A provider gets a card if it holds a key *or* if any profile names it, so a keyless establishment such as Ollama on your own machine is listed as readily as the grand hotels. Inside each card the provider's keys come first, and below them every profile that uses the provider — connection, image and embedding alike — in one column. Connection profiles wear a **Connection** badge and the Forge's portrait, the Forge being the member of staff who keeps the wires humming. Each row shows the profile's name and model; click it to open the profile.
 
+Courier profiles keep a card of their own, **The Courier**, set at the foot of the list after every provider that answers the telephone. A Courier profile calls upon no provider at all — its requests go by your own hand — so it is never filed under OpenAI or anyone else, whatever its paperwork happens to say. The card's **+ Add** menu offers a connection profile and nothing else, and opens the form with the Courier already chosen as the transport.
+
 ### The other way of looking at it: By kind
 
 When you want the whole switchboard at once — every connection profile, whatever its provider — click **By kind** at the top of the Providers card and open **Connection Profiles**. That is the list Quilltap has always shown: drag-to-reorder, health badges, tags, auto-configure and all. A link straight to this page (the one at the top, for example) opens *By kind* with **Connection Profiles** already unfolded, and Quilltap remembers whichever view you chose last, on this browser.

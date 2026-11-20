@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Settings: Courier profiles get their own card under By provider
+
+- Courier connection profiles (`transport: 'courier'`) are now listed under their own **The Courier** card in Settings → Connections → Providers → By provider, after the API providers. Before, they were grouped by their informational `provider` field, so older ones (`OPENAI`) appeared in the OpenAI card
+- `groupByProvider` (`components/settings/cards/provider-groups.ts`) sends Courier profiles to `COURIER_PROVIDER_GROUP`. The card shows no key count, its Add menu offers only a connection profile, and that opens `ProfileModal` with the Courier transport selected
+
 #### Context summary: one fold per chat at a time (doubled story backgrounds)
 
 - Fixed group chats getting two story backgrounds back to back, so the first was replaced before anyone saw it. A summary fold takes about 30 seconds and only advances `lastSummaryTurn` when it finishes. In a multi-character chat the next character's reply read the same anchor, passed the gate again and started a second fold over the same turns. Each fold retitled the chat, and each retitle queued a story background. The story-background dedupe absorbs only a pending job, and the first had already started. On the reference instance this happened for 18 of 34 fold checkpoints in a week

@@ -41,6 +41,7 @@ import { ProfileModal as EmbeddingProfileModal } from '@/components/settings/emb
 import { toEmbeddingProviderInfo } from '@/components/settings/embedding-profiles/hooks/useEmbeddingProfiles'
 import type { EmbeddingModel, EmbeddingProfile } from '@/components/settings/embedding-profiles/types'
 import {
+  COURIER_PROVIDER_GROUP,
   groupByProvider,
   PROVIDER_PROFILE_KIND_LABELS,
   type ProviderGroup,
@@ -73,6 +74,17 @@ const KIND_PERSONA: Record<ProviderProfileKind, SettingsPersona> = {
 }
 
 const EMPTY: never[] = []
+
+/** What the Courier's card is called; it is not a provider the list knows. */
+const COURIER_DISPLAY_NAME = 'The Courier'
+
+/** The Courier's card offers a Courier connection profile and nothing else. */
+const COURIER_OFFERS: Record<'key' | ProviderProfileKind, boolean> = {
+  key: false,
+  connection: true,
+  image: false,
+  embedding: false,
+}
 
 /** The DOM id of a provider's card, so a link (an attention chip) can land on it. */
 export function providerCardDomId(provider: string): string {
@@ -120,11 +132,18 @@ export function ProvidersByProvider({ focusProvider }: { focusProvider?: string 
       embedding: embeddingProfiles,
     })
     const label = (name: string) => providers.find((p) => p.name === name)?.displayName || name
-    return grouped.sort((a, b) => label(a.provider).localeCompare(label(b.provider)))
+    // The Courier calls no provider, so it stands apart: after every API provider.
+    const isCourier = (name: string) => (name === COURIER_PROVIDER_GROUP ? 1 : 0)
+    return grouped.sort(
+      (a, b) => isCourier(a.provider) - isCourier(b.provider) || label(a.provider).localeCompare(label(b.provider)),
+    )
   }, [apiKeys, connectionProfiles, imageProfiles, embeddingProfiles, providers])
 
   const displayName = useCallback(
-    (name: string) => providers.find((p) => p.name === name)?.displayName || name,
+    (name: string) =>
+      name === COURIER_PROVIDER_GROUP
+        ? COURIER_DISPLAY_NAME
+        : providers.find((p) => p.name === name)?.displayName || name,
     [providers],
   )
 
@@ -175,6 +194,7 @@ export function ProvidersByProvider({ focusProvider }: { focusProvider?: string 
 
   const offers = useCallback(
     (provider: string): Record<'key' | ProviderProfileKind, boolean> => {
+      if (provider === COURIER_PROVIDER_GROUP) return COURIER_OFFERS
       const listing = providers.find((p) => p.name === provider)
       // A provider the list does not know (not loaded, or a plugin gone) is not
       // evidence against any kind; the modal's own picker has the last word.
@@ -314,8 +334,10 @@ function ProviderCard({ focused, group, displayName, keyActions, offers, onAdd, 
   const bodyId = `${domId}-body`
   const headingId = `${domId}-heading`
 
+  const isCourier = group.provider === COURIER_PROVIDER_GROUP
   const summary = [
-    group.keys.length === 1 ? '1 key' : `${group.keys.length} keys`,
+    // The Courier carries requests by hand; a key count would only mislead.
+    isCourier ? 'carried by hand' : group.keys.length === 1 ? '1 key' : `${group.keys.length} keys`,
     group.profiles.length === 1 ? '1 profile' : `${group.profiles.length} profiles`,
   ].join(' · ')
 
