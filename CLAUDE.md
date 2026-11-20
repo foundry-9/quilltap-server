@@ -20,6 +20,19 @@ The project is **"Quilltap"** (quill + tap), **never** "Quilttap" (quilt + tap).
 - **User-facing** writing (UI, help docs, prompts, migration loading-screen labels) is in the style of *steampunk + Roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket*.
 - **`docs/CHANGELOG.md` is the exception:** terse, direct, plain American English. No steampunk voice.
 
+### Commits and branches
+
+Check where you are first: `git branch --show-current` (empty means a detached HEAD) and whether this is a cloud session, a worktree (`git rev-parse --git-dir` differs from `--git-common-dir`) or the human's own checkout.
+
+- **On `main`** (the human's local checkout): never commit without an explicit instruction — `/commit`, or "commit this" in their own words. A skill or checklist that says "do not commit" means this. When told to commit, commit on `main` itself; don't make a feature branch.
+- **On any other branch** (a cloud session, a worktree, a feature branch, `bugfix`): commit finished work to *that* branch without waiting to be asked, following [/commit](/.claude/commands/commit.md)'s checks. In a cloud session, push that branch too — unpushed work there is lost.
+- **A cloud session or worktree that finds itself on `main`** (or detached): make a branch first (`git switch -c claude/<short-topic>`) and commit there. Never commit to, push, or merge into `main` from one.
+- Never push `main`, `bugfix` or `release`, and never move or create a tag, unless the human says so in this session. Releases and tag clean-up (`/tag-for-release`, `/remove-old-dev-tags`) run only in the human's local checkout.
+
+### The last release
+
+"Since the last release" means since the last production release this code descends from — never a dev tag (`4.14.0-dev.67` also matches `[0-9]*.[0-9]*.[0-9]*`). Use **`scripts/last-release-tag.sh`**: on `main` and branches cut from it, the newest `rel/X.Y.Z` anchor (the release's merge back into main); on `bugfix`, the commit where `X.Y.Z` merged in. Never range from the bare `X.Y.Z` tag — the release commit is a squash, so `git log X.Y.Z..main` lists the whole history. `--name` prints the version. It unshallows and fetches tags in a cloud checkout. For a minor release's notes, the base is `rel/X.(Y-1).0`, not the last patch.
+
 ### Before committing
 
 - Record changes in `docs/CHANGELOG.md` (reverse chronological, plain voice — see above).

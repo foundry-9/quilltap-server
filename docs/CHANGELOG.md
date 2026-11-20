@@ -4,6 +4,15 @@
 
 ### 4.14-dev
 
+#### Dev tooling: "since the last release" ranges and branch rules for agents
+
+- New `scripts/last-release-tag.sh` prints the base for "since the last release" ranges: the newest `rel/X.Y.Z` anchor on main-line branches, or the commit where `X.Y.Z` merged into bugfix. It unshallows and fetches tags in cloud checkouts; `--name` prints the version
+- The release checklists used `git describe --match '[0-9]*.[0-9]*.[0-9]*'`, which also matches dev tags, so every audit covered only the commits since the last dev build. They now call the script
+- `tag-for-release` no longer claims `git log X.Y.Z..main` lists the work since a release; the release commit is a squash, so that range lists the whole history. Ranges use the `rel/` anchor
+- CLAUDE.md gains "Commits and branches" (no commit on `main` without `/commit`; other branches, worktrees and cloud sessions commit to their own branch) and "The last release". The checklists' "Do not commit" now points to it; `tag-for-release` and `remove-old-dev-tags` refuse to run outside the human's local checkout
+- `/commit` picks the CHANGELOG section from the `package.json` version instead of the branch, and says which sources trigger a version bump
+- `scripts/update_version.sh` keeps the `bugfix` channel on a session branch cut from bugfix (it read the branch name only, so such a branch was stamped `-dev`)
+
 #### Document core: disk bytes read through the doc-edit backend
 
 - `readDocumentBytes` (`lib/documents/core/read.ts`) no longer calls `fs` directly for a filesystem store. It uses the new `readResolvedFileBytes` in `lib/doc-edit/path-resolver.ts`, next to `statResolvedFile` / `moveResolvedFile` / `deleteResolvedFile`. The core chokepoint test now fails if anything under `lib/documents/core/` imports `fs`

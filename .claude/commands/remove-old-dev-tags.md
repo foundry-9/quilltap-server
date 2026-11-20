@@ -4,6 +4,8 @@ $ARGUMENTS
 
 This skill accepts an optional argument: `all`. When no argument is provided, it keeps the latest dev tag and removes older ones. When `all` is provided, it removes **every** dev tag, release, and Docker image for the current release candidate — nothing is kept.
 
+**Where this runs:** only in the human's local checkout, and only when they ask for it. It deletes remote tags, GitHub releases and Docker Hub manifests, none of which can be undone. Never run it from a cloud session or a worktree; if you are in one, stop and say so. In step 1, if the working tree has uncommitted changes, stop and ask rather than switching branches over them.
+
 ## Steps
 
 1. Checkout the main branch if we aren't already on it.

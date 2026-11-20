@@ -7,7 +7,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 ## Scope
 
 ```bash
-LAST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)
+LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
 echo "Reviewing changes since ${LAST_TAG:-<no tag found>}"
 # New/changed source files that should have tests
 git diff --name-only "${LAST_TAG}"..HEAD -- 'lib/**/*.ts' 'app/**/*.ts' 'app/**/*.tsx' | grep -vE '__tests__|\.test\.|\.spec\.' | sort -u
