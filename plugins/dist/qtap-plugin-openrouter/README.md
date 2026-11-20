@@ -5,6 +5,7 @@ This plugin provides integration with OpenRouter's API, enabling Quilltap to acc
 ## Features
 
 - **Access to 100+ Models**: Chat completion models from OpenAI (GPT-4, GPT-3.5), Anthropic (Claude 3 family), Google (Gemini), Meta (Llama), Mistral, and many more
+- **Live Model Catalog**: Context window, output cap, tool-calling, image-input and reasoning support are read from OpenRouter's `/api/v1/models` listing (`getModelCatalog`), used by connection-profile Auto-Configure
 - **Real-time Pricing**: Fetch current pricing for all available models directly from OpenRouter
 - **Cost-aware Model Selection**: Use the pricing fetcher to select the most cost-effective models for your use case
 - **Unified API**: Single API key to access models from multiple providers

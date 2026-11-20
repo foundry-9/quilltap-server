@@ -205,6 +205,24 @@ If your provider has many models, you can see all available ones:
 
 **Note:** This requires a valid API key for the provider.
 
+## Auto-Configure
+
+The **Auto-Configure** button, beside the test buttons in the profile form (and on each profile's card menu), fills in the figures a profile needs — context window, maximum output, temperature, Top P, model class, the uncensored flag — and, where it can find out, whether the model takes tools and pictures *by this particular road*. It consults its sources in strict order of reliability, much as a sensible butler checks the household ledger before asking the neighbours:
+
+1. **The provider's own catalogue.** OpenRouter, NanoGPT, Google and Ollama publish what each of their models can do, and Quilltap reads it with this profile's own key and address. What a provider says of its own service outranks everything else — which matters, because the same model may behave quite differently depending on who is serving it. A Gemini model reached through NanoGPT, say, is NanoGPT's Gemini, tool manners and all.
+2. **The plugin's own model table**, for providers that keep one.
+3. **OpenRouter's public catalogue**, for the model's published limits when nothing nearer says. Its word on tools is taken only for OpenRouter profiles; what OpenRouter's road supports proves nothing about another's.
+4. **A web search and your default model**, for whatever is still unknown — chiefly temperature and Top P, which no catalogue publishes. Without a search provider configured, the model answers from its own general knowledge.
+
+The model class is then worked out from the limits themselves. When it is done, the form lists every figure beside where it came from — "NanoGPT's model catalog", "estimated from web search and model knowledge", and so on — so a looked-up fact can be told from an educated guess at a glance.
+
+Two settings are changed only on good evidence:
+
+- **Supports Image Attachments** is set only when a catalogue states it; otherwise your choice stands.
+- **Tool Format** is moved to **Simple JSON** only when a catalogue says this road has no native tool calling, and only from **Auto** or **Native**. If you have chosen Simple JSON yourself — for a provider whose native tool calling misbehaves despite what its catalogue claims — Auto-Configure leaves it be.
+
+**Note:** Auto-Configure needs a default connection profile to estimate what the catalogues leave out. If the catalogues give both limits, it will finish without one, using ordinary defaults for temperature and Top P.
+
 ## Advanced: Custom Base URLs
 
 For self-hosted or alternative LLM providers (like local Ollama instances):

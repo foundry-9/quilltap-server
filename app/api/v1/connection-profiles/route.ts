@@ -520,30 +520,33 @@ async function handleResetSort(req: NextRequest, context: RequestContext) {
 }
 
 /**
+ * Body of `?action=auto-configure`: the profile being edited, unsaved. The
+ * base URL and key are the route it reaches the model by, which decides what
+ * the provider's own catalog says about it.
+ */
+const autoConfigureSchema = z.strictObject({
+  provider: z.string().trim().min(1),
+  modelName: z.string().trim().min(1),
+  baseUrl: z.string().nullish(),
+  apiKeyId: z.string().nullish(),
+});
+
+/**
  * Auto-configure profile suggestions based on provider and model
  */
 async function handleAutoConfigure(req: NextRequest, context: RequestContext) {
   const { user } = context;
 
+  // Outside the try: a ZodError becomes a 400 in the middleware.
+  const target = autoConfigureSchema.parse(await req.json());
+
   try {
-    const body = await req.json();
-    const { provider, modelName } = body;
-
-    // Validation
-    if (!provider || typeof provider !== 'string') {
-      return badRequest('Provider is required');
-    }
-
-    if (!modelName || typeof modelName !== 'string') {
-      return badRequest('Model name is required');
-    }
-
-    // Call auto-configure service
-    const result = await autoConfigureProfile(provider, modelName, user.id);
+    const result = await autoConfigureProfile(target, user.id);
 
     logger.info('[Connection Profiles v1] Auto-configure suggestions generated', {
-      provider,
-      modelName,
+      provider: target.provider,
+      modelName: target.modelName,
+      sources: Object.fromEntries(Object.entries(result.fieldSources).map(([k, v]) => [k, v.kind])),
     });
 
     return successResponse({ suggestions: result });

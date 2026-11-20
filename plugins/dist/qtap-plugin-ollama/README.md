@@ -9,6 +9,7 @@ This plugin provides integration with Ollama, enabling Quilltap to use open-sour
 - **Multiple Models**: Support for Llama 2, Mistral, Neural Chat, Dolphin, and many others
 - **Multimodal Models**: Support for vision-capable models like LLaVA for image analysis
 - **Zero Cost**: Use open-source models without API fees
+- **Live Model Catalog**: Context window, tool, vision, and thinking support are read from each model's `/api/show` details
 - **Streaming**: Support for streaming responses for real-time chat
 - **Remote Server**: Connect to Ollama running on other machines in your network
 - **Embeddings**: Support for embedding models through compatible Ollama installations

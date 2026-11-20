@@ -4,6 +4,18 @@
 
 ### 4.14-dev
 
+#### Connection profiles: Auto-Configure reads provider catalogs before guessing
+
+- Auto-Configure now looks up known facts before asking an LLM, strongest source first: the provider plugin's live model catalog (read with the profile's own key and base URL), the plugin's static model table, then OpenRouter's public catalog for upstream limits. Facts are never overruled by the LLM estimate. New module: `lib/llm/model-catalog.ts` (`lookupModelFacts`, cached per provider / base URL / key for an hour)
+- New optional plugin hook `getModelCatalog(apiKey, baseUrl)` in `@quilltap/plugin-types` 2.13.0, implemented by the OpenRouter, NanoGPT, Google and Ollama plugins. Absent fields mean unknown
+- The result now reports `supportsTools`, `supportsImages`, a `pseudoToolMode` recommendation and a source for every field (`fieldSources`). Tool and image support are taken only from a source that describes the profile's own route; OpenRouter's public data counts for tools only on OpenRouter profiles
+- Tool format is moved to Simple JSON only when a catalog says the route lacks native tool calling, and only from `auto` or `native`; a hand-picked mode is kept. `supportsImageUpload` is written only when a catalog states it. Shared by both routes through `profileUpdateFromAutoConfigure`
+- Model class is derived from the final limits (`deriveModelClass`) instead of chosen by the LLM. Max output is capped at the context window
+- OpenRouter public lookups for Auto-Configure (`findOpenRouterPublicModel`) never match by substring; after an exact id they compare normalised bare names (`normalizeModelKey`: `.`/`_`/`:` read as `-`, trailing date stamp dropped), so `claude-sonnet-4-6` finds `anthropic/claude-sonnet-4.6` and not `claude-sonnet-4`
+- Web search is now optional. The specs search runs only when a limit is still unknown, and searches by the upstream model name (`google gemini-2.5-pro`) instead of the router's name
+- If the catalogs supply both limits, a missing default profile or a failed LLM no longer fails the run; sampling falls back to defaults
+- `?action=auto-configure` takes `baseUrl` and `apiKeyId` (strict Zod body). The profile form lists each value with its source
+
 #### Settings: Courier profiles get their own card under By provider
 
 - Courier connection profiles (`transport: 'courier'`) are now listed under their own **The Courier** card in Settings → Connections → Providers → By provider, after the API providers. Before, they were grouped by their informational `provider` field, so older ones (`OPENAI`) appeared in the OpenAI card

@@ -17,7 +17,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, conflict, successResponse } from '@/lib/api/responses';
 import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
-import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
+import { autoConfigureProfile, profileUpdateFromAutoConfigure } from '@/lib/services/auto-configure.service';
 import {
   ConnectionProfileUpdateSchema,
   applyCourierForcing,
@@ -247,23 +247,17 @@ export const POST = createContextParamsHandler<{ id: string }>(
       },
       'auto-configure': async () => {
         try {
-          // Call auto-configure service
-          const result = await autoConfigureProfile(profile.provider, profile.modelName, user.id);
-
-          // Merge result into profile
-          const existingParams = typeof profile.parameters === 'string' ? JSON.parse(profile.parameters) : (profile.parameters || {});
-          const updateData: Record<string, unknown> = {
-            maxContext: result.maxContext,
-            maxTokens: result.maxTokens,
-            modelClass: result.modelClass,
-            isDangerousCompatible: result.isDangerousCompatible,
-            parameters: {
-              ...existingParams,
-              temperature: result.temperature,
-              max_tokens: result.maxTokens,
-              top_p: result.topP,
+          const result = await autoConfigureProfile(
+            {
+              provider: profile.provider,
+              modelName: profile.modelName,
+              baseUrl: profile.baseUrl,
+              apiKeyId: profile.apiKeyId,
             },
-          };
+            user.id
+          );
+
+          const updateData = profileUpdateFromAutoConfigure(profile, result);
 
           // Update the profile
           const updatedProfile = await repos.connections.update(id, updateData);
@@ -286,6 +280,9 @@ export const POST = createContextParamsHandler<{ id: string }>(
               topP: result.topP,
               modelClass: result.modelClass,
               isDangerousCompatible: result.isDangerousCompatible,
+              supportsTools: result.supportsTools,
+              supportsImages: result.supportsImages,
+              pseudoToolMode: updateData.pseudoToolMode ?? null,
             },
           });
 

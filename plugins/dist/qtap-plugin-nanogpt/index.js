@@ -698,11 +698,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger6, logLevel) {
-  if (!logger6 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger7, logLevel) {
+  if (!logger7 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger6[fnLevel].bind(logger6);
+    return logger7[fnLevel].bind(logger7);
   }
 }
 var noopLogger = {
@@ -713,22 +713,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger6 = client.logger;
+  const logger7 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger6) {
+  if (!logger7) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger6);
+  const cachedLogger = cachedLoggers.get(logger7);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger6, logLevel),
-    warn: makeLogFn("warn", logger6, logLevel),
-    info: makeLogFn("info", logger6, logLevel),
-    debug: makeLogFn("debug", logger6, logLevel)
+    error: makeLogFn("error", logger7, logLevel),
+    warn: makeLogFn("warn", logger7, logLevel),
+    info: makeLogFn("info", logger7, logLevel),
+    debug: makeLogFn("debug", logger7, logLevel)
   };
-  cachedLoggers.set(logger6, [logLevel, levelLogger]);
+  cachedLoggers.set(logger7, [logLevel, levelLogger]);
   return levelLogger;
 }
 var sensitiveQueryNames = /* @__PURE__ */ new Set([
@@ -884,7 +884,7 @@ var Stream = class _Stream {
    */
   static fromSSEResponse(response, controller, client, synthesizeEventData, streamMode = "legacy") {
     let consumed = false;
-    const logger6 = client ? loggerFor(client) : console;
+    const logger7 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -910,8 +910,8 @@ var Stream = class _Stream {
           try {
             data = JSON.parse(sse.data);
           } catch {
-            logger6.error(`Could not parse message into JSON:`);
-            logger6.error(`From chunk:`);
+            logger7.error(`Could not parse message into JSON:`);
+            logger7.error(`From chunk:`);
             throw new SyntaxError("Error reading response: malformed server-sent event JSON.");
           }
           if (streamMode === "legacy") {
@@ -24171,23 +24171,23 @@ _a3 = OpenAI, _OpenAI_encoder = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Authe
       map.set(key, entry);
   }
   return sanitizedValue;
-}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger6) {
-  if (__classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).has(logger6))
-    return logger6;
+}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger7) {
+  if (__classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).has(logger7))
+    return logger7;
   const sanitized = new globalThis.Proxy(/* @__PURE__ */ Object.create(null), {
     get: (_facade, property) => {
-      const value = globalThis.Reflect.get(logger6, property, logger6);
+      const value = globalThis.Reflect.get(logger7, property, logger7);
       if (typeof value !== "function")
         return value;
       if (typeof property !== "string" || !["debug", "info", "warn", "error", "trace", "log"].includes(property)) {
-        return value.bind(logger6);
+        return value.bind(logger7);
       }
       return (...args) => {
         const seen = /* @__PURE__ */ new WeakMap();
-        return globalThis.Reflect.apply(value, logger6, args.map((entry) => __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
+        return globalThis.Reflect.apply(value, logger7, args.map((entry) => __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
       };
     },
-    set: (_facade, property, value) => globalThis.Reflect.set(logger6, property, value, logger6)
+    set: (_facade, property, value) => globalThis.Reflect.set(logger7, property, value, logger7)
   });
   __classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).add(sanitized);
   return sanitized;
@@ -24341,7 +24341,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger6 = {
+  const logger7 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -24373,7 +24373,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger6;
+  return logger7;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -25176,6 +25176,49 @@ var STATIC_EMBEDDING_MODELS = [
   }
 ];
 
+// model-catalog.ts
+var logger2 = createPluginLogger("qtap-plugin-nanogpt");
+function positiveNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
+function flag(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+function mapNanoGPTEntry(entry) {
+  const caps = entry.capabilities ?? void 0;
+  return {
+    id: entry.id,
+    name: entry.name || entry.id,
+    description: entry.description || void 0,
+    contextWindow: positiveNumber(entry.context_length),
+    maxOutputTokens: positiveNumber(entry.max_output_tokens),
+    supportsImages: flag(caps?.vision),
+    supportsTools: flag(caps?.tool_calling),
+    supportsThinking: flag(caps?.reasoning)
+  };
+}
+async function fetchNanoGPTModelCatalog(apiKey) {
+  const headers = { "User-Agent": getQuilltapUserAgent() };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const response = await fetch(`${NANOGPT_BASE_URL}/models?detailed=true`, { headers });
+  if (!response.ok) {
+    throw new Error(`NanoGPT model catalog request failed: HTTP ${response.status}`);
+  }
+  const payload = await response.json();
+  if (!Array.isArray(payload.data)) {
+    throw new Error("NanoGPT model catalog response had no data array");
+  }
+  const entries = payload.data.filter(
+    (entry) => typeof entry?.id === "string" && entry.available !== false
+  );
+  logger2.debug("Fetched NanoGPT model catalog", {
+    context: "fetchNanoGPTModelCatalog",
+    total: payload.data.length,
+    available: entries.length
+  });
+  return entries.map(mapNanoGPTEntry);
+}
+
 // provider.ts
 var NANOGPT_SUPPORTED_IMAGE_MIME_TYPES = [
   "image/jpeg",
@@ -25592,7 +25635,7 @@ function fitImageShape(catalog, size, aspectRatio) {
 // remote-image.ts
 var import_node_net = require("node:net");
 var import_node_dns = require("node:dns");
-var logger2 = createPluginLogger("qtap-plugin-nanogpt");
+var logger3 = createPluginLogger("qtap-plugin-nanogpt");
 var MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 var MAX_HOPS = 3;
 var TIMEOUT_MS = 6e4;
@@ -25702,7 +25745,7 @@ async function assertPublicHttps(rawUrl) {
   }
   const addresses = (0, import_node_net.isIP)(host) ? [{ address: host }] : await import_node_dns.promises.lookup(host, { all: true, verbatim: true });
   if (!addresses.length || addresses.some((a) => isNonPublicAddress(a.address))) {
-    logger2.debug("Refused non-public image host", { host });
+    logger3.debug("Refused non-public image host", { host });
     throw new Error("Image URL points at a non-public address");
   }
   return url;
@@ -25757,7 +25800,7 @@ async function downloadRemoteImage(rawUrl, label) {
 }
 
 // image-provider.ts
-var logger3 = createPluginLogger("qtap-plugin-nanogpt");
+var logger4 = createPluginLogger("qtap-plugin-nanogpt");
 var CATALOG_TTL_MS = 60 * 60 * 1e3;
 var detailedCatalog = null;
 var detailedCatalogFetchedAt = 0;
@@ -25831,7 +25874,7 @@ var NanoGPTImageProvider = class {
     const sizeCatalog = (await this.catalogEntryFor(model, apiKey))?.supported_parameters;
     const shape = fitImageShape(sizeCatalog, params.size, params.aspectRatio);
     if (shape.adjusted) {
-      logger3.debug("Fitted the requested image shape to the model", {
+      logger4.debug("Fitted the requested image shape to the model", {
         context: "NanoGPTImageProvider.generateImage",
         model,
         requestedSize: params.size,
@@ -25861,7 +25904,7 @@ var NanoGPTImageProvider = class {
     }
     const passthroughKeys = applyPassthroughParameters(extraBody, params.profileParameters);
     const applied = applyLoras(extraBody, model, params.loras, params.profileParameters);
-    logger3.debug("Posting NanoGPT image request", {
+    logger4.debug("Posting NanoGPT image request", {
       context: "NanoGPTImageProvider.generateImage",
       model,
       size: requestParams.size,
@@ -25879,7 +25922,7 @@ var NanoGPTImageProvider = class {
       } catch (error) {
         const square = isNonSquare(requestParams.size, extraBody.aspect_ratio) && isShapeFailure(error) ? fitImageShape(sizeCatalog, "1024x1024", void 0) : null;
         if (!square) throw error;
-        logger3.warn("NanoGPT turned down a non-square image; retrying once as a square", {
+        logger4.warn("NanoGPT turned down a non-square image; retrying once as a square", {
           context: "NanoGPTImageProvider.generateImage",
           model,
           size: requestParams.size,
@@ -25897,7 +25940,7 @@ var NanoGPTImageProvider = class {
         response = await client.images.generate(requestParams);
       }
     } catch (error) {
-      logger3.error("NanoGPT image request failed", {
+      logger4.error("NanoGPT image request failed", {
         context: "NanoGPTImageProvider.generateImage",
         model,
         size: requestParams.size,
@@ -25912,7 +25955,7 @@ var NanoGPTImageProvider = class {
       throw error;
     }
     if (!("data" in response) || !response.data || !Array.isArray(response.data)) {
-      logger3.error("Invalid response from NanoGPT Images API", {
+      logger4.error("Invalid response from NanoGPT Images API", {
         context: "NanoGPTImageProvider.generateImage"
       });
       throw new Error("Invalid response from NanoGPT Images API");
@@ -25968,7 +26011,7 @@ var NanoGPTImageProvider = class {
     );
     for (const id of STATIC_IMAGE_MODEL_IDS) merged.add(id);
     const imageModels = Array.from(merged).sort();
-    logger3.debug("Discovered NanoGPT image-generation models", {
+    logger4.debug("Discovered NanoGPT image-generation models", {
       context: "NanoGPTImageProvider.getAvailableModels",
       count: imageModels.length
     });
@@ -25984,7 +26027,7 @@ var NanoGPTImageProvider = class {
       try {
         await this.fetchDetailedCatalog(apiKey);
       } catch (error) {
-        logger3.warn("Could not refresh the NanoGPT image catalog; posting the size as asked", {
+        logger4.warn("Could not refresh the NanoGPT image catalog; posting the size as asked", {
           context: "NanoGPTImageProvider.catalogEntryFor",
           model,
           error: error instanceof Error ? error.message : String(error)
@@ -26015,7 +26058,7 @@ var NanoGPTImageProvider = class {
     const entries = Array.isArray(payload.data) ? payload.data : [];
     detailedCatalog = new Map(entries.map((entry) => [entry.id, entry]));
     detailedCatalogFetchedAt = Date.now();
-    logger3.debug("Cached the detailed NanoGPT image catalog", {
+    logger4.debug("Cached the detailed NanoGPT image catalog", {
       context: "NanoGPTImageProvider.fetchDetailedCatalog",
       count: entries.length,
       loraTagged: entries.filter((e) => e.tags?.includes("lora")).length
@@ -26123,7 +26166,7 @@ function getNanoGPTImageOptionsSchema(model) {
 }
 
 // embedding-provider.ts
-var logger4 = createPluginLogger("qtap-plugin-nanogpt");
+var logger5 = createPluginLogger("qtap-plugin-nanogpt");
 var NanoGPTEmbeddingProvider = class {
   constructor(baseUrl) {
     this.baseUrl = baseUrl || NANOGPT_BASE_URL;
@@ -26157,7 +26200,7 @@ var NanoGPTEmbeddingProvider = class {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const errorMessage = error.error?.message || response.statusText;
-      logger4.error("NanoGPT embedding failed", {
+      logger5.error("NanoGPT embedding failed", {
         context: "NanoGPTEmbeddingProvider.generateEmbedding",
         status: response.status,
         error: errorMessage
@@ -26205,7 +26248,7 @@ var NanoGPTEmbeddingProvider = class {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const errorMessage = error.error?.message || response.statusText;
-      logger4.error("NanoGPT batch embedding failed", {
+      logger5.error("NanoGPT batch embedding failed", {
         context: "NanoGPTEmbeddingProvider.generateBatchEmbeddings",
         status: response.status,
         error: errorMessage
@@ -26249,7 +26292,7 @@ var NanoGPTEmbeddingProvider = class {
       const models = Array.isArray(data.data) ? data.data.map((m) => m.id) : [];
       return models.length > 0 ? models : STATIC_EMBEDDING_MODELS.map((m) => m.id);
     } catch (error) {
-      logger4.error("Failed to fetch NanoGPT embedding models", {
+      logger5.error("Failed to fetch NanoGPT embedding models", {
         context: "NanoGPTEmbeddingProvider.getAvailableModels"
       }, error instanceof Error ? error : void 0);
       return STATIC_EMBEDDING_MODELS.map((m) => m.id);
@@ -26600,7 +26643,7 @@ function stripAllXMLToolMarkers(response) {
 }
 
 // index.ts
-var logger5 = createPluginLogger("qtap-plugin-nanogpt");
+var logger6 = createPluginLogger("qtap-plugin-nanogpt");
 var NANOGPT_IMAGE_CONSTRAINTS = {
   maxImagesPerRequest: 1,
   supportedSizes: [
@@ -26769,7 +26812,7 @@ var plugin = {
       for (const id of STATIC_IMAGE_MODEL_IDS) merged.delete(id);
       return Array.from(merged).sort();
     } catch (error) {
-      logger5.error(
+      logger6.error(
         "Failed to fetch NanoGPT models",
         { context: "plugin.getAvailableModels" },
         error instanceof Error ? error : void 0
@@ -26777,12 +26820,21 @@ var plugin = {
       return [...STATIC_MODEL_IDS].sort();
     }
   },
+  getModelCatalog: async (apiKey, _baseUrl) => {
+    logger6.debug("Fetching NanoGPT model catalog", { context: "plugin.getModelCatalog" });
+    const catalog = await fetchNanoGPTModelCatalog(apiKey);
+    logger6.debug("NanoGPT model catalog ready", {
+      context: "plugin.getModelCatalog",
+      count: catalog.length
+    });
+    return catalog;
+  },
   validateApiKey: async (apiKey, _baseUrl) => {
     try {
       const provider = new NanoGPTProvider();
       return await provider.validateApiKey(apiKey);
     } catch (error) {
-      logger5.error(
+      logger6.error(
         "Error validating NanoGPT API key",
         { context: "plugin.validateApiKey" },
         error instanceof Error ? error : void 0
@@ -26818,14 +26870,14 @@ var plugin = {
       const formatted = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger5.warn("Skipping tool with invalid format", { context: "plugin.formatTools" });
+          logger6.warn("Skipping tool with invalid format", { context: "plugin.formatTools" });
           continue;
         }
         formatted.push(tool);
       }
       return formatted;
     } catch (error) {
-      logger5.error(
+      logger6.error(
         "Error formatting tools for NanoGPT",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -26837,7 +26889,7 @@ var plugin = {
     try {
       return parseOpenAIToolCalls(response);
     } catch (error) {
-      logger5.error(
+      logger6.error(
         "Error parsing tool calls from NanoGPT response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0
@@ -26852,7 +26904,7 @@ var plugin = {
     try {
       return parseAllXMLAsToolCalls(text);
     } catch (error) {
-      logger5.error(
+      logger6.error(
         "Error parsing text tool calls",
         { context: "nanogpt.parseTextToolCalls" },
         error instanceof Error ? error : void 0

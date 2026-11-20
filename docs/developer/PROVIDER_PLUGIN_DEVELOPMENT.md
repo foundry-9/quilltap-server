@@ -411,6 +411,25 @@ export const plugin: LLMProviderPlugin = {
     },
   ],
 
+  // Optional (plugin-types 2.13+): the provider's live, detailed catalog.
+  // Connection-profile Auto-Configure reads it first, with the profile's own
+  // key and base URL, and treats every stated field as authoritative for this
+  // provider's route — so leave a field undefined unless the provider itself
+  // says it. Throw on an auth or network failure; the host caches the result.
+  getModelCatalog: async (apiKey, baseUrl) => {
+    const res = await fetch(`${baseUrl ?? 'https://api.myai.example'}/v1/models`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!res.ok) throw new Error(`MyAI models request failed: ${res.status}`);
+    const { data } = await res.json();
+    return data.map((m: { id: string; context_length?: number; tools?: boolean }) => ({
+      id: m.id,
+      name: m.id,
+      contextWindow: m.context_length,
+      supportsTools: m.tools,
+    }));
+  },
+
   // Provider icon (SVG data - no React required)
   icon: {
     viewBox: '0 0 24 24',
@@ -1264,6 +1283,7 @@ interface LLMProviderPlugin {
 
   // Optional info methods
   getModelInfo?(): ModelInfo[];
+  getModelCatalog?(apiKey: string, baseUrl?: string): Promise<ModelInfo[]>;
   getEmbeddingModels?(): EmbeddingModelInfo[];
   getImageGenerationModels?(): ImageGenerationModelInfo[];
   getImageProviderConstraints?(): ImageProviderConstraints;

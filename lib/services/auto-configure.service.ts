@@ -1,14 +1,21 @@
 /**
  * Auto-Configure Service
  *
- * Uses web search and LLM analysis to automatically determine optimal
- * settings for a connection profile based on the provider and model name.
+ * Fills in a connection profile's settings for a provider and model, taking
+ * known quantities from structured sources first and asking an LLM only for
+ * what those cannot answer.
  *
  * Flow:
- * 1. Run parallel web searches for model specs and recommended settings
- * 2. Send search results to the default (high-capability) LLM for analysis
- * 3. If the response doesn't parse, send to a cheap LLM for JSON cleanup
- * 4. Validate and return the structured result
+ * 1. Gather facts from `lookupModelFacts` (`lib/llm/model-catalog.ts`): the
+ *    provider's live catalog, the plugin's model table, OpenRouter's public
+ *    catalog. These settle context, output, tool and image support where
+ *    stated, and are never overruled by the LLM.
+ * 2. Web-search (when configured) for whatever the facts leave open — limits
+ *    only if unknown, sampling settings always — by the upstream model's name.
+ * 3. Ask the default (high-capability) LLM for the rest; a cheap LLM repairs
+ *    unparseable JSON.
+ * 4. Merge, derive the model class from the final limits, and report the
+ *    source of every field.
  *
  * @module services/auto-configure
  */
@@ -19,12 +26,36 @@ import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler'
 import { createLLMProvider } from '@/lib/llm'
 import { parseLLMJson } from '@/lib/llm/llm-json'
 import { getCheapLLMProvider, profileParams } from '@/lib/llm/cheap-llm'
-import { MODEL_CLASSES, isValidModelClassName } from '@/lib/llm/model-classes'
+import { MODEL_CLASSES } from '@/lib/llm/model-classes'
+import { lookupModelFacts, type ModelFacts, type ModelFactSource } from '@/lib/llm/model-catalog'
+import { getProviderMetadata } from '@/lib/plugins/provider-registry'
 import { getUserRepositories } from '@/lib/repositories/user-scoped'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { logger } from '@/lib/logger'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { ConnectionProfile } from '@/lib/schemas/types'
+
+/** The fields Auto-Configure sets, each reported with its source. */
+export type AutoConfigureField =
+  | 'maxContext'
+  | 'maxTokens'
+  | 'temperature'
+  | 'topP'
+  | 'isDangerousCompatible'
+  | 'modelClass'
+  | 'supportsTools'
+  | 'supportsImages'
+
+/**
+ * What to configure: the profile's provider and model, plus the route it
+ * reaches them by (base URL and key), which decides what its catalog says.
+ */
+export interface AutoConfigureTarget {
+  provider: string
+  modelName: string
+  baseUrl?: string | null
+  apiKeyId?: string | null
+}
 
 /**
  * Result of auto-configuration analysis
@@ -40,10 +71,67 @@ export interface AutoConfigureResult {
   topP: number
   /** Whether this model is known to be uncensored / unmoderated */
   isDangerousCompatible: boolean
-  /** Recommended model class tier name */
+  /** Recommended model class tier name, derived from the limits */
   modelClass: string
+  /** Native tool calling on this route: true / false when a catalog says, null when unknown */
+  supportsTools: boolean | null
+  /** Image input on this route: true / false when a catalog says, null when unknown */
+  supportsImages: boolean | null
+  /**
+   * A tool-mode recommendation: 'simple-json' when the route is known to lack
+   * native tool calling, otherwise null (leave the profile's mode alone).
+   */
+  pseudoToolMode: 'simple-json' | null
+  /** Where each field came from */
+  fieldSources: Record<AutoConfigureField, ModelFactSource>
   /** Source URLs used for the analysis */
   searchSources: string[]
+  /** Why the provider's live catalog could not be read, when it was tried and failed */
+  catalogError?: string
+}
+
+/** The LLM's half of the answer, before facts are laid over it. */
+interface EstimatedSettings {
+  maxContext: number
+  maxTokens: number
+  temperature: number
+  topP: number
+  isDangerousCompatible: boolean
+}
+
+const ESTIMATED: ModelFactSource = { kind: 'estimated', label: 'estimated from web search and model knowledge' }
+const DEFAULTED: ModelFactSource = { kind: 'default', label: 'default (nothing better was available)' }
+const DERIVED: ModelFactSource = { kind: 'derived', label: 'derived from the context and output limits' }
+
+/**
+ * The model class whose limits fit: the smallest tier holding both the
+ * context window and the output limit, rounding up; the largest tier when
+ * nothing holds them.
+ */
+export function deriveModelClass(maxContext: number, maxTokens: number): string {
+  const ordered = [...MODEL_CLASSES].sort((a, b) => a.quality - b.quality)
+  const fit = ordered.find(mc => maxContext <= mc.maxContext && maxTokens <= mc.maxOutput)
+  return (fit ?? ordered[ordered.length - 1]).name
+}
+
+/**
+ * The upstream model's name for searching: an aggregator's `vendor/model`
+ * id names the vendor itself; a direct provider's bare id is qualified by
+ * the provider's name.
+ */
+function searchSubject(provider: string, modelName: string): string {
+  if (modelName.includes('/')) {
+    return modelName.replace(/\//g, ' ').replace(/:/g, ' ').trim()
+  }
+  const displayName = getProviderMetadata(provider)?.displayName ?? provider
+  return `${displayName} ${modelName}`
+}
+
+function describeKnownFacts(facts: ModelFacts): string {
+  const lines: string[] = []
+  if (facts.maxContext !== undefined) lines.push(`- maxContext: ${facts.maxContext} (from ${facts.sources.maxContext?.label})`)
+  if (facts.maxTokens !== undefined) lines.push(`- maxTokens: ${facts.maxTokens} (from ${facts.sources.maxTokens?.label})`)
+  return lines.length > 0 ? lines.join('\n') : '(none — estimate every field)'
 }
 
 /**
@@ -60,14 +148,12 @@ The JSON object must have exactly these fields:
   "maxTokens": <number - maximum output/completion tokens>,
   "temperature": <number - recommended temperature between 0 and 2, optimized for creative writing and roleplay>,
   "topP": <number - recommended top_p between 0 and 1, optimized for creative writing and roleplay>,
-  "isDangerousCompatible": <boolean - true if the model is known to be uncensored, unmoderated, or explicitly designed without content filters>,
-  "modelClass": <string - one of: "Compact", "Standard", "Extended", "Deep">
+  "isDangerousCompatible": <boolean - true if the model is known to be uncensored, unmoderated, or explicitly designed without content filters>
 }
 
-For modelClass, use these tier definitions to classify the model:
-${MODEL_CLASSES.map(mc => `- ${mc.name} (Tier ${mc.tier}): maxContext <= ${mc.maxContext.toLocaleString()}, maxOutput <= ${mc.maxOutput.toLocaleString()}, quality ${mc.quality}`).join('\n')}
+Some fields may be given to you as known facts, read from the provider's own catalog. Repeat those values exactly; do not second-guess them.
 
-Choose the tier whose context and output limits best fit the model's actual capabilities. If between tiers, round up.
+The model may be reached through an aggregator or a router (the "Provider" below) rather than its maker. Specifications in search results usually describe the maker's own API; where they conflict with a known fact, the fact wins.
 
 For temperature and topP, optimize for creative writing, storytelling, and roleplay — the primary use case is an AI writing assistant. Prefer settings that produce varied, engaging prose without being incoherent.
 
@@ -80,17 +166,21 @@ If you cannot determine a value from the search results, use reasonable defaults
 function buildUserPrompt(
   provider: string,
   modelName: string,
-  specsSearchResults: string,
+  facts: ModelFacts,
+  specsSearchResults: string | null,
   settingsSearchResults: string
 ): string {
+  const specsSection = specsSearchResults === null
+    ? ''
+    : `\n## Search Results: Model Specifications\n${specsSearchResults}\n`
   return `Analyze the following model and determine its optimal configuration:
 
 Provider: ${provider}
 Model: ${modelName}
 
-## Search Results: Model Specifications
-${specsSearchResults}
-
+## Known facts (authoritative)
+${describeKnownFacts(facts)}
+${specsSection}
 ## Search Results: Recommended Settings
 ${settingsSearchResults}
 
@@ -98,21 +188,16 @@ Respond with the JSON object only.`
 }
 
 /**
- * Validate and clamp the auto-configure result to safe ranges
+ * Validate and clamp the LLM's estimate to safe ranges
  */
-function validateResult(raw: Record<string, unknown>): AutoConfigureResult {
+function validateResult(raw: Record<string, unknown>): EstimatedSettings {
   const maxContext = Math.max(1, Math.round(Number(raw.maxContext) || 4096))
   const maxTokens = Math.max(1, Math.round(Number(raw.maxTokens) || 4096))
   const temperature = Math.min(2, Math.max(0, Number(raw.temperature) || 0.7))
   const topP = Math.min(1, Math.max(0, Number(raw.topP) || 1))
   const isDangerousCompatible = Boolean(raw.isDangerousCompatible)
 
-  let modelClass = String(raw.modelClass || 'Standard')
-  if (!isValidModelClassName(modelClass)) {
-    modelClass = 'Standard'
-  }
-
-  return { maxContext, maxTokens, temperature, topP, isDangerousCompatible, modelClass, searchSources: [] }
+  return { maxContext, maxTokens, temperature, topP, isDangerousCompatible }
 }
 
 /**
@@ -180,7 +265,7 @@ async function cleanupWithCheapLLM(
   currentProfile: ConnectionProfile,
   allProfiles: ConnectionProfile[],
   userId: string
-): Promise<AutoConfigureResult> {
+): Promise<EstimatedSettings> {
   logger.info('[Auto-Configure] Primary parse failed, attempting cheap LLM cleanup', {
     responsePreview: rawResponse.substring(0, 200),
   })
@@ -201,7 +286,7 @@ async function cleanupWithCheapLLM(
   const cleanupMessages: LLMMessage[] = [
     {
       role: 'system',
-      content: 'You are a JSON repair assistant. Extract and return ONLY a valid JSON object from the following text. The JSON must have these fields: maxContext (number), maxTokens (number), temperature (number), topP (number), isDangerousCompatible (boolean), modelClass (string). Return the JSON object only, no markdown or explanation.',
+      content: 'You are a JSON repair assistant. Extract and return ONLY a valid JSON object from the following text. The JSON must have these fields: maxContext (number), maxTokens (number), temperature (number), topP (number), isDangerousCompatible (boolean). Return the JSON object only, no markdown or explanation.',
     },
     {
       role: 'user',
@@ -249,7 +334,7 @@ async function analyzeWithProfile(
   messages: LLMMessage[],
   userId: string,
   allProfiles: ConnectionProfile[]
-): Promise<AutoConfigureResult> {
+): Promise<EstimatedSettings> {
   const apiKey = await getApiKey(profile, userId)
   const llmProvider = await createLLMProvider(profile.provider, profile.baseUrl ?? undefined)
 
@@ -300,80 +385,42 @@ async function analyzeWithProfile(
 }
 
 /**
- * Auto-configure a connection profile by searching for model specifications
- * and using an LLM to analyze the results.
- *
- * @param provider - The LLM provider name (e.g., 'ANTHROPIC', 'OPENAI')
- * @param modelName - The model identifier (e.g., 'claude-sonnet-4-5-20250929')
- * @param userId - The authenticated user's ID
- * @returns Recommended settings for the connection profile
+ * The decrypted key a target reaches its provider with, or '' when it has
+ * none (keyless providers, a new profile with no key chosen yet, a key that
+ * no longer resolves). A missing key only costs the live catalog.
  */
-export async function autoConfigureProfile(
-  provider: string,
-  modelName: string,
-  userId: string
-): Promise<AutoConfigureResult> {
-  logger.info('[Auto-Configure] Starting auto-configuration', { provider, modelName, userId })
-
-  // Verify web search is available
-  if (!(await isWebSearchConfigured(userId))) {
-    throw new Error('Web search is not configured. Please add a search provider API key in Settings to use Auto-Configure.')
+async function resolveTargetApiKey(target: AutoConfigureTarget, userId: string): Promise<string> {
+  if (!target.apiKeyId) return ''
+  try {
+    const key = await getUserRepositories(userId).connections.findApiKeyById(target.apiKeyId)
+    return key?.key_value ?? ''
+  } catch (error) {
+    logger.warn('[Auto-Configure] Could not read the target profile\'s API key; skipping its live catalog', {
+      provider: target.provider,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return ''
   }
+}
 
+/**
+ * Ask the analysis LLMs for an estimate, trying the default profile and then
+ * one profile per other provider. Returns null (with the reasons logged) when
+ * no profile is configured or every candidate fails.
+ */
+async function estimateWithLLM(
+  messages: LLMMessage[],
+  userId: string
+): Promise<{ estimate: EstimatedSettings | null; failures: string[] }> {
   const repos = getUserRepositories(userId)
-
-  // Find the default (high-capability) profile for analysis
   const defaultProfile = await repos.connections.findDefault()
   if (!defaultProfile) {
-    throw new Error('No default connection profile configured. Please set a default profile before using Auto-Configure.')
+    return { estimate: null, failures: ['No default connection profile configured.'] }
   }
 
-  // Run two web searches in parallel
-  const searchContext = { userId }
-  const [specsSearch, settingsSearch] = await Promise.all([
-    executeWebSearchTool(
-      { query: `${provider} ${modelName} maximum context window output tokens specifications`, maxResults: 5 },
-      searchContext
-    ),
-    executeWebSearchTool(
-      { query: `${provider} ${modelName} recommended temperature top_p settings creative writing`, maxResults: 5 },
-      searchContext
-    ),
-  ])
-
-  // Collect source URLs for attribution
-  const searchSources: string[] = []
-  if (specsSearch.success && specsSearch.results) {
-    searchSources.push(...specsSearch.results.map(r => r.url).filter(Boolean))
-  }
-  if (settingsSearch.success && settingsSearch.results) {
-    searchSources.push(...settingsSearch.results.map(r => r.url).filter(Boolean))
-  }
-
-  // Format search results for the prompt
-  const specsFormatted = specsSearch.success && specsSearch.results
-    ? formatWebSearchResults(specsSearch.results)
-    : 'No search results found for model specifications.'
-  const settingsFormatted = settingsSearch.success && settingsSearch.results
-    ? formatWebSearchResults(settingsSearch.results)
-    : 'No search results found for recommended settings.'
-
-  // Build the analysis prompt
-  const systemPrompt = buildSystemPrompt()
-  const userPrompt = buildUserPrompt(provider, modelName, specsFormatted, settingsFormatted)
-
-  const messages: LLMMessage[] = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
-  ]
-
-  // Build the ordered list of candidate profiles to try. Fall back through
-  // other providers when the current one fails (quota, auth, network, etc.).
   const allProfiles = await repos.connections.findAll()
   const candidates = pickAutoConfigureCandidates(allProfiles, defaultProfile)
-
-  let result: AutoConfigureResult | undefined
-  const attempts: Array<{ provider: string; modelName: string; error: string }> = []
+  const failures: string[] = []
 
   for (const candidate of candidates) {
     try {
@@ -382,17 +429,17 @@ export async function autoConfigureProfile(
         modelName: candidate.modelName,
         isDefault: candidate.id === defaultProfile.id,
       })
-      result = await analyzeWithProfile(candidate, messages, userId, allProfiles)
+      const estimate = await analyzeWithProfile(candidate, messages, userId, allProfiles)
       if (candidate.id !== defaultProfile.id) {
         logger.info('[Auto-Configure] Default profile failed, succeeded with fallback', {
           fallbackProvider: candidate.provider,
           fallbackModel: candidate.modelName,
         })
       }
-      break
+      return { estimate, failures }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      attempts.push({ provider: candidate.provider, modelName: candidate.modelName, error: message })
+      failures.push(`${candidate.provider} (${candidate.modelName}): ${message}`)
       logger.warn('[Auto-Configure] Candidate failed, trying next', {
         provider: candidate.provider,
         modelName: candidate.modelName,
@@ -401,25 +448,185 @@ export async function autoConfigureProfile(
     }
   }
 
-  if (!result) {
-    const summary = attempts.map(a => `${a.provider} (${a.modelName}): ${a.error}`).join('; ')
-    throw new Error(`Auto-configure failed on all ${attempts.length} candidate provider(s). ${summary}`)
+  return { estimate: null, failures }
+}
+
+/**
+ * Auto-configure a connection profile: known facts first, web search and an
+ * LLM for the rest.
+ *
+ * Throws only when neither the facts nor any LLM could supply the context and
+ * output limits; sampling settings fall back to defaults when no LLM answers.
+ *
+ * @param target - The profile's provider, model, base URL and key
+ * @param userId - The authenticated user's ID
+ * @returns Recommended settings for the connection profile, with sources
+ */
+export async function autoConfigureProfile(
+  target: AutoConfigureTarget,
+  userId: string
+): Promise<AutoConfigureResult> {
+  const { provider, modelName } = target
+  const baseUrl = target.baseUrl || undefined
+  logger.info('[Auto-Configure] Starting auto-configuration', { provider, modelName, hasBaseUrl: !!baseUrl, userId })
+
+  // 1. Known facts.
+  const apiKey = await resolveTargetApiKey(target, userId)
+  const facts = await lookupModelFacts({ provider, modelName, apiKey, baseUrl })
+  const limitsKnown = facts.maxContext !== undefined && facts.maxTokens !== undefined
+
+  // 2. Web search for what the facts leave open.
+  const searchSources: string[] = []
+  let specsFormatted: string | null = null
+  let settingsFormatted = 'Web search is not configured; rely on common knowledge of the model.'
+
+  if (await isWebSearchConfigured(userId)) {
+    const subject = searchSubject(provider, modelName)
+    const searchContext = { userId }
+    const [specsSearch, settingsSearch] = await Promise.all([
+      limitsKnown
+        ? Promise.resolve(null)
+        : executeWebSearchTool(
+            { query: `${subject} context window maximum output tokens specifications`, maxResults: 5 },
+            searchContext
+          ),
+      executeWebSearchTool(
+        { query: `${subject} recommended temperature top_p settings creative writing`, maxResults: 5 },
+        searchContext
+      ),
+    ])
+
+    if (specsSearch?.success && specsSearch.results) {
+      searchSources.push(...specsSearch.results.map(r => r.url).filter(Boolean))
+    }
+    if (settingsSearch.success && settingsSearch.results) {
+      searchSources.push(...settingsSearch.results.map(r => r.url).filter(Boolean))
+    }
+
+    if (specsSearch) {
+      specsFormatted = specsSearch.success && specsSearch.results
+        ? formatWebSearchResults(specsSearch.results)
+        : 'No search results found for model specifications.'
+    }
+    settingsFormatted = settingsSearch.success && settingsSearch.results
+      ? formatWebSearchResults(settingsSearch.results)
+      : 'No search results found for recommended settings.'
+  } else {
+    logger.info('[Auto-Configure] Web search not configured; using catalog facts and model knowledge only', {
+      provider,
+      modelName,
+    })
   }
 
-  result.searchSources = searchSources
+  // 3. The LLM's estimate.
+  const messages: LLMMessage[] = [
+    { role: 'system', content: buildSystemPrompt() },
+    { role: 'user', content: buildUserPrompt(provider, modelName, facts, specsFormatted, settingsFormatted) },
+  ]
+  const { estimate, failures } = await estimateWithLLM(messages, userId)
+
+  if (!estimate && !limitsKnown) {
+    throw new Error(
+      `Auto-configure could not find this model's limits in any catalog, and no LLM could estimate them. ${failures.join('; ')}`
+    )
+  }
+
+  // 4. Merge: facts outrank the estimate; the class follows the limits.
+  const fieldSources = {} as Record<AutoConfigureField, ModelFactSource>
+  const pick = <T>(field: AutoConfigureField, fact: T | undefined, estimated: T | undefined, fallback: T): T => {
+    if (fact !== undefined) {
+      fieldSources[field] = facts.sources[field as keyof ModelFacts['sources']] ?? ESTIMATED
+      return fact
+    }
+    if (estimated !== undefined) {
+      fieldSources[field] = ESTIMATED
+      return estimated
+    }
+    fieldSources[field] = DEFAULTED
+    return fallback
+  }
+
+  const maxContext = pick('maxContext', facts.maxContext, estimate?.maxContext, 4096)
+  let maxTokens = pick('maxTokens', facts.maxTokens, estimate?.maxTokens, 4096)
+  if (maxTokens > maxContext) maxTokens = maxContext
+  const temperature = pick('temperature', undefined, estimate?.temperature, 0.7)
+  const topP = pick('topP', undefined, estimate?.topP, 1)
+  const isDangerousCompatible = pick('isDangerousCompatible', undefined, estimate?.isDangerousCompatible, false)
+
+  const modelClass = deriveModelClass(maxContext, maxTokens)
+  fieldSources.modelClass = DERIVED
+
+  const supportsTools = facts.supportsTools ?? null
+  fieldSources.supportsTools = facts.sources.supportsTools ?? { kind: 'default', label: 'unknown — no catalog states it' }
+  const supportsImages = facts.supportsImages ?? null
+  fieldSources.supportsImages = facts.sources.supportsImages ?? { kind: 'default', label: 'unknown — no catalog states it' }
+
+  const result: AutoConfigureResult = {
+    maxContext,
+    maxTokens,
+    temperature,
+    topP,
+    isDangerousCompatible,
+    modelClass,
+    supportsTools,
+    supportsImages,
+    pseudoToolMode: supportsTools === false ? 'simple-json' : null,
+    fieldSources,
+    searchSources,
+    ...(facts.catalogError ? { catalogError: facts.catalogError } : {}),
+  }
 
   logger.info('[Auto-Configure] Auto-configuration complete', {
     provider,
     modelName,
+    usedLLM: !!estimate,
     result: {
-      maxContext: result.maxContext,
-      maxTokens: result.maxTokens,
-      temperature: result.temperature,
-      topP: result.topP,
-      modelClass: result.modelClass,
-      isDangerousCompatible: result.isDangerousCompatible,
+      maxContext,
+      maxTokens,
+      temperature,
+      topP,
+      modelClass,
+      isDangerousCompatible,
+      supportsTools,
+      supportsImages,
     },
+    sources: Object.fromEntries(Object.entries(fieldSources).map(([k, v]) => [k, v.kind])),
   })
 
   return result
+}
+
+/**
+ * The profile changes an Auto-Configure result implies, for a stored
+ * profile. Tool mode moves only toward simple-json, and only from 'auto' or
+ * 'native' — a mode the operator picked by hand for a flaky route is kept.
+ * Image support is written only when a catalog states it.
+ */
+export function profileUpdateFromAutoConfigure(
+  profile: Pick<ConnectionProfile, 'parameters' | 'pseudoToolMode'>,
+  result: AutoConfigureResult
+): Record<string, unknown> {
+  const existingParams = typeof profile.parameters === 'string'
+    ? JSON.parse(profile.parameters)
+    : (profile.parameters || {})
+  const update: Record<string, unknown> = {
+    maxContext: result.maxContext,
+    maxTokens: result.maxTokens,
+    modelClass: result.modelClass,
+    isDangerousCompatible: result.isDangerousCompatible,
+    parameters: {
+      ...existingParams,
+      temperature: result.temperature,
+      max_tokens: result.maxTokens,
+      top_p: result.topP,
+    },
+  }
+  if (result.supportsImages !== null) {
+    update.supportsImageUpload = result.supportsImages
+  }
+  const currentMode = profile.pseudoToolMode ?? 'auto'
+  if (result.pseudoToolMode === 'simple-json' && (currentMode === 'auto' || currentMode === 'native')) {
+    update.pseudoToolMode = 'simple-json'
+  }
+  return update
 }

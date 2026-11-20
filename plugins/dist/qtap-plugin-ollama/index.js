@@ -698,11 +698,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger4, logLevel) {
-  if (!logger4 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger5, logLevel) {
+  if (!logger5 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger4[fnLevel].bind(logger4);
+    return logger5[fnLevel].bind(logger5);
   }
 }
 var noopLogger = {
@@ -713,22 +713,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger4 = client.logger;
+  const logger5 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger4) {
+  if (!logger5) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger4);
+  const cachedLogger = cachedLoggers.get(logger5);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger4, logLevel),
-    warn: makeLogFn("warn", logger4, logLevel),
-    info: makeLogFn("info", logger4, logLevel),
-    debug: makeLogFn("debug", logger4, logLevel)
+    error: makeLogFn("error", logger5, logLevel),
+    warn: makeLogFn("warn", logger5, logLevel),
+    info: makeLogFn("info", logger5, logLevel),
+    debug: makeLogFn("debug", logger5, logLevel)
   };
-  cachedLoggers.set(logger4, [logLevel, levelLogger]);
+  cachedLoggers.set(logger5, [logLevel, levelLogger]);
   return levelLogger;
 }
 var sensitiveQueryNames = /* @__PURE__ */ new Set([
@@ -884,7 +884,7 @@ var Stream = class _Stream {
    */
   static fromSSEResponse(response, controller, client, synthesizeEventData, streamMode = "legacy") {
     let consumed = false;
-    const logger4 = client ? loggerFor(client) : console;
+    const logger5 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -910,8 +910,8 @@ var Stream = class _Stream {
           try {
             data = JSON.parse(sse.data);
           } catch {
-            logger4.error(`Could not parse message into JSON:`);
-            logger4.error(`From chunk:`);
+            logger5.error(`Could not parse message into JSON:`);
+            logger5.error(`From chunk:`);
             throw new SyntaxError("Error reading response: malformed server-sent event JSON.");
           }
           if (streamMode === "legacy") {
@@ -24171,23 +24171,23 @@ _a3 = OpenAI, _OpenAI_encoder = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Authe
       map.set(key, entry);
   }
   return sanitizedValue;
-}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger4) {
-  if (__classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).has(logger4))
-    return logger4;
+}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger5) {
+  if (__classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).has(logger5))
+    return logger5;
   const sanitized = new globalThis.Proxy(/* @__PURE__ */ Object.create(null), {
     get: (_facade, property) => {
-      const value = globalThis.Reflect.get(logger4, property, logger4);
+      const value = globalThis.Reflect.get(logger5, property, logger5);
       if (typeof value !== "function")
         return value;
       if (typeof property !== "string" || !["debug", "info", "warn", "error", "trace", "log"].includes(property)) {
-        return value.bind(logger4);
+        return value.bind(logger5);
       }
       return (...args) => {
         const seen = /* @__PURE__ */ new WeakMap();
-        return globalThis.Reflect.apply(value, logger4, args.map((entry) => __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
+        return globalThis.Reflect.apply(value, logger5, args.map((entry) => __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
       };
     },
-    set: (_facade, property, value) => globalThis.Reflect.set(logger4, property, value, logger4)
+    set: (_facade, property, value) => globalThis.Reflect.set(logger5, property, value, logger5)
   });
   __classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).add(sanitized);
   return sanitized;
@@ -24341,7 +24341,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger4 = {
+  const logger5 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -24373,7 +24373,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger4;
+  return logger5;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -24992,8 +24992,66 @@ var OllamaProvider = class {
   }
 };
 
-// embedding-provider.ts
+// model-catalog.ts
 var logger2 = createPluginLogger("qtap-plugin-ollama");
+var SHOW_CONCURRENCY = 4;
+function contextLengthOf(modelInfo) {
+  if (!modelInfo) return void 0;
+  const arch = modelInfo["general.architecture"];
+  if (typeof arch !== "string" || !arch) return void 0;
+  const value = modelInfo[`${arch}.context_length`];
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
+async function showModel(baseUrl, name) {
+  const response = await fetch(`${baseUrl}/api/show`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "User-Agent": getQuilltapUserAgent() },
+    body: JSON.stringify({ model: name })
+  });
+  if (!response.ok) {
+    throw new Error(`Ollama /api/show failed for ${name}: ${response.status}`);
+  }
+  const data = await response.json();
+  const caps = Array.isArray(data.capabilities) ? data.capabilities : void 0;
+  if (caps && caps.includes("embedding") && !caps.includes("completion")) {
+    logger2.debug("Skipping embedding-only model", { context: "getModelCatalog", model: name });
+    return null;
+  }
+  const info = { id: name, name, contextWindow: contextLengthOf(data.model_info) };
+  if (caps) {
+    info.supportsTools = caps.includes("tools");
+    info.supportsImages = caps.includes("vision");
+    info.supportsThinking = caps.includes("thinking");
+  }
+  return info;
+}
+async function fetchOllamaModelCatalog(baseUrl) {
+  const tagsResponse = await fetch(`${baseUrl}/api/tags`, {
+    method: "GET",
+    headers: { "User-Agent": getQuilltapUserAgent() }
+  });
+  if (!tagsResponse.ok) {
+    logger2.error("Ollama model catalog listing failed", { context: "getModelCatalog", baseUrl, status: tagsResponse.status });
+    throw new Error(`Ollama /api/tags failed: ${tagsResponse.status}`);
+  }
+  const tags = await tagsResponse.json();
+  const names = (tags.models ?? []).map((m) => m.name ?? m.model).filter((n) => !!n);
+  const results = new Array(names.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < names.length) {
+      const i = next++;
+      results[i] = await showModel(baseUrl, names[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(SHOW_CONCURRENCY, names.length) }, worker));
+  const catalog = results.filter((m) => m !== null);
+  logger2.debug("Fetched Ollama model catalog", { context: "getModelCatalog", baseUrl, listed: names.length, count: catalog.length });
+  return catalog;
+}
+
+// embedding-provider.ts
+var logger3 = createPluginLogger("qtap-plugin-ollama");
 var NUM_CTX_CEILING = 16384;
 var NUM_CTX_FALLBACK = 8192;
 var numCtxCache = /* @__PURE__ */ new Map();
@@ -25048,7 +25106,7 @@ var OllamaEmbeddingProvider = class {
       body: JSON.stringify(requestPayload)
     });
     if (response.status === 404) {
-      logger2.warn("Ollama /api/embed not found (404); falling back to legacy /api/embeddings", {
+      logger3.warn("Ollama /api/embed not found (404); falling back to legacy /api/embeddings", {
         context: "OllamaEmbeddingProvider.generateEmbedding",
         model
       });
@@ -25057,7 +25115,7 @@ var OllamaEmbeddingProvider = class {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const errorMessage = error.error || response.statusText;
-      logger2.error("Ollama embedding failed", {
+      logger3.error("Ollama embedding failed", {
         context: "OllamaEmbeddingProvider.generateEmbedding",
         status: response.status,
         model,
@@ -25096,7 +25154,7 @@ var OllamaEmbeddingProvider = class {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const errorMessage = error.error || response.statusText;
-      logger2.error("Ollama embedding failed (legacy endpoint)", {
+      logger3.error("Ollama embedding failed (legacy endpoint)", {
         context: "OllamaEmbeddingProvider.generateEmbeddingLegacy",
         status: response.status,
         model,
@@ -25156,7 +25214,7 @@ var OllamaEmbeddingProvider = class {
         body: JSON.stringify({ model })
       });
       if (!response.ok) {
-        logger2.warn("Ollama /api/show failed; using fallback num_ctx", {
+        logger3.warn("Ollama /api/show failed; using fallback num_ctx", {
           context: "OllamaEmbeddingProvider.fetchModelNumCtx",
           model,
           status: response.status,
@@ -25174,7 +25232,7 @@ var OllamaEmbeddingProvider = class {
         }
       }
       if (!modelCtx) {
-        logger2.warn("Ollama /api/show returned no context_length; using fallback num_ctx", {
+        logger3.warn("Ollama /api/show returned no context_length; using fallback num_ctx", {
           context: "OllamaEmbeddingProvider.fetchModelNumCtx",
           model,
           fallback: NUM_CTX_FALLBACK
@@ -25184,7 +25242,7 @@ var OllamaEmbeddingProvider = class {
       const numCtx = Math.min(modelCtx, NUM_CTX_CEILING);
       return { numCtx, derived: true };
     } catch (error) {
-      logger2.warn(
+      logger3.warn(
         "Ollama /api/show threw; using fallback num_ctx",
         {
           context: "OllamaEmbeddingProvider.fetchModelNumCtx",
@@ -25238,7 +25296,7 @@ var OllamaEmbeddingProvider = class {
       const models = data.models?.map((m) => m.name) || [];
       return models;
     } catch (error) {
-      logger2.error("Failed to fetch Ollama models", {
+      logger3.error("Failed to fetch Ollama models", {
         context: "OllamaEmbeddingProvider.getAvailableModels",
         baseUrl: this.baseUrl
       }, error instanceof Error ? error : void 0);
@@ -25590,7 +25648,7 @@ function stripAllXMLToolMarkers(response) {
 }
 
 // index.ts
-var logger3 = createPluginLogger("qtap-plugin-ollama");
+var logger4 = createPluginLogger("qtap-plugin-ollama");
 var metadata = {
   providerName: "OLLAMA",
   displayName: "Ollama",
@@ -25798,9 +25856,18 @@ var plugin = {
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
-      logger3.error("Failed to fetch Ollama models", { context: "plugin.getAvailableModels", baseUrl: url }, error instanceof Error ? error : void 0);
+      logger4.error("Failed to fetch Ollama models", { context: "plugin.getAvailableModels", baseUrl: url }, error instanceof Error ? error : void 0);
       return [];
     }
+  },
+  /**
+   * Live, detailed model list (context window, tools, vision, thinking).
+   * Throws on failure so the host does not cache a partial list.
+   */
+  getModelCatalog: async (apiKey, baseUrl) => {
+    const url = baseUrl || config.baseUrlDefault;
+    logger4.debug("Fetching Ollama model catalog", { context: "plugin.getModelCatalog", baseUrl: url });
+    return fetchOllamaModelCatalog(url);
   },
   /**
    * Validate Ollama server connection
@@ -25813,7 +25880,7 @@ var plugin = {
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {
-      logger3.error("Error validating Ollama server", { context: "plugin.validateApiKey", baseUrl: url }, error instanceof Error ? error : void 0);
+      logger4.error("Error validating Ollama server", { context: "plugin.validateApiKey", baseUrl: url }, error instanceof Error ? error : void 0);
       return false;
     }
   },
@@ -25912,7 +25979,7 @@ var plugin = {
       const formattedTools = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger3.warn("Skipping tool with invalid format", {
+          logger4.warn("Skipping tool with invalid format", {
             context: "plugin.formatTools"
           });
           continue;
@@ -25921,7 +25988,7 @@ var plugin = {
       }
       return formattedTools;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error formatting tools for Ollama",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -25941,7 +26008,7 @@ var plugin = {
       const toolCalls = parseOpenAIToolCalls(response);
       return toolCalls;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing tool calls from Ollama response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0
@@ -25964,7 +26031,7 @@ var plugin = {
       const results = parseAllXMLAsToolCalls(text);
       return results;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing text tool calls",
         { context: "ollama.parseTextToolCalls" },
         error instanceof Error ? error : void 0

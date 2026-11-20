@@ -1470,80 +1470,80 @@ var ClientSDK = class {
 _ClientSDK_httpClient = /* @__PURE__ */ new WeakMap(), _ClientSDK_hooks = /* @__PURE__ */ new WeakMap(), _ClientSDK_logger = /* @__PURE__ */ new WeakMap();
 var jsonLikeContentTypeRE = /^(application|text)\/([^+]+\+)*json.*/;
 var jsonlLikeContentTypeRE = /^(application|text)\/([^+]+\+)*(jsonl|x-ndjson)\b.*/;
-async function logRequest(logger5, req) {
-  if (!logger5) {
+async function logRequest(logger6, req) {
+  if (!logger6) {
     return;
   }
   const contentType = req.headers.get("content-type");
   const ct = contentType?.split(";")[0] || "";
-  logger5.group(`> Request: ${req.method} ${req.url}`);
-  logger5.group("Headers:");
+  logger6.group(`> Request: ${req.method} ${req.url}`);
+  logger6.group("Headers:");
   for (const [k, v] of req.headers.entries()) {
-    logger5.log(`${k}: ${v}`);
+    logger6.log(`${k}: ${v}`);
   }
-  logger5.groupEnd();
-  logger5.group("Body:");
+  logger6.groupEnd();
+  logger6.group("Body:");
   switch (true) {
     case jsonLikeContentTypeRE.test(ct):
-      logger5.log(await req.clone().json());
+      logger6.log(await req.clone().json());
       break;
     case ct.startsWith("text/"):
-      logger5.log(await req.clone().text());
+      logger6.log(await req.clone().text());
       break;
     case ct === "multipart/form-data": {
       const body = await req.clone().formData();
       for (const [k, v] of body) {
         const vlabel = v instanceof Blob ? "<Blob>" : v;
-        logger5.log(`${k}: ${vlabel}`);
+        logger6.log(`${k}: ${vlabel}`);
       }
       break;
     }
     default:
-      logger5.log(`<${contentType}>`);
+      logger6.log(`<${contentType}>`);
       break;
   }
-  logger5.groupEnd();
-  logger5.groupEnd();
+  logger6.groupEnd();
+  logger6.groupEnd();
 }
-async function logResponse(logger5, res, req) {
-  if (!logger5) {
+async function logResponse(logger6, res, req) {
+  if (!logger6) {
     return;
   }
   const contentType = res.headers.get("content-type");
   const ct = contentType?.split(";")[0] || "";
-  logger5.group(`< Response: ${req.method} ${req.url}`);
-  logger5.log("Status Code:", res.status, res.statusText);
-  logger5.group("Headers:");
+  logger6.group(`< Response: ${req.method} ${req.url}`);
+  logger6.log("Status Code:", res.status, res.statusText);
+  logger6.group("Headers:");
   for (const [k, v] of res.headers.entries()) {
-    logger5.log(`${k}: ${v}`);
+    logger6.log(`${k}: ${v}`);
   }
-  logger5.groupEnd();
-  logger5.group("Body:");
+  logger6.groupEnd();
+  logger6.group("Body:");
   switch (true) {
     case (matchContentType(res, "application/json") || jsonLikeContentTypeRE.test(ct) && !jsonlLikeContentTypeRE.test(ct)):
-      logger5.log(await res.clone().json());
+      logger6.log(await res.clone().json());
       break;
     case (matchContentType(res, "application/jsonl") || jsonlLikeContentTypeRE.test(ct)):
     case matchContentType(res, "text/event-stream"):
-      logger5.log(`<${contentType}>`);
+      logger6.log(`<${contentType}>`);
       break;
     case matchContentType(res, "text/*"):
-      logger5.log(await res.clone().text());
+      logger6.log(await res.clone().text());
       break;
     case matchContentType(res, "multipart/form-data"): {
       const body = await res.clone().formData();
       for (const [k, v] of body) {
         const vlabel = v instanceof Blob ? "<Blob>" : v;
-        logger5.log(`${k}: ${vlabel}`);
+        logger6.log(`${k}: ${vlabel}`);
       }
       break;
     }
     default:
-      logger5.log(`<${contentType}>`);
+      logger6.log(`<${contentType}>`);
       break;
   }
-  logger5.groupEnd();
-  logger5.groupEnd();
+  logger6.groupEnd();
+  logger6.groupEnd();
 }
 
 // node_modules/@openrouter/sdk/esm/models/errors/openroutererror.js
@@ -49477,11 +49477,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger5, logLevel) {
-  if (!logger5 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger6, logLevel) {
+  if (!logger6 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger5[fnLevel].bind(logger5);
+    return logger6[fnLevel].bind(logger6);
   }
 }
 var noopLogger = {
@@ -49492,22 +49492,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger5 = client.logger;
+  const logger6 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger5) {
+  if (!logger6) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger5);
+  const cachedLogger = cachedLoggers.get(logger6);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger5, logLevel),
-    warn: makeLogFn("warn", logger5, logLevel),
-    info: makeLogFn("info", logger5, logLevel),
-    debug: makeLogFn("debug", logger5, logLevel)
+    error: makeLogFn("error", logger6, logLevel),
+    warn: makeLogFn("warn", logger6, logLevel),
+    info: makeLogFn("info", logger6, logLevel),
+    debug: makeLogFn("debug", logger6, logLevel)
   };
-  cachedLoggers.set(logger5, [logLevel, levelLogger]);
+  cachedLoggers.set(logger6, [logLevel, levelLogger]);
   return levelLogger;
 }
 var sensitiveQueryNames = /* @__PURE__ */ new Set([
@@ -49663,7 +49663,7 @@ var Stream = class _Stream {
    */
   static fromSSEResponse(response, controller, client, synthesizeEventData, streamMode = "legacy") {
     let consumed = false;
-    const logger5 = client ? loggerFor(client) : console;
+    const logger6 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -49689,8 +49689,8 @@ var Stream = class _Stream {
           try {
             data = JSON.parse(sse2.data);
           } catch {
-            logger5.error(`Could not parse message into JSON:`);
-            logger5.error(`From chunk:`);
+            logger6.error(`Could not parse message into JSON:`);
+            logger6.error(`From chunk:`);
             throw new SyntaxError("Error reading response: malformed server-sent event JSON.");
           }
           if (streamMode === "legacy") {
@@ -72950,23 +72950,23 @@ _a4 = OpenAI, _OpenAI_encoder = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Authe
       map.set(key, entry);
   }
   return sanitizedValue;
-}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger5) {
-  if (__classPrivateFieldGet4(_a4, _a4, "f", _OpenAI_sanitizedLoggers).has(logger5))
-    return logger5;
+}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger6) {
+  if (__classPrivateFieldGet4(_a4, _a4, "f", _OpenAI_sanitizedLoggers).has(logger6))
+    return logger6;
   const sanitized = new globalThis.Proxy(/* @__PURE__ */ Object.create(null), {
     get: (_facade, property) => {
-      const value = globalThis.Reflect.get(logger5, property, logger5);
+      const value = globalThis.Reflect.get(logger6, property, logger6);
       if (typeof value !== "function")
         return value;
       if (typeof property !== "string" || !["debug", "info", "warn", "error", "trace", "log"].includes(property)) {
-        return value.bind(logger5);
+        return value.bind(logger6);
       }
       return (...args) => {
         const seen = /* @__PURE__ */ new WeakMap();
-        return globalThis.Reflect.apply(value, logger5, args.map((entry) => __classPrivateFieldGet4(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
+        return globalThis.Reflect.apply(value, logger6, args.map((entry) => __classPrivateFieldGet4(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
       };
     },
-    set: (_facade, property, value) => globalThis.Reflect.set(logger5, property, value, logger5)
+    set: (_facade, property, value) => globalThis.Reflect.set(logger6, property, value, logger6)
   });
   __classPrivateFieldGet4(_a4, _a4, "f", _OpenAI_sanitizedLoggers).add(sanitized);
   return sanitized;
@@ -73120,7 +73120,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger5 = {
+  const logger6 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -73152,7 +73152,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger5;
+  return logger6;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -73702,8 +73702,67 @@ var OpenRouterProvider = class {
   }
 };
 
-// embedding-provider.ts
+// model-catalog.ts
 var logger2 = createPluginLogger("qtap-plugin-openrouter");
+var OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
+function positiveNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
+function supportsImageInput(entry) {
+  const inputs = entry.architecture?.input_modalities;
+  if (Array.isArray(inputs) && inputs.length > 0) return inputs.includes("image");
+  const modality = entry.architecture?.modality;
+  if (typeof modality === "string" && modality.includes("->")) {
+    return modality.split("->")[0].includes("image");
+  }
+  return void 0;
+}
+function emitsText(entry) {
+  const outputs = entry.architecture?.output_modalities;
+  if (Array.isArray(outputs) && outputs.length > 0) return outputs.includes("text");
+  return void 0;
+}
+function mapOpenRouterEntry(entry) {
+  const params = Array.isArray(entry.supported_parameters) ? entry.supported_parameters : void 0;
+  return {
+    id: entry.id,
+    name: entry.name || entry.id,
+    description: entry.description || void 0,
+    contextWindow: positiveNumber(entry.context_length) ?? positiveNumber(entry.top_provider?.context_length),
+    maxOutputTokens: positiveNumber(entry.top_provider?.max_completion_tokens),
+    supportsImages: supportsImageInput(entry),
+    supportsTools: params ? params.includes("tools") : void 0,
+    supportsThinking: params ? params.includes("reasoning") || params.includes("include_reasoning") : void 0
+  };
+}
+async function fetchOpenRouterModelCatalog(apiKey) {
+  const headers = {
+    "User-Agent": getQuilltapUserAgent(),
+    "X-Title": getQuilltapUserAgent(),
+    "HTTP-Referer": process.env.BASE_URL || "http://localhost:3000"
+  };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const response = await fetch(OPENROUTER_MODELS_URL, { headers });
+  if (!response.ok) {
+    throw new Error(`OpenRouter model catalog request failed: HTTP ${response.status}`);
+  }
+  const payload = await response.json();
+  if (!Array.isArray(payload.data)) {
+    throw new Error("OpenRouter model catalog response had no data array");
+  }
+  const entries = payload.data.filter(
+    (entry) => typeof entry?.id === "string" && emitsText(entry) !== false
+  );
+  logger2.debug("Fetched OpenRouter model catalog", {
+    context: "fetchOpenRouterModelCatalog",
+    total: payload.data.length,
+    textModels: entries.length
+  });
+  return entries.map(mapOpenRouterEntry);
+}
+
+// embedding-provider.ts
+var logger3 = createPluginLogger("qtap-plugin-openrouter");
 var OpenRouterEmbeddingProvider = class {
   /**
    * Generate an embedding for the given text
@@ -73829,7 +73888,7 @@ var OpenRouterEmbeddingProvider = class {
       }
       return models;
     } catch (error) {
-      logger2.error(
+      logger3.error(
         "Failed to fetch OpenRouter embedding models",
         { context: "OpenRouterEmbeddingProvider.getAvailableModels" },
         error instanceof Error ? error : void 0
@@ -73840,7 +73899,7 @@ var OpenRouterEmbeddingProvider = class {
 };
 
 // image-provider.ts
-var logger3 = createPluginLogger("qtap-plugin-openrouter");
+var logger4 = createPluginLogger("qtap-plugin-openrouter");
 var REFUSAL_PATTERNS = [
   "content moderation",
   "content_policy",
@@ -73874,7 +73933,7 @@ var OpenRouterImageProvider = class {
       throw new Error("OpenRouter provider requires an API key");
     }
     const model = params.model ?? FALLBACK_IMAGE_MODELS[0];
-    logger3.debug("Generating image via OpenRouter", {
+    logger4.debug("Generating image via OpenRouter", {
       context: "OpenRouterImageProvider.generateImage",
       model,
       hasAspectRatio: !!params.aspectRatio,
@@ -73922,7 +73981,7 @@ Use a ${params.style} artistic style.`;
       });
       if (!response.ok) {
         const errorText = await response.text();
-        logger3.error("OpenRouter image generation API error", {
+        logger4.error("OpenRouter image generation API error", {
           context: "OpenRouterImageProvider.generateImage",
           status: response.status,
           error: errorText,
@@ -73939,7 +73998,7 @@ Use a ${params.style} artistic style.`;
         throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
-      logger3.debug("OpenRouter image generation raw response structure", {
+      logger4.debug("OpenRouter image generation raw response structure", {
         context: "OpenRouterImageProvider.generateImage",
         model,
         choiceCount: data.choices?.length,
@@ -73950,7 +74009,7 @@ Use a ${params.style} artistic style.`;
       });
       return this.parseImageResponse(data);
     } catch (error) {
-      logger3.error("Failed to generate image via OpenRouter", {
+      logger4.error("Failed to generate image via OpenRouter", {
         context: "OpenRouterImageProvider.generateImage",
         model
       }, error instanceof Error ? error : void 0);
@@ -74006,7 +74065,7 @@ Use a ${params.style} artistic style.`;
       }
     }
     if (images.length === 0) {
-      logger3.error("No images in OpenRouter response", {
+      logger4.error("No images in OpenRouter response", {
         context: "OpenRouterImageProvider.parseImageResponse",
         textContent: textContent.slice(0, 500),
         choiceCount: choices.length,
@@ -74023,7 +74082,7 @@ Use a ${params.style} artistic style.`;
       }
       throw new Error("No images returned from OpenRouter API");
     }
-    logger3.debug("Successfully parsed image response", {
+    logger4.debug("Successfully parsed image response", {
       context: "OpenRouterImageProvider.parseImageResponse",
       imageCount: images.length
     });
@@ -74056,7 +74115,7 @@ Use a ${params.style} artistic style.`;
       await client.models.list();
       return true;
     } catch (error) {
-      logger3.error("OpenRouter API key validation failed for image generation", {
+      logger4.error("OpenRouter API key validation failed for image generation", {
         context: "OpenRouterImageProvider.validateApiKey"
       }, error instanceof Error ? error : void 0);
       return false;
@@ -74072,7 +74131,7 @@ Use a ${params.style} artistic style.`;
    */
   async getAvailableModels(apiKey) {
     if (!apiKey) {
-      logger3.debug("No API key provided, returning fallback image models", {
+      logger4.debug("No API key provided, returning fallback image models", {
         context: "OpenRouterImageProvider.getAvailableModels"
       });
       return [...FALLBACK_IMAGE_MODELS];
@@ -74107,7 +74166,7 @@ Use a ${params.style} artistic style.`;
     if (imageModels.length === 0) {
       throw new Error("OpenRouter listed no image-output models for this API key");
     }
-    logger3.info("Discovered image generation models from OpenRouter API", {
+    logger4.info("Discovered image generation models from OpenRouter API", {
       context: "OpenRouterImageProvider.getAvailableModels",
       count: imageModels.length,
       models: imageModels.slice(0, 10)
@@ -74442,7 +74501,7 @@ function stripAllXMLToolMarkers(response) {
 }
 
 // index.ts
-var logger4 = createPluginLogger("qtap-plugin-openrouter");
+var logger5 = createPluginLogger("qtap-plugin-openrouter");
 var metadata = {
   providerName: "OPENROUTER",
   displayName: "OpenRouter",
@@ -74592,13 +74651,26 @@ var plugin = {
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
-      logger4.error(
+      logger5.error(
         "Failed to fetch OpenRouter models",
         { context: "plugin.getAvailableModels" },
         error instanceof Error ? error : void 0
       );
       return [];
     }
+  },
+  /**
+   * Live, detailed text-model catalog (context, output cap, tools, images,
+   * reasoning) as OpenRouter serves it. Throws on failure; the host caches.
+   */
+  getModelCatalog: async (apiKey, _baseUrl) => {
+    logger5.debug("Fetching OpenRouter model catalog", { context: "plugin.getModelCatalog" });
+    const catalog = await fetchOpenRouterModelCatalog(apiKey);
+    logger5.debug("OpenRouter model catalog ready", {
+      context: "plugin.getModelCatalog",
+      count: catalog.length
+    });
+    return catalog;
   },
   /**
    * Validate an OpenRouter API key
@@ -74609,7 +74681,7 @@ var plugin = {
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {
-      logger4.error(
+      logger5.error(
         "Error validating OpenRouter API key",
         { context: "plugin.validateApiKey" },
         error instanceof Error ? error : void 0
@@ -74780,7 +74852,7 @@ var plugin = {
       const formattedTools = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger4.warn("Skipping tool with invalid format", {
+          logger5.warn("Skipping tool with invalid format", {
             context: "plugin.formatTools"
           });
           continue;
@@ -74789,7 +74861,7 @@ var plugin = {
       }
       return formattedTools;
     } catch (error) {
-      logger4.error(
+      logger5.error(
         "Error formatting tools for OpenRouter",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -74809,7 +74881,7 @@ var plugin = {
       const toolCalls = parseOpenAIToolCalls(response);
       return toolCalls;
     } catch (error) {
-      logger4.error(
+      logger5.error(
         "Error parsing tool calls from OpenRouter response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0
@@ -74832,7 +74904,7 @@ var plugin = {
       const results = parseAllXMLAsToolCalls(text2);
       return results;
     } catch (error) {
-      logger4.error(
+      logger5.error(
         "Error parsing text tool calls",
         { context: "openrouter.parseTextToolCalls" },
         error instanceof Error ? error : void 0

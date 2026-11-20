@@ -10,6 +10,8 @@ import { FormActions } from '@/components/ui/FormActions'
 import { MODEL_CLASSES, getModelClass } from '@/lib/llm/model-classes'
 import type { ApiKey, ProviderConfig, ProfileFormData, ConnectionProfile } from './types'
 import { ProviderOptionsPanel } from './ProviderOptionsPanel'
+import { AutoConfigureSources } from './AutoConfigureSources'
+import type { AutoConfigureResult } from '@/lib/services/auto-configure.service'
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names'
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
 import { evaluateThinkingTurn } from '@/lib/llm/thinking-turn'
@@ -88,6 +90,7 @@ export function ProfileModal({
 
   // Auto-configure states
   const [autoConfigureMessage, setAutoConfigureMessage] = useState<string | null>(null)
+  const [autoConfigureResult, setAutoConfigureResult] = useState<AutoConfigureResult | null>(null)
 
   // Note: No need for state reset effect - modal is keyed by profile.id so it remounts fresh
 
@@ -178,16 +181,30 @@ export function ProfileModal({
 
   const handleAutoConfigureClick = useCallback(async () => {
     const result = await operations.handleAutoConfigure((data) => {
-      form.setField('temperature', data.suggestions.temperature)
-      form.setField('maxTokens', data.suggestions.maxTokens)
-      form.setField('topP', data.suggestions.topP)
-      form.setField('maxContext', String(data.suggestions.maxContext))
-      form.setField('modelClass', data.suggestions.modelClass)
-      form.setField('isDangerousCompatible', data.suggestions.isDangerousCompatible)
-      setAutoConfigureMessage('Configuration applied successfully!')
+      const suggestions = data.suggestions as AutoConfigureResult
+      form.setField('temperature', suggestions.temperature)
+      form.setField('maxTokens', suggestions.maxTokens)
+      form.setField('topP', suggestions.topP)
+      form.setField('maxContext', String(suggestions.maxContext))
+      form.setField('modelClass', suggestions.modelClass)
+      form.setField('isDangerousCompatible', suggestions.isDangerousCompatible)
+      // Only what a catalog states: an unknown leaves the operator's choice.
+      if (suggestions.supportsImages !== null) {
+        form.setField('supportsImageUpload', suggestions.supportsImages)
+      }
+      // Tool mode only moves toward Simple JSON, and never off a mode picked by hand.
+      if (
+        suggestions.pseudoToolMode === 'simple-json' &&
+        (form.formData.pseudoToolMode === 'auto' || form.formData.pseudoToolMode === 'native')
+      ) {
+        form.setField('pseudoToolMode', 'simple-json')
+      }
+      setAutoConfigureResult(suggestions)
+      setAutoConfigureMessage('Configuration applied. Here is where each figure came from:')
     })
     if (!result) {
       setAutoConfigureMessage(null)
+      setAutoConfigureResult(null)
     }
   }, [operations, form])
 
@@ -706,6 +723,7 @@ export function ProfileModal({
               {autoConfigureMessage && (
                 <div className="text-sm qt-alert-success">
                   {autoConfigureMessage}
+                  {autoConfigureResult && <AutoConfigureSources result={autoConfigureResult} />}
                 </div>
               )}
 

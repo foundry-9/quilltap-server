@@ -570,6 +570,26 @@ export interface TextProviderPlugin {
   getModelInfo?: () => ModelInfo[];
 
   /**
+   * Get the provider's live, detailed model catalog (optional).
+   *
+   * Where `getAvailableModels` returns names only, this returns what the
+   * provider itself publishes about each model *as served by this provider*:
+   * context window, maximum output tokens, and whether tool calling, image
+   * input and thinking are supported. Leave a field undefined when the
+   * provider does not say — the host treats an absent field as unknown and
+   * looks elsewhere, and treats a present one as authoritative.
+   *
+   * The host uses this for connection-profile Auto-Configure and caches the
+   * result per provider and base URL, so an implementation may fetch on
+   * every call. It should throw on an authentication or network failure
+   * rather than return a partial list.
+   *
+   * @param apiKey API key for authentication ('' for keyless providers)
+   * @param baseUrl Optional base URL
+   */
+  getModelCatalog?: (apiKey: string, baseUrl?: string) => Promise<ModelInfo[]>;
+
+  /**
    * Get embedding models supported by this provider
    */
   getEmbeddingModels?: () => EmbeddingModelInfo[];

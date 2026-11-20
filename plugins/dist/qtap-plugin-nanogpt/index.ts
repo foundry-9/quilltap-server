@@ -18,6 +18,7 @@
  * One NanoGPT API key covers all three capabilities.
  */
 
+import { fetchNanoGPTModelCatalog } from './model-catalog';
 import type {
   TextProviderPlugin,
   ImageGenerationModelInfo,
@@ -270,6 +271,16 @@ export const plugin: TextProviderPlugin = {
       );
       return [...STATIC_MODEL_IDS].sort();
     }
+  },
+
+  getModelCatalog: async (apiKey: string, _baseUrl?: string) => {
+    logger.debug('Fetching NanoGPT model catalog', { context: 'plugin.getModelCatalog' });
+    const catalog = await fetchNanoGPTModelCatalog(apiKey);
+    logger.debug('NanoGPT model catalog ready', {
+      context: 'plugin.getModelCatalog',
+      count: catalog.length,
+    });
+    return catalog;
   },
 
   validateApiKey: async (apiKey: string, _baseUrl?: string) => {

@@ -413,6 +413,9 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
           body: JSON.stringify({
             provider: form.formData.provider,
             modelName: form.formData.modelName,
+            // The route decides what the provider's own catalog says.
+            baseUrl: outboundBaseUrl() || null,
+            apiKeyId: outboundApiKeyId() || null,
           }),
         })
 
@@ -429,7 +432,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
 
       return result
     },
-    [form.formData, autoConfigureOp]
+    [form.formData, autoConfigureOp, outboundBaseUrl, outboundApiKeyId]
   )
 
   const handleSubmit = useCallback(
