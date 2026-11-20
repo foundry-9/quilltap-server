@@ -11,7 +11,7 @@
 - `tag-for-release` no longer claims `git log X.Y.Z..main` lists the work since a release; the release commit is a squash, so that range lists the whole history. Ranges use the `rel/` anchor
 - CLAUDE.md gains "Commits and branches" (no commit on `main` without `/commit`; other branches, worktrees and cloud sessions commit to their own branch) and "The last release". The checklists' "Do not commit" now points to it; `tag-for-release` and `remove-old-dev-tags` refuse to run outside the human's local checkout
 - `/commit` picks the CHANGELOG section from the `package.json` version instead of the branch, and says which sources trigger a version bump
-- `scripts/update_version.sh` keeps the `bugfix` channel on a session branch cut from bugfix (it read the branch name only, so such a branch was stamped `-dev`)
+- `bugfix` is protected like `main`. Cloud sessions push their branch and open a PR without being asked, choose their own test scope (CI runs the full suite), and skip the pre-commit hook. Version bumps happen only on `main` and `bugfix`; other branches skip `update_version.sh` so parallel branches don't conflict on version files. A `packages/` change that needs `npm publish` pushes its branch and pauses for the human to publish from it
 
 #### Document core: disk bytes read through the doc-edit backend
 
