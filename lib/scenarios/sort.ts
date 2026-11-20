@@ -3,7 +3,7 @@
  *
  * Order is the display title (frontmatter `name`, or whatever the scope's
  * parser falls back to), then the filename, each compared case-insensitively
- * with a leading definite article ignored — "The Gilded Cage" files under G.
+ * with a leading definite article ignored (`lib/utils/title-sort.ts`) — "The Gilded Cage" files under G.
  * The untrimmed title and then the path break any remaining tie, so the order
  * is total and stable.
  *
@@ -12,6 +12,8 @@
  *
  * @module scenarios/sort
  */
+
+import { compareText, titleSortKey } from '@/lib/utils/title-sort';
 
 /** What the comparator needs from a scenario. */
 export interface SortableScenario {
@@ -23,19 +25,8 @@ export interface SortableScenario {
   path?: string;
 }
 
-// Whitespace, dash or underscore after it: filenames are dashed (`the-attic`).
-const LEADING_ARTICLE = /^the[\s_-]+/i;
-
 /** The string a title or filename sorts under: trimmed, leading "The " dropped. */
-export function scenarioSortKey(value: string): string {
-  const trimmed = value.trim();
-  const stripped = trimmed.replace(LEADING_ARTICLE, '');
-  // A title that is only "The" keeps itself rather than sorting as empty.
-  return stripped.length > 0 ? stripped : trimmed;
-}
-
-const compareText = (a: string, b: string) =>
-  a.localeCompare(b, undefined, { sensitivity: 'base' });
+export const scenarioSortKey = titleSortKey;
 
 /** Compare two scenarios for display order. */
 export function compareScenarios(a: SortableScenario, b: SortableScenario): number {

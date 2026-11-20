@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Atlas: listings ignore a leading "The"
+
+- The Atlas browser now sorts entries the way scenario lists do: case-insensitive, with a leading "The" ignored ("The Covenant" sorts under C). The rule moved from `lib/scenarios/sort.ts` into `lib/utils/title-sort.ts` (`titleSortKey`, `compareTitles`); `scenarioSortKey` is now an alias for it
+
 #### Atlas lore wizard: quoted phrases inside a search query display correctly
 
 - Brahma's activity lines (`describeBrahmaActivity`) no longer break the outer quotes when a query contains its own quoted phrase. `"Zbinden Trust" Osage Duchy` now shows as “‘Zbinden Trust’ Osage Duchy” instead of losing its leading quote and leaving an unbalanced one

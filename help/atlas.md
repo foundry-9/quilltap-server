@@ -89,7 +89,7 @@ To see one full-screen, click the thumbnail on the entry's row in the Atlas — 
 
 ## Filing, moving and putting away
 
-Everything the Inventory's browser does, the Atlas's does too: **folders** (make, rename, delete, file into), **select several** at once, **duplicate**, **move or copy to a folder**, **move or copy to another shelf** (pictures travel along; a move keeps the entry's identity, and a shelf that already holds a live entry of that name declines it), **archive** (an archived entry is told to no one and chipped nowhere, and **Show archived** brings it back into view) and **delete**.
+Everything the Inventory's browser does, the Atlas's does too: **folders** (make, rename, delete, file into), **select several** at once, **duplicate**, **move or copy to a folder**, **move or copy to another shelf** (pictures travel along; a move keeps the entry's identity, and a shelf that already holds a live entry of that name declines it), **archive** (an archived entry is told to no one and chipped nowhere, and **Show archived** brings it back into view) and **delete**. Entries are listed alphabetically, as the Scenarios are: without regard to capitals, and with a leading *The* politely overlooked, so *The Covenant* waits its turn among the Cs rather than crowding the Ts.
 
 ## Things to know
 
