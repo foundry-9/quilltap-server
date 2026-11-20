@@ -108,7 +108,7 @@ export function FilesPanel({ detail }: { detail: DraftDetail }) {
       </div>
       <p className="qt-text-xs qt-text-secondary">
         The files live in the folder <span className="font-mono">Themes/{detail.id}/</span> of Quilltap General.{' '}
-        <Link href={href} onClick={(e) => openIn(href, e)} className="underline">
+        <Link href={href} onClick={(e) => openIn(href, e)} className="qt-inline-link">
           Open Quilltap General in the Scriptorium
         </Link>
       </p>

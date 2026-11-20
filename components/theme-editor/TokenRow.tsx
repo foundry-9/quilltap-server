@@ -95,7 +95,7 @@ function ContrastLine({ finding, against, role }: ReturnType<typeof rowContrast>
       {!pass && handOff && (
         <>
           {' '}
-          <button type="button" className="underline qt-text-xs" onClick={() => handOff.ask(contrastHandOffText(finding))}>
+          <button type="button" className="qt-inline-link qt-text-xs" onClick={() => handOff.ask(contrastHandOffText(finding))}>
             Ask Calliope
           </button>
         </>

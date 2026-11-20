@@ -164,7 +164,7 @@ export function StylesSection({ detail, value, onChange, status, flushRef, token
               {issues.map((issue, i) => (
                 <li key={i} className={`qt-text-xs ${issue.severity === 'error' ? 'qt-text-destructive' : 'qt-text-warning'}`}>
                   {typeof issue.line === 'number' ? (
-                    <button type="button" className="underline mr-1" onClick={() => editorRef.current?.revealLine(issue.line as number)}>
+                    <button type="button" className="qt-inline-link mr-1" onClick={() => editorRef.current?.revealLine(issue.line as number)}>
                       Line {issue.line}
                     </button>
                   ) : null}
