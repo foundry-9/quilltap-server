@@ -284,3 +284,5 @@ Every migration in `migrations/scripts/` (listed in `index.ts`) must satisfy two
    For batched/streaming migrations, count totals upfront with `SELECT COUNT(*)` and pass the running `totalScanned`. Synchronous `db.transaction(...)` can't reach the UI mid-transaction — skipping there is fine.
 
 The commit skill enforces both rules and will block a non-compliant migration.
+
+A migration whose `shouldRun` answers false is **baselined** (settled without running) on a fresh database or when it predates the database's birth release (`migrations/lib/baseline.ts`). If your `false` means "not yet — waiting on a later startup task" rather than "nothing to do", set `skipMeansNotYet: true`. See [migrations/README.md](./migrations/README.md#baseline-skipped-migrations-that-can-never-have-work).

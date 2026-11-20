@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Fix: a new instance's second boot ran old migrations against current data
+
+- On a fresh database the migrations run before the app creates its tables and seeds its rows, so every historical data pass skipped with "nothing to do" and, writing no ledger row, stayed armed. The next boot ran up to 18 of them against rows written by current code: `migrate-character-photos-to-vault-v1` read the seeded avatars' vault link ids as missing `files` ids, nulled Lorian's and Riya's `defaultImageId` and garbage-collected the gallery's `files` rows (it was set off by the wardrobe portrait preview, which writes a character-tagged `files` row); `align-about-character-id-v1`/`v2` re-attributed seeded memories (a character's memories about another character flipped to be about themselves); obsolete columns were re-added to `characters` and `chat_settings`
+- The migration runner now baselines a skipped migration — writes it to the ledger as settled without running it — when the database was created this boot, or when the migration was introduced before the release that created the database (from the `sqlite-initial-schema-v1` ledger row; pre-release tags ignored). Existing instances settle their dormant pre-birth migrations on the next boot. Logic in `migrations/lib/baseline.ts`
+- New `Migration.skipMeansNotYet` for a migration whose `shouldRun` is waiting on a later startup task rather than out of work; it is never baselined. Set on `drop-wardrobe-items-table-v1`
+- Not repaired: data an instance already lost this way (avatar pointers, `files` rows, memory attribution) stays as it is
+
 #### Refactor: shared file-op failure response, shared repository bases, schema-read theme action bodies, dead code
 
 - New `fileOpFailure` (`lib/api/file-op-failure.ts`) is the HTTP answer for a failed document-store file operation. The mount-point action route, the per-file route and blob upload each spelled the `{ error, code }` mapping in their own `catch` (twelve copies, two local wrappers). Move, copy, link, write and delete file now also map a `DatabaseStoreError` to its status instead of a 500

@@ -48,6 +48,14 @@ export interface Migration {
    * `dependsOn` a deferred migration is deferred with it.
    */
   resumable?: boolean;
+  /**
+   * A `false` from `shouldRun` means "not yet", not "nothing to do": the
+   * migration waits on something that happens later in startup (a startup
+   * task setting an instance flag). The runner never baselines such a
+   * migration (see `migrations/lib/baseline.ts`), so it is asked again at
+   * every boot until it runs.
+   */
+  skipMeansNotYet?: boolean;
   /** Function to check if migration needs to run */
   shouldRun: () => Promise<boolean>;
   /** Function to run the migration */
@@ -106,6 +114,12 @@ export interface MigrationRunResult {
    * at the next boot.
    */
   deferred?: string[];
+  /**
+   * Migrations whose `shouldRun` answered false and which were written to the
+   * ledger as settled, because the database cannot hold the legacy data they
+   * convert (see `migrations/lib/baseline.ts`).
+   */
+  baselined?: string[];
   /** Error message if overall process failed */
   error?: string;
 }

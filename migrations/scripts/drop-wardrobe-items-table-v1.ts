@@ -61,6 +61,9 @@ export const dropWardrobeItemsTableMigration: Migration = {
     'Drop wardrobe_items table (after backing up its rows to a JSON snapshot)',
   introducedInVersion: '4.7.0',
   dependsOn: ['migrate-outfit-presets-to-composites-v1'],
+  // Waits on two startup tasks that run after migrations: a false here is
+  // "not yet", so the runner must keep asking rather than baseline it.
+  skipMeansNotYet: true,
 
   async shouldRun(): Promise<boolean> {
     if (!isSQLiteBackend()) {
