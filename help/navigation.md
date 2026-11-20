@@ -80,7 +80,7 @@ Rest the pointer on any rail button for its name. The button for whatever you ar
 
 ## In the Desktop App
 
-The Quilltap desktop app keeps the rail exactly as it is, and — once its own update arrives — adds a menu bar along the top of the window with the very same names: **Conversations**, **Objects**, **Library** and **Studio**, plus a **Go** menu holding Home, Characters, Help, Quick-hide, Settings, Profile and About. Choosing from the menu bar does precisely what choosing from the rail does.
+The Quilltap desktop app keeps the rail exactly as it is, and — from quilltap-shell 4.2.7 onward — adds a menu bar along the top of the window with the very same names: **Conversations**, **Objects**, **Library** and **Studio**, plus a **Go** menu holding Home, Characters, Help, Quick-hide, Settings, Profile and About. Choosing from the menu bar does precisely what choosing from the rail does.
 
 ## In-Chat Navigation
 

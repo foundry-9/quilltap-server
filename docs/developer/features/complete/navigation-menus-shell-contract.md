@@ -1,6 +1,6 @@
 # Navigation menus: the shell's contract
 
-Status: **server side built** 2026-11-19 (quilltap-server 4.14-dev); the shell side is not started. This page is for whoever builds the native menu bar in [quilltap-shell](https://github.com/foundry-9/quilltap-shell). It says what the server provides, what the shell must supply, and how the two behave together. Read it on its own; it does not depend on the server's code. Why the menus are shaped this way is in [navigation-menus.md](navigation-menus.md) (§6 is the summary this page expands). File references to the shell are to quilltap-shell 4.2.6 (`372feb5`).
+Status: **server side built** 2026-11-19 (quilltap-server 4.14-dev); the shell side shipped in quilltap-shell 4.2.7. This page is for whoever builds the native menu bar in [quilltap-shell](https://github.com/foundry-9/quilltap-shell). It says what the server provides, what the shell must supply, and how the two behave together. Read it on its own; it does not depend on the server's code. Why the menus are shaped this way is in [navigation-menus.md](navigation-menus.md) (§6 is the summary this page expands). File references to the shell are to quilltap-shell 4.2.6 (`372feb5`).
 
 ---
 
