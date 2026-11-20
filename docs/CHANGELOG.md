@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Atlas: listings ignore a leading "The"
+
+- The Atlas browser now sorts entries the way scenario lists do: case-insensitive, with a leading "The" ignored ("The Covenant" sorts under C). The rule moved from `lib/scenarios/sort.ts` into `lib/utils/title-sort.ts` (`titleSortKey`, `compareTitles`); `scenarioSortKey` is now an alias for it
+
 #### API: removed the 4.13 deprecated paths; unknown actions refused on more verbs
 
 - Removed the old route paths that answered for one release after 4.13 moved their actions to `?action=`: `wardrobe/analyze-image`, `wardrobe/preview-avatar`, `wardrobe/transfers`, `atlas/transfers`, `inventory/transfers`, `groups/scenarios`, `system/browse-directory`, `system/plugins/initialize` and `system/plugins/upgrades`. Use the `?action=` forms on the parent routes (listed in `docs/developer/API.md`)
