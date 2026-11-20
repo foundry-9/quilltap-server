@@ -33,7 +33,6 @@
  * Builder; this module supplies the Brahma profile, slate, prompt and scope.
  */
 
-import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
@@ -48,6 +47,7 @@ import { buildBrahmaSystemPrompt } from '@/lib/brahma-console/system-prompt-buil
 import { resolveInlineBrahmaConnectionProfile } from './inline-profile'
 import { resolveBrahmaMaxAgentTurns } from './turn-budget'
 import type { ToolEffect } from '@/lib/tools/effects'
+import { researchOnlyTextBlockToolOptions } from '@/lib/services/chat-message/text-block-tool-options'
 
 const logger = createServiceLogger('BrahmaOneShot')
 
@@ -120,30 +120,11 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     built,
     agentKind: 'inquiry',
     maxAgentTurns,
-    textBlockOptions: {
-      imageGeneration: false,
+    textBlockOptions: researchOnlyTextBlockToolOptions({
       search: true,
       webSearch: !!connectionProfile.allowWebSearch,
-      whisper: false,
-      state: false,
-      rng: false,
-      projectInfo: false,
-      helpSearch: false,
-      helpSettings: false,
-      helpNavigate: false,
-      createNote: false,
-      wardrobeList: false,
-      wardrobeRead: false,
-      wardrobeWear: false,
-      wardrobeTakeOff: false,
-      wardrobeRollback: false,
-      wardrobeHistory: false,
-      wardrobeCreate: false,
-      wardrobeUpdate: false,
-      wardrobeArchive: false,
-      ...inventoryToolFlags(false),
       researchKit: 'full',
-    },
+    }),
   })
 
   const systemPrompt = buildBrahmaSystemPrompt({

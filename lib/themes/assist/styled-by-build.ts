@@ -24,8 +24,8 @@
  * @module themes/assist/styled-by-build
  */
 
-import postcss, { type ChildNode, type Container, type Rule } from 'postcss';
-import { tokenizeSelector } from '../hooks/lint';
+import postcss, { type Container, type Rule } from 'postcss';
+import { isInsideKeyframes, tokenizeSelector } from '../hooks/lint';
 import type { HookCatalogue, HookDef } from '../hooks/types';
 import type { StyledByProperty, StyledByRow, StyledByTable } from './styled-by';
 
@@ -165,15 +165,6 @@ function resolvedSelectors(rule: Rule): string[] {
   return out;
 }
 
-function insideKeyframes(node: ChildNode): boolean {
-  let n: Container | undefined = node.parent as Container | undefined;
-  while (n) {
-    if (n.type === 'atrule' && /keyframes$/i.test((n as unknown as { name: string }).name)) return true;
-    n = n.parent as Container | undefined;
-  }
-  return false;
-}
-
 /** The condition one selector puts on hook `hook`, as the row's `when` label ('' for the base element). */
 export function conditionFor(hook: HookDef, selector: string, hookClasses: ReadonlySet<string>): string {
   const compounds = compoundsOf(selector);
@@ -229,7 +220,7 @@ export function buildStyledByTable(sources: ReadonlyArray<{ path: string; css: s
   for (const source of sources) {
     const root = postcss.parse(source.css, { from: source.path });
     root.walkRules((rule) => {
-      if (insideKeyframes(rule)) return;
+      if (isInsideKeyframes(rule)) return;
       const decls = (rule.nodes ?? []).filter((n): n is import('postcss').Declaration => n.type === 'decl');
       if (decls.length === 0) return;
       // Tailwind's own variables set in this rule (`--tw-shadow: … var(--qt-x) …`), so a

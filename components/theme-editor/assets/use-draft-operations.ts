@@ -85,6 +85,25 @@ function isStale(err: unknown): boolean {
 }
 
 /**
+ * What a save or an operation does on a stale revision: read the draft again,
+ * take it as the newest, hand it to the editor, and say so.
+ */
+export async function reloadAfterConflict(
+  id: string,
+  adopt: (fresh: DraftDetail) => void,
+  onConflict: (fresh: DraftDetail) => void,
+): Promise<void> {
+  try {
+    const fresh = await fetchThemeDraft(id)
+    adopt(fresh)
+    onConflict(fresh)
+  } catch (reloadErr) {
+    showErrorToast(apiErrorMessage(reloadErr, 'The draft changed elsewhere, and could not be fetched again.'))
+  }
+  showWarningToast(CHANGED_ELSEWHERE)
+}
+
+/**
  * The operations for one draft. `onConflict` is the editor's: it takes the
  * draft read again after a stale revision (and resets the tokens to it).
  */
@@ -109,14 +128,7 @@ export function useDraftOperationsState(saver: SaverLike, onConflict: (fresh: Dr
           return { ok: true, value }
         } catch (err) {
           if (isStale(err)) {
-            try {
-              const fresh = await fetchThemeDraft(before.id)
-              adopt(fresh)
-              onConflictRef.current(fresh)
-            } catch (reloadErr) {
-              showErrorToast(apiErrorMessage(reloadErr, 'The draft changed elsewhere, and could not be fetched again.'))
-            }
-            showWarningToast(CHANGED_ELSEWHERE)
+            await reloadAfterConflict(before.id, adopt, onConflictRef.current)
             return { ok: false, message: CHANGED_ELSEWHERE, conflict: true }
           }
           const failure = describeFailure(err)

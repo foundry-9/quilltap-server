@@ -14,7 +14,8 @@
 import { useState } from 'react'
 import { themeDraftAction, themeDraftUpload, type DraftDetail } from '../use-theme-drafts'
 import { useDraftOperations } from './use-draft-operations'
-import { IMAGE_ACCEPT, formatBytes, imageUrl, normalisePath, pictureFiles } from './model'
+import { formatBytes } from '@/lib/utils/format-bytes'
+import { IMAGE_ACCEPT, imageUrl, normalisePath, pictureFiles } from './model'
 import { ConfirmRemoveDialog, FileChooser } from './shared'
 
 type Upload = { draft: DraftDetail; path?: string }

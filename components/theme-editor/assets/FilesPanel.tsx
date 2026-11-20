@@ -17,7 +17,7 @@ import { Icon } from '@/components/ui/icon'
 import { useWorkspaceLink } from '@/components/workspace/useWorkspaceLink'
 import { themeDraftAction, type DraftDetail } from '../use-theme-drafts'
 import { useDraftOperations } from './use-draft-operations'
-import { formatBytes } from './model'
+import { formatBytes } from '@/lib/utils/format-bytes'
 import { ConfirmRemoveDialog } from './shared'
 
 const KIND_LABELS: Record<DraftDetail['files'][number]['kind'], string> = {

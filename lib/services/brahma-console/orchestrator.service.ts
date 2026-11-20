@@ -22,7 +22,6 @@
  * call them as before.
  */
 
-import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { resolveBrahmaMaxAgentTurns } from './turn-budget'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -36,6 +35,7 @@ import { normalizeWritingOutput, WRITING_OUTPUT_KIND } from '@/lib/brahma-consol
 import { BRAHMA_ATTACHMENT_FOLDER } from '@/lib/brahma-console/attachments'
 import { resolveConsoleConnectionProfile, runConsoleTurn } from '@/lib/services/console-engine/engine'
 import type { ConsolePersona, ConsoleTurnPlanBase } from '@/lib/services/console-engine/persona'
+import { researchOnlyTextBlockToolOptions } from '@/lib/services/chat-message/text-block-tool-options'
 
 export { normalizeToolCallSignature } from '@/lib/services/console-engine/loop-guard'
 
@@ -134,28 +134,9 @@ export const BRAHMA_CONSOLE_PERSONA: ConsolePersona<ConsoleTurnPlan> = {
     }),
   // Hand-built text-block options for the console: search + (maybe) web
   // search only; no workspace, wardrobe, help, rng/state, or whisper tools.
-  textBlockToolOptions: ({ connectionProfile }) => ({
-    imageGeneration: false,
+  textBlockToolOptions: ({ connectionProfile }) => researchOnlyTextBlockToolOptions({
     search: true,
     webSearch: !!connectionProfile.allowWebSearch,
-    whisper: false,
-    state: false,
-    rng: false,
-    projectInfo: false,
-    helpSearch: false,
-    helpSettings: false,
-    helpNavigate: false,
-    createNote: false,
-    wardrobeList: false,
-    wardrobeRead: false,
-    wardrobeWear: false,
-    wardrobeTakeOff: false,
-    wardrobeRollback: false,
-    wardrobeHistory: false,
-    wardrobeCreate: false,
-    wardrobeUpdate: false,
-    wardrobeArchive: false,
-    ...inventoryToolFlags(false),
     researchKit: 'full',
   }),
   // Operator surface: character-less, all stores.

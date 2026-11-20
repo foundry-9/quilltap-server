@@ -10,7 +10,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { formatDocStoreUri } from '@/lib/doc-edit/qtap-uri'
-import { foldName } from './text'
+import { dateOf, foldName } from './text'
 
 /**
  * A store's `qtap://` address, to which a file's path is appended to read it
@@ -28,10 +28,6 @@ export function storeAddress(store: { id: string; name: string }): string {
 export const COLLAPSE_FOLDER_OVER = 25
 /** Folders always collapsed in a listing: they hold pictures, not text. */
 export const BINARY_FOLDERS: ReadonlySet<string> = new Set(['images', 'photos', 'character-avatars', 'story-backgrounds'])
-
-function dateOf(iso: string): string {
-  return (iso ?? '').slice(0, 10)
-}
 
 /** Whether a store-relative path sits in `folder` (folded; '' is the root). */
 export function inFolder(relativePath: string, folder: string): boolean {

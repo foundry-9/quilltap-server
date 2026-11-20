@@ -18,7 +18,6 @@
  */
 
 import { buildScenarioBrief } from '@/lib/research/brief'
-import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { randomUUID } from 'crypto'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -43,6 +42,7 @@ import {
   type ScenarioBuilderMode,
 } from '@/lib/scenario-builder/system-prompt'
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
+import { researchOnlyTextBlockToolOptions } from '@/lib/services/chat-message/text-block-tool-options'
 
 const logger = createServiceLogger('ScenarioBuilder')
 
@@ -158,30 +158,11 @@ export async function runScenarioBuilder(
       built,
       agentKind: 'drafting',
       maxAgentTurns: SCENARIO_BUILDER_MAX_AGENT_TURNS,
-      textBlockOptions: {
-        imageGeneration: false,
+      textBlockOptions: researchOnlyTextBlockToolOptions({
         search: true,
         webSearch: webAvailable,
-        whisper: false,
-        state: false,
-        rng: false,
-        projectInfo: false,
-        helpSearch: false,
-        helpSettings: false,
-        helpNavigate: false,
-        createNote: false,
-        wardrobeList: false,
-        wardrobeRead: false,
-        wardrobeWear: false,
-        wardrobeTakeOff: false,
-        wardrobeRollback: false,
-        wardrobeHistory: false,
-        wardrobeCreate: false,
-        wardrobeUpdate: false,
-        wardrobeArchive: false,
-        ...inventoryToolFlags(false),
         researchKit: 'documents',
-      },
+      }),
     })
 
     const systemPrompt = buildScenarioBuilderSystemPrompt({

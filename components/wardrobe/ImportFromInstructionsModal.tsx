@@ -21,13 +21,13 @@ import { useId, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import BaseModal from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
-import { QuillAnimation } from '@/components/chat/QuillAnimation'
-import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import type { AgentStreamEvent, AgentStreamToolCall } from '@/components/agent-stream/parse-agent-stream'
+import { AgentRunProgress } from '@/components/agent-stream/AgentRunProgress'
+import { pickToolProfileId } from '@/components/agent-stream/pick-tool-profile'
 import { useAgentStreamRun } from '@/components/agent-stream/useAgentStreamRun'
 import {
   WARDROBE_DESIGN_INSTRUCTIONS_MAX,
@@ -216,13 +216,7 @@ export function ImportFromInstructionsModal({
   // Null until the operator picks: the default profile stands in, else the
   // first one with tools, else the first.
   const defaultProfileId = defaults?.defaultProfileId ?? null
-  const profileId =
-    chosenProfileId ??
-    ((defaultProfileId ? profiles.find((p) => p.id === defaultProfileId) : undefined) ??
-      profiles.find((p) => p.isDefault && p.allowToolUse) ??
-      profiles.find((p) => p.allowToolUse) ??
-      profiles[0])?.id ??
-    ''
+  const profileId = chosenProfileId ?? pickToolProfileId(profiles, defaultProfileId)
   const selectedProfile = profiles.find((p) => p.id === profileId) ?? null
 
   const searchConfigured = defaults?.webSearchConfigured ?? false
@@ -527,29 +521,13 @@ export function ImportFromInstructionsModal({
       )}
 
       {view === 'running' && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <QuillAnimation size="lg" label="Aurora is designing…" />
-            <span className="text-sm qt-text-secondary">Aurora is designing…</span>
-          </div>
-          {runner.toolCalls.length > 0 && (
-            <ul className="space-y-1 text-sm" aria-label="Aurora's enquiries">
-              {runner.toolCalls.map((call, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  {call.pending ? (
-                    <QuillAnimation size="sm" label={null} className="mt-0.5" />
-                  ) : call.success === false ? (
-                    <Icon name="close" className="w-4 h-4 mt-0.5 qt-text-danger" title="Came to nothing" />
-                  ) : (
-                    <Icon name="check" className="w-4 h-4 mt-0.5 qt-text-success" title="Done" />
-                  )}
-                  <span className="qt-text-secondary break-words">{describeAuroraActivity(call)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <ThinkingBlock content={runner.reasoning} streaming />
-        </div>
+        <AgentRunProgress
+          label="Aurora is designing…"
+          listLabel="Aurora's enquiries"
+          toolCalls={runner.toolCalls}
+          reasoning={runner.reasoning}
+          describe={describeAuroraActivity}
+        />
       )}
 
       {view === 'review' && review && (

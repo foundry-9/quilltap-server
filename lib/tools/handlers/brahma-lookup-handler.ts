@@ -43,7 +43,7 @@ import { readMessagesToolInputSchema } from '../read-messages-tool'
 import { composePublicIdentity } from '@/lib/characters/public-identity'
 import { resolveCharacterRef, type CharacterMatch } from '@/lib/research/characters'
 import { storeAddress, storeOutline } from '@/lib/research/outline'
-import { resolveConversationRef } from '@/lib/research/conversations'
+import { CONVERSATION_CHAT_TYPES, resolveConversationRef } from '@/lib/research/conversations'
 import { capRecords, containsAll, searchTerms } from '@/lib/research/text'
 
 const logger = createServiceLogger('BrahmaLookup')
@@ -56,9 +56,6 @@ export interface BrahmaLookupToolContext {
 export type BrahmaLookupResult =
   | ({ success: true } & Record<string, unknown>)
   | { success: false; error: string }
-
-/** Conversation types an operator means by "conversations". */
-const CONVERSATION_CHAT_TYPES = new Set(['salon', 'autonomous'])
 
 /** Text budgets, in characters. */
 const CORE_FIELD_CHARS = 3000

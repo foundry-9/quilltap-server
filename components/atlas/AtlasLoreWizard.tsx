@@ -24,14 +24,14 @@ import { useQuery } from '@tanstack/react-query'
 import BaseModal from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
-import { QuillAnimation } from '@/components/chat/QuillAnimation'
-import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { atlasTierKey } from '@/lib/hooks/use-atlas'
 import { GENERAL_ATLAS_CONTAINER, atlasActionUrl, type AtlasContainer } from '@/lib/atlas/container'
 import type { AgentStreamEvent, AgentStreamToolCall } from '@/components/agent-stream/parse-agent-stream'
+import { AgentRunProgress } from '@/components/agent-stream/AgentRunProgress'
+import { pickToolProfileId } from '@/components/agent-stream/pick-tool-profile'
 import { useAgentStreamRun } from '@/components/agent-stream/useAgentStreamRun'
 import {
   ATLAS_LORE_DETAILS_MAX,
@@ -159,13 +159,7 @@ export function AtlasLoreWizard({ container, containerLabel, onClose, onDraft }:
   // Null until the operator picks: Brahma's own profile stands in, else the
   // default, else the first one with tools.
   const brahmaProfileId = defaults?.brahmaProfileId ?? null
-  const profileId =
-    chosenProfileId ??
-    ((brahmaProfileId ? profiles.find((p) => p.id === brahmaProfileId) : undefined) ??
-      profiles.find((p) => p.isDefault && p.allowToolUse) ??
-      profiles.find((p) => p.allowToolUse) ??
-      profiles[0])?.id ??
-    ''
+  const profileId = chosenProfileId ?? pickToolProfileId(profiles, brahmaProfileId)
   const selectedProfile = profiles.find((p) => p.id === profileId) ?? null
 
   const running = runner.phase === 'running'
@@ -356,29 +350,13 @@ export function AtlasLoreWizard({ container, containerLabel, onClose, onDraft }:
       )}
 
       {view === 'running' && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <QuillAnimation size="lg" label="Brahma is drafting…" />
-            <span className="text-sm qt-text-secondary">Brahma is drafting…</span>
-          </div>
-          {runner.toolCalls.length > 0 && (
-            <ul className="space-y-1 text-sm" aria-label="Brahma's searches">
-              {runner.toolCalls.map((call, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  {call.pending ? (
-                    <QuillAnimation size="sm" label={null} className="mt-0.5" />
-                  ) : call.success === false ? (
-                    <Icon name="close" className="w-4 h-4 mt-0.5 qt-text-danger" title="Came to nothing" />
-                  ) : (
-                    <Icon name="check" className="w-4 h-4 mt-0.5 qt-text-success" title="Done" />
-                  )}
-                  <span className="qt-text-secondary break-words">{describeBrahmaActivity(call)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <ThinkingBlock content={runner.reasoning} streaming />
-        </div>
+        <AgentRunProgress
+          label="Brahma is drafting…"
+          listLabel="Brahma's searches"
+          toolCalls={runner.toolCalls}
+          reasoning={runner.reasoning}
+          describe={describeBrahmaActivity}
+        />
       )}
 
       {view === 'review' && draft && (

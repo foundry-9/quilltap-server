@@ -14,7 +14,7 @@
  * @module lib/atlas/routes/lore-draft
  */
 
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest, NextResponse } from 'next/server'
 import type { RequestContext } from '@/lib/api/middleware'
 import { badRequest, notFound, successResponse, validationError } from '@/lib/api/responses'
 import { readJsonBody } from '@/lib/api/request-body'
@@ -28,7 +28,7 @@ import {
 } from '@/lib/services/api-key.service'
 import { resolveBrahmaConnectionProfileForProject } from '@/lib/services/brahma-console/inline-profile'
 import { runAtlasLoreDraft } from '@/lib/services/atlas-lore/atlas-lore.service'
-import type { StreamController } from '@/lib/services/chat-message/tool-execution.service'
+import { streamAgentRun } from '@/lib/api/agent-run-stream'
 
 const logger = rootLogger.child({ context: 'AtlasLoreDraft' })
 
@@ -93,76 +93,28 @@ export async function handleAtlasLoreDraft(req: NextRequest, { user, repos }: Re
     chosenProfile: !!body.connectionProfileId,
   })
 
-  const signal = req.signal
-  const encoder = new TextEncoder()
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(streamController) {
-      let closed = false
-      // processToolCalls enqueues directly; a cancelled stream throws on
-      // enqueue. Swallow those so a closed dialog ends the run quietly.
-      const safeController: StreamController = {
-        enqueue: (data: Uint8Array) => {
-          if (closed || signal.aborted) return
-          try {
-            streamController.enqueue(data)
-          } catch {
-            closed = true
-          }
-        },
-      }
-      const onAbort = () => {
-        logger.debug('Atlas lore draft client disconnected; aborting the run')
-        closed = true
-      }
-      signal.addEventListener('abort', onAbort)
-
-      try {
-        await runAtlasLoreDraft(
-          {
-            repos,
-            userId: user.id,
-            connectionProfile,
-            apiKey: keyResolution.apiKey,
-            input: {
-              subject: body.subject,
-              details: body.details,
-              searchStores: body.searchStores,
-              target,
-              priorDraft: body.priorDraft ?? null,
-              revision: body.revision ?? null,
-            },
+  return streamAgentRun(req.signal, {
+    label: 'Atlas lore draft',
+    failureMessage: 'Brahma could not finish the draft.',
+    logger,
+    run: (controller, signal) =>
+      runAtlasLoreDraft(
+        {
+          repos,
+          userId: user.id,
+          connectionProfile,
+          apiKey: keyResolution.apiKey,
+          input: {
+            subject: body.subject,
+            details: body.details,
+            searchStores: body.searchStores,
+            target,
+            priorDraft: body.priorDraft ?? null,
+            revision: body.revision ?? null,
           },
-          safeController,
-          signal,
-        )
-      } catch (error) {
-        // runAtlasLoreDraft never throws by contract; this is belt and braces.
-        logger.error('Atlas lore draft stream failed', {
-          error: error instanceof Error ? error.message : String(error),
-        })
-        safeController.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: 'Brahma could not finish the draft.' })}\n\n`),
-        )
-      } finally {
-        signal.removeEventListener('abort', onAbort)
-        if (!closed) {
-          closed = true
-          try {
-            streamController.close()
-          } catch {
-            /* already closed */
-          }
-        }
-      }
-    },
-  })
-
-  return new NextResponse(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
+        },
+        controller,
+        signal,
+      ),
   })
 }

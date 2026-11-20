@@ -20,13 +20,13 @@ import { useQuery } from '@tanstack/react-query'
 import BaseModal from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
-import { QuillAnimation } from '@/components/chat/QuillAnimation'
-import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { STAFF_AVATARS } from '@/lib/chat/staff-display-names'
 import type { AgentStreamToolCall } from '@/components/agent-stream/parse-agent-stream'
+import { AgentRunProgress } from '@/components/agent-stream/AgentRunProgress'
+import { pickToolProfileId } from '@/components/agent-stream/pick-tool-profile'
 import { useScenarioBuilderRun } from './hooks/useScenarioBuilderRun'
 import {
   SaveScenarioDialog,
@@ -126,14 +126,7 @@ export function ScenarioBuilderDialog({
   const [revision, setRevision] = useState('')
   const [saveOpen, setSaveOpen] = useState(false)
 
-  const profileId = useMemo(() => {
-    if (chosenProfileId) return chosenProfileId
-    const preferred =
-      profiles.find((p) => p.isDefault && p.allowToolUse) ??
-      profiles.find((p) => p.allowToolUse) ??
-      profiles[0]
-    return preferred?.id ?? ''
-  }, [chosenProfileId, profiles])
+  const profileId = chosenProfileId ?? pickToolProfileId(profiles)
 
   const { data: capabilities } = useQuery({
     queryKey: queryKeys.scenarioBuilder.capabilities,
@@ -398,29 +391,13 @@ export function ScenarioBuilderDialog({
         )}
 
         {view === 'running' && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <QuillAnimation size="lg" label="The Host is out making enquiries…" />
-              <span className="text-sm qt-text-secondary">The Host is out making enquiries…</span>
-            </div>
-            {builder.toolCalls.length > 0 && (
-              <ul className="space-y-1 text-sm" aria-label="The Host's enquiries">
-                {builder.toolCalls.map((call, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    {call.pending ? (
-                      <QuillAnimation size="sm" label={null} className="mt-0.5" />
-                    ) : call.success === false ? (
-                      <Icon name="close" className="w-4 h-4 mt-0.5 qt-text-danger" title="Came to nothing" />
-                    ) : (
-                      <Icon name="check" className="w-4 h-4 mt-0.5 qt-text-success" title="Done" />
-                    )}
-                    <span className="qt-text-secondary break-words">{describeHostActivity(call)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <ThinkingBlock content={builder.reasoning} streaming />
-          </div>
+          <AgentRunProgress
+            label="The Host is out making enquiries…"
+            listLabel="The Host's enquiries"
+            toolCalls={builder.toolCalls}
+            reasoning={builder.reasoning}
+            describe={describeHostActivity}
+          />
         )}
 
         {view === 'review' && draft !== null && (

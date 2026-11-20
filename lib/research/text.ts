@@ -91,6 +91,11 @@ export function nameMatches(value: string, nameWords: readonly string[]): boolea
   return nameWords.every((word) => folded.includes(foldName(word)))
 }
 
+/** The calendar date of an ISO timestamp (its first ten characters); empty when there is none. */
+export function dateOf(iso: string | null | undefined): string {
+  return (iso ?? '').slice(0, 10)
+}
+
 /** Clip a line to `max` characters with an ellipsis. */
 export function clipLine(line: string, max: number): string {
   const trimmed = line.trim()

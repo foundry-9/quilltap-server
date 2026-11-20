@@ -21,7 +21,6 @@ import { getCalliopeSettings } from '@/lib/instance-settings'
 import { DEFAULT_CALLIOPE_MAX_AGENT_TURNS } from '@/lib/schemas/settings.types'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import { buildTools } from '@/lib/services/chat-message/streaming.service'
-import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { THEME_ASSIST_TOOL_DEFINITIONS } from '@/lib/tools/theme-assist-tools'
 import { CONSOLE_ATTACHMENT_FOLDERS } from '@/lib/console-engine/attachments'
 import { buildCalliopeSystemPrompt } from '@/lib/calliope/system-prompt-builder'
@@ -29,6 +28,7 @@ import { profileCanReceiveAttachment } from '@/lib/llm/image-transport'
 import { readDraft } from '@/lib/themes/drafts'
 import { resolveConsoleConnectionProfile, runConsoleTurn, type ConsoleSendOptions } from '@/lib/services/console-engine/engine'
 import type { ConsolePersona, ConsoleRepos, ConsoleTurnPlanBase } from '@/lib/services/console-engine/persona'
+import { researchOnlyTextBlockToolOptions } from '@/lib/services/chat-message/text-block-tool-options'
 
 const logger = createServiceLogger('Calliope')
 
@@ -116,28 +116,9 @@ export const CALLIOPE_PERSONA: ConsolePersona<ConsoleTurnPlanBase> = {
   // The text-block tool family describes none of hers: without native tool
   // calling she can talk about the draft but not read or propose (the same
   // limit Brahma's run_sql has).
-  textBlockToolOptions: () => ({
-    imageGeneration: false,
+  textBlockToolOptions: () => researchOnlyTextBlockToolOptions({
     search: false,
     webSearch: false,
-    whisper: false,
-    state: false,
-    rng: false,
-    projectInfo: false,
-    helpSearch: false,
-    helpSettings: false,
-    helpNavigate: false,
-    createNote: false,
-    wardrobeList: false,
-    wardrobeRead: false,
-    wardrobeWear: false,
-    wardrobeTakeOff: false,
-    wardrobeRollback: false,
-    wardrobeHistory: false,
-    wardrobeCreate: false,
-    wardrobeUpdate: false,
-    wardrobeArchive: false,
-    ...inventoryToolFlags(false),
   }),
   // Not the operator surface: her tools read only her conversation's draft.
   toolContext: () => ({}),

@@ -25,7 +25,6 @@
  */
 
 import { randomUUID } from 'crypto'
-import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
@@ -57,6 +56,7 @@ import {
 } from '@/lib/wardrobe/instruction-design/request-schema'
 import { parseWardrobeProposal } from '@/lib/wardrobe/proposal/parse'
 import type { WardrobeProposal } from '@/lib/wardrobe/proposal/types'
+import { researchOnlyTextBlockToolOptions } from '@/lib/services/chat-message/text-block-tool-options'
 
 const logger = createServiceLogger('WardrobeDesign')
 
@@ -178,30 +178,11 @@ export async function runWardrobeInstructionDesign(
       built,
       agentKind: 'drafting',
       maxAgentTurns: WARDROBE_DESIGN_MAX_AGENT_TURNS,
-      textBlockOptions: {
-        imageGeneration: false,
+      textBlockOptions: researchOnlyTextBlockToolOptions({
         search: reach.stores,
         webSearch: reach.webSearch,
-        whisper: false,
-        state: false,
-        rng: false,
-        projectInfo: false,
-        helpSearch: false,
-        helpSettings: false,
-        helpNavigate: false,
-        createNote: false,
-        wardrobeList: false,
-        wardrobeRead: false,
-        wardrobeWear: false,
-        wardrobeTakeOff: false,
-        wardrobeRollback: false,
-        wardrobeHistory: false,
-        wardrobeCreate: false,
-        wardrobeUpdate: false,
-        wardrobeArchive: false,
-        ...inventoryToolFlags(false),
         researchKit: reach.stores ? 'full' : 'off',
-      },
+      }),
     })
 
     // A revision shows Aurora the design as edited; reused pieces go back to

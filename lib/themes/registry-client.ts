@@ -16,9 +16,10 @@ import { safeFetch, SafeFetchError } from '@/lib/net/safe-fetch';
 import { getThemesDir } from '@/lib/paths';
 import { getErrorMessage } from '@/lib/error-utils';
 import { parseVersion } from '@/lib/utils/semver';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { installThemeBundle, readIndex, writeIndex } from '@/lib/themes/bundle-loader';
 import { CURRENT_THEME_FORMAT_VERSION, type RefusedTheme } from '@/lib/themes/refused';
-import { hashBuffer, OFFICIAL_REGISTRY_PUBLIC_KEY, OFFICIAL_REGISTRY_URL } from '@/lib/themes/crypto';
+import { OFFICIAL_REGISTRY_PUBLIC_KEY, OFFICIAL_REGISTRY_URL } from '@/lib/themes/crypto';
 import { assessRegistryIndex, checkBundleSignature, RegistryVerificationError } from '@/lib/themes/registry-trust';
 import {
   type RegistrySource,
@@ -484,7 +485,7 @@ export async function installFromRegistry(
     const buffer = response.body;
 
     // Verify SHA-256 hash
-    const actualHash = hashBuffer(buffer);
+    const actualHash = sha256OfBuffer(buffer);
     if (actualHash !== registryTheme.sha256) {
       registryLogger.error('SHA-256 hash mismatch for downloaded bundle', {
         themeId,

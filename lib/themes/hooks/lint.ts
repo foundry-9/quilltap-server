@@ -399,7 +399,8 @@ const ALLOWED_ELEMENTS = new Set(['html', 'body'])
 const ALLOWED_DATA_ATTRIBUTES = new Set<string>([...ROOT_HOOKS.attributes, 'data-qt-modal'])
 const SUBSTRING_OPERATORS = new Set(['*=', '^=', '$=', '|='])
 
-function isInsideKeyframes(rule: Rule): boolean {
+/** Whether a node sits inside an `@keyframes` block (its selectors are steps, not elements). */
+export function isInsideKeyframes(rule: { parent?: unknown }): boolean {
   let node: { type: string; parent?: unknown } | undefined = rule.parent as { type: string; parent?: unknown } | undefined
   while (node) {
     if (node.type === 'atrule' && /keyframes$/i.test((node as unknown as AtRule).name)) return true

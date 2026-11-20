@@ -100,13 +100,6 @@ export function normalisePath(p: string): string {
   return p.trim().replace(/^(\.\/)+/, '')
 }
 
-/** A byte count in words: `812 bytes`, `14.2 KB`, `3.1 MB`. */
-export function formatBytes(n: number): string {
-  if (n < 1024) return `${n} ${n === 1 ? 'byte' : 'bytes'}`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
-}
-
 /** The file at `p` in the draft, or null. */
 export function fileAt(files: readonly DraftFile[], p: string): DraftFile | null {
   const want = normalisePath(p)

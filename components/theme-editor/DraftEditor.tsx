@@ -26,7 +26,7 @@ import { useTheme } from '@/components/providers/theme-provider'
 import { useDraft } from '@/lib/hooks/use-draft'
 import { ApiFetchError, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { THEME_CHOICES, type ThemeTokensDocument, type TokenDef } from '@/lib/themes/engine/client'
 import { jsonEqual } from '@/lib/hooks/use-draft'
 import { createEditorStore, type EditorStore } from './editor-store'
@@ -41,7 +41,7 @@ import { PrimitivesPanel } from './PrimitivesPanel'
 import { DraftResourcesContext } from './controls'
 import { SectionJump } from '@/components/ui/SectionJump'
 import { assetSectionViews, type AssetSectionView } from './assets/model'
-import { DraftOperationsContext, useDraftOperationsState } from './assets/use-draft-operations'
+import { DraftOperationsContext, reloadAfterConflict, useDraftOperationsState } from './assets/use-draft-operations'
 import { FontsSection } from './assets/FontsSection'
 import { ImagesSection } from './assets/ImagesSection'
 import { IconsSection } from './assets/IconsSection'
@@ -72,7 +72,6 @@ import {
   type SectionView,
 } from './model'
 import {
-  fetchThemeDraft,
   installThemeDraft,
   saveThemeDraft,
   themeDraftAction,
@@ -80,7 +79,6 @@ import {
   type DraftInstallResult,
   type ThemeDraftSave,
 } from './use-theme-drafts'
-import { CHANGED_ELSEWHERE } from './assets/use-draft-operations'
 import { applyChangeSet } from '@/lib/themes/assist/change-set'
 import type { CalliopeProposalActions } from './calliope/CalliopePanel'
 import { CalliopeAvatar } from './calliope/CalliopeAvatar'
@@ -126,6 +124,16 @@ function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => 
     }
   }, [detail])
 
+  /** Take a draft a save or an operation returned as the newest, ahead of the render that shows it. */
+  const adopt = useCallback(
+    (fresh: DraftDetail) => {
+      latest.current = fresh
+      queryClient.setQueryData(queryKeys.themeDrafts.detail(fresh.id), fresh)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.themeDrafts.list })
+    },
+    [queryClient],
+  )
+
   const send = useCallback(
     async (keepalive: boolean): Promise<void> => {
       if (inFlight.current) await inFlight.current
@@ -148,20 +156,10 @@ function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => 
             },
             { keepalive },
           )
-          latest.current = fresh
-          queryClient.setQueryData(queryKeys.themeDrafts.detail(id), fresh)
-          void queryClient.invalidateQueries({ queryKey: queryKeys.themeDrafts.list })
+          adopt(fresh)
         } catch (err) {
           if (err instanceof ApiFetchError && err.status === 409) {
-            try {
-              const fresh = await fetchThemeDraft(id)
-              latest.current = fresh
-              queryClient.setQueryData(queryKeys.themeDrafts.detail(id), fresh)
-              onConflictRef.current(fresh)
-            } catch (reloadErr) {
-              showErrorToast(apiErrorMessage(reloadErr, 'The draft changed elsewhere, and could not be fetched again.'))
-            }
-            showWarningToast(CHANGED_ELSEWHERE)
+            await reloadAfterConflict(id, adopt, onConflictRef.current)
           } else {
             showErrorToast(apiErrorMessage(err, 'The atelier could not save the draft.'))
           }
@@ -176,7 +174,7 @@ function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => 
         if (inFlight.current === run) inFlight.current = null
       }
     },
-    [queryClient],
+    [adopt],
   )
 
   const queue = useCallback(
@@ -204,15 +202,6 @@ function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => 
 
   /** The newest draft seen: what an operation reads its manifest revision from. */
   const current = useCallback(() => latest.current, [])
-  /** Take a draft an operation returned as the newest, ahead of the render that shows it. */
-  const adopt = useCallback(
-    (fresh: DraftDetail) => {
-      latest.current = fresh
-      queryClient.setQueryData(queryKeys.themeDrafts.detail(fresh.id), fresh)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.themeDrafts.list })
-    },
-    [queryClient],
-  )
 
   return { queue, flush, saving, current, adopt }
 }

@@ -22,7 +22,6 @@
 
 import { buildLoreBrief } from '@/lib/research/brief'
 import { randomUUID } from 'crypto'
-import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
@@ -46,6 +45,7 @@ import type { AtlasScope } from '@/lib/schemas/atlas.types'
 import { buildAtlasLoreSystemPrompt, buildAtlasLoreUserMessage } from '@/lib/atlas/lore-draft/prompt'
 import { parseAtlasLoreDraft } from '@/lib/atlas/lore-draft/parse'
 import type { AtlasLoreDraft } from '@/lib/atlas/lore-draft/request-schema'
+import { researchOnlyTextBlockToolOptions } from '@/lib/services/chat-message/text-block-tool-options'
 
 const logger = createServiceLogger('AtlasLoreDraft')
 
@@ -167,30 +167,11 @@ export async function runAtlasLoreDraft(
       built,
       agentKind: 'drafting',
       maxAgentTurns,
-      textBlockOptions: {
-        imageGeneration: false,
+      textBlockOptions: researchOnlyTextBlockToolOptions({
         search: input.searchStores,
         webSearch: false,
-        whisper: false,
-        state: false,
-        rng: false,
-        projectInfo: false,
-        helpSearch: false,
-        helpSettings: false,
-        helpNavigate: false,
-        createNote: false,
-        wardrobeList: false,
-        wardrobeRead: false,
-        wardrobeWear: false,
-        wardrobeTakeOff: false,
-        wardrobeRollback: false,
-        wardrobeHistory: false,
-        wardrobeCreate: false,
-        wardrobeUpdate: false,
-        wardrobeArchive: false,
-        ...inventoryToolFlags(false),
         researchKit: input.searchStores ? 'full' : 'off',
-      },
+      }),
     })
 
     const systemPrompt = buildAtlasLoreSystemPrompt({

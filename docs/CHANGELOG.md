@@ -4,6 +4,15 @@
 
 ### 4.14-dev
 
+#### Refactor: release checklist 3 (best-practices pass)
+
+- New `streamAgentRun` (`lib/api/agent-run-stream.ts`) is the SSE response for the Scenario Builder, wardrobe design and Atlas lore routes, which each carried their own copy of the abort-safe controller, fallback error frame and headers
+- New `researchOnlyTextBlockToolOptions` (`lib/services/chat-message/text-block-tool-options.ts`) replaces the all-off text-block tool options literal copied into the Brahma orchestrator and one-shot, the Calliope persona, the Scenario Builder, Atlas lore and wardrobe design services
+- New `AgentRunProgress` and `pickToolProfileId` (`components/agent-stream/`) replace the running panel and the default-profile fallback repeated in the Scenario Builder dialog, Import from Instructions and the Atlas lore wizard
+- Theme editor: a stale-revision save and a stale-revision operation recover through one `reloadAfterConflict`; the saver's conflict path now also refreshes the draft list
+- Theme editor file sizes use the shared `formatBytes`: sizes under 1 KB read "812 B" instead of "812 bytes"
+- Removed duplicates: `hashBuffer` (use `sha256OfBuffer`), a second `isInsideKeyframes`, three `dateOf` copies in `lib/research/`, and a private `CONVERSATION_CHAT_TYPES` in the Brahma lookup handler. Removed unused `hooksForSurface`
+
 #### Tests: dynamic-backgrounds layout test runs in about 1 s
 
 - `layout.test.ts` took about 112 s: `checkPlan` made one `expect` per occupancy-grid cell (2,304 per plan, 2,400 plans, about 5.5 million matcher calls). It now collects violations in plain JS and asserts the list is empty once per plan. Same invariants and seeds; failures still list the offending cells, tiles and bands

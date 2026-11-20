@@ -15,7 +15,7 @@
  * @module lib/wardrobe/routes/design-from-instructions
  */
 
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest, NextResponse } from 'next/server'
 import type { RequestContext } from '@/lib/api/middleware'
 import { badRequest, notFound, successResponse, validationError } from '@/lib/api/responses'
 import { readJsonBody } from '@/lib/api/request-body'
@@ -24,7 +24,7 @@ import {
   describeProfileApiKeyFailure,
   resolveConnectionProfileApiKey,
 } from '@/lib/services/api-key.service'
-import type { StreamController } from '@/lib/services/chat-message/tool-execution.service'
+import { streamAgentRun } from '@/lib/api/agent-run-stream'
 import {
   resolveWardrobeDesignReach,
   runWardrobeInstructionDesign,
@@ -110,76 +110,28 @@ export async function handleWardrobeDesign(req: NextRequest, { user, repos }: Re
     profileId: connectionProfile.id,
   })
 
-  const signal = req.signal
-  const encoder = new TextEncoder()
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(streamController) {
-      let closed = false
-      // processToolCalls enqueues directly; a cancelled stream throws on
-      // enqueue. Swallow those so a closed dialog ends the run quietly.
-      const safeController: StreamController = {
-        enqueue: (data: Uint8Array) => {
-          if (closed || signal.aborted) return
-          try {
-            streamController.enqueue(data)
-          } catch {
-            closed = true
-          }
-        },
-      }
-      const onAbort = () => {
-        logger.debug('Wardrobe design client disconnected; aborting the run')
-        closed = true
-      }
-      signal.addEventListener('abort', onAbort)
-
-      try {
-        await runWardrobeInstructionDesign(
-          {
-            repos,
-            userId: user.id,
-            connectionProfile,
-            apiKey: keyResolution.apiKey,
-            location,
-            input: {
-              instructions: body.instructions,
-              searchStores: body.searchStores,
-              searchWeb: body.searchWeb,
-              priorProposal: body.priorProposal ?? null,
-              revision: body.revision ?? null,
-            },
+  return streamAgentRun(req.signal, {
+    label: 'Wardrobe design',
+    failureMessage: 'Aurora could not finish the design.',
+    logger,
+    run: (controller, signal) =>
+      runWardrobeInstructionDesign(
+        {
+          repos,
+          userId: user.id,
+          connectionProfile,
+          apiKey: keyResolution.apiKey,
+          location,
+          input: {
+            instructions: body.instructions,
+            searchStores: body.searchStores,
+            searchWeb: body.searchWeb,
+            priorProposal: body.priorProposal ?? null,
+            revision: body.revision ?? null,
           },
-          safeController,
-          signal,
-        )
-      } catch (error) {
-        // runWardrobeInstructionDesign never throws by contract; this is belt and braces.
-        logger.error('Wardrobe design stream failed', {
-          error: error instanceof Error ? error.message : String(error),
-        })
-        safeController.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: 'Aurora could not finish the design.' })}\n\n`),
-        )
-      } finally {
-        signal.removeEventListener('abort', onAbort)
-        if (!closed) {
-          closed = true
-          try {
-            streamController.close()
-          } catch {
-            /* already closed */
-          }
-        }
-      }
-    },
-  })
-
-  return new NextResponse(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
+        },
+        controller,
+        signal,
+      ),
   })
 }

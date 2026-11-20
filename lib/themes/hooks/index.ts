@@ -97,11 +97,6 @@ export function getHook(className: string): HookDef | undefined {
   return BY_CLASS.get(className)
 }
 
-/** Every hook on one surface, in catalogue order. */
-export function hooksForSurface(surface: HookSurface): HookDef[] {
-  return HOOKS.filter((hook) => hook.surface === surface)
-}
-
 /**
  * Hooks removed after `version` — what a theme written against that catalogue
  * version may still target.

@@ -17,6 +17,7 @@ import { useId, useMemo, useState } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { formatFontFamily, type ThemeTokensDocument } from '@/lib/themes/engine/client'
 import type { UploadedFontReading } from '@/lib/themes/drafts/operations'
+import { formatBytes } from '@/lib/utils/format-bytes'
 import { themeDraftAction, themeDraftUpload, type DraftDetail } from '../use-theme-drafts'
 import { useDraftOperations } from './use-draft-operations'
 import {
@@ -27,7 +28,6 @@ import {
   familiesInUse,
   fontEntries,
   fontFamilies,
-  formatBytes,
   licenceFiles,
   licenceFromHint,
   sampleWeight,

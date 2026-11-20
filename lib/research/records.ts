@@ -40,7 +40,7 @@ import { resolveCharacterRef } from './characters'
 import { CONVERSATION_CHAT_TYPES, resolveConversationRef } from './conversations'
 import type { ResearchOutcome } from './documents'
 import { storeAddress, storeOutline } from './outline'
-import { RESEARCH_RESULT_CEILING, clipLine, foldName, joinUnderCeiling, nearestByName } from './text'
+import { RESEARCH_RESULT_CEILING, clipLine, dateOf, foldName, joinUnderCeiling, nearestByName } from './text'
 
 const logger = createServiceLogger('ResearchRecords')
 
@@ -49,10 +49,6 @@ const SUMMARY_PREVIEW_CHARS = 300
 const OUTLINE_LINES = 24
 /** One outline line per this many spoken lines of a conversation. */
 const OUTLINE_EVERY = 10
-
-function dateOf(iso: string | null | undefined): string {
-  return (iso ?? '').slice(0, 10)
-}
 
 /** The first sentence of a text, clipped. */
 export function firstSentence(text: string | null | undefined, max = 200): string {
