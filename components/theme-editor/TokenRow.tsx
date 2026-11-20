@@ -89,7 +89,7 @@ function ContrastLine({ finding, against, role }: ReturnType<typeof rowContrast>
   const pass = finding.status === 'pass'
   return (
     <li className={`qt-text-xs ${pass ? 'qt-text-secondary' : 'qt-text-destructive'}`}>
-      <Icon name={pass ? 'check' : 'alert-triangle'} className="inline w-3 h-3 mr-1 align-[-2px]" />
+      <Icon name={pass ? 'check' : 'alert-triangle'} className="qt-icon-inline-note" />
       <span className="font-medium">{pass ? 'Passes' : 'Falls short'}</span>{' '}
       {finding.ratio?.toFixed(2)}:1 {relation}, needs {finding.threshold}:1 ({kind})
       {!pass && handOff && (
@@ -175,8 +175,8 @@ function ModeBlock({ token, mode, view, primitives, problem, edit, heading, acti
         onCommit={(v) => edit(key, (s) => setTokenValue(s.tokens, token.name, mode, v))}
       />
       {problem && (
-        <p className="qt-text-xs qt-text-destructive">
-          <Icon name="alert-triangle" className="inline w-3 h-3 mr-1 align-[-2px]" />
+        <p role="status" className="qt-text-xs qt-text-destructive">
+          <Icon name="alert-triangle" className="qt-icon-inline-note" />
           The value in force does not fit: {problem}.
         </p>
       )}

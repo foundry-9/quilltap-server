@@ -34,7 +34,8 @@
    {"when":"","properties":[{"property":"inset","vars":[],"literal":true},{"property":"overflow","vars":[],"literal":true},{"property":"pointer-events","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}
   ],
   "qt-workspace-backdrop-layer": [
-   {"when":"","properties":[{"property":"background-position","vars":[],"literal":true},{"property":"background-repeat","vars":[],"literal":true},{"property":"background-size","vars":[],"literal":true},{"property":"inset","vars":[],"literal":true},{"property":"opacity","vars":["--qt-workspace-backdrop-opacity"]},{"property":"position","vars":[],"literal":true}]}
+   {"when":"","properties":[{"property":"background-position","vars":[],"literal":true},{"property":"background-repeat","vars":[],"literal":true},{"property":"background-size","vars":[],"literal":true},{"property":"inset","vars":[],"literal":true},{"property":"opacity","vars":["--qt-workspace-backdrop-opacity"]},{"property":"position","vars":[],"literal":true}]},
+   {"when":"dark mode","properties":[{"property":"opacity","vars":["--qt-workspace-backdrop-opacity"]}]}
   ],
   "qt-workspace-pane-chrome": [
    {"when":"","properties":[{"property":"background","vars":["--color-background","--color-card","--qt-panel-bg","--qt-workspace-chrome-bg"]},{"property":"border-bottom","vars":["--color-border","--qt-workspace-chrome-border"]},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"min-width","vars":[],"literal":true},{"property":"position","vars":[],"literal":true},{"property":"z-index","vars":[],"literal":true}]}

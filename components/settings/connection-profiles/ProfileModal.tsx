@@ -697,14 +697,14 @@ export function ProfileModal({
 
               {/* Status messages */}
               {connectionMessage && (
-                <div className="text-sm qt-alert-success">
-                  ✓ {connectionMessage}
+                <div role="status" className="text-sm qt-alert-success">
+                  <span aria-hidden="true">✓</span> {connectionMessage}
                 </div>
               )}
 
               {operations.connectError && (
-                <div className="qt-alert-error">
-                  ✗ {operations.connectError}
+                <div role="alert" className="qt-alert-error">
+                  <span aria-hidden="true">✗</span> {operations.connectError}
                 </div>
               )}
 

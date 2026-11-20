@@ -358,64 +358,81 @@
     transition: opacity 200ms ease;
   }
 
-  /**
-   * Queue badge idle state (count is 0)
-   */
-  .qt-queue-badge-idle {
-    opacity: var(--qt-queue-badge-idle-opacity);
-  }
-
-  /**
-   * Queue badge blip — work that started and finished between two polls never
-   * shows up as a count, so the badge pulses once to mark that it happened.
-   */
-  .qt-queue-badge-pulse {
-    animation: qt-queue-badge-blip 600ms ease-in-out 2;
-  }
-
-  @keyframes qt-queue-badge-blip {
-    0%, 100% { opacity: var(--qt-queue-badge-idle-opacity); }
-    50% { opacity: 1; }
-  }
 
   /**
    * Memory queue badge (blue)
    */
   .qt-queue-badge-memory {
-    background: var(--qt-queue-badge-memory-bg);
-    color: var(--qt-queue-badge-memory-fg);
+    --qt-queue-badge-current-bg: var(--qt-queue-badge-memory-bg);
+    --qt-queue-badge-current-fg: var(--qt-queue-badge-memory-fg);
+    background: var(--qt-queue-badge-current-bg);
+    color: var(--qt-queue-badge-current-fg);
   }
 
   /**
    * Embedding queue badge (purple)
    */
   .qt-queue-badge-embedding {
-    background: var(--qt-queue-badge-embedding-bg);
-    color: var(--qt-queue-badge-embedding-fg);
+    --qt-queue-badge-current-bg: var(--qt-queue-badge-embedding-bg);
+    --qt-queue-badge-current-fg: var(--qt-queue-badge-embedding-fg);
+    background: var(--qt-queue-badge-current-bg);
+    color: var(--qt-queue-badge-current-fg);
   }
 
   /**
    * Summarization queue badge (green)
    */
   .qt-queue-badge-summary {
-    background: var(--qt-queue-badge-summary-bg);
-    color: var(--qt-queue-badge-summary-fg);
+    --qt-queue-badge-current-bg: var(--qt-queue-badge-summary-bg);
+    --qt-queue-badge-current-fg: var(--qt-queue-badge-summary-fg);
+    background: var(--qt-queue-badge-current-bg);
+    color: var(--qt-queue-badge-current-fg);
   }
 
   /**
    * Danger classification queue badge (red)
    */
   .qt-queue-badge-danger {
-    background: var(--qt-queue-badge-danger-bg);
-    color: var(--qt-queue-badge-danger-fg);
+    --qt-queue-badge-current-bg: var(--qt-queue-badge-danger-bg);
+    --qt-queue-badge-current-fg: var(--qt-queue-badge-danger-fg);
+    background: var(--qt-queue-badge-current-bg);
+    color: var(--qt-queue-badge-current-fg);
   }
 
   /**
    * Story background queue badge (dark gray)
    */
   .qt-queue-badge-story {
-    background: var(--qt-queue-badge-story-bg);
-    color: var(--qt-queue-badge-story-fg);
+    --qt-queue-badge-current-bg: var(--qt-queue-badge-story-bg);
+    --qt-queue-badge-current-fg: var(--qt-queue-badge-story-fg);
+    background: var(--qt-queue-badge-current-bg);
+    color: var(--qt-queue-badge-current-fg);
+  }
+
+  /**
+   * Queue badge idle state (count is 0). Only the colour fades — to the
+   * idle-opacity share of the badge's own colour — and the label is set in
+   * the page's foreground, so "Mem 0" stays legible (WCAG 1.4.3). After the
+   * colour rules above so it wins at equal specificity.
+   */
+  .qt-queue-badge-idle {
+    background: color-mix(in srgb, var(--qt-queue-badge-current-bg) calc(var(--qt-queue-badge-idle-opacity) * 100%), transparent);
+    color: var(--color-foreground);
+  }
+
+  /**
+   * Queue badge blip — work that started and finished between two polls never
+   * shows up as a count, so the idle badge flashes its working colours twice.
+   */
+  .qt-queue-badge-pulse {
+    animation: qt-queue-badge-blip 600ms ease-in-out 2;
+  }
+
+  @keyframes qt-queue-badge-blip {
+    50% {
+      background: var(--qt-queue-badge-current-bg);
+      color: var(--qt-queue-badge-current-fg);
+    }
   }
 
   /* ==========================================================================

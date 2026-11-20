@@ -268,6 +268,10 @@ Nor need you reach for the mouse to open things. The name on a character card, a
 
 The very first press of Tab on any page now offers a **Skip to content** link, so the keyboard may bypass the sidebar entirely and land in the page proper. In the Salon, a screen reader is told each time a character replies, and Document Mode murmurs "Saved" when your work is safely put away. A whisper you are merely overhearing says so in words, not just in a paler ink, and the close buttons on workspace tabs have grown large enough to hit without squinting. Should your system be set to Windows High Contrast, the icons now keep their ink rather than vanishing into the page.
 
+The ring that marks where the keyboard has got to is now a reliable companion. It no longer vanishes from buttons that wear a little shadow (the red delete buttons on character cards were the chief absentees); its inner margin takes the colour of the page rather than a stark white band in dark mode; it survives Windows High Contrast; and a choice drawn as a card around a hidden radio button, such as picking a connection profile, now shows the ring on the card itself. The places where you drop a picture or a chat file to import it may likewise be reached with Tab and opened with Enter or the space bar, and the result of testing a connection is read aloud.
+
+The edges of text boxes, menus and other fields are now drawn firmly enough to be found at a glance in every theme, light and dark (Earl Grey's fields, formerly borderless, now wear a quiet grey rule). The little badges at the top right that report background work no longer fade to a ghost when idle; they keep their lettering legible and merely pale their colour, flashing it briefly when a task has come and gone. And in dark mode the photograph behind a page is hung a shade fainter, so the headings and greeting set upon it stay readable even over its brightest corners.
+
 ## Troubleshooting Appearance Settings
 
 ### Themes Won't Load

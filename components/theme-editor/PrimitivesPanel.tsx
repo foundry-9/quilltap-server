@@ -203,8 +203,8 @@ const PrimitiveRow = memo(function PrimitiveRow({ name, store, edit, onRemove }:
           }
         />
         {problem && (
-          <p className="qt-text-xs qt-text-destructive">
-            <Icon name="alert-triangle" className="inline w-3 h-3 mr-1 align-[-2px]" />
+          <p role="status" className="qt-text-xs qt-text-destructive">
+            <Icon name="alert-triangle" className="qt-icon-inline-note" />
             The value does not fit its type: {problem}.
           </p>
         )}

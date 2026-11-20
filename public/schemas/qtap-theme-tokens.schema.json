@@ -10272,7 +10272,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Queue badge idle opacity — opacity, group badge — default: 0.35"
+          "description": "Queue badge idle tint (share of the badge colour) — opacity, group badge — default: 0.35"
         },
         "--qt-queue-badge-memory-bg": {
           "anyOf": [
@@ -16044,7 +16044,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Input — color, group colors — default: hsl(225 10% 87%) — dark default: hsl(225 12% 20%)"
+          "description": "Input — color, group colors — default: hsl(225 10% 57.5%) — dark default: hsl(225 12% 43.5%)"
         },
         "--theme-letter-spacing-normal": {
           "anyOf": [

@@ -4,6 +4,20 @@
 
 ### 4.14-dev
 
+#### Accessibility: release checklist 13 (UI and WCAG pass)
+
+- Focus ring restored on buttons that also carry `qt-shadow-sm` / `-md` / `-lg` (e.g. the delete buttons on character and group cards): the shadow utility replaced the `ring-*` box-shadow. While `:focus-visible`, the shadow utilities now use Tailwind's ring composite
+- Button, tab and chat-control focus rings use `outline-hidden` instead of `outline-none` (a transparent outline that shows under `forced-colors: active`) and `ring-offset-background` instead of the default white offset, which drew a white band around the ring in dark themes
+- A `<label>` wrapping an `sr-only` radio or checkbox shows a focus outline when the input has keyboard focus (connection-profile picker and similar option cards)
+- The Import from Image drop zone and the SillyTavern chat-import drop zone are keyboard operable (`role="button"`, `tabIndex`, `activateOnKey`, accessible name)
+- Connection-test results in the profile modal and import errors are announced (`role="status"` / `role="alert"`); theme-editor "does not fit" messages are `role="status"`; a theme file over the per-file size limit is marked with an icon and screen-reader text, not colour alone
+- Form-field edges reach 3:1 against the page and card backgrounds in the default theme and all six bundled themes (`--theme-input` raised in each mode; Earl Grey's `--qt-input-border` was `transparent`, Rains' `--qt-input-border` was a 12% white mix in dark mode). `check-theme-contrast` now checks `--qt-input-border` on `--theme-background` and `--theme-card`. `.qt-bg-input` (Document Mode's source view) now uses `--qt-input-bg` instead of the input border colour. Bundled theme versions bumped: Art Deco, Earl Grey, Great Estate, Old School and Rains to 2.0.1, Madman's Box to 2.0.2
+- Idle header queue badges no longer fade the whole badge: the background is tinted at `--qt-queue-badge-idle-opacity` of the badge colour and the label uses the page foreground. The blip animation flashes the badge's working colours instead of opacity
+- In dark mode the workspace photo backdrop defaults to 0.35 opacity (was 0.4), and the Home subtitle uses the foreground colour instead of the secondary one, since both sit directly on the photo
+- Four more file drop zones are keyboard operable: AI Import source files, the `.qtap` import step, backup restore, and the AI Wizard's image and document uploads (the hidden inputs are now `sr-only`, and a label following a focused `sr-only` input shows a focus outline)
+- Calliope's message list is a `role="log"` region instead of `aria-live` on the whole transcript; the workspace tab close cross has a `title`
+- New `qt-icon-inline-note` utility for the small warning/check icons in the theme editor's notes (`TokenRow`, `PrimitivesPanel`, `FilesPanel`). The old Tailwind `inline` class set `display: inline`, which made the mask-drawn icons render at zero size
+
 #### CLI: theme bundle paths complete in the shell
 
 - `quilltap themes install` and `themes validate` now complete file and directory paths in bash, zsh and fish; before, only flags were offered after those verbs. Tests in `completion-behavior.test.js`

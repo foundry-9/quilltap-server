@@ -264,8 +264,8 @@ export const COLORS_TOKENS: readonly TokenDef[] = [
     type: 'color',
     group: 'colors',
     label: "Input",
-    default: "hsl(225 10% 87%)",
-    defaultDark: "hsl(225 12% 20%)",
+    default: "hsl(225 10% 57.5%)",
+    defaultDark: "hsl(225 12% 43.5%)",
     visibility: 'standard',
   },
   {

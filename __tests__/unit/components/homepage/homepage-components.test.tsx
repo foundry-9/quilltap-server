@@ -242,10 +242,12 @@ describe('WelcomeSection', () => {
     expect(h1).toHaveClass('qt-heading-1', 'mb-2')
   })
 
-  it('renders paragraph with muted foreground class', () => {
+  // The subtitle sits straight on the page backdrop, so it wears the full
+  // foreground colour rather than the secondary one (WCAG 1.4.3).
+  it('renders paragraph with the foreground text class', () => {
     const { container } = render(<WelcomeSection displayName="John" />)
     const paragraph = container.querySelector('p')
-    expect(paragraph).toHaveClass('qt-text-secondary')
+    expect(paragraph).toHaveClass('qt-text')
   })
 
   it('renders name with primary text class', () => {

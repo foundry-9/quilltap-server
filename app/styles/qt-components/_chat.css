@@ -1147,7 +1147,7 @@
    */
   .qt-chat-toolbar-button {
     @apply inline-flex items-center justify-center;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
     @apply disabled:pointer-events-none disabled:opacity-50;
     cursor: pointer;
     width: 2.75rem;
@@ -1486,7 +1486,7 @@
     @apply h-12 w-12;
     @apply rounded-full;
     @apply transition-all duration-200;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
     cursor: pointer;
     background: var(--qt-button-primary-bg);
@@ -1564,7 +1564,7 @@
    */
   .qt-composer-gutter-button {
     @apply inline-flex items-center justify-center;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
     @apply disabled:pointer-events-none disabled:opacity-50;
     @apply transition-colors duration-150;
     width: 2rem;

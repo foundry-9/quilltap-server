@@ -3,10 +3,10 @@
  * add-file-generation-moderation-column-v1 — adds `files.generationModeration` against a real in-memory SQLite database.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const Database = require(require('path').join(process.cwd(), 'node_modules', 'better-sqlite3'))
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 let db: any
 
 jest.mock('../../../migrations/lib/logger', () => ({

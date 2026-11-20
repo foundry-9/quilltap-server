@@ -276,7 +276,7 @@ The CLI carries the app's own engine (`packages/quilltap/lib/theme-engine.genera
 
 ### Contrast
 
-Every theme is measured against the registry's contrast pairs (`lib/themes/registry/contrast.ts`): a foreground token, the background it is drawn on, and a kind — `text` must reach 4.5:1 and `non-text` (focus rings) 3:1, WCAG 2.2 AA, in light and in dark. A translucent foreground is composited over its background, a translucent background over the page. A value that is not one colour the engine can evaluate (a gradient, an image, an unsupported colour function) is reported as unchecked, never as a pass.
+Every theme is measured against the registry's contrast pairs (`lib/themes/registry/contrast.ts`): a foreground token, the background it is drawn on, and a kind — `text` must reach 4.5:1 and `non-text` (focus rings, and the edge of a form field — `--qt-input-border` on the page and on a card) 3:1, WCAG 2.2 AA, in light and in dark. A translucent foreground is composited over its background, a translucent background over the page. A value that is not one colour the engine can evaluate (a gradient, an image, an unsupported colour function) is reported as unchecked, never as a pass.
 
 A failure is a **warning**: a theme that fails a pair still loads, saves and installs. `quilltap themes validate` prints the failures, the Atelier shows each token's pairs beside it, and `npm run lint` runs `scripts/check-theme-contrast.ts --check` against the default theme and the bundled themes, which must pass every pair except those on `themes/bundled/contrast-exceptions.json` (empty, and kept that way). `--all` prints every pair.
 

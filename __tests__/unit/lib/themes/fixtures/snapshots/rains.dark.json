@@ -408,7 +408,7 @@
     "--qt-highlight-padding-x": "0.125rem",
     "--qt-highlight-radius": "0.125rem",
     "--qt-input-bg": "hsl(40 6% 20%)",
-    "--qt-input-border": "color-mix(in srgb, hsl(0 0% 100%) 12%, transparent)",
+    "--qt-input-border": "hsl(30 8% 47%)",
     "--qt-input-fg": "hsl(40 10% 95%)",
     "--qt-input-focus-ring": "hsl(28 85% 58%)",
     "--qt-input-padding-x": "0.75rem",

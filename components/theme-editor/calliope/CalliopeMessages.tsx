@@ -93,7 +93,7 @@ export function CalliopeMessages({
   }, [messages.length, streamingContent, streamingToolCalls.length, isStreaming])
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3" aria-live="polite" aria-busy={isStreaming}>
+    <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3" role="log" aria-label="Conversation with Calliope" aria-busy={isStreaming}>
       {messages.length === 0 && !isStreaming && (
         <p className="qt-text-small qt-text-secondary">
           Tell her the look you are after &mdash; a mood, a palette, a period, a picture &mdash; and she will set

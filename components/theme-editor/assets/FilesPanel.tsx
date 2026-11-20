@@ -13,6 +13,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { Icon } from '@/components/ui/icon'
 import { useWorkspaceLink } from '@/components/workspace/useWorkspaceLink'
 import { themeDraftAction, type DraftDetail } from '../use-theme-drafts'
 import { useDraftOperations } from './use-draft-operations'
@@ -77,7 +78,11 @@ export function FilesPanel({ detail }: { detail: DraftDetail }) {
                 <td className="py-1.5 pr-3 font-mono break-all">{file.path}</td>
                 <td className="py-1.5 pr-3">{KIND_LABELS[file.kind]}</td>
                 <td className={`py-1.5 pr-3 text-right whitespace-nowrap ${file.size > totals.limits.fileBytes ? 'qt-text-destructive' : ''}`}>
+                  {file.size > totals.limits.fileBytes && (
+                    <Icon name="alert-triangle" className="qt-icon-inline-note" />
+                  )}
                   {formatBytes(file.size)}
+                  {file.size > totals.limits.fileBytes && <span className="sr-only"> (over the per-file limit)</span>}
                 </td>
                 <td className="py-1.5 pr-3">
                   {file.unused ? (

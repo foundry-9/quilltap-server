@@ -150,6 +150,7 @@ export function TabStrip({
               className="qt-tab-close"
               tabIndex={-1}
               aria-hidden="true"
+              title={`Close ${tab.title}`}
               onClick={(e) => {
                 e.stopPropagation()
                 onClose(id)

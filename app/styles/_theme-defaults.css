@@ -68,7 +68,7 @@
 
   /* Borders & inputs */
   --theme-border: hsl(225 10% 87%);
-  --theme-input: hsl(225 10% 87%);
+  --theme-input: hsl(225 10% 57.5%);
   --theme-ring: hsl(225 65% 48%);
 
   /* Chat - user bubble matches primary hue */
@@ -437,7 +437,7 @@
   --theme-info-foreground: hsl(225 18% 9%);
   /* Borders & inputs */
   --theme-border: hsl(225 12% 20%);
-  --theme-input: hsl(225 12% 20%);
+  --theme-input: hsl(225 12% 43.5%);
   --theme-ring: hsl(225 55% 60%);
   /* Chat - boosted for dark backgrounds */
   --theme-chat-user: hsl(225 60% 56%);

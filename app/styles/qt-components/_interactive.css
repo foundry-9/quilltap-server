@@ -27,7 +27,7 @@
     @apply inline-flex items-center justify-center gap-2;
     @apply text-sm font-medium;
     @apply transition-all duration-200;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
     cursor: pointer;
     padding: var(--qt-button-padding-y) var(--qt-button-padding-x);
@@ -353,7 +353,7 @@
    * to 25% and wash the control out.
    */
   .qt-range {
-    @apply focus-visible:outline-none focus-visible:ring-2;
+    @apply focus-visible:outline-hidden focus-visible:ring-2;
     @apply disabled:cursor-not-allowed;
     cursor: pointer;
     accent-color: var(--qt-range-accent);
@@ -381,7 +381,7 @@
   .qt-tab {
     @apply inline-flex items-center gap-2 min-w-fit;
     @apply border border-b-0;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
     padding: var(--qt-tab-padding-y) var(--qt-tab-padding-x);
     border-radius: var(--qt-tab-radius);
     font-size: var(--qt-tab-font-size);

@@ -27,6 +27,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
+import { activateOnKey } from '@/components/ui/activate-on-key'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -347,7 +348,7 @@ export function ImportFromImageModal({
     >
       {/* Error display */}
       {error && (
-        <div className="qt-alert-error rounded px-3 py-2 text-sm">
+        <div role="alert" className="qt-alert-error rounded px-3 py-2 text-sm">
           {error}
         </div>
       )}
@@ -382,6 +383,10 @@ export function ImportFromImageModal({
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={activateOnKey}
+              role="button"
+              tabIndex={0}
+              aria-label="Choose an image: drop one here or press to browse"
               className="border-2 border-dashed qt-border-default rounded-lg p-8 text-center cursor-pointer hover:qt-border-primary transition-colors"
             >
               <Icon name="image" className="w-12 h-12 mx-auto qt-text-secondary mb-3" />

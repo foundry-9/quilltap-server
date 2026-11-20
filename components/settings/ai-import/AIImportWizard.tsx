@@ -22,6 +22,7 @@ import {
   type PromptFieldHint,
   type PromptFieldHintKey,
 } from '@/components/prompt-fields/field-hints';
+import { activateOnKey } from '@/components/ui/activate-on-key';
 
 // ============================================================================
 // Step Indicator
@@ -125,6 +126,10 @@ function SourceMaterialStep({
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onClick={() => fileInputRef.current?.click()}
+          onKeyDown={activateOnKey}
+          role="button"
+          tabIndex={0}
+          aria-label="Choose source files: drop them here or press to browse"
         >
           <input
             ref={fileInputRef}

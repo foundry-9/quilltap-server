@@ -45,7 +45,7 @@ The semantic colour pairs every component derives from: surfaces, text, actions,
 | `--theme-info` | color | `hsl(210 75% 44.5%)` | `hsl(210 70% 58%)` |  | standard | Info |
 | `--theme-info-foreground` | color | `hsl(0 0% 100%)` | `hsl(225 18% 9%)` |  | standard | Info foreground |
 | `--theme-border` | color | `hsl(225 10% 87%)` | `hsl(225 12% 20%)` |  | standard | Border. Borders & inputs |
-| `--theme-input` | color | `hsl(225 10% 87%)` | `hsl(225 12% 20%)` |  | standard | Input |
+| `--theme-input` | color | `hsl(225 10% 57.5%)` | `hsl(225 12% 43.5%)` |  | standard | Input |
 | `--theme-ring` | color | `hsl(225 65% 48%)` | `hsl(225 55% 60%)` |  | standard | Ring |
 | `--theme-chat-user` | color | `hsl(225 62% 50%)` | `hsl(225 60% 56%)` |  | standard | Chat user. Chat - user bubble matches primary hue |
 | `--theme-chat-user-foreground` | color | `hsl(0 0% 100%)` |  |  | standard | Chat user foreground |
@@ -834,7 +834,7 @@ Group id `badge`, 99 tokens.
 | `--qt-queue-badge-danger-fg` | color | `hsl(0 0% 100%)` |  |  | advanced | Queue badge danger text colour |
 | `--qt-queue-badge-story-bg` | color | `hsl(225 12% 38%)` | `hsl(225 12% 44%)` |  | standard | Queue badge story background |
 | `--qt-queue-badge-story-fg` | color | `hsl(0 0% 100%)` |  |  | standard | Queue badge story text colour |
-| `--qt-queue-badge-idle-opacity` | opacity | `0.35` |  | density=comfortable: `0.4` | standard | Queue badge idle opacity |
+| `--qt-queue-badge-idle-opacity` | opacity | `0.35` |  | density=comfortable: `0.4` | standard | Queue badge idle tint (share of the badge colour) |
 | `--qt-autonomous-badge-running-bg` | color | `hsl(152 55% 38%)` |  |  | advanced | Autonomous badge running background. Autonomous-room badge colors (shares queue-badge structural tokens) |
 | `--qt-autonomous-badge-running-fg` | color | `hsl(0 0% 100%)` |  |  | advanced | Autonomous badge running text colour |
 | `--qt-autonomous-badge-idle-bg` | color | `hsl(225 12% 38%)` |  |  | advanced | Autonomous badge idle background |

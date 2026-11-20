@@ -53,6 +53,9 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   // the focus ring
   pair('--theme-ring', '--theme-background', 'non-text'),
   pair('--theme-ring', '--theme-card', 'non-text'),
+  // a form field's edge, which is what identifies it (SC 1.4.11)
+  pair('--qt-input-border', '--theme-background', 'non-text'),
+  pair('--qt-input-border', '--theme-card', 'non-text'),
   // ---- sidebar
   pair('--theme-sidebar-foreground', '--theme-sidebar-background'),
   pair('--theme-sidebar-muted', '--theme-sidebar-background'),

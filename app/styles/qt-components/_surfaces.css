@@ -477,7 +477,7 @@
   .qt-help-composer-input {
     @apply flex-1 resize-none rounded-lg px-3 py-2 text-sm;
     @apply ring-offset-background placeholder:text-muted-foreground;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     border: 1px solid var(--qt-input-border, var(--color-input));
     background: var(--qt-input-bg, var(--color-background));

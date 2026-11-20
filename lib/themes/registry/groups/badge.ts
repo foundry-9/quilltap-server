@@ -875,7 +875,7 @@ export const BADGE_TOKENS: readonly TokenDef[] = [
     tier: 'component',
     type: 'opacity',
     group: 'badge',
-    label: "Queue badge idle opacity",
+    label: "Queue badge idle tint (share of the badge colour)",
     default: "0.35",
     byChoice: {"density":{"comfortable":"0.4"}},
     visibility: 'standard',
