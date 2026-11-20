@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Backup/restore: tests for 4.14 data-model additions
+
+- `restore-field-fidelity.test.ts` now runs a Calliope chat's `chatType` / `themeDraftId` and a generated file's `generationModeration` through `restore()`. `themeDraftId` was only tested at the remap step, and `generationModeration` had no restore test
+
 #### Atlas lore wizard: quoted phrases inside a search query display correctly
 
 - Brahma's activity lines (`describeBrahmaActivity`) no longer break the outer quotes when a query contains its own quoted phrase. `"Zbinden Trust" Osage Duchy` now shows as “‘Zbinden Trust’ Osage Duchy” instead of losing its leading quote and leaving an unbalanced one
