@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Tests: dynamic-backgrounds layout test runs in about 1 s
+
+- `layout.test.ts` took about 112 s: `checkPlan` made one `expect` per occupancy-grid cell (2,304 per plan, 2,400 plans, about 5.5 million matcher calls). It now collects violations in plain JS and asserts the list is empty once per plan. Same invariants and seeds; failures still list the offending cells, tiles and bands
+
 #### Accessibility: release checklist 13 (UI and WCAG pass)
 
 - Focus ring restored on buttons that also carry `qt-shadow-sm` / `-md` / `-lg` (e.g. the delete buttons on character and group cards): the shadow utility replaced the `ring-*` box-shadow. While `:focus-visible`, the shadow utilities now use Tailwind's ring composite

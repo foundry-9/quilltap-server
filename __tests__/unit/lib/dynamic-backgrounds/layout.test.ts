@@ -31,18 +31,28 @@ function bands(tiles: PlannedTile[], mode: CollageMode) {
   return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v);
 }
 
+/**
+ * Check every layout invariant of one plan in plain JS and assert once.
+ *
+ * Thousands of plans are checked, so a per-cell or per-tile `expect` would run
+ * millions of matchers (about 110 s); the problems are gathered instead and the
+ * list is asserted empty, which still names every violation on failure.
+ */
 function checkPlan(tiles: PlannedTile[], mode: CollageMode, o: CollageOrientation) {
+  const problems: string[] = [];
+  const fail = (msg: string) => {
+    if (problems.length < 20) problems.push(msg);
+  };
   const { width, height } = CANVAS[o];
   let area = 0;
   for (const t of tiles) {
-    for (const v of [t.x, t.y, t.width, t.height]) expect(Number.isInteger(v)).toBe(true);
-    expect(t.width).toBeGreaterThanOrEqual(1);
-    expect(t.height).toBeGreaterThanOrEqual(1);
-    expect(t.x + t.width).toBeLessThanOrEqual(width);
-    expect(t.y + t.height).toBeLessThanOrEqual(height);
+    const id = `${t.key}@${t.x},${t.y} ${t.width}x${t.height}`;
+    if (![t.x, t.y, t.width, t.height].every(Number.isInteger)) fail(`non-integer tile ${id}`);
+    if (t.width < 1 || t.height < 1) fail(`empty tile ${id}`);
+    if (t.x + t.width > width || t.y + t.height > height) fail(`tile off canvas ${id}`);
     area += t.width * t.height;
   }
-  expect(area).toBe(width * height);
+  if (area !== width * height) fail(`area ${area} !== ${width * height}`);
 
   // Coarse occupancy grid: every cell covered exactly once.
   const step = 30;
@@ -59,29 +69,34 @@ function checkPlan(tiles: PlannedTile[], mode: CollageMode, o: CollageOrientatio
       }
     }
   }
-  for (const c of grid) expect(c).toBe(1);
+  grid.forEach((c, i) => {
+    if (c !== 1) fail(`cell ${i % cols},${Math.floor(i / cols)} covered ${c} times`);
+  });
 
   const bs = bands(tiles, mode);
   const [lo, hi] = BAND_RANGES[mode][o];
-  expect(bs.length).toBeGreaterThanOrEqual(lo);
-  expect(bs.length).toBeLessThanOrEqual(hi);
+  if (bs.length < lo || bs.length > hi) fail(`${bs.length} bands outside [${lo}, ${hi}]`);
 
   const full = mode === 'rows' ? width : height;
   const total = mode === 'rows' ? height : width;
   const thickness = Math.floor(total / bs.length);
+  const remainder = total - thickness * bs.length;
   bs.forEach((band, i) => {
     const thick = mode === 'rows' ? band[0].height : band[0].width;
-    const remainder = total - thickness * bs.length;
-    expect(thick).toBe(i === bs.length - 1 ? thickness + remainder : thickness);
+    const want = i === bs.length - 1 ? thickness + remainder : thickness;
+    if (thick !== want) fail(`band ${i} thickness ${thick} !== ${want}`);
     const ordered = [...band].sort((a, b) => (mode === 'rows' ? a.x - b.x : a.y - b.y));
     let pos = 0;
     ordered.forEach((t, j) => {
-      expect(mode === 'rows' ? t.x : t.y).toBe(pos);
+      const at = mode === 'rows' ? t.x : t.y;
+      if (at !== pos) fail(`band ${i} tile ${j} at ${at}, expected ${pos}`);
       pos += mode === 'rows' ? t.width : t.height;
-      if (j > 0) expect(t.key).not.toBe(ordered[j - 1].key);
+      if (j > 0 && t.key === ordered[j - 1].key) fail(`band ${i} repeats ${t.key} side by side`);
     });
-    expect(pos).toBe(full);
+    if (pos !== full) fail(`band ${i} spans ${pos} !== ${full}`);
   });
+
+  expect(problems).toEqual([]);
 }
 
 const CASES: Array<[CollageMode, CollageOrientation]> = [
