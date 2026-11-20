@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Release prep: leftover debug logging pruned
+
+- Removed a `console.debug` in the left-sidebar nav rail that fired whenever a disabled item was activated. All other logging added since 4.13.0 was reviewed and kept
+
 #### Tests: release checklist 2 (coverage and regression tests)
 
 - Regression tests for four fixes that had none: the home-tab dynamic background marker and the hidden-tab exclusion in the page-background rule (`page-background-precedence.test.ts`, `home-view-dynamic-background.test.tsx`), the Madman's Box home photograph guard, the sticky Markdown editor toolbar and the `cqh`-sized Atelier panels (`scroll-surface-layout.test.ts`). Each fails with its fix reverted
