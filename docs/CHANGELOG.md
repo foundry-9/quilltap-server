@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Release prep: leftover debug logging pruned
+
+- Removed a `console.debug` in the left-sidebar nav rail that fired whenever a disabled item was activated. All other logging added since 4.13.0 was reviewed and kept
+
 #### Atlas lore wizard: quoted phrases inside a search query display correctly
 
 - Brahma's activity lines (`describeBrahmaActivity`) no longer break the outer quotes when a query contains its own quoted phrase. `"Zbinden Trust" Osage Duchy` now shows as “‘Zbinden Trust’ Osage Duchy” instead of losing its leading quote and leaving an unbalanced one
