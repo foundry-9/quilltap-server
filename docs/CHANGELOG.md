@@ -4,6 +4,12 @@
 
 ### 4.14-dev
 
+#### API: every DELETE refuses an unknown action
+
+- 43 v1 `DELETE` handlers ran their delete when called with an `?action=` they do not answer. They now go through the action dispatcher (`withActionDispatch({}, handler)`, or `dispatchAction` for the two catch-all `[...path]` routes), so an unknown action is a 400. Covers the inline route handlers, `characters/[id]` and `files/[id]` (`handlers/delete.ts` callers), and the scenario, inventory, wardrobe and owner mount-link route factories
+- New guard test `__tests__/unit/lib/api/delete-action-dispatch.test.ts` walks every v1 route that exports a `DELETE` (inline, through `./handlers`, or from a factory) and fails when it is not dispatched
+- Test request mocks for these routes now carry `nextUrl`, which the dispatcher reads
+
 #### Backup/restore: tests for 4.14 data-model additions
 
 - `restore-field-fidelity.test.ts` now runs a Calliope chat's `chatType` / `themeDraftId` and a generated file's `generationModeration` through `restore()`. `themeDraftId` was only tested at the remap step, and `generationModeration` had no restore test

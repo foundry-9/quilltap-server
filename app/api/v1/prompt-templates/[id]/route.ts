@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
@@ -108,8 +109,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
 // DELETE Handler
 // ============================================================================
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req: NextRequest, { user, repos }, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (req: NextRequest, { user, repos }, { id }) => {
     const existingTemplate = await repos.promptTemplates.findById(id);
 
     if (!existingTemplate) {
@@ -142,5 +144,5 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
     logger.info('[Prompt Templates v1] Template deleted', { templateId: id, userId: user.id });
 
     return NextResponse.json({ success: true });
-  }
+  })
 );

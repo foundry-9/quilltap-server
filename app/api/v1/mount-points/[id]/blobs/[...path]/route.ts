@@ -19,6 +19,7 @@
 import type { NextRequest } from 'next/server';
 import { createContextParamsHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { dispositionFor } from '@/lib/api/content-disposition';
@@ -101,8 +102,10 @@ export const GET = createContextParamsHandler<Params>(
   }
 );
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
+// (`path` is a catch-all array, so `withActionDispatch`'s string params don't fit.)
 export const DELETE = createContextParamsHandler<Params>(
-  async (_req: NextRequest, { user, repos }: RequestContext, { id, path }) => {
+  async (req: NextRequest, { user, repos }: RequestContext, { id, path }) => dispatchAction(req, {}, async () => {
     try {
       const relativePath = joinPath(path);
       const deleted = await repos.docMountBlobs.deleteByMountPointAndPath(id, relativePath);
@@ -134,7 +137,7 @@ export const DELETE = createContextParamsHandler<Params>(
       );
       return serverError('Failed to delete blob');
     }
-  }
+  })
 );
 
 export const PATCH = createContextParamsHandler<Params>(

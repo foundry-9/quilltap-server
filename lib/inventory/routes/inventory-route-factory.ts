@@ -328,7 +328,8 @@ export function createInventoryItemHandlers<P extends Params & { itemId: string 
     ),
   );
 
-  const DELETE = createContextParamsHandler<P>(withInventoryErrors(async (req: NextRequest, ctx: RequestContext, params: P) => {
+  // No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
+  const DELETE = createContextParamsHandler<P>(withActionDispatch<P>({}, withInventoryErrors(async (req: NextRequest, ctx: RequestContext, params: P) => {
     const found = await findRecord(ctx, params);
     if (!found.ok) return found.response;
     const force = new URL(req.url).searchParams.get('force') === 'true';
@@ -343,7 +344,7 @@ export function createInventoryItemHandlers<P extends Params & { itemId: string 
       context: 'inventory',
     });
     return successResponse({ success: true, detached: result.detached });
-  }));
+  })));
 
   return { GET, PUT, DELETE };
 }

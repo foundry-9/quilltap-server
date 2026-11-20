@@ -7,7 +7,7 @@
  */
 
 jest.mock('@/lib/logger', () => ({
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(), child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })) },
 }));
 
 jest.mock('@/lib/api/middleware', () => ({
@@ -27,8 +27,8 @@ import { readGeneralState, writeGeneralState } from '@/lib/mount-index/general-s
 const readGeneralStateMock = readGeneralState as jest.MockedFunction<typeof readGeneralState>;
 const writeGeneralStateMock = writeGeneralState as jest.MockedFunction<typeof writeGeneralState>;
 
-function req(body?: unknown) {
-  return { json: async () => body } as never;
+function req(body?: unknown, url = 'http://localhost/api/v1/settings/general-state') {
+  return { json: async () => body, nextUrl: new URL(url) } as never;
 }
 
 beforeEach(() => {

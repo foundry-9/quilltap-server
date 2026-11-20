@@ -9,6 +9,7 @@
  */
 
 import { createContextParamsHandler } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { successResponse, errorResponse, notFound, forbidden } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { generateTemplateRenderingPatterns } from '@/lib/chat/annotations';
@@ -147,8 +148,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
  * Returns 404 if template not found or user doesn't own it
  * Returns 403 if trying to delete a built-in template
  */
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (req, { user, repos }, { id }) => {
     const existingTemplate = await repos.roleplayTemplates.findById(id);
 
     if (!existingTemplate) {
@@ -184,5 +186,5 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       success: true,
       deletedId: id,
     });
-  }
+  })
 );

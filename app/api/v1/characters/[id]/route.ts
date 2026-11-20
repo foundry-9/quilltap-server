@@ -27,6 +27,7 @@
  */
 
 import { createContextParamsHandler } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { handleGet, handlePut, handleDelete, handlePost } from './handlers';
 
 export const GET = createContextParamsHandler<{ id: string }>(
@@ -37,8 +38,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
   (req, ctx, { id }) => handlePut(req, ctx, id)
 );
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  (req, ctx, { id }) => handleDelete(req, ctx, id)
+  withActionDispatch<{ id: string }>({}, (req, ctx, { id }) => handleDelete(req, ctx, id))
 );
 
 export const POST = createContextParamsHandler<{ id: string }>(

@@ -11,12 +11,14 @@
  */
 
 import { createContextParamsHandler } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { successResponse, badRequest, notFound, serverError } from '@/lib/api/responses';
 import { removeFromCharacterGallery } from '@/lib/photos/character-gallery-service';
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string; linkId: string }>(
-  async (_req, { user, repos }, { id, linkId }) => {
+  withActionDispatch<{ id: string; linkId: string }>({}, async (_req, { user, repos }, { id, linkId }) => {
     try {
       if (!id) return badRequest('Missing character id');
       if (!linkId) return badRequest('Missing photo link id');
@@ -37,5 +39,5 @@ export const DELETE = createContextParamsHandler<{ id: string; linkId: string }>
       logger.error('[Characters/Photos v1] Error deleting photo', { userId: user.id, characterId: id, linkId }, error instanceof Error ? error : undefined);
       return serverError(message);
     }
-  }
+  })
 );

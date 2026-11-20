@@ -7,6 +7,7 @@
 
 import { NextRequest } from 'next/server';
 import { createContextParamsHandler } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import {
   successResponse,
   badRequest,
@@ -57,8 +58,9 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
   },
 );
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (_req: NextRequest, _ctx, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (_req: NextRequest, _ctx, { id }) => {
     try {
       const repos = getRepositories();
       const deleted = await repos.textReplacementRules.delete(id);
@@ -76,5 +78,5 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       );
       return serverError('Failed to delete text replacement rule');
     }
-  },
+  },)
 );

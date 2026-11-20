@@ -181,8 +181,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/embedding-profiles/[id]
  */
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (req, { user, repos }, { id }) => {
     try {
 
       // Verify ownership
@@ -202,7 +203,7 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       logger.error('[Embedding Profiles v1] Error deleting profile', { profileId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete embedding profile');
     }
-  }
+  })
 );
 
 /**

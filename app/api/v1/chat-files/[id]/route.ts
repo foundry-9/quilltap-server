@@ -109,8 +109,9 @@ export const POST = createContextParamsHandler<{ id: string }>(
  * DELETE /api/v1/chat-files/:id
  * Delete a chat file and its physical file
  */
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (request: NextRequest, ctx, params) => {
+  withActionDispatch<{ id: string }>({}, async (request: NextRequest, ctx, params) => {
     const { id } = params;
     const { user, repos } = ctx;
 
@@ -164,5 +165,5 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       );
       return serverError('Failed to delete file');
     }
-  }
+  })
 );

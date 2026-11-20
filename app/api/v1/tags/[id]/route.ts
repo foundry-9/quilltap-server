@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, successResponse, badRequest } from '@/lib/api/responses';
@@ -102,7 +103,8 @@ export const PUT = createContextParamsHandler<{ id: string }>(async (req, { user
 // DELETE Handler
 // ============================================================================
 
-export const DELETE = createContextParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
+export const DELETE = createContextParamsHandler<{ id: string }>(withActionDispatch<{ id: string }>({}, async (req, { user, repos }, { id }) => {
   const existingTag = await repos.tags.findById(id);
 
   if (!exists(existingTag)) {
@@ -164,4 +166,4 @@ export const DELETE = createContextParamsHandler<{ id: string }>(async (req, { u
   logger.info('[Tags v1] Tag deleted', { tagId: id, userId: user.id });
 
   return successResponse({ success: true });
-});
+}));

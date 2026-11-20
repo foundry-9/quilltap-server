@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
-import { dispatchAction } from '@/lib/api/middleware/actions';
+import { withActionDispatch, dispatchAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import type { ChatEvent } from '@/lib/schemas/types';
@@ -215,8 +215,9 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
  * DELETE /api/v1/help-chats/[id]
  * Delete a help chat
  */
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req, context, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (req, context, { id }) => {
     return handleDelete(req, context, id);
-  }
+  })
 );

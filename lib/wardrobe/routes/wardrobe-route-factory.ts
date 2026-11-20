@@ -471,7 +471,8 @@ export function createWardrobeItemHandlers<P extends Params & { itemId: string }
     return successResponse({ wardrobeItem: await serializeOne(item, location.origin, ctx.repos) });
   });
 
-  const DELETE = createContextParamsHandler<P>(async (_req, ctx, params) => {
+  // No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
+  const DELETE = createContextParamsHandler<P>(withActionDispatch<P>({}, async (_req, ctx, params) => {
     const found = await findItem(ctx, params);
     if (!found.ok) return found.response;
     const { location } = found;
@@ -498,7 +499,7 @@ export function createWardrobeItemHandlers<P extends Params & { itemId: string }
 
     logger.info(`${logTag} Deleted wardrobe item`, { ...meta, mountPointId: location.mountPointId });
     return successResponse({ success: true });
-  });
+  }));
 
   return { GET, PUT, DELETE };
 }

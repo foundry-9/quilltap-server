@@ -196,8 +196,9 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
 // DELETE Handler
 // ============================================================================
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 
       const existing = await repos.docMountPoints.findById(id);
@@ -238,7 +239,7 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       logger.error('[Mount Points v1] Error deleting mount point', { mountPointId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete mount point');
     }
-  }
+  })
 );
 
 // ============================================================================
