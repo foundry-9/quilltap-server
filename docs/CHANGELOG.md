@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Backup/restore: tests for 4.14 data-model additions
+
+- `restore-field-fidelity.test.ts` now runs a Calliope chat's `chatType` / `themeDraftId` and a generated file's `generationModeration` through `restore()`. `themeDraftId` was only tested at the remap step, and `generationModeration` had no restore test
+
 #### Theming: staff avatars and Atelier inline links follow the theme
 
 - The Brahma, Aurora and Host portraits in the Atlas lore wizard, Import from Instructions and the Scenario Builder now use `qt-avatar`, so a theme's avatar radius, border and background apply
