@@ -21,7 +21,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getAccessibleMountPoints, type AccessibleMountPoint } from '@/lib/doc-edit/path-resolver'
-import { flattenTierPool, type TieredMountPool } from '@/lib/mount-index/tiered-mount-pool'
+import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool'
 import { classifyMount, resolveOwnerStore, type OwnerScope } from '@/lib/mount-index/reach'
 import { foldName, nearestByName } from './text'
 
@@ -63,11 +63,6 @@ export async function storesInScope(scope: ResearchScope): Promise<AccessibleMou
   return scope.kind === 'everything'
     ? getAccessibleMountPoints({ operatorOverride: true })
     : getAccessibleMountPoints({ mountPool: scope.pool })
-}
-
-/** The ids of every store the scope reaches, without loading the rows. */
-export function poolMountIds(pool: TieredMountPool): string[] {
-  return flattenTierPool(pool, { includeParticipants: true })
 }
 
 /** Attach each store's owner (raw reads; a broken owner costs a null). */

@@ -100,10 +100,6 @@ export class TagsRepository extends UserOwnedBaseRepository<Tag> {
           updateData.nameLower = data.name.toLowerCase();
         }
 
-        // Remove id and createdAt to prevent accidental overwrites
-        delete updateData.id;
-        delete updateData.createdAt;
-
         const tag = await this._update(id, updateData);
 
         if (tag) {

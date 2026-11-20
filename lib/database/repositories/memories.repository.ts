@@ -958,34 +958,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Update the lastAccessedAt timestamp for a memory
-   * @param characterId The character ID
-   * @param memoryId The memory ID
-   * @returns Promise<Memory | null> The updated memory if found, null otherwise
-   */
-  async updateAccessTime(characterId: string, memoryId: string): Promise<Memory | null> {
-    return this.safeQuery(
-      async () => {
-        const memory = await this.findById(memoryId);
-        if (!memory) {
-          logger.warn('Memory not found for access time update', { memoryId, characterId });
-          return null;
-        }
-
-        if (memory.characterId !== characterId) {
-          logger.warn('Memory does not belong to character', { characterId, memoryId });
-          return null;
-        }
-
-        const now = this.getCurrentTimestamp();
-        return await this.update(memoryId, { lastAccessedAt: now });
-      },
-      'Error updating memory access time',
-      { characterId, memoryId }
-    );
-  }
-
-  /**
    * Bulk-update lastAccessedAt for a set of memories.
    * Used by the semantic search return path so the recent-access signal in the
    * blended protection score reflects actual usage. Character-scoped so a
@@ -1914,23 +1886,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       'Error finding memories by character and source message IDs',
       { characterId, count: sourceMessageIds.length },
       []
-    );
-  }
-
-  /**
-   * Count memories associated with a specific source message
-   * @param sourceMessageId The source message ID
-   * @returns Promise<number> Number of memories for the message
-   */
-  async countBySourceMessageId(sourceMessageId: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const count = await this.count({ sourceMessageId });
-        return count;
-      },
-      'Error counting memories for source message',
-      { sourceMessageId },
-      0
     );
   }
 

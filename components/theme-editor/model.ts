@@ -315,12 +315,6 @@ export function keywordOptions(token: { type: TokenType; options?: readonly stri
   return token.options ?? optionsOf(token.type) ?? null
 }
 
-/** The theme's own dark value for `name`, when it sets one apart from light. */
-export function ownDarkValue(tokens: ThemeTokensDocument, name: string): string | undefined {
-  const own = tokens.tokens[name]
-  return own === undefined ? undefined : tokenModes(own).dark
-}
-
 /** Whether the theme sets `name` at all. */
 export function isOverridden(tokens: ThemeTokensDocument, name: string): boolean {
   return tokens.tokens[name] !== undefined

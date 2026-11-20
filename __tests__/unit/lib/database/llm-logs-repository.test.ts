@@ -5,7 +5,7 @@
  * - CRUD operations (create, read, update, delete)
  * - Query methods (findByChatId, findByMessageId, findByUserId, etc.)
  * - Cleanup methods (cleanupOldLogs, deleteByUserId)
- * - Count methods (countByUserId, countByType, countByMessageId)
+ * - Count methods (countByUserId, countByType)
  * - Token usage aggregation
  * - Error handling and degraded mode
  *
@@ -566,17 +566,6 @@ describe('LLMLogsRepository', () => {
 
       expect(result).toBe(10);
       expect(mockCollection.countDocuments).toHaveBeenCalledWith({ userId: USER_ID, type: 'CHAT_MESSAGE' });
-    });
-  });
-
-  describe('countByMessageId', () => {
-    it('returns count of logs for a message', async () => {
-      mockCollection.countDocuments.mockResolvedValue(2);
-
-      const result = await repo.countByMessageId(MSG_ID);
-
-      expect(result).toBe(2);
-      expect(mockCollection.countDocuments).toHaveBeenCalledWith({ messageId: MSG_ID });
     });
   });
 

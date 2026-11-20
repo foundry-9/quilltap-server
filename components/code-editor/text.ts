@@ -26,18 +26,6 @@ export function detectLineEnding(text: string): LineEnding {
   return crlf > lf ? 'crlf' : 'lf'
 }
 
-/** True when a text has both kinds of line break, so an edited copy cannot keep both. */
-export function hasMixedLineEndings(text: string): boolean {
-  let crlf = false
-  let lf = false
-  for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) {
-    if (i > 0 && text.charCodeAt(i - 1) === 13) crlf = true
-    else lf = true
-    if (crlf && lf) return true
-  }
-  return false
-}
-
 /** The text as the editor holds it: every `\r\n` as `\n`. A lone `\r` is kept. */
 export function toEditorText(text: string): string {
   return text.includes('\r\n') ? text.replace(/\r\n/g, '\n') : text

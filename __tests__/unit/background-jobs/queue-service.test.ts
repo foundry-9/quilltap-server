@@ -11,7 +11,6 @@ import {
   getQueueStats,
   cancelJob,
   getPendingJobsForChat,
-  cleanupOldJobs,
   cleanupFinishedJobs,
   releaseHeldAvatarRefreshes,
   cancelHeldAvatarRefreshes,
@@ -55,7 +54,6 @@ type MockBackgroundJobRepo = {
   findPendingForChat: jest.Mock;
   findAbsorbers: jest.Mock;
   update: jest.Mock;
-  cleanupOldJobs: jest.Mock;
   cleanupOldJobsByStatus: jest.Mock;
 };
 
@@ -80,7 +78,6 @@ beforeEach(() => {
     findAbsorbers: jest.fn(async (type: string, statuses: string[]) =>
       queued.filter(j => j.type === type && statuses.includes(j.status))),
     update: jest.fn().mockResolvedValue({}),
-    cleanupOldJobs: jest.fn().mockResolvedValue(5),
     cleanupOldJobsByStatus: jest.fn().mockResolvedValue({ completed: 3, dead: 1 }),
   };
 
@@ -211,21 +208,6 @@ describe('queue lookups and maintenance', () => {
     const success = await cancelJob('job-22');
     expect(success).toBe(true);
     expect(backgroundJobs.cancel).toHaveBeenCalledWith('job-22');
-  });
-
-  it('calculates the cutoff timestamp when cleaning up old jobs', async () => {
-    const now = new Date('2024-02-01T00:00:00.000Z').getTime();
-    const spy = jest.spyOn(Date, 'now').mockReturnValue(now);
-
-    const deleted = await cleanupOldJobs(2);
-
-    expect(deleted).toBe(5);
-    expect(backgroundJobs.cleanupOldJobs).toHaveBeenCalledTimes(1);
-    const cutoff: Date = backgroundJobs.cleanupOldJobs.mock.calls[0][0];
-    expect(cutoff).toBeInstanceOf(Date);
-    expect(cutoff.toISOString()).toBe('2024-01-30T00:00:00.000Z');
-
-    spy.mockRestore();
   });
 
   it('reaps finished jobs with per-status retention windows (7d completed, 30d dead)', async () => {

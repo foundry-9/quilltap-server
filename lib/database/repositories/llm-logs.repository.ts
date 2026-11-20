@@ -522,60 +522,14 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   }
 
   /**
-   * Get total token usage for a specific chat since a given timestamp.
-   *
-   * Used by the autonomous-room turn handler to compute per-run token spend
-   * across turn-job boundaries. The forked-job child's repository proxy
-   * buffers writes and uses a readonly DB connection for reads, which makes
-   * the chats.totalPromptTokens delta unreliable mid-job; summing llm_logs
-   * is authoritative as soon as the previous turn's job has flushed. A
-   * future refinement is to tag each log with the autonomous run's UUID
-   * and sum by that instead of a timestamp window.
-   */
-  async getTotalTokenUsageForChatSince(
-    chatId: string,
-    sinceTimestamp: string,
-  ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
-    return this.safeQuery(
-      async () => {
-        // Rows with usage recorded (`usage IS NOT NULL`).
-        const filter: TypedQueryFilter<LLMLog> = {
-          chatId,
-          usage: { $exists: true },
-          createdAt: { $gte: sinceTimestamp },
-        };
-
-        const logs = await this.findByFilter(filter);
-
-        let totalPromptTokens = 0;
-        let totalCompletionTokens = 0;
-        let totalTokens = 0;
-
-        for (const log of logs) {
-          if (log.usage) {
-            totalPromptTokens += log.usage.promptTokens || 0;
-            totalCompletionTokens += log.usage.completionTokens || 0;
-            totalTokens += log.usage.totalTokens || 0;
-          }
-        }
-        return { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens, totalTokens };
-      },
-      'Error getting total token usage for chat since timestamp',
-      { chatId, sinceTimestamp },
-      { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
-    );
-  }
-
-  /**
    * Get total token usage for a single autonomous-room run, summed across
    * every llm_logs row tagged with this `autonomousRunId` — the run's
    * conversational turns plus their agent-mode tool sub-calls.
    *
-   * This supersedes the timestamp-window {@link getTotalTokenUsageForChatSince}
-   * for per-run budget accounting. Summing by run id isolates exactly this
+   * Summing by run id, rather than over a timestamp window, isolates exactly this
    * run's spend regardless of any overlapping chat activity, and is robust to
-   * the forked-job child's buffered-write timing. As with the timestamp
-   * variant, the current turn's own log row is still buffered when the handler
+   * the forked-job child's buffered-write timing. The current turn's own
+   * log row is still buffered when the handler
    * reads this, so the sum converges one turn behind — acceptable for a budget
    * gate that only needs to trip within a turn of crossing the cap.
    *
@@ -624,23 +578,6 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
       'Error getting total token usage for autonomous run',
       { autonomousRunId, includeCacheHits },
       { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
-    );
-  }
-
-  /**
-   * Count logs associated with a message ID
-   * @param messageId The message ID
-   * @returns Promise<number> Number of logs for the message
-   */
-  async countByMessageId(messageId: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const count = await this.count({ messageId });
-        return count;
-      },
-      'Error counting LLM logs for message',
-      { messageId },
-      0
     );
   }
 

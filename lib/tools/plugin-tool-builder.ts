@@ -203,9 +203,6 @@ export type DocToolsMode = 'off' | 'read' | 'full';
 /** Which research-kit tools a surface is offered. See `BuildToolsOptions.researchKit`. */
 export type ResearchKitMode = 'off' | 'documents' | 'full';
 
-/** The doc_* tools the research kit replaces; withheld wherever the kit is on. */
-export const KIT_REPLACED_DOC_TOOLS: ReadonlySet<string> = new Set(['doc_grep', 'doc_list_files']);
-
 /**
  * Options for building tools for a provider ({@link buildToolsForProvider}). The nine `inventory_*` flags
  * (`inventoryList` … `inventoryGive`, gated by `canManageInventory`) come from

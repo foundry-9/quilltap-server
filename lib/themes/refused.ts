@@ -33,9 +33,6 @@ export interface RefusedTheme {
   message: string;
 }
 
-/** The help page that explains what became of an earlier theme. */
-export const REFUSED_THEME_HELP_URL = '/settings?section=appearance';
-
 /** The explanation shown wherever an earlier theme is refused. */
 export function earlierThemeMessage(name: string): string {
   return `“${name}” was tailored for an earlier Quilltap, and the present establishment can no longer wear it. The Themes help page explains how such a garment may be remade.`;

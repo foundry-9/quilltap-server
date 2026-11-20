@@ -1538,18 +1538,6 @@ export async function enqueueWardrobeOutfitAnnouncement(
 }
 
 /**
- * Cleanup old completed jobs
- *
- * @deprecated Single-window reaper. Use {@link cleanupFinishedJobs}, which
- * applies separate retention windows to COMPLETED vs DEAD jobs.
- */
-export async function cleanupOldJobs(daysOld: number = 7): Promise<number> {
-  const repos = getRepositories();
-  const olderThan = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
-  return repos.backgroundJobs.cleanupOldJobs(olderThan);
-}
-
-/**
  * Reap finished background jobs using the per-status retention windows from
  * `lib/background-jobs/maintenance/retention-constants.ts`: COMPLETED jobs
  * after the short window, DEAD jobs after the longer one. PENDING/PROCESSING/

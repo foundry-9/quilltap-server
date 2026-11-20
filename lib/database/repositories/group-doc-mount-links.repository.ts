@@ -1,170 +1,34 @@
 /**
  * Group Document Mount Links Repository
  *
- * Backend-agnostic repository for GroupDocMountLink entities.
- * Lives in the dedicated mount index database (quilltap-mount-index.db)
- * via `AbstractDedicatedDbRepository`, isolating document
- * mount tracking data from the main database.
- *
- * GroupDocMountLink is a join table linking groups to their *additional linked*
- * mount points (the official store is recorded on the group row as
- * officialMountPointId, not here).
- * Note: the groupId references a group in the main database — the
- * link itself lives in the mount index DB for co-location with mount data.
- *
- * When the mount index DB is in degraded mode (corruption, permissions, etc.),
- * getCollection() throws and all safeQuery fallbacks kick in — returning
- * empty arrays, null, etc. The rest of the app continues normally.
+ * GroupDocMountLink is a join table linking groups to their *additional
+ * linked* mount points (the official store is recorded on the group row as
+ * officialMountPointId, not here). The groupId references a group in the main
+ * database; the link itself lives in the mount index DB. Linking, unlinking
+ * and the finders are inherited from {@link OwnerDocMountLinksRepository}.
  */
 
 import { GroupDocMountLink, GroupDocMountLinkSchema } from '@/lib/schemas/mount-index.types';
-import { CreateOptions } from './base.repository';
-import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
+import { OwnerDocMountLinksRepository } from './owner-doc-mount-links.repository';
 import { TypedQueryFilter } from '../interfaces';
-import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
 
-/**
- * Group Document Mount Links Repository
- * Implements CRUD operations for the group-to-mount-point join table.
- * Uses the mount index database instead of the main database.
- */
-export class GroupDocMountLinksRepository extends AbstractDedicatedDbRepository<GroupDocMountLink> {
+export class GroupDocMountLinksRepository extends OwnerDocMountLinksRepository<GroupDocMountLink> {
   constructor() {
-    super('group_doc_mount_links', GroupDocMountLinkSchema, { dbTarget: 'mountIndex', acquireDb: requireMountIndexDb });
+    super('group_doc_mount_links', GroupDocMountLinkSchema, { ownerKey: 'groupId', ownerNoun: 'group' });
   }
 
-  // ============================================================================
-  // Abstract method implementations
-  // ============================================================================
-
-  async create(
-    data: Omit<GroupDocMountLink, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: CreateOptions
-  ): Promise<GroupDocMountLink> {
-    return this._create(data, options);
-  }
-
-  async update(id: string, data: Partial<GroupDocMountLink>): Promise<GroupDocMountLink | null> {
-    return this._update(id, data);
-  }
-
-  async delete(id: string): Promise<boolean> {
-    return this._delete(id);
-  }
-
-  // ============================================================================
-  // Custom query methods
-  // ============================================================================
-
-  /**
-   * Find all links for a group
-   * @param groupId The group ID
-   * @returns Promise<GroupDocMountLink[]> Array of links for the group
-   */
+  /** Find all links for a group. */
   async findByGroupId(groupId: string): Promise<GroupDocMountLink[]> {
-    return this.safeQuery(
-      async () => {
-        const results = await this.findByFilter(
-          { groupId } as TypedQueryFilter<GroupDocMountLink>
-        );
-        return results;
-      },
-      'Error finding links by group ID',
-      { groupId },
-      []
-    );
-  }
-
-  /**
-   * Find all links for a mount point
-   * @param mountPointId The mount point ID
-   * @returns Promise<GroupDocMountLink[]> Array of links for the mount point
-   */
-  async findByMountPointId(mountPointId: string): Promise<GroupDocMountLink[]> {
-    return this.safeQuery(
-      async () => {
-        const results = await this.findByFilter(
-          { mountPointId } as TypedQueryFilter<GroupDocMountLink>
-        );
-        return results;
-      },
-      'Error finding links by mount point ID',
-      { mountPointId },
-      []
-    );
-  }
-
-  /**
-   * Link a group to a mount point.
-   * Checks for existing link first to prevent duplicates.
-   *
-   * @param groupId The group ID
-   * @param mountPointId The mount point ID
-   * @returns Promise<GroupDocMountLink> The existing or newly created link
-   */
-  async link(groupId: string, mountPointId: string): Promise<GroupDocMountLink> {
-    return this.safeQuery(
-      async () => {
-
-        // Check for existing link to avoid duplicates
-        const existing = await this.findOneByFilter({
-          groupId,
-          mountPointId,
-        } as TypedQueryFilter<GroupDocMountLink>);
-
-        if (existing) {
-          return existing;
-        }
-
-        const link = await this._create({
-          groupId,
-          mountPointId,
-        } as Omit<GroupDocMountLink, 'id' | 'createdAt' | 'updatedAt'>);
-
-        return link;
-      },
-      'Error linking group to mount point',
-      { groupId, mountPointId }
-    );
-  }
-
-  /**
-   * Unlink a group from a mount point.
-   * Deletes the link record matching both groupId and mountPointId.
-   *
-   * @param groupId The group ID
-   * @param mountPointId The mount point ID
-   * @returns Promise<boolean> True if a link was deleted, false if none existed
-   */
-  async unlink(groupId: string, mountPointId: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-
-        const count = await this.deleteMany({
-          groupId,
-          mountPointId,
-        } as TypedQueryFilter<GroupDocMountLink>);
-
-        const deleted = count > 0;
-
-        return deleted;
-      },
-      'Error unlinking group from mount point',
-      { groupId, mountPointId }
-    );
+    return this.findByOwnerId(groupId);
   }
 
   /**
    * Delete every link for a group (used when a group is deleted).
-   *
-   * @param groupId The group ID
-   * @returns Promise<number> Number of link rows removed
+   * @returns Number of link rows removed
    */
   async deleteByGroupId(groupId: string): Promise<number> {
     return this.safeQuery(
-      async () => {
-        return this.deleteMany({ groupId } as TypedQueryFilter<GroupDocMountLink>);
-      },
+      () => this.deleteMany(this.ownerFilter(groupId)),
       'Error deleting links by group ID',
       { groupId },
       0
@@ -176,15 +40,11 @@ export class GroupDocMountLinksRepository extends AbstractDedicatedDbRepository<
    * deleted). The sibling of {@link deleteByGroupId} on the mount-point axis —
    * without it, deleting a store left its group's additional-store links
    * standing (Bug 9).
-   *
-   * @param mountPointId The mount point ID
-   * @returns Promise<number> Number of link rows removed
+   * @returns Number of link rows removed
    */
   async deleteByMountPointId(mountPointId: string): Promise<number> {
     return this.safeQuery(
-      async () => {
-        return this.deleteMany({ mountPointId } as TypedQueryFilter<GroupDocMountLink>);
-      },
+      () => this.deleteMany({ mountPointId } as TypedQueryFilter<GroupDocMountLink>),
       'Error deleting group links by mount point ID',
       { mountPointId },
       0

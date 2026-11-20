@@ -6,6 +6,9 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query/keys';
+import { apiFetch } from '@/lib/query/fetcher';
 import { Icon } from '@/components/ui/icon';
 import { showErrorToast } from '@/lib/toast';
 import { useClickOutside } from '@/hooks/useClickOutside';
@@ -27,7 +30,6 @@ interface TagEditorProps {
 
 export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps) {
   const [tags, setTags] = useState<Tag[]>([]);
-  const [allTags, setAllTags] = useState<Tag[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -70,24 +72,14 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
     loadTags();
   }, [entityId, getApiBasePath, onTagsChange]);
 
-  // Load all available tags when input is focused
-  useEffect(() => {
-    if (!showSuggestions) return;
-
-    const loadAllTags = async () => {
-      try {
-        const res = await fetch('/api/v1/tags');
-        if (res.ok) {
-          const data = await res.json();
-          setAllTags(data.tags || []);
-        }
-      } catch (error) {
-        console.error('Error loading all tags:', { error: error instanceof Error ? error.message : String(error) });
-      }
-    };
-
-    loadAllTags();
-  }, [showSuggestions]);
+  // Every tag, for the suggestions: the shared tag list, read once the input is focused
+  const queryClient = useQueryClient();
+  const { data: allTagsData } = useQuery({
+    queryKey: queryKeys.tags.list(),
+    queryFn: ({ signal }) => apiFetch<{ tags: Tag[] }>('/api/v1/tags', { signal }),
+    enabled: showSuggestions,
+  });
+  const allTags = allTagsData?.tags ?? [];
 
   // Filter suggestions based on input
   const filteredSuggestions = allTags.filter(
@@ -118,6 +110,8 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       }
 
       const { tag } = await tagRes.json();
+      // The tag may be new: every reader of the tag list refetches
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tags.all });
 
       // Then attach it to the entity
       const basePath = getApiBasePath();

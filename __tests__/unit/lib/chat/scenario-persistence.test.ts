@@ -60,10 +60,6 @@ jest.mock('@/lib/import/sillytavern-import-service', () => ({
   importLegacyChat: jest.fn(),
 }))
 
-jest.mock('@/lib/errors', () => ({
-  getErrorMessage: jest.fn((_: unknown, fallback: string) => fallback),
-}))
-
 // ============================================================================
 // Fixtures
 // ============================================================================

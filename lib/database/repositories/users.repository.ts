@@ -6,11 +6,10 @@
  *
  * Handles CRUD operations for User entities.
  * Manages the 'users' collection.
- * Provides compound operations for GeneralSettings (user + chat settings).
  */
 
 import { logger } from '@/lib/logger';
-import { User, UserSchema, GeneralSettings, GeneralSettingsSchema, ChatSettings } from '@/lib/schemas/types';
+import { User, UserSchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { TypedQueryFilter, UpdateSpec } from '../interfaces';
 
@@ -111,12 +110,8 @@ export class UsersRepository extends AbstractBaseRepository<User> {
   async update(id: string, data: Partial<User>): Promise<User | null> {
     return this.safeQuery(
       async () => {
-        // Remove id and createdAt to prevent accidental overwrites
-        const updateData = { ...data };
-        delete updateData.id;
-        delete updateData.createdAt;
-
-        const user = await this._update(id, updateData);
+        // `_update` keeps the stored id and createdAt whatever the patch carries
+        const user = await this._update(id, data);
 
         if (user) {
           logger.info('User updated successfully', {
@@ -220,97 +215,5 @@ export class UsersRepository extends AbstractBaseRepository<User> {
       'Error migrating user ID',
       { oldId, newId }
     );
-  }
-
-  // ============================================================================
-  // GENERAL SETTINGS COMPOUND OPERATIONS
-  // ============================================================================
-
-  /**
-   * Get general settings (user + chat settings combined)
-   * Returns a compound object with version, user, chatSettings, and timestamps
-   */
-  async getGeneralSettings(userId: string): Promise<GeneralSettings | null> {
-    return this.safeQuery(
-      async () => {
-        // Get the chat settings repository from the database manager
-        const db = await (await import('../manager')).getDatabaseAsync();
-        const chatSettingsCollection = db.getCollection<ChatSettings>('chat_settings');
-
-        // Fetch user and chat settings in parallel
-        const [user, chatSettingsDocs] = await Promise.all([
-          this.findById(userId),
-          chatSettingsCollection.find({ userId } as TypedQueryFilter<ChatSettings>),
-        ]);
-
-        if (!user) {
-          logger.warn('User not found when retrieving general settings', {
-            userId,
-          });
-          return null;
-        }
-
-        if (!chatSettingsDocs || chatSettingsDocs.length === 0) {
-          logger.warn('Chat settings not found when retrieving general settings', {
-            userId,
-          });
-          return null;
-        }
-
-        const chatSettings: ChatSettings = chatSettingsDocs[0];
-
-        // Create the compound general settings object
-        const now = this.getCurrentTimestamp();
-        const generalSettings: GeneralSettings = {
-          version: 1,
-          user,
-          chatSettings,
-          createdAt: now,
-          updatedAt: now,
-        };
-
-        const validationResult = this.validateGeneralSettingsSafe(generalSettings);
-        if (!validationResult.success) {
-          logger.warn('GeneralSettings validation failed', {
-            userId,
-            error: validationResult.error,
-          });
-          return null;
-        }
-        return validationResult.data || null;
-      },
-      'Error getting general settings',
-      { userId }
-    );
-  }
-
-  // ============================================================================
-  // HELPER METHODS
-  // ============================================================================
-
-  /**
-   * Validate general settings data against schema
-   */
-  private validateGeneralSettings(data: unknown): GeneralSettings {
-    return GeneralSettingsSchema.parse(data) as GeneralSettings;
-  }
-
-  /**
-   * Safely validate general settings data without throwing
-   */
-  private validateGeneralSettingsSafe(data: unknown): {
-    success: boolean;
-    data?: GeneralSettings;
-    error?: string;
-  } {
-    try {
-      const validated = this.validateGeneralSettings(data);
-      return { success: true, data: validated };
-    } catch (error: any) {
-      logger.warn('GeneralSettings validation failed', {
-        error: error.message,
-      });
-      return { success: false, error: error.message };
-    }
   }
 }

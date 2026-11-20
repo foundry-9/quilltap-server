@@ -476,26 +476,6 @@ export function remapEntity<T extends object>(
   return { row: dropRow ? null : (next as T), changed, unresolved };
 }
 
-/** Remap a collection, dropping rows a `drop-row` field rejected. */
-export function remapEntities<T extends object>(
-  entity: IdEntity,
-  rows: readonly T[],
-  resolve: IdResolver,
-  options: RemapEntityOptions
-): T[] {
-  const out: T[] = [];
-  let dropped = 0;
-  for (const row of rows) {
-    const result = remapEntity(entity, row, resolve, options);
-    if (result.row) out.push(result.row);
-    else dropped++;
-  }
-  if (dropped > 0) {
-    moduleLogger.info('Dropped rows whose required reference did not resolve', { entity, side: options.side, dropped });
-  }
-  return out;
-}
-
 /** Pick the changed top-level fields of a remapped row, for an update patch. */
 export function changedFields<T extends object>(row: T, changed: ReadonlySet<string>): Partial<T> {
   const patch: Record<string, unknown> = {};

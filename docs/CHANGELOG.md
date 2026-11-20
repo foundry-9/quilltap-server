@@ -4,6 +4,19 @@
 
 ### 4.14-dev
 
+#### Refactor: shared file-op failure response, shared repository bases, schema-read theme action bodies, dead code
+
+- New `fileOpFailure` (`lib/api/file-op-failure.ts`) is the HTTP answer for a failed document-store file operation. The mount-point action route, the per-file route and blob upload each spelled the `{ error, code }` mapping in their own `catch` (twelve copies, two local wrappers). Move, copy, link, write and delete file now also map a `DatabaseStoreError` to its status instead of a 500
+- `POST /api/v1/themes`: `install-from-url`, `add-source`, `remove-source` and `install-registry` read their body against a Zod schema through one `readBody`. Error messages are unchanged; a body that is not an object (`null`, an array) is a 400 instead of a 500
+- `POST /api/v1/themes?action=install` keeps only the last path segment of the uploaded filename for its temporary file
+- The plugin-routes `OPTIONS` answer no longer sends `Access-Control-Allow-Methods` (`Allow` is unchanged)
+- Tag editor suggestions read the shared tag list query (`queryKeys.tags.list()`) instead of a private fetch, and creating a tag invalidates it for the Tags settings card and tag styles
+- Six hand-built secondary buttons (Aurora dialogs, project header, delete-project dialog) use `qt-button-secondary`; the outfit quick-pick and the Brahma model picker use `qt-shadow-md` / `qt-shadow-lg`
+- New `DefaultableProfileRepository` (`lib/database/repositories/defaultable-profile.repository.ts`) holds the find-by-name, find-default, create, update, delete and unset-defaults bodies that `ImageProfilesRepository` and `EmbeddingProfilesRepository` each carried a copy of. The one difference is kept as an option: embedding-profile finders return null on a failed read, image-profile finders rethrow
+- New `OwnerDocMountLinksRepository` (`owner-doc-mount-links.repository.ts`) holds the link, unlink and finder bodies shared by the project and group store-link repositories. The group repository keeps its own `deleteByGroupId` and `deleteByMountPointId`
+- Repository `update` overrides (users, tags, files) no longer strip `id` / `createdAt` before `_update`, which already keeps the stored values. `backup-service.ts` uses the restore archive's `cleanupDir` instead of its own copy
+- Removed unused code: `lib/errors.ts`, `hooks/useEscapeKey.ts`, `components/ui/ChevronIcon.tsx`, `TemplateDisplay`, `buildInterspersedToolLayout`, `hasMixedLineEndings`, `ownDarkValue`, `remapEntities`, `personasWithCards`, `poolMountIds`, `isSafeAtlasFolderPath`, `isSafeInventoryFolderPath`, `listAtlasEntryImages`, `listInventoryItemImages`, `EMPTY_CONSOLE_CONTEXT`, `KIT_REPLACED_DOC_TOOLS`, `REFUSED_THEME_HELP_URL`, the deprecated `cleanupOldJobs`, and the repository methods `updatePath` (blobs), `getTotalTokenUsageForChatSince`, `countByMessageId`, `updateAccessTime`, `countBySourceMessageId`, `getGeneralSettings` and `findRowsForWearer`
+
 #### Refactor: release checklist 3 (best-practices pass)
 
 - New `streamAgentRun` (`lib/api/agent-run-stream.ts`) is the SSE response for the Scenario Builder, wardrobe design and Atlas lore routes, which each carried their own copy of the abort-safe controller, fallback error frame and headers

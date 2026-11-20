@@ -36,7 +36,6 @@ function createMockRepos() {
     llmLogs: {
       create: jest.fn(),
       findByUserId: jest.fn(),
-      countByMessageId: jest.fn(),
       getTotalTokenUsage: jest.fn(),
       cleanupOldLogs: jest.fn(),
       deleteByUserId: jest.fn(),

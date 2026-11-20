@@ -581,30 +581,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
-   * @deprecated Single-window reaper that treats COMPLETED and DEAD jobs the
-   * same. Retention now differs by status (completed jobs are short-lived,
-   * dead jobs are kept longer as a forensic trail), so production should call
-   * {@link cleanupOldJobsByStatus}. Retained only so the existing
-   * queue-service unit test keeps compiling.
-   */
-  async cleanupOldJobs(olderThan: Date): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const deletedCount = await this.deleteMany({
-          status: { $in: ['COMPLETED', 'DEAD'] },
-          completedAt: { $lt: olderThan.toISOString() },
-        });
-
-        logger.info('Cleaned up old background jobs', { deletedCount });
-        return deletedCount;
-      },
-      'Error cleaning up old jobs',
-      {},
-      0
-    );
-  }
-
-  /**
    * Reap finished jobs on per-status retention windows, keyed off
    * `completedAt`. COMPLETED jobs are reaped after the shorter window; DEAD
    * (retry-exhausted) jobs after the longer one. PENDING, PROCESSING, FAILED,

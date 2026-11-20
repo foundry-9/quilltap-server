@@ -235,10 +235,8 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async update(id: string, data: Partial<FileEntry>): Promise<FileEntry | null> {
     return this.safeQuery(
       async () => {
-        // Remove id and createdAt to prevent accidental overwrites
-        const { id: _id, createdAt: _createdAt, ...updateData } = data as any;
-
-        const file = await this._update(id, updateData);
+        // `_update` keeps the stored id and createdAt whatever the patch carries
+        const file = await this._update(id, data);
 
         if (file) {
           logger.info('File updated', { fileId: id });

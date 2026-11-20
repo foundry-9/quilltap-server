@@ -73,9 +73,6 @@ const family = defineItemFolderFamily(INVENTORY_FOLDER_RULES, '.json', errors);
 /** A folder an existing object carries, in normal form or the root. */
 export const normalizeInventoryFolderPathOrRoot = family.normalizeOrRoot;
 
-/** True when `path` is structurally safe to write under `Inventory/`. */
-export const isSafeInventoryFolderPath = family.isSafe;
-
 /** Resolve an operator's requested folder against the folders a tier already has. */
 export const resolveInventoryFolder = family.resolve;
 

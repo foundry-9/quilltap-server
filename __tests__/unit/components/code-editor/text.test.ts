@@ -9,7 +9,6 @@ import {
   detectIndentUnit,
   detectLineEnding,
   fromEditorText,
-  hasMixedLineEndings,
   leadingIndentAt,
   lineOfOffset,
   lineStarts,
@@ -28,8 +27,6 @@ describe('line endings', () => {
   it('takes the majority for a mixed file', () => {
     expect(detectLineEnding('a\r\nb\r\nc\n')).toBe('crlf')
     expect(detectLineEnding('a\r\nb\nc\n')).toBe('lf')
-    expect(hasMixedLineEndings('a\r\nb\n')).toBe(true)
-    expect(hasMixedLineEndings('a\r\nb\r\n')).toBe(false)
   })
 })
 

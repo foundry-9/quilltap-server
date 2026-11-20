@@ -745,11 +745,6 @@ export function hostedCardsOf(hostId: string): SettingsCard[] {
   return SETTINGS_CARDS.filter((c) => c.hostedBy === hostId)
 }
 
-/** Personas that own at least one card — the lens can be any of them. */
-export function personasWithCards(): SettingsPersona[] {
-  return Array.from(new Set(SETTINGS_CARDS.map((c) => c.persona)))
-}
-
 export function isSettingsPersona(id: string | null | undefined): id is SettingsPersona {
   return !!id && SETTINGS_CARDS.some((c) => c.persona === id)
 }
