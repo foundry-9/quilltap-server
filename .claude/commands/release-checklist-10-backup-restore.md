@@ -10,7 +10,7 @@ Related project convention (CLAUDE.md): data/schema changes must be reflected in
 
 1. Find what changed in the data model since the last release:
    ```bash
-   LAST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)
+   LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
    git diff --name-only "${LAST_TAG}"..HEAD -- 'lib/schemas/**' 'migrations/**' 'lib/db/**' 'docs/developer/DDL.md' | sort -u
    ```
 2. Locate the backup/restore implementation (search for the backup service and its included-tables/entities list) and confirm every new table, column, entity, or on-disk asset added this cycle is covered by **both** backup and restore.
@@ -24,4 +24,4 @@ Related project convention (CLAUDE.md): data/schema changes must be reflected in
 
 ## Report
 
-List new data-model additions this cycle and, for each, **BACKED UP** / **RESTORED** / **EXCLUDED (secret)**. Note any gaps fixed and tests added. Do not commit.
+List new data-model additions this cycle and, for each, **BACKED UP** / **RESTORED** / **EXCLUDED (secret)**. Note any gaps fixed and tests added. Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

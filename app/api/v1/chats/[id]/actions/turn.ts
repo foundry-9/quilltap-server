@@ -5,8 +5,7 @@
  * POST ?action=turn-query  (no body) — the next speaker; a POST because a spent
  *   rotation is redrawn and stored to answer it.
  *
- * The old `POST ?action=turn` with `{ action }` in the body answers for one
- * release (`TURN_ACTION_KINDS` maps the action names to the body values).
+ * `TURN_ACTION_KINDS` maps the action names to the turn-action kinds.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -49,18 +48,17 @@ export const TURN_ACTION_KINDS = {
 export type TurnActionKind = (typeof TURN_ACTION_KINDS)[keyof typeof TURN_ACTION_KINDS];
 
 /**
- * Process a turn action. `kind` comes from the `?action=` name; when it is
- * absent (the deprecated `?action=turn`), the body names it.
+ * Process a turn action. `kind` comes from the `?action=` name.
  */
 export async function handleTurnAction(
   req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
   { repos }: RequestContext,
-  kind?: TurnActionKind,
+  kind: TurnActionKind,
 ): Promise<NextResponse> {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-  const parsed = turnActionSchema.parse(kind ? { ...body, action: kind } : body);
+  const parsed = turnActionSchema.parse({ ...body, action: kind });
   const turnAction = parsed.action;
   const participantId = 'participantId' in parsed ? parsed.participantId : undefined;
 

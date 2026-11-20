@@ -8,7 +8,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 
 1. See what changed in the CLI since the last release:
    ```bash
-   LAST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)
+   LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
    git diff --name-only "${LAST_TAG}"..HEAD -- 'packages/quilltap/**' | sort -u
    ```
 2. Enumerate the CLI's current commands/subcommands and options (read `packages/quilltap/`'s command definitions, or run the help):
@@ -28,4 +28,4 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 
 ## Report
 
-List CLI changes this cycle and, for each, confirm **DOCS / COMPLETIONS / HELP** are current or note what you updated. Do not commit.
+List CLI changes this cycle and, for each, confirm **DOCS / COMPLETIONS / HELP** are current or note what you updated. Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

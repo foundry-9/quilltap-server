@@ -1,9 +1,7 @@
 /**
  * Inventory transfer — the handler behind
  * `POST /api/v1/inventory?action=move-to-tier` / `?action=copy-to-tier`
- * `{ itemId, from: { scope, id }, to: { scope, id } }`
- * (and, for one release, the old `POST /api/v1/inventory/transfers`, which took
- * `action` in the body).
+ * `{ itemId, from: { scope, id }, to: { scope, id } }`.
  *
  * The rules (id kept on a move, `canCopy` on a copy, kits kept whole,
  * pictures carried) live in `transferInventoryItem`
@@ -21,11 +19,11 @@ import { resolveInventoryLocation } from '@/lib/inventory/location';
 import { transferInventoryItem } from '@/lib/inventory/transfers';
 import { withInventoryErrors } from '@/lib/inventory/routes/responses';
 
-/** `mode` comes from the action; `'from-body'` is the deprecated path. */
-export function handleInventoryTransfer(mode: 'move' | 'copy' | 'from-body') {
+/** `mode` comes from the action (`move-to-tier` / `copy-to-tier`). */
+export function handleInventoryTransfer(mode: 'move' | 'copy') {
   return withInventoryErrors(async (req: NextRequest, { user, repos }: RequestContext) => {
     const raw = (await req.json()) as Record<string, unknown>;
-    const body = inventoryTransferSchema.parse(mode === 'from-body' ? raw : { ...raw, action: mode });
+    const body = inventoryTransferSchema.parse({ ...raw, action: mode });
     const source = await resolveInventoryLocation(body.from.scope, body.from.id, repos, user.id);
     const record = source ? await source.findItem(body.itemId) : null;
     if (!source || !record) return notFound('Inventory object');

@@ -38,7 +38,6 @@
 import { NextRequest } from 'next/server';
 import { createContextHandler } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
-import { deprecatedPath } from '@/lib/api/deprecated-path';
 import { handleDeleteData, handleDeleteDataPreview } from '@/lib/system-tools/delete-data';
 import {
   handleTasksQueue,
@@ -75,12 +74,6 @@ export const POST = createContextHandler(async (req: NextRequest, context) =>
     'delete-data': () => handleDeleteData(req, context),
     'tasks-queue-start': () => handleTasksQueueControl('start')(req, context),
     'tasks-queue-stop': () => handleTasksQueueControl('stop')(req, context),
-    // Deprecated: `{ action }` in the body. Answers for one release.
-    'tasks-queue': deprecatedPath(
-      'POST /api/v1/system/tools?action=tasks-queue',
-      '/api/v1/system/tools?action=tasks-queue-start|tasks-queue-stop',
-      () => handleTasksQueueControl()(req, context),
-    ),
     'job-concurrency': () => handleJobConcurrencyControl(req, context),
     'export': () => handleExport(req, context),
     'import-preview': () => handleImportPreview(req, context),

@@ -7,7 +7,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 ## Scope
 
 ```bash
-LAST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)
+LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
 git diff --name-only "${LAST_TAG}"..HEAD -- 'app/**/*.tsx' 'components/**/*.tsx' '*.tsx' | grep -vE '__tests__|\.test\.|\.stories\.' | sort -u
 ```
 
@@ -24,4 +24,4 @@ git diff --name-only "${LAST_TAG}"..HEAD -- 'app/**/*.tsx' 'components/**/*.tsx'
 
 ## Report
 
-List components reviewed and any Tailwind→`qt-*` conversions (`file:line`). Note new `qt-*` utilities added and where they were propagated. Do not commit.
+List components reviewed and any Tailwind→`qt-*` conversions (`file:line`). Note new `qt-*` utilities added and where they were propagated. Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

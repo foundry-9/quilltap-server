@@ -169,7 +169,7 @@ async function handleDiscardUpload(req: NextRequest, context: RequestContext) {
 // Route Handlers
 // ============================================================================
 
-export const GET = createContextHandler(async (req, context) => handleList(req, context));
+export const GET = createContextHandler(withCollectionActionDispatch({}, handleList));
 
 export const POST = createContextHandler(
   withCollectionActionDispatch(
