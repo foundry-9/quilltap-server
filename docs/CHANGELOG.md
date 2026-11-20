@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Document core: disk bytes read through the doc-edit backend
+
+- `readDocumentBytes` (`lib/documents/core/read.ts`) no longer calls `fs` directly for a filesystem store. It uses the new `readResolvedFileBytes` in `lib/doc-edit/path-resolver.ts`, next to `statResolvedFile` / `moveResolvedFile` / `deleteResolvedFile`. The core chokepoint test now fails if anything under `lib/documents/core/` imports `fs`
+
 #### Atlas: listings ignore a leading "The"
 
 - The Atlas browser now sorts entries the way scenario lists do: case-insensitive, with a leading "The" ignored ("The Covenant" sorts under C). The rule moved from `lib/scenarios/sort.ts` into `lib/utils/title-sort.ts` (`titleSortKey`, `compareTitles`); `scenarioSortKey` is now an alias for it
