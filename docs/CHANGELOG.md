@@ -21,6 +21,14 @@
 
 - The Atlas browser now sorts entries the way scenario lists do: case-insensitive, with a leading "The" ignored ("The Covenant" sorts under C). The rule moved from `lib/scenarios/sort.ts` into `lib/utils/title-sort.ts` (`titleSortKey`, `compareTitles`); `scenarioSortKey` is now an alias for it
 
+#### API: removed the 4.13 deprecated paths; unknown actions refused on more verbs
+
+- Removed the old route paths that answered for one release after 4.13 moved their actions to `?action=`: `wardrobe/analyze-image`, `wardrobe/preview-avatar`, `wardrobe/transfers`, `atlas/transfers`, `inventory/transfers`, `groups/scenarios`, `system/browse-directory`, `system/plugins/initialize` and `system/plugins/upgrades`. Use the `?action=` forms on the parent routes (listed in `docs/developer/API.md`)
+- Removed the body-discriminator aliases `POST /api/v1/chats/[id]?action=turn` and `POST /api/v1/system/tools?action=tasks-queue`; both are now unknown actions (400). Use `turn-nudge|turn-queue|turn-dequeue|turn-query|turn-skip-user` and `tasks-queue-start|tasks-queue-stop`
+- Removed `lib/api/deprecated-path.ts` and the `'from-body'` mode of the wardrobe, atlas and inventory transfer handlers
+- `DELETE` on `calliope/[id]`, `connection-profiles/[id]` and `themes/[themeId]`, and `GET`/`POST` on `calliope`, `calliope/[id]` and `calliope/[id]/messages`, now go through `dispatchAction`, so an unknown `?action=` is a 400 instead of running the default verb
+- `connection-profiles/[id]`, `chats/[id]` DELETE and `system/navigation` answer through the `@/lib/api/responses` helpers instead of `NextResponse.json`
+
 #### Atlas lore wizard: quoted phrases inside a search query display correctly
 
 - Brahma's activity lines (`describeBrahmaActivity`) no longer break the outer quotes when a query contains its own quoted phrase. `"Zbinden Trust" Osage Duchy` now shows as “‘Zbinden Trust’ Osage Duchy” instead of losing its leading quote and leaving an unbalanced one

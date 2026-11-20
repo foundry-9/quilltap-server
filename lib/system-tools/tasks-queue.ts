@@ -3,7 +3,7 @@
  *
  * Served by `app/api/v1/system/tools/route.ts`:
  *   GET  ?action=tasks-queue      - queue status, active jobs, processor status
- *   POST ?action=tasks-queue      - start / stop the processor (body `{ action }`)
+ *   POST ?action=tasks-queue-start / tasks-queue-stop - start / stop the processor
  *   GET  ?action=job-concurrency  - the global concurrency cap
  *   POST ?action=job-concurrency  - set the global concurrency cap (1-32)
  */
@@ -21,15 +21,6 @@ import { getMaxConcurrentJobs, setMaxConcurrentJobs } from '@/lib/instance-setti
 // ============================================================================
 // Schemas
 // ============================================================================
-
-/**
- * POST ?action=tasks-queue body. The `{ action }` body discriminator is kept
- * for now (a conformance item in refactor-4-13-api-input-schemas §4.6); an
- * unknown value is a 400.
- */
-export const tasksQueueControlBodySchema = z.object({
-  action: z.enum(['start', 'stop'], { error: 'Invalid action. Must be "start" or "stop"' }),
-});
 
 /** POST ?action=job-concurrency body. */
 export const jobConcurrencyBodySchema = z.object({
@@ -213,15 +204,14 @@ export async function handleTasksQueue(_req: NextRequest, context: RequestContex
 
 /**
  * Start or stop the processor: `POST ?action=tasks-queue-start` /
- * `?action=tasks-queue-stop`. With no `mode` (the deprecated
- * `POST ?action=tasks-queue` `{ action }`), the body names it.
+ * `?action=tasks-queue-stop`; `mode` comes from the action.
  */
-export function handleTasksQueueControl(mode?: 'start' | 'stop') {
+export function handleTasksQueueControl(mode: 'start' | 'stop') {
   return async (req: NextRequest, context: RequestContext) => {
   const { user } = context;
 
   try {
-    const { action } = mode ? { action: mode } : tasksQueueControlBodySchema.parse(await req.json());
+    const action = mode;
 
     logger.info('[System Tools v1] Tasks queue control action', {
       userId: user.id,

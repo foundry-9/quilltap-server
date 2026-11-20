@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import { badRequest, successResponse } from '@/lib/api/responses';
@@ -111,6 +112,10 @@ async function handleGetMessages(_req: NextRequest, context: RequestContext, id:
 // Route Handlers
 // ============================================================================
 
-export const POST = createContextParamsHandler<{ id: string }>(async (req, context, { id }) => handleSendMessage(req, context, id));
+export const POST = createContextParamsHandler<{ id: string }>(async (req, context, { id }) =>
+  dispatchAction(req, {}, () => handleSendMessage(req, context, id))
+);
 
-export const GET = createContextParamsHandler<{ id: string }>(async (req, context, { id }) => handleGetMessages(req, context, id));
+export const GET = createContextParamsHandler<{ id: string }>(async (req, context, { id }) =>
+  dispatchAction(req, {}, () => handleGetMessages(req, context, id))
+);
