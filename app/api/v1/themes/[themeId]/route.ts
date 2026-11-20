@@ -176,44 +176,8 @@ export async function DELETE(
     await ensureInitialized();
     const { themeId } = await params;
 
-    const theme = themeRegistry.get(themeId);
-    const refused = theme ? null : themeRegistry.getRefusedTheme(themeId);
-    if (!theme && !refused) {
-      return notFound('Theme');
-    }
-    const name = theme?.name ?? refused!.name;
-
-    if (refused && refused.source !== 'bundle') {
-      return badRequest(
-        `“${name}” arrives with a plugin; it departs when the plugin is removed from the Plugins card.`
-      );
-    }
-    if (theme && theme.source !== 'bundle') {
-      return badRequest(
-        `Cannot uninstall ${theme.source} theme "${theme.name}". Only bundle themes can be uninstalled.`
-      );
-    }
-
-    logger.info('Uninstalling bundle theme', {
-      context: 'DELETE /api/v1/themes/[themeId]',
-      themeId,
-      refused: !!refused,
-    });
-
-    const result = await uninstallThemeBundle(themeId);
-    if (!result.success) {
-      return serverError(`Failed to uninstall theme: ${result.error}`);
-    }
-
-    if (refused) {
-      themeRegistry.forgetRefused(themeId);
-      return messageResponse(`Theme "${name}" uninstalled successfully`);
-    }
-
-    // Hot-unload from registry
-    themeRegistry.unregisterTheme(themeId);
-
-    return messageResponse(`Theme "${name}" uninstalled successfully`);
+    // No actions on DELETE: an unknown `?action=` is a 400, never an uninstall.
+    return await dispatchAction(request, {}, () => handleUninstall(themeId));
   } catch (error) {
     logger.error(
       'Failed to delete theme',
@@ -222,4 +186,46 @@ export async function DELETE(
     );
     return serverError('Failed to uninstall theme');
   }
+}
+
+/** Uninstall a bundle theme, or forget a refused one. */
+async function handleUninstall(themeId: string): Promise<Response> {
+  const theme = themeRegistry.get(themeId);
+  const refused = theme ? null : themeRegistry.getRefusedTheme(themeId);
+  if (!theme && !refused) {
+    return notFound('Theme');
+  }
+  const name = theme?.name ?? refused!.name;
+
+  if (refused && refused.source !== 'bundle') {
+    return badRequest(
+      `“${name}” arrives with a plugin; it departs when the plugin is removed from the Plugins card.`
+    );
+  }
+  if (theme && theme.source !== 'bundle') {
+    return badRequest(
+      `Cannot uninstall ${theme.source} theme "${theme.name}". Only bundle themes can be uninstalled.`
+    );
+  }
+
+  logger.info('Uninstalling bundle theme', {
+    context: 'DELETE /api/v1/themes/[themeId]',
+    themeId,
+    refused: !!refused,
+  });
+
+  const result = await uninstallThemeBundle(themeId);
+  if (!result.success) {
+    return serverError(`Failed to uninstall theme: ${result.error}`);
+  }
+
+  if (refused) {
+    themeRegistry.forgetRefused(themeId);
+    return messageResponse(`Theme "${name}" uninstalled successfully`);
+  }
+
+  // Hot-unload from registry
+  themeRegistry.unregisterTheme(themeId);
+
+  return messageResponse(`Theme "${name}" uninstalled successfully`);
 }

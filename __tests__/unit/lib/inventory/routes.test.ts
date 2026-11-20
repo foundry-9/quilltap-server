@@ -46,10 +46,13 @@ import {
   createInventoryCollectionHandlers,
   createInventoryItemHandlers,
 } from '@/lib/inventory/routes/inventory-route-factory'
-import { POST as transfer } from '@/app/api/v1/inventory/transfers/route'
+import { handleInventoryTransfer } from '@/lib/inventory/routes/transfer'
 import { handleGetInventory, handleInventoryEquip, handleInventoryResetDefaults } from '@/app/api/v1/chats/[id]/actions/inventory'
 
 type Handler = (req: NextRequest, ctx: unknown, params: unknown) => Promise<Response>
+/** `?action=move-to-tier` / `copy-to-tier`, chosen here from the test body's `action`. */
+const transfer: Handler = async (r, c) =>
+  handleInventoryTransfer(((await r.clone().json()) as { action: 'move' | 'copy' }).action)(r, c as never)
 const project = createInventoryCollectionHandlers<{ id: string }>({ scope: 'project', paramsToId: ({ id }) => id, logTag: '[t]', logIdKey: 'projectId' }) as unknown as Record<'GET' | 'POST', Handler>
 const projectItem = createInventoryItemHandlers<{ id: string; itemId: string }>({ scope: 'project', paramsToId: ({ id }) => id, logTag: '[t]', logIdKey: 'projectId' }) as unknown as Record<'GET' | 'PUT' | 'DELETE', Handler>
 const character = createInventoryCollectionHandlers<{ id: string }>({ scope: 'character', paramsToId: ({ id }) => id, logTag: '[t]', logIdKey: 'characterId' }) as unknown as Record<'GET' | 'POST', Handler>

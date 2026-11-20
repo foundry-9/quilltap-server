@@ -211,7 +211,9 @@ async function handleDelete(_req: NextRequest, context: RequestContext, id: stri
 // Route Handlers
 // ============================================================================
 
-export const GET = createContextParamsHandler<{ id: string }>(async (req, context, { id }) => handleGet(req, context, id));
+export const GET = createContextParamsHandler<{ id: string }>(async (req, context, { id }) =>
+  dispatchAction(req, {}, () => handleGet(req, context, id))
+);
 
 export const PATCH = createContextParamsHandler<{ id: string }>(async (req, context, { id }) =>
   dispatchAction(req, { 'set-model': () => handleSetModel(req, context, id) }, () => handleRename(req, context, id))
@@ -225,4 +227,7 @@ export const POST = createContextParamsHandler<{ id: string }>(async (req, conte
   })
 );
 
-export const DELETE = createContextParamsHandler<{ id: string }>(async (req, context, { id }) => handleDelete(req, context, id));
+// No actions on DELETE: an unknown `?action=` is a 400, never a deleted conversation.
+export const DELETE = createContextParamsHandler<{ id: string }>(async (req, context, { id }) =>
+  dispatchAction(req, {}, () => handleDelete(req, context, id))
+);
