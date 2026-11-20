@@ -290,6 +290,9 @@ _quilltap_complete() {
         else
           COMPREPLY=($(compgen -W "$registry_verbs" -- "$cur"))
         fi
+      elif [[ "$cur" != -* ]] && [[ "$subverb" == "install" || "$subverb" == "validate" ]]; then
+        # A .qtap-theme file, or (validate) a bundle directory.
+        COMPREPLY=($(compgen -f -- "$cur"))
       else
         COMPREPLY=($(compgen -W "$themes_flags" -- "$cur"))
       fi

@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### CLI: theme bundle paths complete in the shell
+
+- `quilltap themes install` and `themes validate` now complete file and directory paths in bash, zsh and fish; before, only flags were offered after those verbs. Tests in `completion-behavior.test.js`
+
 #### API: every DELETE refuses an unknown action
 
 - 43 v1 `DELETE` handlers ran their delete when called with an `?action=` they do not answer. They now go through the action dispatcher (`withActionDispatch({}, handler)`, or `dispatchAction` for the two catch-all `[...path]` routes), so an unknown action is a 400. Covers the inline route handlers, `characters/[id]` and `files/[id]` (`handlers/delete.ts` callers), and the scenario, inventory, wardrobe and owner mount-link route factories
