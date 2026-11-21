@@ -56,6 +56,8 @@ import { inventoryGiveToolDefinition } from './inventory-give-tool';
 import { inventoryListToolDefinition } from './inventory-list-tool';
 import { inventoryPickUpToolDefinition } from './inventory-pick-up-tool';
 import { inventoryReadToolDefinition } from './inventory-read-tool';
+import { readMemoryToolDefinition } from './read-memory-tool';
+import { editMemoryToolDefinition } from './edit-memory-tool';
 import { inventoryUnequipToolDefinition } from './inventory-unequip-tool';
 import { inventoryUpdateToolDefinition } from './inventory-update-tool';
 import { keepImageToolDefinition } from './keep-image-tool';
@@ -93,7 +95,8 @@ export type ToolRequirement =
   | 'multiCharacter'
   | 'canDressThemselves'
   | 'canCreateOutfits'
-  | 'canManageInventory';
+  | 'canManageInventory'
+  | 'canEditMemories';
 
 /** A tool the picker lists. */
 export interface ListedToolPickerEntry {
@@ -339,6 +342,22 @@ export const BUILT_IN_TOOL_PICKER: Readonly<Record<string, ToolPickerEntry>> = {
     category: 'wardrobe',
     definition: wardrobeHistoryToolDefinition,
     requires: ['canDressThemselves'],
+  },
+  read_memory: {
+    listed: true,
+    name: 'Read Memory',
+    description: 'Read one of the character\'s own memories as the object Edit Memory takes',
+    category: 'memory',
+    definition: readMemoryToolDefinition,
+    requires: ['canEditMemories'],
+  },
+  edit_memory: {
+    listed: true,
+    name: 'Edit Memory',
+    description: 'Rewrite one of the character\'s own memories: its text, summary, keywords, importance, subject and links',
+    category: 'memory',
+    definition: editMemoryToolDefinition,
+    requires: ['canEditMemories'],
   },
   inventory_list: {
     listed: true,
@@ -656,6 +675,7 @@ export interface ToolAvailabilityContext {
   canDressThemselves: boolean;
   canCreateOutfits: boolean;
   canManageInventory: boolean;
+  canEditMemories: boolean;
 }
 
 /** Why a requirement is unmet, or null when it is met. */
@@ -683,6 +703,8 @@ function unmetReason(requirement: ToolRequirement, ctx: ToolAvailabilityContext)
       return ctx.canCreateOutfits ? null : 'Character does not have wardrobe item creation enabled';
     case 'canManageInventory':
       return ctx.canManageInventory ? null : 'Character does not have inventory management enabled';
+    case 'canEditMemories':
+      return ctx.canEditMemories ? null : 'Character does not have memory editing enabled';
   }
 }
 

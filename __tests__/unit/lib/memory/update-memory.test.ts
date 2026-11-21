@@ -28,11 +28,13 @@ jest.mock('@/lib/memory/index-store', () => ({
 jest.mock('@/lib/memory/time/calendar-refresh', () => ({ refreshMemoryTimeZone: jest.fn(async () => 'UTC') }))
 jest.mock('@/lib/memory/recall/archive', () => ({ invalidateFrozenArchive: jest.fn() }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
+jest.mock('@/lib/background-jobs/child/host-rpc-client', () => ({ callHost: jest.fn() }))
 jest.mock('@/lib/file-storage/commonplace-digest-vault-bridge', () => ({
   writeCommonplaceDigestsToVault: jest.fn().mockResolvedValue({ written: 1, unchanged: 0, skipped: 0 }),
 }))
 
-import { updateMemory } from '@/lib/memory/admission'
+import { updateMemory, requestMemoryEdit } from '@/lib/memory/admission'
+import { callHost } from '@/lib/background-jobs/child/host-rpc-client'
 import { getRepositories } from '@/lib/repositories/factory'
 import { memoryIndex } from '@/lib/memory/index-store'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
@@ -292,5 +294,38 @@ describe('updateMemory (bug 203)', () => {
       expect((await updateMemory('holder', 'k0', { keystone: false }, { userId: 'u1' })).ok).toBe(true)
       expect(byId.get('k0')!.keystone).toBe(false)
     })
+  })
+})
+
+// edit_memory from an autonomous room runs in the job child; the chokepoint
+// publishes and invalidates parent-side, so the child asks the parent.
+describe('requestMemoryEdit', () => {
+  const request = { characterId: 'holder', memoryId: 'm1', patch: { content: 'new text' }, userId: 'u1' }
+
+  beforeEach(() => {
+    jest.mocked(callHost).mockClear()
+  })
+
+  afterEach(() => {
+    delete process.env.QUILLTAP_JOB_CHILD
+  })
+
+  it('asks the parent over host-RPC from the job child, and writes nothing itself', async () => {
+    const { memories } = setup([{ ...base, id: 'm1' }])
+    process.env.QUILLTAP_JOB_CHILD = '1'
+    jest.mocked(callHost).mockResolvedValue({ ok: true, memory: { id: 'm1' } })
+    await requestMemoryEdit(request)
+    expect(callHost).toHaveBeenCalledWith('editMemory', request)
+    expect(memories.updateForCharacter).not.toHaveBeenCalled()
+  })
+
+  it('edits in the parent through updateMemory and returns the row without its vector', async () => {
+    const { byId } = setup([{ ...base, id: 'm1' }])
+    const result = await requestMemoryEdit(request)
+    expect(callHost).not.toHaveBeenCalled()
+    expect(byId.get('m1')!.content).toBe('new text')
+    expect(byId.get('m1')!.embedding).toBe(NEW_VECTOR)
+    expect(result.ok).toBe(true)
+    expect(result.ok && 'embedding' in result.memory).toBe(false)
   })
 })

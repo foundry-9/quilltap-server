@@ -106,6 +106,7 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
           let canDressThemselves = true;
           let canCreateOutfits = true;
           let canManageInventory = true;
+          let canEditMemories = false;
           if (characterParticipant?.characterId) {
             try {
               const character = await repos.characters.findById(characterParticipant.characterId);
@@ -113,6 +114,7 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
                 canDressThemselves = character.canDressThemselves !== false;
                 canCreateOutfits = character.canCreateOutfits !== false;
                 canManageInventory = character.canManageInventory !== false;
+                canEditMemories = character.canEditMemories === true;
               }
             } catch (charError) {
               logger.warn('[Tools v1] Failed to load character for wardrobe check', {
@@ -143,6 +145,7 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
             canDressThemselves,
             canCreateOutfits,
             canManageInventory,
+            canEditMemories,
           };
         }
       } catch (chatError) {

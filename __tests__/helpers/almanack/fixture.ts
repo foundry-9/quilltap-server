@@ -257,6 +257,7 @@ export function makeAlmanackFixture(
       canDressThemselves: 30,
       canCreateOutfits: 12,
       canManageInventory: 28,
+      canEditMemories: 3,
       coreWhisperOverrides: 5,
     },
     featureConfig: {

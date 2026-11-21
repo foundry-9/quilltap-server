@@ -119,6 +119,8 @@ import { sendMailToolDefinition } from '@/lib/tools/send-mail-tool';
 import { listMailToolDefinition } from '@/lib/tools/list-mail-tool';
 import { readMailToolDefinition } from '@/lib/tools/read-mail-tool';
 import { discardMailToolDefinition } from '@/lib/tools/discard-mail-tool';
+import { readMemoryToolDefinition } from '@/lib/tools/read-memory-tool';
+import { editMemoryToolDefinition } from '@/lib/tools/edit-memory-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 import { enabledInventoryToolDefinitions, pickInventoryToolFlags, type InventoryToolFlags } from '@/lib/tools/inventory-tool-flags';
 
@@ -321,6 +323,9 @@ export interface BuildToolsOptions extends InventoryToolFlags {
   /** Whether to enable the ask_carina tool (inline Carina answerer) */
   askCarina?: boolean;
 
+  /** Whether to enable read_memory and edit_memory (the character's `canEditMemories`) */
+  memoryEdit?: boolean;
+
   /**
    * Whether to include the always-on "workspace" tool set: self-inventory,
    * Post Office mail (send_mail/list_mail), conversation reading, annotations,
@@ -444,6 +449,7 @@ export async function buildToolsForProvider(
       documentsOnlySearch: options.documentsOnlySearch,
       includePluginTools: options.includePluginTools,
       askCarina: options.askCarina,
+      memoryEdit: options.memoryEdit,
       sqlAccess: options.sqlAccess,
       researchKit: options.researchKit ?? 'off',
     },
@@ -614,6 +620,12 @@ export async function buildToolsForProvider(
   // Add ask_carina tool if enabled (inline Carina answerer)
   if (options.askCarina) {
     universalTools.push(askCarinaToolDefinition as UniversalTool);
+  }
+
+  // Reading and rewriting the character's own memories (gated by canEditMemories)
+  if (options.memoryEdit) {
+    universalTools.push(readMemoryToolDefinition as UniversalTool);
+    universalTools.push(editMemoryToolDefinition as UniversalTool);
   }
 
   // Add wardrobe tools if enabled (gated by character wardrobe flags)

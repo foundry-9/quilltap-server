@@ -482,6 +482,10 @@
           "type": ["boolean", "null"],
           "description": "Whether this character may see and change what they carry with the inventory_* tools (null = enabled by default)"
         },
+        "canEditMemories": {
+          "type": ["boolean", "null"],
+          "description": "Whether this character may read and edit their own memories with read_memory / edit_memory (null = disabled by default)"
+        },
         "canChooseOutfit": {
           "type": "boolean",
           "description": "When true, a new chat with this character defaults its Starting Outfit to 'Let character choose'. Absent/false falls back to defaults (or Compose when there is no usable default outfit). Stored in the vault's properties.json."

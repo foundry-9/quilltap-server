@@ -67,6 +67,8 @@ import { inventoryGiveToolEffect } from './inventory-give-tool';
 import { inventoryListToolEffect } from './inventory-list-tool';
 import { inventoryPickUpToolEffect } from './inventory-pick-up-tool';
 import { inventoryReadToolEffect } from './inventory-read-tool';
+import { readMemoryToolEffect } from './read-memory-tool';
+import { editMemoryToolEffect } from './edit-memory-tool';
 import { inventoryUnequipToolEffect } from './inventory-unequip-tool';
 import { inventoryUpdateToolEffect } from './inventory-update-tool';
 import { keepImageToolEffect } from './keep-image-tool';
@@ -149,6 +151,7 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
   doc_write_blob: docWriteBlobToolEffect,
   doc_write_file: docWriteFileToolEffect,
   edit_custom_tool: editCustomToolToolEffect,
+  edit_memory: editMemoryToolEffect,
   help_navigate: helpNavigateToolEffect,
   help_search: helpSearchToolEffect,
   help_settings: helpSettingsToolEffect,
@@ -170,6 +173,7 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
   log_read: logReadToolEffect,
   project_info: projectInfoToolEffect,
   read_conversation: readConversationToolEffect,
+  read_memory: readMemoryToolEffect,
   read_mail: readMailToolEffect,
   request_full_context: requestFullContextToolEffect,
   rng: rngToolEffect,

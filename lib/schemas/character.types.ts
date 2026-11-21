@@ -175,6 +175,11 @@ export const CharacterRowSchema = z.object({
   /** Whether this character may use the inventory_* tools (null = enabled by default) */
   canManageInventory: z.boolean().nullable().optional(),
   /**
+   * Whether this character may use `read_memory` and `edit_memory` on their own
+   * memories (null = disabled by default; independent of `systemTransparency`).
+   */
+  canEditMemories: z.boolean().nullable().optional(),
+  /**
    * When true, this character may inspect and access "the Staff" of personified
    * features — chat-level toggles for self_inventory, Staff messages
    * (Lantern/Aurora/Librarian/Prospero/Host announcements), and any character

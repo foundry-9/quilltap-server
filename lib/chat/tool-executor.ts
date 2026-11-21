@@ -86,6 +86,10 @@ import {
   type LogToolContext,
 } from '@/lib/tools/handlers/log-handler';
 import {
+  executeReadMemoryTool,
+  executeEditMemoryTool,
+} from '@/lib/tools/handlers/memory-edit-handler';
+import {
   executeReadConversationTool,
   formatReadConversationResults,
   type ReadConversationToolContext,
@@ -319,6 +323,9 @@ const BUILT_IN_TOOLS = new Set<string>([
   'log_create_entry',
   'log_grep',
   'log_read',
+  // The Commonplace Book — a character's own memories (canEditMemories)
+  'read_memory',
+  'edit_memory',
   // Scriptorium tools
   'read_conversation',
   'upsert_annotation',
@@ -912,6 +919,23 @@ export async function executeToolCallWithContext(
             ? executeLogGrepTool
             : executeLogReadTool;
       const { success, error, ...result } = await execute(toolCall.arguments, logContext);
+      return {
+        toolName: toolCall.name,
+        success,
+        result: success ? result : null,
+        error: success ? undefined : error,
+      };
+    }
+
+    // read_memory / edit_memory: the calling character's own memories. The
+    // answer is the handler's output itself, so the model reads (and hands
+    // back) the memory object as JSON.
+    if (toolCall.name === 'read_memory' || toolCall.name === 'edit_memory') {
+      if (!characterId) {
+        return { toolName: toolCall.name, success: false, result: null, error: 'The memory tools need a character to act for.' };
+      }
+      const execute = toolCall.name === 'read_memory' ? executeReadMemoryTool : executeEditMemoryTool;
+      const { success, error, ...result } = await execute(toolCall.arguments, { userId, characterId });
       return {
         toolName: toolCall.name,
         success,

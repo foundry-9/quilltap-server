@@ -340,6 +340,7 @@ CREATE TABLE "characters" (
   "canDressThemselves" INTEGER DEFAULT NULL,
   "canCreateOutfits" INTEGER DEFAULT NULL,
   "canManageInventory" INTEGER DEFAULT NULL,  -- Offered the inventory_* tools; NULL reads as on.
+  "canEditMemories" INTEGER DEFAULT NULL,     -- Offered read_memory / edit_memory on their own memories; NULL reads as off. Independent of systemTransparency.
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
   "archivedAt" TEXT DEFAULT NULL,            -- ISO timestamp when the character was archived into a tombstone.
   "archiveFileId" TEXT DEFAULT NULL,         -- File row holding the archived character bundle export.

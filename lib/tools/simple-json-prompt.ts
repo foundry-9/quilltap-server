@@ -36,6 +36,8 @@ import { wardrobeTakeOffToolDefinition } from './wardrobe-take-off-tool'
 import { wardrobeRollbackToolDefinition } from './wardrobe-rollback-tool'
 import { wardrobeHistoryToolDefinition } from './wardrobe-history-tool'
 import { enabledInventoryToolDefinitions, type InventoryToolFlags } from './inventory-tool-flags'
+import { readMemoryToolDefinition } from './read-memory-tool'
+import { editMemoryToolDefinition } from './edit-memory-tool'
 import { STORY_LOOKUP_NOTE } from './native-tool-prompt'
 import type { ToolRulesVariant } from '@/lib/characters/kind'
 
@@ -64,6 +66,8 @@ export interface SimpleJsonPromptOptions extends InventoryToolFlags {
   wardrobeCreate?: boolean
   wardrobeUpdate?: boolean
   wardrobeArchive?: boolean
+  /** read_memory / edit_memory (the character's `canEditMemories`) */
+  memoryEdit?: boolean
 }
 
 /**
@@ -254,6 +258,10 @@ export function buildSimpleJsonToolInstructions(
   }
   for (const definition of enabledInventoryToolDefinitions(options)) {
     entries.push(renderToolEntry(definition as unknown as OpenAIToolDefinition))
+  }
+  if (options.memoryEdit) {
+    entries.push(renderToolEntry(readMemoryToolDefinition as unknown as OpenAIToolDefinition))
+    entries.push(renderToolEntry(editMemoryToolDefinition as unknown as OpenAIToolDefinition))
   }
 
   if (entries.length === 0) {

@@ -265,6 +265,7 @@ Cast sizes:
 - **May dress themselves**: 30
 - **May create outfits**: 12
 - **May manage their inventory**: 28
+- **May edit their own memories**: 3
 - **With a Core-whisper override**: 5
 
 ### Feature Configuration

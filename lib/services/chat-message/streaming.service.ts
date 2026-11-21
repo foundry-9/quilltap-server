@@ -232,6 +232,8 @@ export interface BuildToolsOptions {
   docToolsMode?: DocToolsMode
   /** Whether the ask_carina tool is enabled for this character */
   askCarinaEnabled?: boolean
+  /** read_memory / edit_memory on the character's own memories (`canEditMemories`; default off) */
+  canEditMemories?: boolean
   /**
    * Whether to include the always-on "workspace" tool set (mail, annotations,
    * terminal, conversation reading, self-inventory, RNG/state). Defaults to
@@ -331,6 +333,7 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     canManageInventory,
     docToolsMode,
     askCarinaEnabled,
+    canEditMemories,
     includeWorkspaceTools,
     excludeMemorySearch,
     sqlAccess,
@@ -435,6 +438,7 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     documentsOnlySearch: !!documentsOnlySearch,
     storeSearch: storeSearch !== false,
     askCarina: askCarinaEnabled,
+    memoryEdit: canEditMemories === true,
     includeWorkspaceTools: includeWorkspaceTools !== false,
     excludeMemorySearch: !!excludeMemorySearch,
     sqlAccess: !!sqlAccess,

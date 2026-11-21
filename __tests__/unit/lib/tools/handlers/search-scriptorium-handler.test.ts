@@ -688,6 +688,7 @@ describe('search-scriptorium-handler', () => {
         sourceType: 'memory',
         relevanceScore: 0.83,
         metadata: {
+          memoryId: 'mem-42',
           summary: 'Archive note',
           importance: 0.8,
         },
@@ -708,6 +709,7 @@ describe('search-scriptorium-handler', () => {
     expect(formatted).toContain('Found 2 results:')
     expect(formatted).toContain('[Result 1 - Memory]')
     expect(formatted).toContain('Importance: High')
+    expect(formatted).toContain('Memory ID: mem-42\nSummary: Archive note')
     expect(formatted).toContain('Conversation ID: chat-9')
     expect(formatted).toContain('Participants: Ada, User')
   })

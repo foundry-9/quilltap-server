@@ -439,6 +439,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🧵',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
+    read_memory: {
+      displayName: 'Read Memory',
+      icon: '🧠',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    edit_memory: {
+      displayName: 'Edit Memory',
+      icon: '🧠',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
     inventory_list: {
       displayName: 'Inventory',
       icon: '🎒',

@@ -516,6 +516,7 @@ function renderLedgers(push: Push, data: AlmanackReportData): void {
   push(`- **May dress themselves**: ${data.characterBreakdown.canDressThemselves}`);
   push(`- **May create outfits**: ${data.characterBreakdown.canCreateOutfits}`);
   push(`- **May manage their inventory**: ${data.characterBreakdown.canManageInventory}`);
+  push(`- **May edit their own memories**: ${data.characterBreakdown.canEditMemories}`);
   push(`- **With a Core-whisper override**: ${data.characterBreakdown.coreWhisperOverrides}`, '');
 
   renderFeatureConfig(push, data);

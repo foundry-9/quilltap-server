@@ -4,6 +4,21 @@
 
 ### 4.14-dev
 
+#### Feature: characters may read and edit their own memories
+
+- New tools `read_memory` (effect `read`) and `edit_memory` (effect `write`), gated by a new per-character flag `canEditMemories` (migration `add-character-memory-edit-flag-v1`, NULL = off). Independent of `systemTransparency`. Offered on Salon turns only; the other tool surfaces never pass the flag
+- `read_memory` takes an id and returns `{ memory, context }`: `memory` is exactly the object `edit_memory` takes (`id`, `content`, `summary`, `keywords`, `importance`, `about_character_id`, `related_memory_ids`), `context` the read-only facts (kind, source, archived, keystone, dates, reinforcement count, subject name, source conversation)
+- `edit_memory` takes the whole object, every field required, and writes only the fields that changed through `updateMemory`. Scoped to the calling character's own memories; a keystone is refused; an unknown `about_character_id` is refused. From the job child (autonomous rooms) the write goes to the parent over a new `editMemory` host-RPC (`requestMemoryEdit` / `editMemoryOnHost`, `lib/memory/admission/update-memory.ts`)
+- Handlers in `lib/tools/handlers/memory-edit-handler.ts`. Native and simple-json tool modes; text-block mode does not offer them
+- Aurora: Abilities → Tools & talents → **Edits their own memories**. Tool settings group "The Commonplace Book". Salon tool cards "Read Memory" / "Edit Memory". Almanack counts characters with the permission
+- Help: `character-editing.md`. Also `DDL.md`, `qtap-export.schema.json`
+
+#### Fix: `search` sent every hit to the model twice
+
+- The tool message for `search` was the whole result object as JSON: the rendered `formattedText` plus the raw `results` array, so each memory's content, summary and dates went out twice, with UUIDs and scores the text already summarised. `processToolCalls` (`lib/services/chat-message/tool-execution.service.ts`) now hands the model `formattedText` alone; the live tool card still receives the full object
+- Memory hits in the rendered text now carry a `Memory ID:` line, so the id survives the change
+- Help: `episodic-memory.md`
+
 #### Docs: 4.14.0 release notes
 
 - Added `docs/releases/4.14.0.md`

@@ -687,6 +687,11 @@ export {
 } from './inventory-tool-flags';
 export { inventoryListToolDefinition, validateInventoryListInput } from './inventory-list-tool';
 export { inventoryReadToolDefinition, validateInventoryReadInput } from './inventory-read-tool';
+export { readMemoryToolDefinition, readMemoryToolInputSchema, validateReadMemoryInput } from './read-memory-tool';
+export type { ReadMemoryToolInput, ReadMemoryToolOutput, EditableMemoryObject, MemoryReadOnlyContext } from './read-memory-tool';
+export { editMemoryToolDefinition, editMemoryToolInputSchema, validateEditMemoryInput } from './edit-memory-tool';
+export type { EditMemoryToolInput, EditMemoryToolOutput } from './edit-memory-tool';
+export { executeReadMemoryTool, executeEditMemoryTool, type MemoryEditToolContext } from './handlers/memory-edit-handler';
 export { inventoryEquipToolDefinition, validateInventoryEquipInput } from './inventory-equip-tool';
 export { inventoryUnequipToolDefinition, validateInventoryUnequipInput } from './inventory-unequip-tool';
 export { inventoryPickUpToolDefinition, validateInventoryPickUpInput } from './inventory-pick-up-tool';

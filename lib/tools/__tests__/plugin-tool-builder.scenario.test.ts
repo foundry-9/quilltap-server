@@ -183,3 +183,20 @@ describe('buildToolsForProvider — the research kit (research-kit.md §5.2)', (
     expect(names).not.toContain('find_documents')
   })
 })
+
+describe('buildToolsForProvider — memoryEdit', () => {
+  beforeEach(() => {
+    mockedGetConfiguredToolDefinitions.mockReset()
+    mockedGetConfiguredToolDefinitions.mockResolvedValue([])
+  })
+
+  const base = { includeWorkspaceTools: false, includePluginTools: false, rng: false, state: false }
+
+  it('offers read_memory and edit_memory together, and only when asked', async () => {
+    const on = (await buildToolsForProvider('OPENAI', { ...base, memoryEdit: true })).map(toolName)
+    expect(on).toEqual(expect.arrayContaining(['read_memory', 'edit_memory']))
+    const off = (await buildToolsForProvider('OPENAI', base)).map(toolName)
+    expect(off).not.toContain('read_memory')
+    expect(off).not.toContain('edit_memory')
+  })
+})

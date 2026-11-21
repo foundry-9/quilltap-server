@@ -229,3 +229,43 @@ export async function updateMemory(
   })
   return { ok: true, memory }
 }
+
+/** `updateMemory`'s arguments, as the job child hands them over host-RPC (`editMemory`). */
+export interface MemoryEditRequest {
+  characterId: string
+  memoryId: string
+  patch: MemoryEditPatch
+  userId: string
+}
+
+/**
+ * {@link updateMemory} from either process. The job child (an autonomous
+ * room's turn calling `edit_memory`) cannot run it — it publishes realtime
+ * hints and invalidates the parent's archive cache — so it asks the parent
+ * over the `editMemory` host-RPC, which calls {@link editMemoryOnHost}.
+ */
+export async function requestMemoryEdit(request: MemoryEditRequest): Promise<UpdateMemoryResult> {
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    log.debug('Routing memory edit to the parent over host-RPC', {
+      characterId: request.characterId,
+      memoryId: request.memoryId,
+    })
+    const { callHost } = await import('@/lib/background-jobs/child/host-rpc-client')
+    return callHost<UpdateMemoryResult>('editMemory', request)
+  }
+  return editMemoryOnHost(request)
+}
+
+/**
+ * The parent's half of {@link requestMemoryEdit}. The returned row leaves its
+ * vector behind: a `Float32Array` does not survive the IPC trip intact, and no
+ * caller needs it.
+ */
+export async function editMemoryOnHost(request: MemoryEditRequest): Promise<UpdateMemoryResult> {
+  const result = await updateMemory(request.characterId, request.memoryId, request.patch, {
+    userId: request.userId,
+  })
+  if (!result.ok) return result
+  const { embedding: _embedding, ...rest } = result.memory
+  return { ok: true, memory: rest as Memory }
+}

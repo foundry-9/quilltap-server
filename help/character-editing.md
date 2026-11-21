@@ -410,9 +410,15 @@ The Ariel Clause: the character's standing conditions on how they may be shown, 
 Every switch about the character's powers, in four cards, each saving the moment you change it. Where a setting may **Inherit**, the option tells you what it presently resolves to, so you need not go hunting through Settings to find out.
 
 - **Trust & perception** — **System transparency** (see [System Transparency](character-system-transparency.md)) and **Aurora's Core whisper** (inherit, always or never).
-- **Tools & talents** — **Can answer @-queries (Carina)** (see [Carina](carina.md)) and **Draws diagrams**, with its **Drawing style** of **Hand-drawn** (the default) or **Clean**, greyed out but remembered while the pen is withheld (see [Diagrams](diagrams.md)).
+- **Tools & talents** — **Can answer @-queries (Carina)** (see [Carina](carina.md)), **Edits their own memories** (below) and **Draws diagrams**, with its **Drawing style** of **Hand-drawn** (the default) or **Clean**, greyed out but remembered while the pen is withheld (see [Diagrams](diagrams.md)).
 - **Wardrobe & inventory** — **Dresses themselves**, **Creates outfits**, **Chooses own opening outfit**, **Manages inventory**.
 - **Control** — **You play this character** (the character is user-controlled: you speak for them) and **Non-player character** (an NPC).
+
+### Edits their own memories
+
+Off unless you turn it on. When on, the character is handed two instruments for their own Commonplace Book (see [Episodic Memory](episodic-memory.md)): **`read_memory`**, which takes down one memory by its id (each memory a `search` turns up now shows its **Memory ID**), and **`edit_memory`**, which puts it back revised. The character may mend the text or the summary, change the keywords it is found by, decide it matters more or less than first supposed, say whom it is about, and link it to their other memories. A revised text is re-indexed at once, so the next search finds it as it now reads.
+
+A few rules hold firm. A character may only ever touch their **own** memories. A **keystone** (see [Recall Relevance](memory-recall-relevance.md#keystones-facts-set-in-stone)) — a standing fact you have set in stone — is left strictly alone; only you may change one. The setting is quite apart from **System transparency**: a character may be trusted with the pencil without being shown the workings of the house, or the reverse. And, like every tool, it asks for a connection profile that permits tool use; it also works from an autonomous room.
 
 ## Chat Defaults
 

@@ -103,6 +103,12 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions, Invento
   wardrobeCreate: boolean
   wardrobeUpdate: boolean
   wardrobeArchive: boolean
+  /**
+   * read_memory / edit_memory. Rendered by the simple-json prompt only: the
+   * text-block protocol has no parser for them, as it has none for mail, the
+   * log or the document tools.
+   */
+  memoryEdit?: boolean
   /** The research kit's tools (`buildTools`' `researchKit`); absent = off. */
   researchKit?: 'off' | 'documents' | 'full'
 }
@@ -119,6 +125,7 @@ export function determineTextBlockToolOptions(
   canDressThemselves?: boolean,
   canCreateOutfits?: boolean,
   canManageInventory?: boolean,
+  canEditMemories?: boolean,
 ): TextBlockEnabledToolOptions {
   return {
     imageGeneration: !!imageProfileId,
@@ -142,6 +149,7 @@ export function determineTextBlockToolOptions(
     wardrobeUpdate: canCreateOutfits !== false,
     wardrobeArchive: canCreateOutfits !== false,
     ...inventoryToolFlags(canManageInventory),
+    memoryEdit: canEditMemories === true,
   }
 }
 
@@ -268,6 +276,7 @@ export function buildSimpleJsonSystemInstructions(
     wardrobeUpdate: enabledOptions.wardrobeUpdate,
     wardrobeArchive: enabledOptions.wardrobeArchive,
     ...pickInventoryToolFlags(enabledOptions),
+    memoryEdit: enabledOptions.memoryEdit,
   }
   return buildSimpleJsonToolInstructions(options, variant)
 }

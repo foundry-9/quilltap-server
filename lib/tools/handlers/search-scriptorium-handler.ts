@@ -727,7 +727,7 @@ export function formatSearchScriptoriumResults(
 
       const archived = result.metadata.archivedLabel ? ` ${result.metadata.archivedLabel}` : ''
       return `[Result ${index + 1} - Memory${archived}] (Importance: ${importanceLabel}, Relevance: ${(result.relevanceScore * 100).toFixed(0)}%)
-Summary: ${result.metadata.summary || 'No summary'}${whenLine}${sourceLine}
+${result.metadata.memoryId ? `Memory ID: ${result.metadata.memoryId}\n` : ''}Summary: ${result.metadata.summary || 'No summary'}${whenLine}${sourceLine}
 Details: ${result.content}`
     } else if (result.sourceType === 'conversation') {
       return `[Result ${index + 1} - Conversation] (Relevance: ${(result.relevanceScore * 100).toFixed(0)}%, Chat: ${result.metadata.conversationTitle || 'Untitled'})

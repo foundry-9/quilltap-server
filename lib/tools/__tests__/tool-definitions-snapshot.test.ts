@@ -94,6 +94,8 @@ import { wardrobeRollbackToolDefinition } from '../wardrobe-rollback-tool'
 import { wardrobeHistoryToolDefinition } from '../wardrobe-history-tool'
 import { inventoryListToolDefinition } from '../inventory-list-tool'
 import { inventoryReadToolDefinition } from '../inventory-read-tool'
+import { readMemoryToolDefinition } from '../read-memory-tool'
+import { editMemoryToolDefinition } from '../edit-memory-tool'
 import { inventoryEquipToolDefinition } from '../inventory-equip-tool'
 import { inventoryUnequipToolDefinition } from '../inventory-unequip-tool'
 import { inventoryPickUpToolDefinition } from '../inventory-pick-up-tool'
@@ -140,6 +142,8 @@ const ALL_TOOLS = {
   imageGeneration: imageGenerationToolDefinition,
   inventoryList: inventoryListToolDefinition,
   inventoryRead: inventoryReadToolDefinition,
+  readMemory: readMemoryToolDefinition,
+  editMemory: editMemoryToolDefinition,
   inventoryEquip: inventoryEquipToolDefinition,
   inventoryUnequip: inventoryUnequipToolDefinition,
   inventoryPickUp: inventoryPickUpToolDefinition,

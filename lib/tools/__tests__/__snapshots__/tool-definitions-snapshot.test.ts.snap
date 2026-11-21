@@ -31,6 +31,7 @@ exports[`tool definitions: declared effects effects snapshot (static effect, or 
   "doc_write_blob": "write",
   "doc_write_file": "write",
   "edit_custom_tool": "computed (max write)",
+  "edit_memory": "write",
   "find_documents": "read",
   "generate_image": "write",
   "help_navigate": "read",
@@ -63,6 +64,7 @@ exports[`tool definitions: declared effects effects snapshot (static effect, or 
   "project_info": "read",
   "read_conversation": "read",
   "read_mail": "read",
+  "read_memory": "read",
   "read_messages": "read",
   "request_full_context": "read",
   "rng": "none",
@@ -1140,6 +1142,81 @@ exports[`tool definitions: derived OpenAI parameters editCustomTool: parameters 
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters editMemory: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "about_character_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string",
+        },
+        {
+          "type": "null",
+        },
+      ],
+      "description": "The id of the character this memory is about, or null when it is not about anyone in particular.",
+    },
+    "content": {
+      "description": "The memory in full: what happened or what is true, in as much detail as it deserves.",
+      "maxLength": 20000,
+      "minLength": 1,
+      "type": "string",
+    },
+    "id": {
+      "description": "The memory's id. Identifies which memory to edit; it cannot be changed.",
+      "maxLength": 100,
+      "minLength": 1,
+      "type": "string",
+    },
+    "importance": {
+      "description": "How much the memory matters, from 0 (trivial) to 1 (defining). 0.7 and above counts as high, below 0.3 as low; it decides which memories surface first and which are kept longest.",
+      "maximum": 1,
+      "minimum": 0,
+      "type": "number",
+    },
+    "keywords": {
+      "description": "Words and short phrases the memory should be found by in a keyword search. May be empty.",
+      "items": {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string",
+      },
+      "maxItems": 50,
+      "type": "array",
+    },
+    "related_memory_ids": {
+      "description": "Ids of your other memories this one is linked to. The link is kept on both memories; leave a memory off the list to unlink it.",
+      "items": {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string",
+      },
+      "maxItems": 50,
+      "type": "array",
+    },
+    "summary": {
+      "description": "One or two sentences distilling the memory. This is what is shown when the memory is recalled into a conversation.",
+      "maxLength": 2000,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "id",
+    "content",
+    "summary",
+    "keywords",
+    "importance",
+    "about_character_id",
+    "related_memory_ids",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters findDocuments: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -2138,6 +2215,24 @@ exports[`tool definitions: derived OpenAI parameters readMail: parameters snapsh
   },
   "required": [
     "letter",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters readMemory: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "description": "The memory's id, as shown on the "Memory ID:" line of a search result.",
+      "maxLength": 100,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "id",
   ],
   "type": "object",
 }
@@ -3592,6 +3687,7 @@ exports[`tool definitions: the tool picker picker snapshot (listed category, or 
   "doc_write_blob": "unlisted",
   "doc_write_file": "documents [documentStores]",
   "edit_custom_tool": "pascal",
+  "edit_memory": "memory [canEditMemories]",
   "find_documents": "unlisted",
   "generate_image": "media [imageProfile]",
   "help_navigate": "help",
@@ -3624,6 +3720,7 @@ exports[`tool definitions: the tool picker picker snapshot (listed category, or 
   "project_info": "project [project]",
   "read_conversation": "search",
   "read_mail": "utility",
+  "read_memory": "memory [canEditMemories]",
   "read_messages": "unlisted",
   "request_full_context": "unlisted",
   "rng": "utility",

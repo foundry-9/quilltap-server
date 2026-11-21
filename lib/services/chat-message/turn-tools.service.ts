@@ -139,6 +139,8 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
   const canDressThemselves = character.canDressThemselves !== false
   const canCreateOutfits = character.canCreateOutfits !== false
   const canManageInventory = character.canManageInventory !== false
+  // Editing their own memories is granted, never assumed (null reads as off).
+  const canEditMemories = character.canEditMemories === true
 
   // System transparency: a character not opted in never gets self_inventory,
   // whatever the chat- and project-level toggles say.
@@ -167,6 +169,7 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     canDressThemselves,
     canCreateOutfits,
     canManageInventory,
+    canEditMemories,
     docToolsMode: documentEditingEnabled ? 'full' : 'off',
     askCarinaEnabled,
     customToolContext: customToolRosterFor(chat, userId, character, chatSettings),
@@ -187,7 +190,8 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
       helpToolsEnabled,
       canDressThemselves,
       canCreateOutfits,
-      canManageInventory
+      canManageInventory,
+      canEditMemories
     )
     if (resolvedToolMode === 'simple-json') {
       toolInstructions = buildSimpleJsonSystemInstructions(textOptions, characterKindPolicy(character).toolRules)
