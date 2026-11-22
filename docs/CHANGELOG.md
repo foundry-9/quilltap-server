@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Dependencies: root installs `@quilltap/plugin-utils` 2.7.7
+
+- Root `package.json` floor raised to `^2.7.7` and the lockfile updated from 2.7.6 to the published 2.7.7. `packages/plugin-utils/CHANGELOG.md` now has entries for 2.7.2 through 2.7.7 (all dependency-only releases)
+
 #### Fix: Brahma's SQL prompt described every cold memory as a consolidated member
 
 - The `memories.tier` note in `lib/brahma-console/brahma-sql-prompt.ts` now says a cold row is either superseded (`supersededById` names the digest or the newer contradicting row) or, with `supersededById` NULL, demoted past the memory cap. Brahma's tier counts no longer count cap-demoted rows as consolidated ones
