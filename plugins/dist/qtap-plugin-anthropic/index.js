@@ -410,7 +410,7 @@ var init_sleep = __esm({
 var VERSION;
 var init_version = __esm({
   "node_modules/@anthropic-ai/sdk/version.mjs"() {
-    VERSION = "1.10.0";
+    VERSION = "1.12.0";
   }
 });
 
@@ -1953,6 +1953,7 @@ async function* _iterSSEMessages(response, controller) {
   }
   const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
   let text = "";
+  let endsWithCR = false;
   let event = null;
   let data = [];
   let raw = [];
@@ -1985,7 +1986,10 @@ async function* _iterSSEMessages(response, controller) {
   for await (const chunk of ReadableStreamToAsyncIterable(response.body)) {
     if (chunk == null)
       continue;
-    text += decoder.decode(typeof chunk === "string" ? encodeUTF8(chunk) : chunk, { stream: true });
+    const decoded = decoder.decode(typeof chunk === "string" ? encodeUTF8(chunk) : chunk, { stream: true });
+    text += decoded;
+    if (!endsWithCR && !decoded.includes("\n") && !decoded.includes("\r"))
+      continue;
     let start = 0;
     if (!text.includes("\r")) {
       let end;
@@ -2011,6 +2015,7 @@ async function* _iterSSEMessages(response, controller) {
       }
     }
     text = text.slice(start);
+    endsWithCR = text.endsWith("\r");
   }
   text += decoder.decode();
   if (text) {
@@ -14093,9 +14098,10 @@ var init_user_cost_report = __esm({
        * Only cost attributed to a user account is included, so cost with no user
        * account, such as Code Review usage and Claude Tag usage in Slack channels, is
        * left out. Claude Tag one-to-one direct messages are included, with product
-       * `claude-tag`, only for members who have connected a Claude account. Available to
-       * organizations on a Claude Enterprise plan. Requires an API key with the
-       * `read:analytics` scope.
+       * `claude-tag`, only for members who have connected a Claude account. To see all
+       * cost by product, call `GET /v1/organizations/analytics/cost_report` with
+       * `group_by[]=product`. Available to organizations on a Claude Enterprise plan.
+       * Requires an API key with the `read:analytics` scope.
        *
        * This endpoint is one of the legacy Claude Enterprise usage and cost reports. For
        * new integrations, use
@@ -14166,8 +14172,9 @@ var init_user_usage_report = __esm({
        * usage with no user account, such as Code Review usage and Claude Tag usage in
        * Slack channels, is left out. Claude Tag one-to-one direct messages are included,
        * with product `claude-tag`, only for members who have connected a Claude account.
-       * Available to organizations on a Claude Enterprise plan. Requires an API key with
-       * the `read:analytics` scope.
+       * To see all usage by product, call `GET /v1/organizations/analytics/usage_report`
+       * with `group_by[]=product`. Available to organizations on a Claude Enterprise
+       * plan. Requires an API key with the `read:analytics` scope.
        *
        * This endpoint is one of the legacy Claude Enterprise usage and cost reports. For
        * new integrations, use
@@ -15378,6 +15385,276 @@ var init_users2 = __esm({
   }
 });
 
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/members.mjs
+var Members;
+var init_members = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/members.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    init_path();
+    Members = class extends APIResource {
+      /**
+       * List members of an RBAC Group.
+       *
+       * The RBAC Groups API is available to Claude Enterprise organizations only.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaRBACGroupMember of client.beta.organization.rbacGroups.members.list(
+       *   'rbac_group_id',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(rbacGroupID, query = {}, options) {
+        return this._client.getAPIList(path`/v1/organizations/rbac_groups/${rbacGroupID}/members`, PageCursor, {
+          query,
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.list", options, {
+            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members",
+            queryParams: ["limit", "page"],
+            attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+          })
+        });
+      }
+      /**
+       * Add a User to an RBAC Group. Membership of groups provisioned by an identity
+       * provider (source type `"scim"`) cannot be modified via the API while an
+       * organization in the tenant uses SCIM provisioning.
+       *
+       * The RBAC Groups API is available to Claude Enterprise organizations only.
+       *
+       * @throws {RBACGroupGrantsOwnerAccessError}
+       * @throws {RBACGroupOwnerAccessUnconfirmedError}
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaRBACGroupMember =
+       *   await client.beta.organization.rbacGroups.members.add(
+       *     'rbac_group_id',
+       *     { user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu' },
+       *   );
+       * ```
+       */
+      add(rbacGroupID, body, options) {
+        return this._client.post(path`/v1/organizations/rbac_groups/${rbacGroupID}/members`, {
+          body,
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.add", options, {
+            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members",
+            attributes: { "anthropic.organization.rbac_group.id": rbacGroupID },
+            createdIDAttribute: "anthropic.organization.rbac_group.member.id",
+            createdIDField: "user_id"
+          })
+        });
+      }
+      /**
+       * Remove a User from an RBAC Group. Membership of groups provisioned by an
+       * identity provider (source type `"scim"`) cannot be modified via the API while an
+       * organization in the tenant uses SCIM provisioning.
+       *
+       * The RBAC Groups API is available to Claude Enterprise organizations only.
+       *
+       * @throws {RBACGroupGrantsOwnerAccessError}
+       * @throws {RBACGroupOwnerAccessUnconfirmedError}
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaDeletedRBACGroupMember =
+       *   await client.beta.organization.rbacGroups.members.remove(
+       *     'user_id',
+       *     { rbac_group_id: 'rbac_group_id' },
+       *   );
+       * ```
+       */
+      remove(userID, params, options) {
+        const { rbac_group_id } = params;
+        return this._client.delete(path`/v1/organizations/rbac_groups/${rbac_group_id}/members/${userID}`, {
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.remove", options, {
+            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members/{user_id}",
+            attributes: {
+              "anthropic.organization.rbac_group.id": rbac_group_id,
+              "anthropic.organization.rbac_group.member.id": userID
+            }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/rbac-groups.mjs
+var BetaRBACGroupNotFoundError, RBACGroups;
+var init_rbac_groups = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/rbac-groups.mjs"() {
+    init_resource();
+    init_members();
+    init_members();
+    init_error();
+    init_pagination();
+    init_tracing();
+    init_path();
+    BetaRBACGroupNotFoundError = /* @__PURE__ */ (() => {
+      class BetaRBACGroupNotFoundError2 extends NotFoundError {
+      }
+      BetaRBACGroupNotFoundError2._errorName = "BetaRBACGroupNotFoundError";
+      return BetaRBACGroupNotFoundError2;
+    })();
+    RBACGroups = /* @__PURE__ */ (() => {
+      class RBACGroups4 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.members = new Members(this._client);
+        }
+        /**
+         * Create an RBAC Group in the Claude Enterprise tenant. Groups created via the API
+         * have source type `"direct"`.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaRBACGroup =
+         *   await client.beta.organization.rbacGroups.create({
+         *     name: 'Engineering',
+         *   });
+         * ```
+         */
+        create(body, options) {
+          return this._client.post("/v1/organizations/rbac_groups", {
+            body,
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.create", options, {
+              route: "/v1/organizations/rbac_groups",
+              createdIDAttribute: "anthropic.organization.rbac_group.id"
+            })
+          });
+        }
+        /**
+         * Retrieve an RBAC Group by ID.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * const betaRBACGroup =
+         *   await client.beta.organization.rbacGroups.retrieve(
+         *     'rbac_group_id',
+         *   );
+         * ```
+         */
+        retrieve(rbacGroupID, options) {
+          return this._client.get(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.retrieve", options, {
+              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
+              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+            })
+          });
+        }
+        /**
+         * Update an RBAC Group's name. Groups provisioned by an identity provider (source
+         * type `"scim"`) cannot be modified via the API while an organization in the
+         * tenant uses SCIM provisioning.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaRBACGroup =
+         *   await client.beta.organization.rbacGroups.update(
+         *     'rbac_group_id',
+         *     {},
+         *   );
+         * ```
+         */
+        update(rbacGroupID, body, options) {
+          return this._client.post(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
+            body,
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.update", options, {
+              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
+              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+            })
+          });
+        }
+        /**
+         * List RBAC Groups in the Claude Enterprise tenant.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * // Automatically fetches more pages as needed.
+         * for await (const betaRBACGroup of client.beta.organization.rbacGroups.list()) {
+         *   // ...
+         * }
+         * ```
+         */
+        list(query = {}, options) {
+          return this._client.getAPIList("/v1/organizations/rbac_groups", PageCursor, {
+            query,
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.list", options, {
+              route: "/v1/organizations/rbac_groups",
+              queryParams: ["limit", "page"]
+            })
+          });
+        }
+        /**
+         * Delete an RBAC Group. Groups provisioned by an identity provider (source type
+         * `"scim"`) cannot be deleted via the API while an organization in the tenant uses
+         * SCIM provisioning.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @throws {RBACGroupGrantsOwnerAccessError}
+         * @throws {RBACGroupOwnerAccessUnconfirmedError}
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaDeletedRBACGroup =
+         *   await client.beta.organization.rbacGroups.delete(
+         *     'rbac_group_id',
+         *   );
+         * ```
+         */
+        delete(rbacGroupID, options) {
+          return this._client.delete(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.delete", options, {
+              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
+              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+            })
+          });
+        }
+      }
+      RBACGroups4.BetaRBACGroupNotFoundError = BetaRBACGroupNotFoundError;
+      RBACGroups4.Members = Members;
+      return RBACGroups4;
+    })();
+  }
+});
+
 // node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/installation-settings.mjs
 var InstallationSettings;
 var init_installation_settings = __esm({
@@ -15463,6 +15740,8 @@ var init_installation_settings = __esm({
        * Platform (Claude Console) organizations, or to organizations with HIPAA
        * readiness enabled.
        *
+       * @throws {SandboxEgressRestrictedError}
+       *
        * @example
        * ```ts
        * const betaDeletedPluginInstallationSetting =
@@ -15513,6 +15792,8 @@ var init_installation_settings = __esm({
        * available to Claude Enterprise organizations only. It is not available to Claude
        * Platform (Claude Console) organizations, or to organizations with HIPAA
        * readiness enabled.
+       *
+       * @throws {SandboxEgressRestrictedError}
        *
        * @example
        * ```ts
@@ -15656,6 +15937,7 @@ var init_versions2 = __esm({
        * @throws {CMEKKeyDisabledError}
        * @throws {CMEKKeyNetworkBlockedError}
        * @throws {BetaUnsupportedCharsetError}
+       * @throws {SandboxEgressRestrictedError}
        * @throws {BetaSkillNameTakenError}
        * @throws {BetaRegistrationPendingError}
        *
@@ -15804,6 +16086,7 @@ var init_versions2 = __esm({
        *
        * @throws {CMEKKeyDisabledError}
        * @throws {CMEKKeyNetworkBlockedError}
+       * @throws {SandboxEgressRestrictedError}
        *
        * @example
        * ```ts
@@ -15941,6 +16224,7 @@ var init_plugins2 = __esm({
          * @throws {CMEKKeyDisabledError}
          * @throws {CMEKKeyNetworkBlockedError}
          * @throws {BetaUnsupportedCharsetError}
+         * @throws {SandboxEgressRestrictedError}
          * @throws {BetaPluginNameTakenError}
          * @throws {BetaSkillNameTakenError}
          * @throws {BetaRegistrationPendingError}
@@ -16050,6 +16334,7 @@ var init_plugins2 = __esm({
          * @throws {CMEKKeyDisabledError}
          * @throws {CMEKKeyNetworkBlockedError}
          * @throws {BetaScanFailedError}
+         * @throws {SandboxEgressRestrictedError}
          * @throws {BetaScanPendingError}
          * @throws {BetaSkillNameTakenError}
          *
@@ -16163,6 +16448,7 @@ var init_plugins2 = __esm({
          * readiness enabled.
          *
          * @throws {CMEKKeyDisabledError}
+         * @throws {SandboxEgressRestrictedError}
          *
          * @example
          * ```ts
@@ -16534,6 +16820,487 @@ var init_spend_limits = __esm({
   }
 });
 
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/configuration.mjs
+var Configuration;
+var init_configuration = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/configuration.mjs"() {
+    init_resource();
+    init_headers();
+    init_tracing();
+    Configuration = class extends APIResource {
+      /**
+       * Retrieve the organization's Claude Code managed settings mode and RBAC Group
+       * order.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `read:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeManagedSettingsConfiguration =
+       *   await client.beta.organization.claudeCode.managedSettings.configuration.retrieve();
+       * ```
+       */
+      retrieve(params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get("/v1/organizations/claude_code/managed_settings/configuration", {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.configuration.retrieve", options, { route: "/v1/organizations/claude_code/managed_settings/configuration" })
+        });
+      }
+      /**
+       * Change the organization's Claude Code managed settings mode, the RBAC Group
+       * order, or both, in one atomic write.
+       *
+       * To change the order, send `rbac_group_order` with the `rbac_group_order_version`
+       * from the read the change is based on. If the order has changed since that read,
+       * the request returns `409`: read it again and retry. To switch modes only if the
+       * order has not changed, send the current `rbac_group_order` and
+       * `rbac_group_order_version` with the new `mode`.
+       *
+       * A switch to `rbac_groups` mode with no RBAC Group settings and no default
+       * settings copies the organization settings into a new default, in the same write,
+       * so members keep the settings they had. The copy does not follow later changes to
+       * the organization settings. If the organization settings cannot be copied, the
+       * request returns `400` and changes nothing. If they cannot be read, are over 1
+       * MiB or are not valid, setting the default settings first avoids the copy.
+       *
+       * After a switch to `rbac_groups` mode, a member in no listed RBAC Group receives
+       * the default settings, or no settings if no default is set, not the organization
+       * settings.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `write:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * A write that returns `503` may have applied. Retrying it is safe.
+       *
+       * @throws {CMEKKeyDisabledError}
+       * @throws {BetaRequestBodyTimeoutError}
+       * @throws {BetaSettingsDocumentLimitExceededError}
+       * @throws {BetaSettingsHistoryLimitExceededError}
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeManagedSettingsConfiguration =
+       *   await client.beta.organization.claudeCode.managedSettings.configuration.update(
+       *     {},
+       *   );
+       * ```
+       */
+      update(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/organizations/claude_code/managed_settings/configuration", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.configuration.update", options, { route: "/v1/organizations/claude_code/managed_settings/configuration" })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-group-default.mjs
+var RBACGroupDefault;
+var init_rbac_group_default = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-group-default.mjs"() {
+    init_resource();
+    init_headers();
+    init_tracing();
+    RBACGroupDefault = class extends APIResource {
+      /**
+       * Retrieve the default Claude Code managed settings, which members who belong to
+       * no RBAC Group in `rbac_group_order` receive in `rbac_groups` mode.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `read:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * @throws {BetaCMEKFeatureUnsupportedError}
+       * @throws {CMEKKeyDisabledError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeRBACGroupDefaultManagedSettings =
+       *   await client.beta.organization.claudeCode.managedSettings.rbacGroupDefault.retrieve();
+       * ```
+       */
+      retrieve(params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get("/v1/organizations/claude_code/managed_settings/rbac_group_default", {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_group_default.retrieve", options, { route: "/v1/organizations/claude_code/managed_settings/rbac_group_default" })
+        });
+      }
+      /**
+       * Set or replace the default Claude Code managed settings, or clear them with
+       * `null`.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `write:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * A write that returns `503` may have applied. Retrying it is safe.
+       *
+       * @throws {BetaCMEKFeatureUnsupportedError}
+       * @throws {CMEKKeyDisabledError}
+       * @throws {BetaRequestBodyTimeoutError}
+       * @throws {BetaSettingsDocumentLimitExceededError}
+       * @throws {BetaSettingsHistoryLimitExceededError}
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeRBACGroupDefaultManagedSettings =
+       *   await client.beta.organization.claudeCode.managedSettings.rbacGroupDefault.update(
+       *     { settings: { foo: 'bar' } },
+       *   );
+       * ```
+       */
+      update(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/organizations/claude_code/managed_settings/rbac_group_default", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_group_default.update", options, { route: "/v1/organizations/claude_code/managed_settings/rbac_group_default" })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-groups.mjs
+var RBACGroups2;
+var init_rbac_groups2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-groups.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    RBACGroups2 = class extends APIResource {
+      /**
+       * Retrieve an RBAC Group's Claude Code managed settings.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `read:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * @throws {BetaCMEKFeatureUnsupportedError}
+       * @throws {CMEKKeyDisabledError}
+       * @throws {BetaRBACGroupManagedSettingsNotFoundError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeRBACGroupManagedSettings =
+       *   await client.beta.organization.claudeCode.managedSettings.rbacGroups.retrieve(
+       *     'rbac_group_id',
+       *   );
+       * ```
+       */
+      retrieve(rbacGroupID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path`/v1/organizations/claude_code/managed_settings/rbac_groups/${rbacGroupID}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.retrieve", options, {
+            route: "/v1/organizations/claude_code/managed_settings/rbac_groups/{rbac_group_id}",
+            attributes: { "anthropic.organization.claude_code.managed_setting.rbac_group.id": rbacGroupID }
+          })
+        });
+      }
+      /**
+       * List the RBAC Groups that have Claude Code managed settings, highest precedence
+       * first.
+       *
+       * Each entry gives the group's status and timestamps, not its settings. The list
+       * includes deleted groups that still have settings, and leaves out the default
+       * settings. If the order changes between pages, the request returns `409`: list
+       * again from the first page.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `read:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaClaudeCodeRBACGroupManagedSettingsSummary of client.beta.organization.claudeCode.managedSettings.rbacGroups.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/organizations/claude_code/managed_settings/rbac_groups", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.list", options, {
+            route: "/v1/organizations/claude_code/managed_settings/rbac_groups",
+            queryParams: ["limit", "page"]
+          })
+        });
+      }
+      /**
+       * Delete an RBAC Group's Claude Code managed settings and remove the group from
+       * `rbac_group_order`.
+       *
+       * A group with no settings returns `404` with the error code
+       * `rbac_group_managed_settings_not_found`. That code on a retry of a delete that
+       * returned `503` means the settings are gone.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `write:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * A write that returns `503` may have applied. Retrying it is safe.
+       *
+       * @throws {CMEKKeyDisabledError}
+       * @throws {BetaSettingsHistoryLimitExceededError}
+       * @throws {SandboxEgressRestrictedError}
+       * @throws {BetaRBACGroupManagedSettingsNotFoundError}
+       *
+       * @example
+       * ```ts
+       * const betaDeletedClaudeCodeRBACGroupManagedSettings =
+       *   await client.beta.organization.claudeCode.managedSettings.rbacGroups.delete(
+       *     'rbac_group_id',
+       *   );
+       * ```
+       */
+      delete(rbacGroupID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.delete(path`/v1/organizations/claude_code/managed_settings/rbac_groups/${rbacGroupID}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.delete", options, {
+            route: "/v1/organizations/claude_code/managed_settings/rbac_groups/{rbac_group_id}",
+            attributes: { "anthropic.organization.claude_code.managed_setting.rbac_group.id": rbacGroupID }
+          })
+        });
+      }
+      /**
+       * Create or replace an RBAC Group's Claude Code managed settings.
+       *
+       * New settings join the end of `rbac_group_order`, and existing settings keep
+       * their place. Until the group is moved up, its members who also belong to an
+       * earlier group keep that group's settings. In `organization` mode a write changes
+       * no member's settings until the organization switches to `rbac_groups` mode. Once
+       * a group has settings, that switch no longer copies the organization settings
+       * into default settings, so members in no RBAC Group in `rbac_group_order` receive
+       * no settings unless you set the default settings before the switch.
+       *
+       * Get the group's ID from the RBAC Groups API. One key can hold `read:rbac_groups`
+       * and `write:claude_code_managed_settings`.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `write:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * A write that returns `503` may have applied. Retrying it is safe.
+       *
+       * @throws {BetaCMEKFeatureUnsupportedError}
+       * @throws {CMEKKeyDisabledError}
+       * @throws {BetaRBACGroupOrderLimitExceededError}
+       * @throws {BetaRequestBodyTimeoutError}
+       * @throws {BetaSettingsDocumentLimitExceededError}
+       * @throws {BetaSettingsHistoryLimitExceededError}
+       * @throws {SandboxEgressRestrictedError}
+       * @throws {BetaRBACGroupNotFoundError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeRBACGroupManagedSettings =
+       *   await client.beta.organization.claudeCode.managedSettings.rbacGroups.set(
+       *     'rbac_group_id',
+       *     { settings: { foo: 'bar' } },
+       *   );
+       * ```
+       */
+      set(rbacGroupID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/claude_code/managed_settings/rbac_groups/${rbacGroupID}`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.set", options, {
+            route: "/v1/organizations/claude_code/managed_settings/rbac_groups/{rbac_group_id}",
+            attributes: { "anthropic.organization.claude_code.managed_setting.rbac_group.id": rbacGroupID }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/managed-settings.mjs
+var BetaCMEKFeatureUnsupportedError, BetaRBACGroupOrderLimitExceededError, BetaSettingsDocumentLimitExceededError, BetaSettingsHistoryLimitExceededError, BetaRBACGroupManagedSettingsNotFoundError, ManagedSettings;
+var init_managed_settings = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/managed-settings.mjs"() {
+    init_resource();
+    init_configuration();
+    init_configuration();
+    init_rbac_group_default();
+    init_rbac_group_default();
+    init_rbac_groups2();
+    init_rbac_groups2();
+    init_error();
+    BetaCMEKFeatureUnsupportedError = /* @__PURE__ */ (() => {
+      class BetaCMEKFeatureUnsupportedError2 extends BadRequestError {
+      }
+      BetaCMEKFeatureUnsupportedError2._errorName = "BetaCMEKFeatureUnsupportedError";
+      return BetaCMEKFeatureUnsupportedError2;
+    })();
+    BetaRBACGroupOrderLimitExceededError = /* @__PURE__ */ (() => {
+      class BetaRBACGroupOrderLimitExceededError2 extends BadRequestError {
+      }
+      BetaRBACGroupOrderLimitExceededError2._errorName = "BetaRBACGroupOrderLimitExceededError";
+      return BetaRBACGroupOrderLimitExceededError2;
+    })();
+    BetaSettingsDocumentLimitExceededError = /* @__PURE__ */ (() => {
+      class BetaSettingsDocumentLimitExceededError2 extends BadRequestError {
+      }
+      BetaSettingsDocumentLimitExceededError2._errorName = "BetaSettingsDocumentLimitExceededError";
+      return BetaSettingsDocumentLimitExceededError2;
+    })();
+    BetaSettingsHistoryLimitExceededError = /* @__PURE__ */ (() => {
+      class BetaSettingsHistoryLimitExceededError2 extends BadRequestError {
+      }
+      BetaSettingsHistoryLimitExceededError2._errorName = "BetaSettingsHistoryLimitExceededError";
+      return BetaSettingsHistoryLimitExceededError2;
+    })();
+    BetaRBACGroupManagedSettingsNotFoundError = /* @__PURE__ */ (() => {
+      class BetaRBACGroupManagedSettingsNotFoundError2 extends NotFoundError {
+      }
+      BetaRBACGroupManagedSettingsNotFoundError2._errorName = "BetaRBACGroupManagedSettingsNotFoundError";
+      return BetaRBACGroupManagedSettingsNotFoundError2;
+    })();
+    ManagedSettings = /* @__PURE__ */ (() => {
+      class ManagedSettings2 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.configuration = new Configuration(this._client);
+          this.rbacGroups = new RBACGroups2(this._client);
+          this.rbacGroupDefault = new RBACGroupDefault(this._client);
+        }
+      }
+      ManagedSettings2.BetaCMEKFeatureUnsupportedError = BetaCMEKFeatureUnsupportedError;
+      ManagedSettings2.BetaRBACGroupOrderLimitExceededError = BetaRBACGroupOrderLimitExceededError;
+      ManagedSettings2.BetaSettingsDocumentLimitExceededError = BetaSettingsDocumentLimitExceededError;
+      ManagedSettings2.BetaSettingsHistoryLimitExceededError = BetaSettingsHistoryLimitExceededError;
+      ManagedSettings2.BetaRBACGroupManagedSettingsNotFoundError = BetaRBACGroupManagedSettingsNotFoundError;
+      ManagedSettings2.Configuration = Configuration;
+      ManagedSettings2.RBACGroups = RBACGroups2;
+      ManagedSettings2.RBACGroupDefault = RBACGroupDefault;
+      return ManagedSettings2;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/claude-code.mjs
+var ClaudeCode;
+var init_claude_code = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/claude-code.mjs"() {
+    init_resource();
+    init_managed_settings();
+    init_managed_settings();
+    ClaudeCode = /* @__PURE__ */ (() => {
+      class ClaudeCode2 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.managedSettings = new ManagedSettings(this._client);
+        }
+      }
+      ClaudeCode2.ManagedSettings = ManagedSettings;
+      ClaudeCode2.BetaCMEKFeatureUnsupportedError = BetaCMEKFeatureUnsupportedError;
+      ClaudeCode2.BetaRBACGroupOrderLimitExceededError = BetaRBACGroupOrderLimitExceededError;
+      ClaudeCode2.BetaSettingsDocumentLimitExceededError = BetaSettingsDocumentLimitExceededError;
+      ClaudeCode2.BetaSettingsHistoryLimitExceededError = BetaSettingsHistoryLimitExceededError;
+      ClaudeCode2.BetaRBACGroupManagedSettingsNotFoundError = BetaRBACGroupManagedSettingsNotFoundError;
+      return ClaudeCode2;
+    })();
+  }
+});
+
 // node_modules/@anthropic-ai/sdk/resources/beta/organization/compliance-settings.mjs
 var ComplianceSettings;
 var init_compliance_settings = __esm({
@@ -16669,8 +17436,8 @@ var init_external_keys = __esm({
        * Partially update an external key config. Omitted fields are left unchanged.
        *
        * `display_name` is always editable. `geo` and `provider_config` cannot be changed
-       * once any workspace references this config, because previously encrypted data
-       * requires the original key identity to decrypt.
+       * once any workspace references this config, and a Google Cloud key's provider and
+       * `key_name` cannot be changed at all.
        *
        * @throws {ExternalKeyInWorkspacePolicyError}
        * @throws {SandboxEgressRestrictedError}
@@ -17563,6 +18330,8 @@ var init_plugin_marketplaces = __esm({
        * Platform (Claude Console) organizations, or to organizations with HIPAA
        * readiness enabled.
        *
+       * @throws {SandboxEgressRestrictedError}
+       *
        * @example
        * ```ts
        * const betaPluginMarketplace =
@@ -17667,6 +18436,7 @@ var init_plugin_marketplaces = __esm({
        * readiness enabled.
        *
        * @throws {BetaUnsupportedCharsetError}
+       * @throws {SandboxEgressRestrictedError}
        *
        * @example
        * ```ts
@@ -17721,6 +18491,8 @@ var init_plugin_marketplaces = __esm({
        * available to Claude Enterprise organizations only. It is not available to Claude
        * Platform (Claude Console) organizations, or to organizations with HIPAA
        * readiness enabled.
+       *
+       * @throws {SandboxEgressRestrictedError}
        *
        * @example
        * ```ts
@@ -18024,268 +18796,6 @@ var init_webhooks2 = __esm({
         });
       }
     };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/members.mjs
-var Members;
-var init_members = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/members.mjs"() {
-    init_resource();
-    init_pagination();
-    init_tracing();
-    init_path();
-    Members = class extends APIResource {
-      /**
-       * List members of an RBAC Group.
-       *
-       * The RBAC Groups API is available to Claude Enterprise organizations only.
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaRBACGroupMember of client.beta.organization.rbacGroups.members.list(
-       *   'rbac_group_id',
-       * )) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(rbacGroupID, query = {}, options) {
-        return this._client.getAPIList(path`/v1/organizations/rbac_groups/${rbacGroupID}/members`, PageCursor, {
-          query,
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.list", options, {
-            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members",
-            queryParams: ["limit", "page"],
-            attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
-          })
-        });
-      }
-      /**
-       * Add a User to an RBAC Group. Membership of groups provisioned by an identity
-       * provider (source type `"scim"`) cannot be modified via the API while an
-       * organization in the tenant uses SCIM provisioning.
-       *
-       * The RBAC Groups API is available to Claude Enterprise organizations only.
-       *
-       * @throws {RBACGroupGrantsOwnerAccessError}
-       * @throws {RBACGroupOwnerAccessUnconfirmedError}
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaRBACGroupMember =
-       *   await client.beta.organization.rbacGroups.members.add(
-       *     'rbac_group_id',
-       *     { user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu' },
-       *   );
-       * ```
-       */
-      add(rbacGroupID, body, options) {
-        return this._client.post(path`/v1/organizations/rbac_groups/${rbacGroupID}/members`, {
-          body,
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.add", options, {
-            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members",
-            attributes: { "anthropic.organization.rbac_group.id": rbacGroupID },
-            createdIDAttribute: "anthropic.organization.rbac_group.member.id",
-            createdIDField: "user_id"
-          })
-        });
-      }
-      /**
-       * Remove a User from an RBAC Group. Membership of groups provisioned by an
-       * identity provider (source type `"scim"`) cannot be modified via the API while an
-       * organization in the tenant uses SCIM provisioning.
-       *
-       * The RBAC Groups API is available to Claude Enterprise organizations only.
-       *
-       * @throws {RBACGroupGrantsOwnerAccessError}
-       * @throws {RBACGroupOwnerAccessUnconfirmedError}
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaDeletedRBACGroupMember =
-       *   await client.beta.organization.rbacGroups.members.remove(
-       *     'user_id',
-       *     { rbac_group_id: 'rbac_group_id' },
-       *   );
-       * ```
-       */
-      remove(userID, params, options) {
-        const { rbac_group_id } = params;
-        return this._client.delete(path`/v1/organizations/rbac_groups/${rbac_group_id}/members/${userID}`, {
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.remove", options, {
-            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members/{user_id}",
-            attributes: {
-              "anthropic.organization.rbac_group.id": rbac_group_id,
-              "anthropic.organization.rbac_group.member.id": userID
-            }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/rbac-groups.mjs
-var RBACGroups;
-var init_rbac_groups = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/rbac-groups.mjs"() {
-    init_resource();
-    init_members();
-    init_members();
-    init_pagination();
-    init_tracing();
-    init_path();
-    RBACGroups = /* @__PURE__ */ (() => {
-      class RBACGroups3 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.members = new Members(this._client);
-        }
-        /**
-         * Create an RBAC Group in the Claude Enterprise tenant. Groups created via the API
-         * have source type `"direct"`.
-         *
-         * The RBAC Groups API is available to Claude Enterprise organizations only.
-         *
-         * @throws {SandboxEgressRestrictedError}
-         *
-         * @example
-         * ```ts
-         * const betaRBACGroup =
-         *   await client.beta.organization.rbacGroups.create({
-         *     name: 'Engineering',
-         *   });
-         * ```
-         */
-        create(body, options) {
-          return this._client.post("/v1/organizations/rbac_groups", {
-            body,
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.create", options, {
-              route: "/v1/organizations/rbac_groups",
-              createdIDAttribute: "anthropic.organization.rbac_group.id"
-            })
-          });
-        }
-        /**
-         * Retrieve an RBAC Group by ID.
-         *
-         * The RBAC Groups API is available to Claude Enterprise organizations only.
-         *
-         * @example
-         * ```ts
-         * const betaRBACGroup =
-         *   await client.beta.organization.rbacGroups.retrieve(
-         *     'rbac_group_id',
-         *   );
-         * ```
-         */
-        retrieve(rbacGroupID, options) {
-          return this._client.get(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.retrieve", options, {
-              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
-              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
-            })
-          });
-        }
-        /**
-         * Update an RBAC Group's name. Groups provisioned by an identity provider (source
-         * type `"scim"`) cannot be modified via the API while an organization in the
-         * tenant uses SCIM provisioning.
-         *
-         * The RBAC Groups API is available to Claude Enterprise organizations only.
-         *
-         * @throws {SandboxEgressRestrictedError}
-         *
-         * @example
-         * ```ts
-         * const betaRBACGroup =
-         *   await client.beta.organization.rbacGroups.update(
-         *     'rbac_group_id',
-         *     {},
-         *   );
-         * ```
-         */
-        update(rbacGroupID, body, options) {
-          return this._client.post(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
-            body,
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.update", options, {
-              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
-              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
-            })
-          });
-        }
-        /**
-         * List RBAC Groups in the Claude Enterprise tenant.
-         *
-         * The RBAC Groups API is available to Claude Enterprise organizations only.
-         *
-         * @example
-         * ```ts
-         * // Automatically fetches more pages as needed.
-         * for await (const betaRBACGroup of client.beta.organization.rbacGroups.list()) {
-         *   // ...
-         * }
-         * ```
-         */
-        list(query = {}, options) {
-          return this._client.getAPIList("/v1/organizations/rbac_groups", PageCursor, {
-            query,
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.list", options, {
-              route: "/v1/organizations/rbac_groups",
-              queryParams: ["limit", "page"]
-            })
-          });
-        }
-        /**
-         * Delete an RBAC Group. Groups provisioned by an identity provider (source type
-         * `"scim"`) cannot be deleted via the API while an organization in the tenant uses
-         * SCIM provisioning.
-         *
-         * The RBAC Groups API is available to Claude Enterprise organizations only.
-         *
-         * @throws {RBACGroupGrantsOwnerAccessError}
-         * @throws {RBACGroupOwnerAccessUnconfirmedError}
-         * @throws {SandboxEgressRestrictedError}
-         *
-         * @example
-         * ```ts
-         * const betaDeletedRBACGroup =
-         *   await client.beta.organization.rbacGroups.delete(
-         *     'rbac_group_id',
-         *   );
-         * ```
-         */
-        delete(rbacGroupID, options) {
-          return this._client.delete(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.delete", options, {
-              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
-              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
-            })
-          });
-        }
-      }
-      RBACGroups3.Members = Members;
-      return RBACGroups3;
-    })();
   }
 });
 
@@ -19803,6 +20313,8 @@ var init_organization = __esm({
     init_webhooks2();
     init_analytics();
     init_analytics();
+    init_claude_code();
+    init_claude_code();
     init_claude_tag();
     init_claude_tag();
     init_federation();
@@ -19843,6 +20355,7 @@ var init_organization = __esm({
           this.pluginMarketplaces = new PluginMarketplaces(this._client);
           this.telemetryDestinations = new TelemetryDestinations(this._client);
           this.webhooks = new Webhooks2(this._client);
+          this.claudeCode = new ClaudeCode(this._client);
           this.claudeTag = new ClaudeTag(this._client);
         }
         /**
@@ -19884,6 +20397,7 @@ var init_organization = __esm({
       Organization4.SpendLimits = SpendLimits;
       Organization4.BetaSpendLimitsAdminAPIWritesNotEnabledError = BetaSpendLimitsAdminAPIWritesNotEnabledError;
       Organization4.RBACGroups = RBACGroups;
+      Organization4.BetaRBACGroupNotFoundError = BetaRBACGroupNotFoundError;
       Organization4.RBACRoles = RBACRoles;
       Organization4.Plugins = Plugins2;
       Organization4.BetaScanFailedError = BetaScanFailedError;
@@ -19894,6 +20408,7 @@ var init_organization = __esm({
       Organization4.PluginMarketplaces = PluginMarketplaces;
       Organization4.TelemetryDestinations = TelemetryDestinations;
       Organization4.Webhooks = Webhooks2;
+      Organization4.ClaudeCode = ClaudeCode;
       Organization4.ClaudeTag = ClaudeTag;
       Organization4.BetaBundleAttachmentNotSupportedError = BetaBundleAttachmentNotSupportedError;
       Organization4.BetaBundleOnCallError = BetaBundleOnCallError;
@@ -23940,7 +24455,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
 });
 
 // node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs
-var BetaOrganizationNotEnrolledInBetaError, BetaUnsupportedCharsetError, Beta;
+var BetaOrganizationNotEnrolledInBetaError, BetaRequestBodyTimeoutError, BetaUnsupportedCharsetError, Beta;
 var init_beta3 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs"() {
     init_resource();
@@ -23983,6 +24498,12 @@ var init_beta3 = __esm({
       BetaOrganizationNotEnrolledInBetaError2._errorName = "BetaOrganizationNotEnrolledInBetaError";
       return BetaOrganizationNotEnrolledInBetaError2;
     })();
+    BetaRequestBodyTimeoutError = /* @__PURE__ */ (() => {
+      class BetaRequestBodyTimeoutError2 extends BadRequestError {
+      }
+      BetaRequestBodyTimeoutError2._errorName = "BetaRequestBodyTimeoutError";
+      return BetaRequestBodyTimeoutError2;
+    })();
     BetaUnsupportedCharsetError = /* @__PURE__ */ (() => {
       class BetaUnsupportedCharsetError2 extends BadRequestError {
       }
@@ -24012,6 +24533,7 @@ var init_beta3 = __esm({
         }
       }
       Beta3.BetaOrganizationNotEnrolledInBetaError = BetaOrganizationNotEnrolledInBetaError;
+      Beta3.BetaRequestBodyTimeoutError = BetaRequestBodyTimeoutError;
       Beta3.BetaUnsupportedCharsetError = BetaUnsupportedCharsetError;
       Beta3.Models = Models;
       Beta3.Messages = Messages;
@@ -25011,7 +25533,7 @@ var init_batches2 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs
-var AvailableToolsLimitExceededError, CompactionBlockAmbiguousError, CompactionBlockMisplacedError, CompactionContentMismatchError, CompactionIncompleteTurnError, CompactionNothingToSummarizeError, CompactionSignatureInvalidError, CompactionTooManyToolReferencesError, CompactionToolChangesMismatchError, ThreadAlreadyContinuedError, ThreadContinueInFlightError, ThreadFingerprintMismatchError, ThreadUnsupportedRequestError, ToolNameConflictError, ToolReferenceUnresolvedError, ThreadNotFoundError, CompactionUnavailableError, Messages2, DEPRECATED_MODELS2, MODELS_TO_WARN_WITH_THINKING_ENABLED2;
+var AvailableToolsLimitExceededError, CompactionBlockAmbiguousError, CompactionBlockMisplacedError, CompactionContentMismatchError, CompactionIncompleteTurnError, CompactionNothingToSummarizeError, CompactionSignatureInvalidError, CompactionTooManyToolReferencesError, CompactionToolChangesMismatchError, ImageDimensionsTooLargeError, ThreadAlreadyContinuedError, ThreadContinueInFlightError, ThreadFingerprintMismatchError, ThreadUnsupportedRequestError, ToolNameConflictError, ToolReferenceUnresolvedError, ThreadNotFoundError, CompactionUnavailableError, Messages2, DEPRECATED_MODELS2, MODELS_TO_WARN_WITH_THINKING_ENABLED2;
 var init_messages3 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs"() {
     init_resource();
@@ -25078,6 +25600,12 @@ var init_messages3 = __esm({
       }
       CompactionToolChangesMismatchError2._errorName = "CompactionToolChangesMismatchError";
       return CompactionToolChangesMismatchError2;
+    })();
+    ImageDimensionsTooLargeError = /* @__PURE__ */ (() => {
+      class ImageDimensionsTooLargeError2 extends BadRequestError {
+      }
+      ImageDimensionsTooLargeError2._errorName = "ImageDimensionsTooLargeError";
+      return ImageDimensionsTooLargeError2;
     })();
     ThreadAlreadyContinuedError = /* @__PURE__ */ (() => {
       class ThreadAlreadyContinuedError2 extends BadRequestError {
@@ -25280,6 +25808,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       Messages5.CompactionSignatureInvalidError = CompactionSignatureInvalidError;
       Messages5.CompactionTooManyToolReferencesError = CompactionTooManyToolReferencesError;
       Messages5.CompactionToolChangesMismatchError = CompactionToolChangesMismatchError;
+      Messages5.ImageDimensionsTooLargeError = ImageDimensionsTooLargeError;
       Messages5.ThreadAlreadyContinuedError = ThreadAlreadyContinuedError;
       Messages5.ThreadContinueInFlightError = ThreadContinueInFlightError;
       Messages5.ThreadFingerprintMismatchError = ThreadFingerprintMismatchError;
@@ -25482,8 +26011,8 @@ var init_external_keys2 = __esm({
          * Partially update an external key config. Omitted fields are left unchanged.
          *
          * `display_name` is always editable. `geo` and `provider_config` cannot be changed
-         * once any workspace references this config, because previously encrypted data
-         * requires the original key identity to decrypt.
+         * once any workspace references this config, and a Google Cloud key's provider and
+         * `key_name` cannot be changed at all.
          *
          * @throws {ExternalKeyInWorkspacePolicyError}
          * @throws {SandboxEgressRestrictedError}
@@ -27005,8 +27534,8 @@ var init_members3 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/organization/rbac-groups/rbac-groups.mjs
-var RBACGroupGrantsOwnerAccessError, RBACGroupOwnerAccessUnconfirmedError, RBACGroups2;
-var init_rbac_groups2 = __esm({
+var RBACGroupGrantsOwnerAccessError, RBACGroupOwnerAccessUnconfirmedError, RBACGroups3;
+var init_rbac_groups3 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/organization/rbac-groups/rbac-groups.mjs"() {
     init_resource();
     init_members3();
@@ -27027,8 +27556,8 @@ var init_rbac_groups2 = __esm({
       RBACGroupOwnerAccessUnconfirmedError2._errorName = "RBACGroupOwnerAccessUnconfirmedError";
       return RBACGroupOwnerAccessUnconfirmedError2;
     })();
-    RBACGroups2 = /* @__PURE__ */ (() => {
-      class RBACGroups3 extends APIResource {
+    RBACGroups3 = /* @__PURE__ */ (() => {
+      class RBACGroups4 extends APIResource {
         constructor() {
           super(...arguments);
           this.members = new Members3(this._client);
@@ -27161,10 +27690,10 @@ var init_rbac_groups2 = __esm({
           });
         }
       }
-      RBACGroups3.RBACGroupGrantsOwnerAccessError = RBACGroupGrantsOwnerAccessError;
-      RBACGroups3.RBACGroupOwnerAccessUnconfirmedError = RBACGroupOwnerAccessUnconfirmedError;
-      RBACGroups3.Members = Members3;
-      return RBACGroups3;
+      RBACGroups4.RBACGroupGrantsOwnerAccessError = RBACGroupGrantsOwnerAccessError;
+      RBACGroups4.RBACGroupOwnerAccessUnconfirmedError = RBACGroupOwnerAccessUnconfirmedError;
+      RBACGroups4.Members = Members3;
+      return RBACGroups4;
     })();
   }
 });
@@ -28424,8 +28953,8 @@ var init_organization2 = __esm({
     init_analytics2();
     init_federation2();
     init_federation2();
-    init_rbac_groups2();
-    init_rbac_groups2();
+    init_rbac_groups3();
+    init_rbac_groups3();
     init_rbac_roles2();
     init_rbac_roles2();
     init_service_accounts3();
@@ -28469,7 +28998,7 @@ var init_organization2 = __esm({
           this.complianceSettings = new ComplianceSettings2(this._client);
           this.analytics = new Analytics2(this._client);
           this.spendLimits = new SpendLimits2(this._client);
-          this.rbacGroups = new RBACGroups2(this._client);
+          this.rbacGroups = new RBACGroups3(this._client);
           this.rbacRoles = new RBACRoles2(this._client);
         }
         /**
@@ -28519,7 +29048,7 @@ var init_organization2 = __esm({
       Organization4.ComplianceSettings = ComplianceSettings2;
       Organization4.Analytics = Analytics2;
       Organization4.SpendLimits = SpendLimits2;
-      Organization4.RBACGroups = RBACGroups2;
+      Organization4.RBACGroups = RBACGroups3;
       Organization4.RBACGroupGrantsOwnerAccessError = RBACGroupGrantsOwnerAccessError;
       Organization4.RBACGroupOwnerAccessUnconfirmedError = RBACGroupOwnerAccessUnconfirmedError;
       Organization4.RBACRoles = RBACRoles2;
@@ -29041,11 +29570,13 @@ var init_error_classes = __esm({
     init_environments2();
     init_work();
     init_users2();
-    init_rbac_groups2();
+    init_rbac_groups3();
     init_workspaces7();
     init_claude_tag();
     init_plugins2();
+    init_rbac_groups();
     init_spend_limits();
+    init_managed_settings();
     ERROR_CODE_CLASSES = /* @__PURE__ */ new Map([
       ["400 already_member", AlreadyMemberError],
       ["400 available_tools_limit_exceeded", AvailableToolsLimitExceededError],
@@ -29057,6 +29588,7 @@ var init_error_classes = __esm({
       ["400 cannot_sign_out_self", BetaCannotSignOutSelfError],
       ["400 claude_code_key_creator_not_member", ClaudeCodeKeyCreatorNotMemberError],
       ["400 claude_code_version_too_old", ClaudeCodeVersionTooOldError],
+      ["400 cmek_feature_unsupported", BetaCMEKFeatureUnsupportedError],
       ["400 cmek_key_disabled", CMEKKeyDisabledError],
       ["400 cmek_key_network_blocked", CMEKKeyNetworkBlockedError],
       ["400 compaction_block_ambiguous", CompactionBlockAmbiguousError],
@@ -29073,6 +29605,7 @@ var init_error_classes = __esm({
       ["400 external_key_validation_failed", ExternalKeyValidationFailedError],
       ["400 external_key_validation_timed_out", ExternalKeyValidationTimedOutError],
       ["400 file_not_downloadable", FileNotDownloadableError],
+      ["400 image_dimensions_too_large", ImageDimensionsTooLargeError],
       ["400 invalid_config_type_change", BetaInvalidConfigTypeChangeError],
       ["400 invalid_metadata", BetaInvalidMetadataError],
       ["400 invite_already_exists", InviteAlreadyExistsError],
@@ -29084,10 +29617,14 @@ var init_error_classes = __esm({
       ["400 organization_type_not_supported", OrganizationTypeNotSupportedError],
       ["400 parent_organization_required", ParentOrganizationRequiredError],
       ["400 rbac_group_grants_owner_access", RBACGroupGrantsOwnerAccessError],
+      ["400 rbac_group_order_limit_exceeded", BetaRBACGroupOrderLimitExceededError],
       ["400 rbac_group_owner_access_unconfirmed", RBACGroupOwnerAccessUnconfirmedError],
       ["400 request_body_encoding_invalid", RequestBodyEncodingInvalidError],
       ["400 request_body_encoding_unsupported", RequestBodyEncodingUnsupportedError],
+      ["400 request_body_timeout", BetaRequestBodyTimeoutError],
       ["400 scan_failed", BetaScanFailedError],
+      ["400 settings_document_limit_exceeded", BetaSettingsDocumentLimitExceededError],
+      ["400 settings_history_limit_exceeded", BetaSettingsHistoryLimitExceededError],
       ["400 slack_channel_set_up_settings_refused", BetaSlackChannelSetUpSettingsRefusedError],
       ["400 storage_quota_exceeded", StorageQuotaExceededError],
       ["400 thread_already_continued", ThreadAlreadyContinuedError],
@@ -29120,6 +29657,8 @@ var init_error_classes = __esm({
       ["403 user_profile_not_billable", UserProfileNotBillableError],
       ["404 environment_not_found", BetaEnvironmentNotFoundError],
       ["404 file_expired", FileExpiredError],
+      ["404 rbac_group_managed_settings_not_found", BetaRBACGroupManagedSettingsNotFoundError],
+      ["404 rbac_group_not_found", BetaRBACGroupNotFoundError],
       ["404 rbac_role_not_found", RBACRoleNotFoundError],
       ["404 slack_channel_set_up_environment_not_found", BetaSlackChannelSetUpEnvironmentNotFoundError],
       ["404 thread_not_found", ThreadNotFoundError],
@@ -30355,7 +30894,7 @@ var init_client = __esm({
                 parsed[line.substring(0, colon).trim()] = line.substring(colon + 1).trim();
               }
             }
-            options.defaultHeaders = { ...parsed, ...options.defaultHeaders };
+            options.defaultHeaders = options.defaultHeaders instanceof Headers || Array.isArray(options.defaultHeaders) ? buildHeaders([parsed, options.defaultHeaders]) : { ...parsed, ...options.defaultHeaders };
           }
           const inherited = opts.__auth;
           delete options.__auth;
@@ -31147,6 +31686,7 @@ var init_client = __esm({
       Anthropic2.CompactionSignatureInvalidError = CompactionSignatureInvalidError;
       Anthropic2.CompactionTooManyToolReferencesError = CompactionTooManyToolReferencesError;
       Anthropic2.CompactionToolChangesMismatchError = CompactionToolChangesMismatchError;
+      Anthropic2.ImageDimensionsTooLargeError = ImageDimensionsTooLargeError;
       Anthropic2.ThreadAlreadyContinuedError = ThreadAlreadyContinuedError;
       Anthropic2.ThreadContinueInFlightError = ThreadContinueInFlightError;
       Anthropic2.ThreadFingerprintMismatchError = ThreadFingerprintMismatchError;
@@ -31173,6 +31713,7 @@ var init_client = __esm({
       Anthropic2.ConcurrentMembershipChangeError = ConcurrentMembershipChangeError;
       Anthropic2.Beta = Beta;
       Anthropic2.BetaOrganizationNotEnrolledInBetaError = BetaOrganizationNotEnrolledInBetaError;
+      Anthropic2.BetaRequestBodyTimeoutError = BetaRequestBodyTimeoutError;
       Anthropic2.BetaUnsupportedCharsetError = BetaUnsupportedCharsetError;
       Anthropic2.ClaudeCodeKeyCreatorNotMemberError = ClaudeCodeKeyCreatorNotMemberError;
       Anthropic2.ClaudeCodeVersionTooOldError = ClaudeCodeVersionTooOldError;
@@ -32647,7 +33188,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION3 = "7.60.0";
+var VERSION3 = "7.62.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -50043,7 +50584,7 @@ var Sessions5 = class extends APIResource2 {
    * @example
    * ```ts
    * await client.live.sessions.accept('session_id', {
-   *   session: { model: 'gpt-live-1', type: 'live' },
+   *   session: { model: 'gpt-live-1.1', type: 'live' },
    * });
    * ```
    */
@@ -50174,7 +50715,7 @@ var Live = class extends APIResource2 {
    * @example
    * ```ts
    * const live = await client.live.create({
-   *   session: { model: 'gpt-live-1' },
+   *   session: { model: 'gpt-live-1.1' },
    *   transport: { sdp: 'x', type: 'webrtc' },
    * });
    * ```

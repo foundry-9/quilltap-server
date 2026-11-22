@@ -4,6 +4,12 @@
 
 ### 4.14-dev
 
+#### Dependencies: npm update across root, packages and plugins
+
+- Ran `npm update -S` in the root project, every package and every plugin. Notable bumps: `openai` 7.62, `@anthropic-ai/sdk` 1.12 (anthropic plugin), `@openrouter/sdk` 1.5.128, `@tanstack/react-query` / `react-query-devtools` / `eslint-plugin-query` 5.108.2, `@tanstack/react-virtual` 3.14.27, `autoprefixer` 10.7.0, `@napi-rs/canvas` 1.2.0 (CLI)
+- plugin-utils and the plugins now require `@quilltap/plugin-types` ^2.13.0; the plugins require `@quilltap/plugin-utils` ^2.7.7
+- plugin-utils 2.7.8, installed at the root; patch bumps to all 15 plugins (`package.json` and `manifest.json`), rebuilt
+
 #### Dependencies: root installs `@quilltap/plugin-utils` 2.7.7
 
 - Root `package.json` floor raised to `^2.7.7` and the lockfile updated from 2.7.6 to the published 2.7.7. `packages/plugin-utils/CHANGELOG.md` now has entries for 2.7.2 through 2.7.7 (all dependency-only releases)

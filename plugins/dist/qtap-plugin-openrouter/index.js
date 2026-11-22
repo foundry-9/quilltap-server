@@ -117,9 +117,9 @@ function serverURLFromOptions(options) {
 var SDK_METADATA = {
   language: "typescript",
   openapiDocVersion: "1.0.0",
-  sdkVersion: "1.5.120",
+  sdkVersion: "1.5.128",
   genVersion: "2.960.8",
-  userAgent: "speakeasy-sdk/typescript 1.5.120 2.960.8 1.0.0 @openrouter/sdk"
+  userAgent: "speakeasy-sdk/typescript 1.5.128 2.960.8 1.0.0 @openrouter/sdk"
 };
 
 // node_modules/@openrouter/sdk/esm/lib/files.js
@@ -2948,6 +2948,7 @@ var ProviderName = {
   Parallel: "Parallel",
   Parasail: "Parasail",
   ParetoAlpha: "ParetoAlpha",
+  ParetoInference: "Pareto Inference",
   ParticleAI: "Particle AI",
   PearlResearch: "Pearl Research",
   Poolside: "Poolside",
@@ -3102,6 +3103,7 @@ var ProviderOptions$outboundSchema = z51.object({
   parallel: z51.record(z51.string(), z51.any()).optional(),
   parasail: z51.record(z51.string(), z51.any()).optional(),
   paretoAlpha: z51.record(z51.string(), z51.any()).optional(),
+  paretoInference: z51.record(z51.string(), z51.any()).optional(),
   particleAi: z51.record(z51.string(), z51.any()).optional(),
   pearlResearch: z51.record(z51.string(), z51.any()).optional(),
   perceptron: z51.record(z51.string(), z51.any()).optional(),
@@ -3180,6 +3182,7 @@ var ProviderOptions$outboundSchema = z51.object({
     nexAgi: "nex-agi",
     openInference: "open-inference",
     paretoAlpha: "pareto-alpha",
+    paretoInference: "pareto-inference",
     particleAi: "particle-ai",
     pearlResearch: "pearl-research",
     sailResearch: "sail-research",
@@ -4828,7 +4831,7 @@ var Analytics = class extends ClientSDK {
    * Get user activity grouped by endpoint
    *
    * @remarks
-   * Returns user activity data grouped by endpoint for the last 30 (completed) UTC days. Pass `workspace_id` to scope the response to a single workspace. Pass `group_by=workspace` to split each row per workspace and include `workspace_id` on every item; by default rows are aggregated across workspaces and `workspace_id` is not returned. Activity recorded before workspace resolution existed is permanently attributed to the account default workspace (no backfill is possible). A workspace-scoped management key needs `activity:view_all` on its own workspace and reads only that workspace: an omitted `workspace_id` defaults to it, a `workspace_id` naming any other workspace returns 403, `api_key_hash` and `user_id` resolve only keys and members of that workspace, and legacy activity with no workspace is excluded (including for the default workspace). [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Returns user activity data grouped by endpoint for the last 30 (completed) UTC days. Pass `workspace_id` to scope the response to a single workspace. Pass `group_by=workspace` to split each row per workspace and include `workspace_id` on every item; by default rows are aggregated across workspaces and `workspace_id` is not returned. Activity recorded before workspace resolution existed is permanently attributed to the account default workspace (no backfill is possible). A workspace-scoped management key needs `activity:view_all` on its own workspace and reads only that workspace: an omitted `workspace_id` defaults to it, a `workspace_id` naming any other workspace returns 403, `api_key_hash` and `user_id` resolve only keys and members of that workspace, and legacy activity with no workspace is excluded (including for the default workspace). For Custom keys, `api_key_hash` also requires `api_keys:view_all` and does not resolve deleted keys. `user_id` also requires `workspace_members:view` on an explicit non-default workspace; organization and default-workspace member filtering requires `org_members:view`, which is not available as a Custom grant. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async getUserActivity(request, options) {
     return unwrapAsync(analyticsGetUserActivity(this, request, options));
@@ -4837,7 +4840,7 @@ var Analytics = class extends ClientSDK {
    * Get available analytics metrics and dimensions
    *
    * @remarks
-   * Returns the available metrics, dimensions, filter operators, and granularities for the analytics query endpoint. Workspace-scoped management keys are accepted. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Returns the available metrics, dimensions, filter operators, and granularities for the analytics query endpoint. Custom access requires an organization-scoped key with `analytics:view`. Workspace-scoped keys with base Read Only or Read Write access are also accepted. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async getAnalyticsMeta(request, options) {
     return unwrapAsync(analyticsGetAnalyticsMeta(this, request, options));
@@ -4846,7 +4849,7 @@ var Analytics = class extends ClientSDK {
    * Query analytics data
    *
    * @remarks
-   * Execute an analytics query with specified metrics, dimensions, filters, and time range. A workspace-scoped management key needs `activity:view_all` on its own workspace and reads only that workspace: it is refused a `workspace` filter naming another workspace, it excludes legacy rows with no workspace (including for the default workspace), and possible-cache metrics such as `possible_cached_tokens` return 400. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Execute an analytics query with specified metrics, dimensions, filters, and time range. Custom access requires an organization-scoped key with `analytics:view`; grouping or filtering by `api_key_id` or `api_key_tag` also requires `api_keys:view_all`, and by `user` requires `org_members:view`. Key hash filters resolve only non-deleted ordinary keys. Workspace-scoped keys with base Read Only or Read Write access can query only their own workspace: a `workspace` filter naming another workspace is refused, legacy rows with no workspace are excluded (including for the default workspace), and possible-cache metrics such as `possible_cached_tokens` return 400. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async queryAnalytics(request, options) {
     return unwrapAsync(analyticsQueryAnalytics(this, request, options));
@@ -18547,6 +18550,7 @@ var BYOKProviderSlug = {
   Parallel: "parallel",
   Parasail: "parasail",
   ParetoAlpha: "pareto-alpha",
+  ParetoInference: "pareto-inference",
   ParticleAi: "particle-ai",
   PearlResearch: "pearl-research",
   Perceptron: "perceptron",
@@ -19065,6 +19069,7 @@ var Provider = {
   Parallel: "parallel",
   Parasail: "parasail",
   ParetoAlpha: "pareto-alpha",
+  ParetoInference: "pareto-inference",
   ParticleAi: "particle-ai",
   PearlResearch: "pearl-research",
   Perceptron: "perceptron",
@@ -22878,6 +22883,7 @@ var Parameter = {
   Seed: "seed",
   ResponseFormat: "response_format",
   StructuredOutputs: "structured_outputs",
+  StrictToolSchemas: "strict_tool_schemas",
   Stop: "stop",
   Tools: "tools",
   ToolChoice: "tool_choice",
@@ -25338,6 +25344,7 @@ var ProviderResponseProviderName = {
   Parallel: "Parallel",
   Parasail: "Parasail",
   ParetoAlpha: "ParetoAlpha",
+  ParetoInference: "Pareto Inference",
   ParticleAI: "Particle AI",
   PearlResearch: "Pearl Research",
   Poolside: "Poolside",
@@ -31864,6 +31871,7 @@ var ImageGenerationProviderPreferencesOptions$outboundSchema = z775.object({
   parallel: z775.record(z775.string(), z775.any()).optional(),
   parasail: z775.record(z775.string(), z775.any()).optional(),
   paretoAlpha: z775.record(z775.string(), z775.any()).optional(),
+  paretoInference: z775.record(z775.string(), z775.any()).optional(),
   particleAi: z775.record(z775.string(), z775.any()).optional(),
   pearlResearch: z775.record(z775.string(), z775.any()).optional(),
   perceptron: z775.record(z775.string(), z775.any()).optional(),
@@ -31942,6 +31950,7 @@ var ImageGenerationProviderPreferencesOptions$outboundSchema = z775.object({
     nexAgi: "nex-agi",
     openInference: "open-inference",
     paretoAlpha: "pareto-alpha",
+    paretoInference: "pareto-inference",
     particleAi: "particle-ai",
     pearlResearch: "pearl-research",
     sailResearch: "sail-research",
@@ -32031,7 +32040,8 @@ var ImageGenerationRequestResolution = {
   OneK: "1K",
   OneDot5K: "1.5K",
   TwoK: "2K",
-  FourK: "4K"
+  FourK: "4K",
+  EightK: "8K"
 };
 var ImageGenerationRequestResponseFormat = {
   B64Json: "b64_json",
@@ -35765,7 +35775,7 @@ var Observability = class extends ClientSDK {
    * Create an observability destination
    *
    * @remarks
-   * Create a new observability destination. A maximum of 5 destinations per type is allowed. Defaults to the authenticated entity's default workspace, or a workspace-scoped management key's own workspace; use the `workspace_id` body field to scope to a different workspace. A workspace-scoped management key can only create in its own workspace; any other `workspace_id` returns 403. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Create a new observability destination. A maximum of 5 enabled destinations per workspace, across all types, is allowed; disabled destinations do not count. A workspace already above the cap keeps its enabled destinations but cannot create or enable more until fewer than 5 are enabled. Defaults to the authenticated entity's default workspace, or a workspace-scoped management key's own workspace; use the `workspace_id` body field to scope to a different workspace. A workspace-scoped management key can only create in its own workspace; any other `workspace_id` returns 403. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async create(request, options) {
     return unwrapAsync(observabilityCreate(this, request, options));
@@ -35792,7 +35802,7 @@ var Observability = class extends ClientSDK {
    * Update an observability destination
    *
    * @remarks
-   * Update an existing observability destination. Only the fields provided in the request body are updated. A workspace-scoped management key only reaches destinations in its own workspace; any other `id` returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Update an existing observability destination. Only the fields provided in the request body are updated. Enabling a disabled destination returns 400 while the workspace already has 5 enabled destinations. A workspace-scoped management key only reaches destinations in its own workspace; any other `id` returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async update(request, options) {
     return unwrapAsync(observabilityUpdate(this, request, options));
@@ -39198,6 +39208,7 @@ var PrivateEndpointDeclaredParameter = {
   Seed: "seed",
   ResponseFormat: "response_format",
   StructuredOutputs: "structured_outputs",
+  StrictToolSchemas: "strict_tool_schemas",
   Stop: "stop",
   Tools: "tools",
   ToolChoice: "tool_choice",
@@ -39296,6 +39307,7 @@ var UpdatePrivateEndpointSettingsRequestExcludedParameter = {
   Seed: "seed",
   ResponseFormat: "response_format",
   StructuredOutputs: "structured_outputs",
+  StrictToolSchemas: "strict_tool_schemas",
   Stop: "stop",
   Tools: "tools",
   ToolChoice: "tool_choice",
@@ -39823,6 +39835,7 @@ var PrivateEndpointSettingsExcludedParameter = {
   Seed: "seed",
   ResponseFormat: "response_format",
   StructuredOutputs: "structured_outputs",
+  StrictToolSchemas: "strict_tool_schemas",
   Stop: "stop",
   Tools: "tools",
   ToolChoice: "tool_choice",
@@ -42863,9 +42876,7 @@ var Scim = class extends ClientSDK {
    * Create a SCIM group mapping
    *
    * @remarks
-   * Create a SCIM group-to-workspace role mapping. Disabled: no API key can perform this write, including management keys. Use the organization settings in the dashboard, which require step-up verification. A valid management key for an organization with SCIM access receives 403; an invalid key still receives 401 and an organization without SCIM access receives 404.
-   *
-   * @deprecated method: This will be removed in a future release, please migrate away from it as soon as possible.
+   * Create a SCIM group-to-workspace role mapping. Creating a mapping that already exists with the same role succeeds and re-applies the mapping to the group members. Requesting a different role for an existing mapping returns 409. Assigning the `admin` role is dashboard-only and returns 403 for management keys. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async create(request, options) {
     return unwrapAsync(scimCreate(this, request, options));
@@ -42874,9 +42885,7 @@ var Scim = class extends ClientSDK {
    * Delete a SCIM group mapping
    *
    * @remarks
-   * Delete a SCIM group-to-workspace mapping. Disabled: no API key can perform this write, including management keys. Use the organization settings in the dashboard, which require step-up verification. A valid management key for an organization with SCIM access receives 403; an invalid key still receives 401 and an organization without SCIM access receives 404.
-   *
-   * @deprecated method: This will be removed in a future release, please migrate away from it as soon as possible.
+   * Delete a SCIM group-to-workspace mapping. For an `admin` mapping, `keep_members=true` returns `403` and leaves the mapping in place — preserving members as workspace admins is dashboard-only. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async delete(request, options) {
     return unwrapAsync(scimDelete(this, request, options));
@@ -42894,9 +42903,7 @@ var Scim = class extends ClientSDK {
    * Update a SCIM group mapping
    *
    * @remarks
-   * Update a SCIM group mapping role. Disabled: no API key can perform this write, including management keys. Use the organization settings in the dashboard, which require step-up verification. A valid management key for an organization with SCIM access receives 403; an invalid key still receives 401 and an organization without SCIM access receives 404.
-   *
-   * @deprecated method: This will be removed in a future release, please migrate away from it as soon as possible.
+   * Update a SCIM group mapping role. Assigning the `admin` role is dashboard-only and returns 403 for management keys. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async update(request, options) {
     return unwrapAsync(scimUpdate(this, request, options));
@@ -42914,9 +42921,7 @@ var Scim = class extends ClientSDK {
    * Start a SCIM directory sync
    *
    * @remarks
-   * Start a SCIM directory sync. Disabled: no API key can perform this write, including management keys. Use the organization settings in the dashboard, which require step-up verification. A valid management key for an organization with SCIM access receives 403; an invalid key still receives 401 and an organization without SCIM access receives 404.
-   *
-   * @deprecated method: This will be removed in a future release, please migrate away from it as soon as possible.
+   * Start a SCIM directory sync. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async createSyncJob(request, options) {
     return unwrapAsync(scimCreateSyncJob(this, request, options));
@@ -45936,14 +45941,23 @@ var VideoGenerationResponseStatus = {
   Cancelled: "cancelled",
   Expired: "expired"
 };
+var StatusDetail = {
+  Submitting: "submitting",
+  QueuedAtProvider: "queued_at_provider",
+  Generating: "generating",
+  Finalizing: "finalizing"
+};
 var VideoGenerationResponseStatus$inboundSchema = inboundSchema(VideoGenerationResponseStatus);
+var StatusDetail$inboundSchema = inboundSchema(StatusDetail);
 var VideoGenerationResponse$inboundSchema = z1040.object({
   error: z1040.string().optional(),
   expires_at: z1040.int().optional(),
   generation_id: z1040.string().optional(),
   id: z1040.string(),
   polling_url: z1040.string(),
+  progress: z1040.number().optional(),
   status: VideoGenerationResponseStatus$inboundSchema,
+  status_detail: StatusDetail$inboundSchema.optional(),
   unsigned_urls: z1040.array(z1040.string()).optional(),
   urls: z1040.array(z1040.string()).optional(),
   usage: VideoGenerationUsage$inboundSchema.optional()
@@ -45952,6 +45966,7 @@ var VideoGenerationResponse$inboundSchema = z1040.object({
     "expires_at": "expiresAt",
     "generation_id": "generationId",
     "polling_url": "pollingUrl",
+    "status_detail": "statusDetail",
     "unsigned_urls": "unsignedUrls"
   });
 });
@@ -46163,6 +46178,7 @@ var VideoGenerationRequestOptions$outboundSchema = z1045.object({
   parallel: z1045.record(z1045.string(), z1045.any()).optional(),
   parasail: z1045.record(z1045.string(), z1045.any()).optional(),
   paretoAlpha: z1045.record(z1045.string(), z1045.any()).optional(),
+  paretoInference: z1045.record(z1045.string(), z1045.any()).optional(),
   particleAi: z1045.record(z1045.string(), z1045.any()).optional(),
   pearlResearch: z1045.record(z1045.string(), z1045.any()).optional(),
   perceptron: z1045.record(z1045.string(), z1045.any()).optional(),
@@ -46241,6 +46257,7 @@ var VideoGenerationRequestOptions$outboundSchema = z1045.object({
     nexAgi: "nex-agi",
     openInference: "open-inference",
     paretoAlpha: "pareto-alpha",
+    paretoInference: "pareto-inference",
     particleAi: "particle-ai",
     pearlResearch: "pearl-research",
     sailResearch: "sail-research",
@@ -47196,18 +47213,18 @@ var Workspace$inboundSchema = z1062.object({
   created_at: z1062.string(),
   created_by: z1062.nullable(z1062.string()),
   default_guardrail_id: z1062.string(),
-  default_image_model: z1062.nullable(z1062.string()),
-  default_provider_sort: z1062.nullable(z1062.string()),
-  default_text_model: z1062.nullable(z1062.string()),
+  default_image_model: z1062.nullable(z1062.string()).optional(),
+  default_provider_sort: z1062.nullable(z1062.string()).optional(),
+  default_text_model: z1062.nullable(z1062.string()).optional(),
   description: z1062.nullable(z1062.string()),
   disabled_server_tools: z1062.nullable(z1062.array(z1062.string())).optional(),
   id: z1062.string(),
   include_byok_in_budgets: z1062.boolean().optional(),
-  io_logging_api_key_ids: z1062.nullable(z1062.array(z1062.int())),
-  io_logging_sampling_rate: z1062.number(),
-  is_data_discount_logging_enabled: z1062.boolean(),
-  is_observability_broadcast_enabled: z1062.boolean(),
-  is_observability_io_logging_enabled: z1062.boolean(),
+  io_logging_api_key_ids: z1062.nullable(z1062.array(z1062.int())).optional(),
+  io_logging_sampling_rate: z1062.number().optional(),
+  is_data_discount_logging_enabled: z1062.boolean().optional(),
+  is_observability_broadcast_enabled: z1062.boolean().optional(),
+  is_observability_io_logging_enabled: z1062.boolean().optional(),
   name: z1062.string(),
   slug: z1062.string(),
   updated_at: z1062.nullable(z1062.string())
@@ -48615,7 +48632,7 @@ var Workspaces = class extends ClientSDK {
    * Create or update a workspace budget
    *
    * @remarks
-   * Create or update the budget for a given interval. Budget limits must strictly decrease as the interval narrows (lifetime > monthly > weekly > daily). The optional `include_byok_in_budgets` flag is a workspace-wide setting: when provided it applies to every budget interval for the workspace, not just the interval in this request. Note that a change made here is applied to budget enforcement immediately, but an already-open workspace settings page in the web dashboard may keep showing the previous value until it is reloaded. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Create or update the budget for a given interval. Budget limits must strictly decrease as the interval narrows (lifetime > monthly > weekly > daily). Requires an organization-scoped management key with both budgets:view and budgets:update. The optional `include_byok_in_budgets` flag is a workspace-wide setting: when provided it applies to every budget interval for the workspace, not just the interval in this request. Note that a change made here is applied to budget enforcement immediately, but an already-open workspace settings page in the web dashboard may keep showing the previous value until it is reloaded. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async setBudget(request, options) {
     return unwrapAsync(workspacesSetBudget(this, request, options));
@@ -50253,7 +50270,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "7.60.0";
+var VERSION = "7.62.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -55146,15 +55163,15 @@ var _parseJSON = (jsonString, allow) => {
     if (index === length && !(Allow.NUM & allow)) {
       markPartialJSON("Unterminated number literal");
     }
-    const number142 = jsonString.substring(start, index);
+    const number143 = jsonString.substring(start, index);
     try {
-      return JSON.parse(number142);
+      return JSON.parse(number143);
     } catch {
-      if (number142 === "-" && Allow.NUM & allow) {
+      if (number143 === "-" && Allow.NUM & allow) {
         markPartialJSON("Not sure what '-' is");
       }
       try {
-        return JSON.parse(number142.substring(0, number142.lastIndexOf("e")));
+        return JSON.parse(number143.substring(0, number143.lastIndexOf("e")));
       } catch (e) {
         throwMalformedError(String(e));
       }
@@ -67649,7 +67666,7 @@ var Sessions4 = class extends APIResource {
    * @example
    * ```ts
    * await client.live.sessions.accept('session_id', {
-   *   session: { model: 'gpt-live-1', type: 'live' },
+   *   session: { model: 'gpt-live-1.1', type: 'live' },
    * });
    * ```
    */
@@ -67780,7 +67797,7 @@ var Live = class extends APIResource {
    * @example
    * ```ts
    * const live = await client.live.create({
-   *   session: { model: 'gpt-live-1' },
+   *   session: { model: 'gpt-live-1.1' },
    *   transport: { sdp: 'x', type: 'webrtc' },
    * });
    * ```
