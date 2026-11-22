@@ -548,6 +548,10 @@ export {
   lookupAtlasToolDefinition,
   validateLookupAtlasInput,
 } from './lookup-wardrobe-tool';
+export {
+  lookupChatStateToolDefinition,
+  validateLookupChatStateInput,
+} from './lookup-chat-state-tool';
 export { readMessagesToolDefinition, validateReadMessagesInput } from './read-messages-tool';
 export {
   executeLookupCharacterTool,

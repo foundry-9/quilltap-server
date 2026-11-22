@@ -9,6 +9,7 @@ import {
   RESEARCH_RECORD_TOOL_NAMES,
 } from '@/lib/tools/handlers/research-kit-handler';
 import { findDocuments, listDocuments } from '@/lib/research/documents';
+import { lookupChatState } from '@/lib/research/chat-state';
 import { lookupAtlas, lookupConversations, lookupGroup, lookupProject, lookupWardrobe } from '@/lib/research/records';
 
 jest.mock('@/lib/research/documents', () => ({ findDocuments: jest.fn(), listDocuments: jest.fn() }));
@@ -19,6 +20,7 @@ jest.mock('@/lib/research/records', () => ({
   lookupProject: jest.fn(),
   lookupWardrobe: jest.fn(),
 }));
+jest.mock('@/lib/research/chat-state', () => ({ lookupChatState: jest.fn() }));
 jest.mock('@/lib/research/scope', () => ({
   // Faithful to the real resolver's rules; the real module pulls in repositories.
   resolveResearchScope: (ctx: { operatorSurface?: boolean; mountPool?: unknown }) => {
@@ -35,7 +37,7 @@ const ok = { ok: true as const, text: 'result text' };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  for (const fn of [findDocuments, listDocuments, lookupAtlas, lookupConversations, lookupGroup, lookupProject, lookupWardrobe]) {
+  for (const fn of [findDocuments, listDocuments, lookupAtlas, lookupConversations, lookupGroup, lookupProject, lookupWardrobe, lookupChatState]) {
     (fn as jest.Mock).mockResolvedValue(ok);
   }
 });
@@ -45,6 +47,7 @@ describe('handler map exports', () => {
     expect([...RESEARCH_DOCUMENT_TOOL_NAMES].sort()).toEqual(['find_documents', 'list_documents']);
     expect([...RESEARCH_RECORD_TOOL_NAMES].sort()).toEqual([
       'lookup_atlas',
+      'lookup_chat_state',
       'lookup_conversations',
       'lookup_group',
       'lookup_project',
@@ -95,6 +98,14 @@ describe('routing', () => {
     expect(lookupConversations).toHaveBeenCalledWith({});
     expect(lookupWardrobe).toHaveBeenCalledWith({ owner: 'Amy' }, op);
     expect(lookupAtlas).toHaveBeenCalledWith({}, op);
+  });
+
+  it('lookup_chat_state carries the calling chat as its default conversation', async () => {
+    const here = { ...op, chatId: 'chat-1' };
+    await RESEARCH_KIT_HANDLERS.lookup_chat_state(undefined, here);
+    expect(lookupChatState).toHaveBeenCalledWith({}, here);
+    const res = await RESEARCH_KIT_HANDLERS.lookup_chat_state({}, { ...pool, chatId: 'chat-1' });
+    expect(res).toEqual({ success: false, error: "lookup_chat_state is only available on the operator's surfaces." });
   });
 });
 

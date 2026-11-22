@@ -10,7 +10,7 @@
  * clean `no-profile` failure.
  */
 
-import { runBrahmaQuery } from '../one-shot.service'
+import { askedFromNote, runBrahmaQuery } from '../one-shot.service'
 
 jest.mock('@/lib/plugins/provider-validation', () => ({
   requiresApiKey: jest.fn(() => false),
@@ -103,6 +103,19 @@ describe('runBrahmaQuery', () => {
     expect(streamArgs.messages[1]).toMatchObject({ role: 'user', content: 'what tables exist?' })
   })
 
+  it('prefixes the question with where it was asked — title and id, never the transcript', async () => {
+    const repos = { chats: { findById: jest.fn().mockResolvedValue({ id: 'c1', title: 'The Lantern', chatType: 'salon' }) } } as never
+    await runBrahmaQuery({ repos, userId: 'u1', chatId: 'c1', question: 'what is Riya carrying?' })
+    const streamArgs = jest.mocked(streamMessage).mock.calls[0][0] as unknown as {
+      messages: Array<{ role: string; content: string }>
+    }
+    expect(streamArgs.messages).toHaveLength(2)
+    const content = streamArgs.messages[1].content
+    expect(content).toContain('"The Lantern" (c1)')
+    expect(content).toContain('lookup_chat_state')
+    expect(content.endsWith('what is Riya carrying?')).toBe(true)
+  })
+
   it('builds tools with the Brahma flags (no ask_carina / no workspace / no memory search / SQL on)', async () => {
     await runBrahmaQuery({ repos: REPOS, userId: 'u1', chatId: 'c1', question: 'q' })
     const [options] = jest.mocked(buildTools).mock.calls[0]
@@ -181,5 +194,19 @@ describe('runBrahmaQuery', () => {
       expect(result.answer).toContain('2-turn budget')
       expect(result.answer).toContain('rows: 7')
     }
+  })
+})
+
+describe('askedFromNote', () => {
+  it('names a Salon or autonomous conversation', () => {
+    expect(askedFromNote({ id: 'x', title: 'T', chatType: 'salon' })).toContain('"T" (x)')
+    expect(askedFromNote({ id: 'x', title: '', chatType: 'autonomous' })).toContain('"Untitled" (x)')
+    expect(askedFromNote({ id: 'x', title: 'T', chatType: null })).not.toBeNull()
+  })
+
+  it('is null for a non-conversation or a missing chat', () => {
+    expect(askedFromNote(null)).toBeNull()
+    expect(askedFromNote({ id: 'x', title: 'T', chatType: 'brahma' })).toBeNull()
+    expect(askedFromNote({ id: 'x', title: 'T', chatType: 'help' })).toBeNull()
   })
 })

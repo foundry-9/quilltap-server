@@ -55,6 +55,7 @@ exports[`tool definitions: declared effects effects snapshot (static effect, or 
   "log_read": "read",
   "lookup_atlas": "read",
   "lookup_character": "read",
+  "lookup_chat_state": "read",
   "lookup_conversations": "read",
   "lookup_group": "read",
   "lookup_memories": "read",
@@ -1957,6 +1958,20 @@ exports[`tool definitions: derived OpenAI parameters lookupCharacter: parameters
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters lookupChatState: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "conversation": {
+      "description": "A conversation by id or exact title. Omit for the conversation you were asked from.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters lookupConversations: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -3711,6 +3726,7 @@ exports[`tool definitions: the tool picker picker snapshot (listed category, or 
   "log_read": "log",
   "lookup_atlas": "unlisted",
   "lookup_character": "unlisted",
+  "lookup_chat_state": "unlisted",
   "lookup_conversations": "unlisted",
   "lookup_group": "unlisted",
   "lookup_memories": "unlisted",

@@ -64,6 +64,7 @@ import { listDocumentsToolDefinition } from '../list-documents-tool'
 import { lookupConversationsToolDefinition } from '../lookup-conversations-tool'
 import { lookupGroupToolDefinition, lookupProjectToolDefinition } from '../lookup-group-tool'
 import { lookupAtlasToolDefinition, lookupWardrobeToolDefinition } from '../lookup-wardrobe-tool'
+import { lookupChatStateToolDefinition } from '../lookup-chat-state-tool'
 import { lookupMemoriesToolDefinition } from '../lookup-memories-tool'
 import { lookupMessagesToolDefinition } from '../lookup-messages-tool'
 import { readMessagesToolDefinition } from '../read-messages-tool'
@@ -178,6 +179,7 @@ const ALL_TOOLS = {
   lookupProject: lookupProjectToolDefinition,
   lookupWardrobe: lookupWardrobeToolDefinition,
   lookupAtlas: lookupAtlasToolDefinition,
+  lookupChatState: lookupChatStateToolDefinition,
   themeReadDraft: themeReadDraftToolDefinition,
   themeLookupTokens: themeLookupTokensToolDefinition,
   themeLookupHooks: themeLookupHooksToolDefinition,

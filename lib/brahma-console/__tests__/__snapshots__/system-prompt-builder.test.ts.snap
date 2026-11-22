@@ -46,6 +46,7 @@ These answer in names, titles, paths and dates — no schema to learn, no ids to
 - \`read_messages\` — the lines around a hit, or a conversation's opening or closing lines.
 - \`lookup_memories\` — what characters remember, searched by meaning; inspection, not recall.
 - \`lookup_wardrobe\` / \`lookup_atlas\` — the clothes someone can wear; an Atlas entry or a tier's Atlas names.
+- \`lookup_chat_state\` — a conversation as it stands right now: who is in it, what each person is carrying and wearing there, where the scene is. Asked from inside a conversation, call it with no arguments for that one.
 - \`doc_read_file\` — read one file in full, by the \`uri\` a result gave you.
 
 Use \`run_sql\` only for counts, aggregates, costs, settings, and anything these do not cover.
@@ -80,6 +81,8 @@ A \`characters\` row holds only scaffolding; the content (identity, description,
 
 ### Chats and messages
 \`chats.chatType\` is 'salon' | 'help' | 'autonomous' | 'brahma'; "my conversations" means 'salon' unless the operator says otherwise. \`chat_messages.content\` (and \`opaqueContent\`, \`description\`, \`context\`), \`conversation_chunks.content\` and \`llm_logs.request\`/\`response\` are stored compressed: read them as \`qt_text("content")\`, never compare or \`LIKE\` the bare column, and **never search message text in SQL** — use \`lookup_messages\`, which uses the full-text index. \`chat_messages.participantId\` is a seat in that chat; map it through \`chats.participants\` (each entry's \`id\` → \`characterId\`). Filter \`systemSender IS NULL\` for real conversational turns.
+
+What someone carries or wears is per conversation: \`chats.equippedInventory\` and \`chats.equippedOutfit\` (JSON keyed by \`characterId\`; object and garment ids). An Inventory object's own file never says whether it is carried — its \`equippedByDefault\` is only what a character takes up on arriving in a new conversation. Use \`lookup_chat_state\` rather than reading these by hand.
 
 Be honest about empty results and NULLs. Never fabricate rows, counts or content.
 

@@ -90,6 +90,7 @@ import { listDocumentsToolEffect } from './list-documents-tool';
 import { lookupConversationsToolEffect } from './lookup-conversations-tool';
 import { lookupGroupToolEffect, lookupProjectToolEffect } from './lookup-group-tool';
 import { lookupAtlasToolEffect, lookupWardrobeToolEffect } from './lookup-wardrobe-tool';
+import { lookupChatStateToolEffect } from './lookup-chat-state-tool';
 import { lookupMemoriesToolEffect } from './lookup-memories-tool';
 import { lookupMessagesToolEffect } from './lookup-messages-tool';
 import { readMessagesToolEffect } from './read-messages-tool';
@@ -191,6 +192,7 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
   lookup_project: lookupProjectToolEffect,
   lookup_wardrobe: lookupWardrobeToolEffect,
   lookup_atlas: lookupAtlasToolEffect,
+  lookup_chat_state: lookupChatStateToolEffect,
   theme_read_draft: themeReadDraftToolEffect,
   theme_lookup_tokens: themeLookupTokensToolEffect,
   theme_lookup_hooks: themeLookupHooksToolEffect,
@@ -323,6 +325,7 @@ export const OPERATOR_SURFACE_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'lookup_project',
   'lookup_wardrobe',
   'lookup_atlas',
+  'lookup_chat_state',
 ]);
 
 /** Everything the permit needs beyond the call itself. */

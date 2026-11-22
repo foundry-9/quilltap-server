@@ -158,7 +158,7 @@ describe('buildToolsForProvider — the research kit (research-kit.md §5.2)', (
   }
   const RECORD_TOOLS = [
     'lookup_character', 'lookup_memories', 'lookup_messages', 'read_messages',
-    'lookup_conversations', 'lookup_group', 'lookup_project', 'lookup_wardrobe', 'lookup_atlas',
+    'lookup_conversations', 'lookup_group', 'lookup_project', 'lookup_wardrobe', 'lookup_atlas', 'lookup_chat_state',
   ]
 
   it("'documents' adds the document tools and withholds doc_grep / doc_list_files", async () => {

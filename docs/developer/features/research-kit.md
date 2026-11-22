@@ -106,6 +106,7 @@ Record tools (conversations, messages, memories, characters, groups, projects) r
 | `lookup_conversations` (new) | everything | title/date SQL, reading conversation endings to identify them |
 | `lookup_group`, `lookup_project` (new) | everything | membership SQL, per-member vault reads, store-id mapping |
 | `lookup_wardrobe`, `lookup_atlas` (new) | everything | wardrobe and Atlas SQL over `Wardrobe/` and `Atlas/` files |
+| `lookup_chat_state` (added 4.14) | everything | reading `Inventory/` object files (whose `equippedByDefault` is an arrival default) to answer what someone carries now |
 | `lookup_character` (changed) | everything | — |
 | `lookup_messages`, `read_messages`, `lookup_memories` (changed) | everything | — |
 | `doc_read_file` and the other `doc_*` readers (kept) | either | — |
@@ -162,6 +163,8 @@ Both read raw rows and tolerate a broken vault (a member whose vault is unreadab
 `lookup_atlas(name?, owner?)`: with a name, the entry (aliases, graphic prompt, knowledge) and which tier holds it, resolved through `resolveAtlasLocation` per tier; without, the names in a tier. A name is matched through `lib/atlas/match.ts`' folding.
 
 These two exist because the questions recur (the resonator wardrobe audit, the Mercury and Winnower entries). A further `lookup_*` is added only when a recurring question shows up in the logs the way these did.
+
+`lookup_chat_state(conversation?)` (`lib/research/chat-state.ts`, added 4.14): a conversation's live state from the records the turn reads — every seat, present first; what each carries (`loadEquippedSet`) and wears (`describeEquippedOutfitTitleOnly`) in that chat; the scene tracker's location and per-person action, labelled as told; the Concierge posture. With no `conversation`, the chat the call was made from (`ResearchKitToolContext.chatId`); from the Console's own chat it asks for one. It was added after `@Brahma` answered "what does Riya have equipped right now?" from the object's file and said "nothing" while she held it. The inline Brahma's question now carries an asked-from note (`askedFromNote`, `one-shot.service.ts`: the chat's title and id, never its transcript) so "now" and "here" resolve.
 
 ### 5.8 Changes to existing tools
 

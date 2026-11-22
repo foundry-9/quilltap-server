@@ -1123,6 +1123,7 @@ export async function executeToolCallWithContext(
     if (researchKit) {
       const result = await researchKit(toolCall.arguments, {
         userId,
+        chatId: context.chatId,
         operatorSurface: context.operatorSurface,
         mountPool: context.mountPool,
       });

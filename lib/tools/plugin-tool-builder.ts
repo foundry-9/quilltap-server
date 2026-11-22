@@ -61,6 +61,7 @@ import { listDocumentsToolDefinition } from '@/lib/tools/list-documents-tool';
 import { lookupConversationsToolDefinition } from '@/lib/tools/lookup-conversations-tool';
 import { lookupGroupToolDefinition, lookupProjectToolDefinition } from '@/lib/tools/lookup-group-tool';
 import { lookupAtlasToolDefinition, lookupWardrobeToolDefinition } from '@/lib/tools/lookup-wardrobe-tool';
+import { lookupChatStateToolDefinition } from '@/lib/tools/lookup-chat-state-tool';
 import {
   wardrobeListToolDefinition,
 } from '@/lib/tools/wardrobe-list-tool';
@@ -597,6 +598,7 @@ export async function buildToolsForProvider(
     universalTools.push(lookupProjectToolDefinition as UniversalTool);
     universalTools.push(lookupWardrobeToolDefinition as UniversalTool);
     universalTools.push(lookupAtlasToolDefinition as UniversalTool);
+    universalTools.push(lookupChatStateToolDefinition as UniversalTool);
   }
 
   // Read-only SQL access — the operator's surfaces only. Execution is

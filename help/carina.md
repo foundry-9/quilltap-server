@@ -111,7 +111,7 @@ There is one answerer at the reference desk who keeps no character file at all, 
 
 Brahma is a creature apart, and a few particulars follow from that:
 
-- **It keeps no memories.** Nothing asked of Brahma is filed away, and nothing it has answered before colours a later reply. Each consultation stands entirely alone — Brahma does not even recall the rest of the present conversation, only the single question you put to it.
+- **It keeps no memories.** Nothing asked of Brahma is filed away, and nothing it has answered before colours a later reply. Each consultation stands entirely alone — Brahma does not even recall the rest of the present conversation, only the single question you put to it. It does know *which* conversation it was rung from, and may look up that conversation's present state — who is here, and what each is carrying and wearing.
 - **It appears on no roster.** Brahma is not a character; you will not find it in Aurora, in a participant list, or anywhere a character might ordinarily be enrolled. It exists only at the moment it is consulted.
 - **It answers with the Console's full powers** — the same read-only inspection of your records and access to your document stores that the standalone Console enjoys.
 - **It answers with the engine you appoint.** **Settings → Games & Tools → Brahma Console** names the connection profile for `@Brahma` (your default, unless you choose otherwise), and a project's **Model Behavior** card may overrule it for that project's chats. See [Brahma Console](brahma-console.md).

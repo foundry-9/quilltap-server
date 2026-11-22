@@ -650,6 +650,7 @@ export const BUILT_IN_TOOL_PICKER: Readonly<Record<string, ToolPickerEntry>> = {
   lookup_project: { listed: false, reason: "Brahma's Console and the operator's builders only (operator surface, research kit)." },
   lookup_wardrobe: { listed: false, reason: "Brahma's Console and the operator's builders only (operator surface, research kit)." },
   lookup_atlas: { listed: false, reason: "Brahma's Console and the operator's builders only (operator surface, research kit)." },
+  lookup_chat_state: { listed: false, reason: "Brahma's Console and the operator's builders only (operator surface, research kit)." },
   lookup_character: { listed: false, reason: "Brahma's Console only (operator surface)." },
   lookup_memories: { listed: false, reason: "Brahma's Console only (operator surface)." },
   lookup_messages: { listed: false, reason: "Brahma's Console only (operator surface)." },

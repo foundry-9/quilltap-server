@@ -9,7 +9,7 @@
  * Document tools (`find_documents`, `list_documents`) work under either scope
  * (the operator surface, or a Scenario Builder mount pool). Record tools
  * (`lookup_conversations`, `lookup_group`, `lookup_project`,
- * `lookup_wardrobe`, `lookup_atlas`) need the operator surface; the permit
+ * `lookup_wardrobe`, `lookup_atlas`, `lookup_chat_state`) need the operator surface; the permit
  * (`OPERATOR_SURFACE_ONLY_TOOLS`) refuses them anywhere else, and so does the
  * scope check here.
  */
@@ -24,11 +24,15 @@ import { listDocumentsToolInputSchema } from '../list-documents-tool'
 import { lookupConversationsToolInputSchema } from '../lookup-conversations-tool'
 import { lookupGroupToolInputSchema, lookupProjectToolInputSchema } from '../lookup-group-tool'
 import { lookupAtlasToolInputSchema, lookupWardrobeToolInputSchema } from '../lookup-wardrobe-tool'
+import { lookupChatStateToolInputSchema } from '../lookup-chat-state-tool'
+import { lookupChatState } from '@/lib/research/chat-state'
 
 const logger = createServiceLogger('ResearchKitHandler')
 
 export interface ResearchKitToolContext {
   userId: string
+  /** The chat the call was made from (`lookup_chat_state`'s default conversation). */
+  chatId?: string
   operatorSurface?: boolean
   mountPool?: TieredMountPool
 }
@@ -119,6 +123,12 @@ const lookupAtlasHandler: Handler = async (input, ctx) => {
   return run('lookup_atlas', ctx, true, () => lookupAtlas(parsed.data, ctx))
 }
 
+const lookupChatStateHandler: Handler = async (input, ctx) => {
+  const parsed = lookupChatStateToolInputSchema.safeParse(input ?? {})
+  if (!parsed.success) return invalid('lookup_chat_state', parsed.error.issues)
+  return run('lookup_chat_state', ctx, true, () => lookupChatState(parsed.data, ctx))
+}
+
 /** The kit's document tools, by name: either scope. */
 export const RESEARCH_DOCUMENT_HANDLERS: Readonly<Record<string, Handler>> = {
   find_documents: findDocumentsHandler,
@@ -132,6 +142,7 @@ export const RESEARCH_RECORD_HANDLERS: Readonly<Record<string, Handler>> = {
   lookup_project: lookupProjectHandler,
   lookup_wardrobe: lookupWardrobeHandler,
   lookup_atlas: lookupAtlasHandler,
+  lookup_chat_state: lookupChatStateHandler,
 }
 
 /** Every research-kit tool handler (the new tools; the changed Brahma lookups keep their own). */

@@ -66,6 +66,24 @@ export interface RunBrahmaQueryOptions {
   effectCeiling?: ToolEffect
 }
 
+/**
+ * The line that tells an inline Brahma where it was asked from. Without it
+ * "right now" and "here" had no referent, and "what does Riya have equipped"
+ * was answered from her object files instead of the chat's equipped set. Title
+ * and id only — never the transcript (Carina's isolation contract stands).
+ * Null when the chat is not a conversation (or cannot be read). Pure.
+ */
+export function askedFromNote(chat: { id: string; title?: string | null; chatType?: string | null } | null): string | null {
+  if (!chat) return null
+  const type = chat.chatType ?? 'salon'
+  if (type !== 'salon' && type !== 'autonomous') return null
+  return (
+    `[Asked from inside the conversation "${chat.title?.trim() || 'Untitled'}" (${chat.id}). ` +
+    '"Here", "now" and "this chat" mean that conversation; `lookup_chat_state` with no arguments reads who is in it ' +
+    'and what each person is carrying and wearing there right now. You cannot see its transcript unless you read it.]'
+  )
+}
+
 export type BrahmaQueryResult =
   | { ok: true; answer: string }
   | { ok: false; detail: string }
@@ -148,6 +166,20 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
   }
   logger.debug('Brahma one-shot tool context built', { chatId, effectCeiling: effectCeiling ?? null })
 
+  // Where it was asked from (title and id only), so "now" and "here" resolve.
+  let askedFromChat: Awaited<ReturnType<typeof repos.chats.findById>> = null
+  try {
+    askedFromChat = await repos.chats.findById(chatId)
+  } catch (error) {
+    logger.debug('Brahma one-shot could not read the asking chat; no asked-from note', {
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  const note = askedFromNote(askedFromChat)
+  logger.debug('Brahma one-shot asked-from note', { chatId, present: note !== null })
+  const userMessage = note ? `${note}\n\n${question}` : question
+
   // ISOLATION: the loop's slate is system + the single question only — never
   // the Salon transcript. No controller: nothing is surfaced live.
   const result = await runOneShotToolLoop({
@@ -158,7 +190,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     connectionProfile,
     apiKey,
     systemPrompt,
-    userMessage: question,
+    userMessage,
     tools: built,
     toolContext,
     maxAgentTurns,

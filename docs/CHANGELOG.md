@@ -4,6 +4,21 @@
 
 ### 4.14-dev
 
+#### Feature: Brahma reads a conversation's live state
+
+- `@Brahma` answered "what does Riya have equipped right now?" from her `Inventory/` object file, whose `equippedByDefault` is only an arrival default, and said nothing was equipped while the chat's equipped set still held it. It also had no way to know which conversation "now" meant
+- New research-kit record tool `lookup_chat_state` (`lib/research/chat-state.ts`, definition `lib/tools/lookup-chat-state-tool.ts`, effect `read`, operator surface only): every seat, present first; what each carries (`loadEquippedSet`) and wears (`describeEquippedOutfitTitleOnly`) in that chat; the scene tracker's location and action, labelled as told; the Concierge posture. With no `conversation` argument it reads the chat the call came from; the executor now passes `chatId` to research-kit handlers
+- The inline Brahma's question is prefixed with an asked-from note (`askedFromNote`, `lib/services/brahma-console/one-shot.service.ts`): the chat's title and id only, never its transcript. Salon and autonomous chats only
+- Brahma's SQL prompt lists the tool and says carried and worn objects are `chats.equippedInventory` / `chats.equippedOutfit`, not an object file's `equippedByDefault`
+- Help: `brahma-console.md`, `carina.md`. Also `research-kit.md`
+
+#### Fix: the scene state told characters their narrated deeds were done
+
+- The scene tracker reads prose only (tool calls stripped), so it could not tell a deed done from a deed described, and `## Current State` handed its answer back to every character as present truth. A character who narrated putting an object away without calling `inventory_unequip` was told by her own scene state that she had, next to a "Carried and equipped" record saying she still held it, and kept narrating instead of calling the tool
+- Both tracker prompts (`lib/memory/cheap-llm-tasks/image-scene-tasks.ts`) now take a shared `SCENE_ACTION_RULE`: `action` is a telling attributed to whoever told it ("<name> says she has put the lamp away"), never accomplished fact; the update prompt rewrites a carried-forward action phrased as fact. Examples use a `<name>` placeholder (bug 161)
+- `formatCurrentSceneState` (`lib/chat/context/scene-state.ts`) heads each section `#### Action (as told)` and adds `SCENE_ACTION_NOTE` to the header list (actions are a telling; carried and worn objects are the records), which also frames actions stored before this change
+- Help: `scene-state-tracker.md`
+
 #### Dependencies: npm update across root, packages and plugins
 
 - Ran `npm update -S` in the root project, every package and every plugin. Notable bumps: `openai` 7.62, `@anthropic-ai/sdk` 1.12 (anthropic plugin), `@openrouter/sdk` 1.5.128, `@tanstack/react-query` / `react-query-devtools` / `eslint-plugin-query` 5.108.2, `@tanstack/react-virtual` 3.14.27, `autoprefixer` 10.7.0, `@napi-rs/canvas` 1.2.0 (CLI)
