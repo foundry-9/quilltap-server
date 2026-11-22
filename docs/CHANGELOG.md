@@ -4,6 +4,10 @@
 
 ### 4.14-dev
 
+#### Fix: Brahma's SQL prompt described every cold memory as a consolidated member
+
+- The `memories.tier` note in `lib/brahma-console/brahma-sql-prompt.ts` now says a cold row is either superseded (`supersededById` names the digest or the newer contradicting row) or, with `supersededById` NULL, demoted past the memory cap. Brahma's tier counts no longer count cap-demoted rows as consolidated ones
+
 #### Feature: characters may read and edit their own memories
 
 - New tools `read_memory` (effect `read`) and `edit_memory` (effect `write`), gated by a new per-character flag `canEditMemories` (migration `add-character-memory-edit-flag-v1`, NULL = off). Independent of `systemTransparency`. Offered on Salon turns only; the other tool surfaces never pass the flag
