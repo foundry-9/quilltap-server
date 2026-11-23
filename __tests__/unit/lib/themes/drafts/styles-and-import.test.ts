@@ -3,7 +3,7 @@
  *
  * Calliope Live, Spec G Stage 1: a draft's issues name their file and line,
  * the custom stylesheet is attached, detached and saved, and a `.qtap-theme`
- * archive opens as a new draft — over an in-memory Quilltap General, with the
+ * archive opens as a new draft, and a draft exports as one — over an in-memory Quilltap General, with the
  * real registry, loader and archive checks.
  */
 
@@ -34,6 +34,8 @@ import {
   clearDraftStylesFile,
   DraftImportRefusedError,
   DraftManifestRevisionConflictError,
+  DraftNotExportableError,
+  exportDraft,
   DraftOperationRefusedError,
   DraftRevisionConflictError,
   importDraft,
@@ -414,6 +416,61 @@ describe('import', () => {
     await importDraft(await upload(archive));
     await importDraft({ fileName: 'junk.qtap-theme', bytes: Buffer.from('not a zip') }).catch(() => undefined);
     const after = (await fs.readdir(os.tmpdir())).filter((n) => n.startsWith('qtap-theme-import-') && !before.has(n));
+    expect(after).toEqual([]);
+  });
+});
+
+// ============================================================================
+// Export
+// ============================================================================
+
+describe('export', () => {
+  const draftFiles = (id: string) =>
+    new Map([...fake.files.entries()].filter(([k]) => k.startsWith(`Themes/${id}/`)).map(([k, v]) => [k.slice(`Themes/${id}/`.length), v.data]));
+
+  it('packs every file as it is, and opens again as the same draft', async () => {
+    await seed('round-trip');
+    // An unused image and a TrueType-looking font name stay: nothing is left out or converted.
+    fake.put('Themes/round-trip/images/spare.png', Buffer.from('89504e470d0a1a0a', 'hex'));
+    const before = draftFiles('round-trip');
+
+    const exported = await exportDraft('round-trip');
+    expect(exported.fileName).toBe('round-trip-0.3.0.qtap-theme');
+
+    const archive = path.join(work, exported.fileName);
+    await fs.writeFile(archive, exported.bytes);
+    const out = path.join(work, 'out');
+    await fs.mkdir(out);
+    execFileSync('unzip', ['-q', archive, '-d', out]);
+    const unpacked = await filesOf(out);
+    expect([...unpacked.keys()].sort()).toEqual([...before.keys()].sort());
+    for (const [rel, bytes] of before) expect(unpacked.get(rel)?.equals(bytes)).toBe(true);
+
+    // The draft is untouched: same files, same version.
+    expect(draftFiles('round-trip')).toEqual(before);
+    expect(manifestOf('round-trip').version).toBe('0.3.0');
+
+    const imported = await importDraft({ fileName: exported.fileName, bytes: exported.bytes });
+    expect(imported.bundleId).toBe('round-trip');
+    expect(imported.draft.id).toBe('round-trip-2');
+    expect(imported.draft.version).toBe('0.3.0');
+    expect(imported.draft.issues.filter((i) => i.severity === 'error')).toEqual([]);
+  });
+
+  it('refuses a draft with errors, naming them', async () => {
+    await seed('broken-export');
+    fake.put('Themes/broken-export/styles.css', '.a {\n');
+    const failure = await exportDraft('broken-export').catch((e) => e);
+    expect(failure).toBeInstanceOf(DraftNotExportableError);
+    expect((failure as DraftNotExportableError).errors.some((e) => e.startsWith('styles.css'))).toBe(true);
+  });
+
+  it('removes its temporary directory whatever happens', async () => {
+    const prefix = 'qtap-theme-draft-export-';
+    const before = new Set((await fs.readdir(os.tmpdir())).filter((n) => n.startsWith(prefix)));
+    await seed('tidy');
+    await exportDraft('tidy');
+    const after = (await fs.readdir(os.tmpdir())).filter((n) => n.startsWith(prefix) && !before.has(n));
     expect(after).toEqual([]);
   });
 });

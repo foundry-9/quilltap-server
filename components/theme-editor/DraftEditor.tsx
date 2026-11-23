@@ -27,6 +27,7 @@ import { useDraft } from '@/lib/hooks/use-draft'
 import { ApiFetchError, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { triggerDownload } from '@/lib/download-utils'
 import { THEME_CHOICES, type ThemeTokensDocument, type TokenDef } from '@/lib/themes/engine/client'
 import { jsonEqual } from '@/lib/hooks/use-draft'
 import { createEditorStore, type EditorStore } from './editor-store'
@@ -72,6 +73,7 @@ import {
   type SectionView,
 } from './model'
 import {
+  exportThemeDraft,
   installThemeDraft,
   saveThemeDraft,
   themeDraftAction,
@@ -460,6 +462,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
   const queryClient = useQueryClient()
   const [previewing, setPreviewing] = useState(true)
   const [installing, setInstalling] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [installErrors, setInstallErrors] = useState<string[] | null>(null)
   const [installed, setInstalled] = useState<DraftInstallResult | null>(null)
   const nameId = useId()
@@ -840,6 +843,19 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
     }
   }
 
+  const exportDraftFile = async () => {
+    setExporting(true)
+    try {
+      await flushAll()
+      const { blob, fileName } = await exportThemeDraft(detail.id)
+      await triggerDownload(blob, fileName)
+    } catch (err) {
+      showErrorToast(apiErrorMessage(err, 'The atelier could not export the draft.'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const wear = async () => {
     if (!installed) return
     await setTheme(installed.themeId)
@@ -923,6 +939,17 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
             </button>
             <button
               type="button"
+              className="qt-button qt-button-secondary qt-button-sm"
+              onClick={exportDraftFile}
+              disabled={exporting || errors.length > 0}
+              aria-describedby={errors.length > 0 ? `${nameId}-errors` : undefined}
+              title="Save this draft as a .qtap-theme file, originals and all"
+            >
+              <Icon name="download" className="w-4 h-4" />
+              <span className="ml-1">{exporting ? 'Exporting…' : 'Export'}</span>
+            </button>
+            <button
+              type="button"
               className="qt-button qt-button-primary qt-button-sm"
               onClick={install}
               disabled={installing || errors.length > 0}
@@ -977,7 +1004,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
 
         {errors.length > 0 && (
           <div id={`${nameId}-errors`} className="qt-alert-error" role="status">
-            <p className="font-medium">Install waits until these are mended:</p>
+            <p className="font-medium">Install and export wait until these are mended:</p>
             <ul className="list-disc pl-5 mt-1 qt-text-small">
               {errors.map((e, i) => (
                 <li key={i}>

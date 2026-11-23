@@ -2,6 +2,7 @@
  * One theme draft (Calliope Live, Spec D)
  *
  * GET    /api/v1/theme-drafts/[id]                         - The draft: tokens, revisions, compiled parts, files and their users, totals, issues
+ * GET    /api/v1/theme-drafts/[id]?action=export           - Download the draft as a `.qtap-theme`, originals kept (422 when it has errors)
  * PUT    /api/v1/theme-drafts/[id]                         - Save `{ revision, tokens }`, or the stylesheet `{ stylesRevision, css }`; 409 when the revision is stale
  * DELETE /api/v1/theme-drafts/[id]                         - Delete the draft folder (an installed copy stays)
  * POST   /api/v1/theme-drafts/[id]?action=install          - Install the draft as a theme (422 when it has errors)
@@ -24,10 +25,11 @@
  * POST ?action=clear-styles-file  - `{ deleteFile? }`: stop using the stylesheet; delete the file too when asked
  */
 
-import type { NextRequest, NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createContextParamsHandler } from '@/lib/api/middleware';
 import { withActionDispatch, type ActionHandler } from '@/lib/api/middleware/actions';
+import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { badRequest, messageResponse, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { ThemeTokensDocumentSchema } from '@/lib/themes/engine';
@@ -166,6 +168,21 @@ const handleGet: Handler = async (_req, _ctx, { id }) => {
   return answering(() => readDraft(id), (draft) => successResponse({ draft }));
 };
 
+const handleExport: Handler = async (_req, _ctx, { id }) => {
+  const { exportDraft } = await getDrafts();
+  logger.debug('Exporting theme draft', { context: 'theme-drafts-api', draftId: id });
+  return answering(() => exportDraft(id), ({ fileName, bytes }) =>
+    new NextResponse(new Uint8Array(bytes), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': buildContentDisposition(fileName, 'attachment'),
+        'Content-Length': bytes.length.toString(),
+      },
+    }),
+  );
+};
+
 const handlePut: Handler = async (request, _ctx, { id }) => {
   const body = SaveDraftSchema.parse(await request.json());
   const { writeDraftTokens, writeDraftStyles } = await getDrafts();
@@ -301,7 +318,7 @@ const handleClearStylesFile: Handler = async (request, _ctx, { id }) => {
   return answering(() => clearDraftStylesFile(id, { revision: body.manifestRevision, deleteFile: body.deleteFile }), respondDraft);
 };
 
-export const GET = createContextParamsHandler<{ id: string }>(withActionDispatch({}, handleGet));
+export const GET = createContextParamsHandler<{ id: string }>(withActionDispatch({ export: handleExport }, handleGet));
 export const PUT = createContextParamsHandler<{ id: string }>(withActionDispatch({}, handlePut));
 export const DELETE = createContextParamsHandler<{ id: string }>(withActionDispatch({}, handleDelete));
 export const POST = createContextParamsHandler<{ id: string }>(

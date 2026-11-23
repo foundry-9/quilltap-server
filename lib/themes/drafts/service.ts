@@ -122,6 +122,14 @@ export class DraftNotInstallableError extends Error {
   }
 }
 
+/** Export refused: the draft has validation errors, so its archive would not install or open. */
+export class DraftNotExportableError extends Error {
+  constructor(readonly errors: string[]) {
+    super(`The draft cannot be exported: ${errors.slice(0, 3).join('; ')}${errors.length > 3 ? ` (and ${errors.length - 3} more)` : ''}`);
+    this.name = 'DraftNotExportableError';
+  }
+}
+
 /** An uploaded archive that would not install, so it is not opened as a draft (Spec G decision 7). */
 export class DraftImportRefusedError extends Error {
   constructor(
@@ -970,6 +978,54 @@ export async function installDraft(id: string): Promise<DraftInstallResult> {
       fontConversion: fontConversion.converted,
       leftOut,
     };
+  } finally {
+    await fs.rm(work, { recursive: true, force: true });
+  }
+}
+
+// ============================================================================
+// Exporting
+// ============================================================================
+
+export interface DraftExport {
+  /** `<id>-<version>.qtap-theme` (a valid draft always has a version; `<id>.qtap-theme` is the fallback). */
+  fileName: string;
+  bytes: Buffer;
+}
+
+/**
+ * Export a draft as a `.qtap-theme` archive, exactly as it is: every file in
+ * the folder, originals kept (no WebP or WOFF2 conversion, nothing left out as
+ * unused), and the version unchanged. Opened in an Atelier, it comes back as
+ * the same draft. A draft with validation errors is refused, and the packed
+ * archive goes through the same checks an install or an import makes, so an
+ * exported file always installs and always opens. Nothing is written to the
+ * draft; the temporary directory is removed whatever happens.
+ */
+export async function exportDraft(id: string): Promise<DraftExport> {
+  const { store, files, read } = await loadDraft(id);
+  const errors = read.detail.issues.filter((i) => i.severity === 'error').map((i) => i.message);
+  if (errors.length > 0) throw new DraftNotExportableError(errors);
+
+  const work = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-draft-export-'));
+  try {
+    const dir = path.join(work, 'bundle');
+    await fs.mkdir(dir);
+    for (const file of files) {
+      const target = await resolveInside(dir, file.path);
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.writeFile(target, await readDraftBytes(store, id, file.path));
+    }
+    const archive = path.join(work, `${id}.qtap-theme`);
+    await packThemeDirectory(dir, archive);
+    const checked = await validateThemeBundle(archive);
+    if (!checked.valid) throw new DraftNotExportableError(checked.refused ? [checked.refused.message] : checked.errors);
+
+    const bytes = await fs.readFile(archive);
+    const version = read.detail.version;
+    const fileName = version ? `${id}-${version}.qtap-theme` : `${id}.qtap-theme`;
+    logger.info('Exported theme draft', { draftId: id, version, files: files.length, bytes: bytes.length });
+    return { fileName, bytes };
   } finally {
     await fs.rm(work, { recursive: true, force: true });
   }

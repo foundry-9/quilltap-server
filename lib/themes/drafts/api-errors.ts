@@ -14,6 +14,7 @@ import {
   DraftManifestUnreadableError,
   DraftOperationRefusedError,
   DraftNotInstallableError,
+  DraftNotExportableError,
   DraftRevisionConflictError,
   DraftSourceNotFoundError,
   DraftImportRefusedError,
@@ -37,6 +38,7 @@ export function draftErrorResponse(error: unknown): NextResponse<ErrorResponse> 
   if (error instanceof DraftOperationRefusedError) return badRequest(error.message);
   if (error instanceof DraftUploadRefusedError) return errorResponse(error.message, error.reason === 'limit' ? 413 : 422);
   if (error instanceof DraftNotInstallableError) return errorResponse(error.message, 422, { errors: error.errors });
+  if (error instanceof DraftNotExportableError) return errorResponse(error.message, 422, { errors: error.errors });
   if (error instanceof DraftSourceNotFoundError) return badRequest(error.message);
   if (error instanceof DraftImportRefusedError) {
     return errorResponse(error.message, error.reason === 'limit' ? 413 : 422, { errors: error.errors, reason: error.reason });

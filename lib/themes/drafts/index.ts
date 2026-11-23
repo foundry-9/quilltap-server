@@ -13,6 +13,7 @@ export {
   writeDraftTokens,
   deleteDraft,
   installDraft,
+  exportDraft,
   draftServedSet,
   readDraftServedFile,
   draftIdFromName,
@@ -25,6 +26,7 @@ export {
   DraftOperationRefusedError,
   DraftFileInUseError,
   DraftNotInstallableError,
+  DraftNotExportableError,
   DraftSourceNotFoundError,
   DraftImportRefusedError,
   type DraftDetail,
@@ -39,6 +41,7 @@ export {
   type DraftSummary,
   type DraftServedSet,
   type DraftInstallResult,
+  type DraftExport,
 } from './service';
 export {
   addDraftFont,

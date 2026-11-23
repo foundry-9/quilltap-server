@@ -151,7 +151,7 @@ More: [Installing](theme-editor.md#installing).
 
 ## 12. Share it
 
-To hand your theme to someone else, export the installed copy: in **Settings → Appearance**, press the theme's **Preview** button and then the export icon, and save the `.qtap-theme` file. Whoever receives it installs it with **Install Theme**, or opens it in their own Atelier to make something new of it.
+To hand your theme to someone else, press **Export** in the Atelier and save the `.qtap-theme` file: it is the draft exactly as you left it, originals and all. Or export the installed copy — in **Settings → Appearance**, press the theme's **Preview** button and then the export icon — which carries the trimmed pictures and fonts of the install. Either way, whoever receives it installs it with **Install Theme**, or opens it in their own Atelier to make something new of it.
 
 Before you send it, read the fonts' licences one last time.
 

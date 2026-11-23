@@ -4,7 +4,7 @@
  * Calliope's Atelier — server state for theme drafts.
  *
  * The draft list and one draft's detail, and the writes on them (create,
- * save, delete, install), over `/api/v1/theme-drafts` and the
+ * save, delete, install, export), over `/api/v1/theme-drafts` and the
  * `queryKeys.themeDrafts` namespace. The realtime `themes` topic invalidates
  * the namespace, so a draft written elsewhere refreshes here.
  *
@@ -12,7 +12,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { ApiFetchError, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import type { DraftDetail, DraftImportResult, DraftInstallResult, DraftSummary } from '@/lib/themes/drafts/service'
 import type { ThemeTokensDocument } from '@/lib/themes/engine/client'
@@ -160,4 +160,25 @@ export async function saveThemeDraft(id: string, body: ThemeDraftSave, init?: { 
 /** Install a draft. Throws `ApiFetchError` (422 with `info.errors` when it has errors). */
 export function installThemeDraft(id: string): Promise<DraftInstallResult> {
   return apiFetch<{ result: DraftInstallResult }>(`${itemUrl(id)}?action=install`, { method: 'POST' }).then((r) => r.result)
+}
+
+/**
+ * Export a draft as a `.qtap-theme` archive, originals kept. Answers the bytes
+ * and the file name the server chose; throws `ApiFetchError` (422 with
+ * `info.details.errors` when the draft has errors).
+ */
+export async function exportThemeDraft(id: string): Promise<{ blob: Blob; fileName: string }> {
+  const url = `${itemUrl(id)}?action=export`
+  const res = await fetch(url)
+  if (!res.ok) {
+    let info: unknown = undefined
+    try {
+      info = await res.json()
+    } catch {
+      // response body wasn't JSON
+    }
+    throw new ApiFetchError(`Request to ${url} failed: ${res.status} ${res.statusText}`, res.status, info)
+  }
+  const named = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')
+  return { blob: await res.blob(), fileName: named?.[1] ?? `${id}.qtap-theme` }
 }

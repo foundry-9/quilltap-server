@@ -25,7 +25,7 @@ Or press **Open a theme file** and choose a `.qtap-theme` bundle — one a frien
 
 Each draft lives as an ordinary folder in your **Quilltap General** document store, under `Themes/<its id>/`, holding exactly the files a `.qtap-theme` bundle would. You may open those files in the Scriptorium or Document Mode and edit them by hand — `tokens.json` and `theme.json` arrive in Document Mode with their syntax coloured — and a character with document tools may do the same; the Atelier reads them afresh. The stylesheet is the exception: Quilltap General keeps it as a stored file rather than a written page, so Document Mode shows it for reading only, and it is written in the **Custom CSS** section. Should a hand edit leave a file that will not read, the draft still appears in the list, with a note saying which file wants mending.
 
-Drafts are kept in your backups, but they do not travel in a `.qtap` export; to share a finished theme, install it and export it from the Appearance card as a `.qtap-theme` bundle.
+Drafts are kept in your backups, but they do not travel in a `.qtap` export. To carry a draft elsewhere — to a friend, to another Quilltap, or simply into a drawer for safekeeping — use **Export** (see [Exporting a draft](#exporting-a-draft)).
 
 To be rid of a draft, use the bin beside it in the list. The Atelier asks first, because a deleted draft is gone; a theme you already installed from it stays installed.
 
@@ -239,6 +239,14 @@ A few things happen on the way:
 - **Installing again replaces the earlier install** of the same theme. A draft may not take the name of a theme that ships with Quilltap.
 
 If the draft has errors, **Install** waits until they are mended and lists them; if the install itself is refused, the Atelier shows why.
+
+## Exporting a draft
+
+Press **Export**, beside **Install**, and the Atelier wraps the draft up as a `.qtap-theme` file and hands it to you, named for its id and version (`my-theme-0.3.0.qtap-theme`, say). The parcel is the draft precisely as it stands — every file, your original pictures and fonts, unused ones included — with nothing converted and nothing left behind, and the draft's version does not move. Open it again with **Open a theme file** and you have the same draft back, in this Atelier or another.
+
+The file is checked as an install would check it before it is handed over, so whoever receives it may install it straight away with **Install Theme** in **Settings → Appearance**. Like **Install**, **Export** waits while the draft has errors.
+
+The difference from exporting an *installed* theme from the Appearance card: that file carries the installed copy, pictures already turned to WebP and fonts to WOFF2, and anything unused left out. Export the draft when you mean to keep working on it; export the installed theme when you want the trimmest parcel.
 
 ## In-Chat Navigation
 

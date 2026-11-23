@@ -4,6 +4,14 @@
 
 ### 4.14-dev
 
+#### Feature: export a theme draft from the Atelier
+
+- The Atelier had no way to get a draft out as a file; the only route was to install it and export the installed copy from Appearance, which converts images to WebP, fonts to WOFF2 and drops unused files
+- New `GET /api/v1/theme-drafts/[id]?action=export` (`exportDraft`, `lib/themes/drafts/service.ts`): packs every draft file as stored into a `.qtap-theme` named `<id>-<version>.qtap-theme`. Nothing is converted or left out and the draft's version is not bumped, so importing the file gives back the same draft
+- Refused with `422 { errors }` (`DraftNotExportableError`) while the draft has validation errors; the packed archive is also checked with `validateThemeBundle`
+- Editor: an Export button beside Install, disabled while the draft has errors; downloads through `triggerDownload`, so the Electron shell gets its save dialog
+- Help: `theme-editor.md` (new "Exporting a draft" section), `making-a-theme.md`. Also `API.md`
+
 #### Feature: home page rebuilt as bands
 
 - The home page was three equal columns clipped to the viewport: Projects sat half empty, chat titles were cut at about 20 characters, and eight of the character cards fit. It is now a header line and three bands, each as tall as its content; the page scrolls

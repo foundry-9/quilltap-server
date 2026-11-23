@@ -7,6 +7,7 @@ import {
   DraftManifestInvalidError,
   DraftManifestRevisionConflictError,
   DraftManifestUnreadableError,
+  DraftNotExportableError,
   DraftNotInstallableError,
   DraftOperationRefusedError,
   DraftRevisionConflictError,
@@ -76,6 +77,12 @@ describe('draftErrorResponse', () => {
     const r = await parts(new DraftNotInstallableError(['x']));
     expect(r?.status).toBe(422);
     expect(r?.body.details).toEqual({ errors: ['x'] });
+  });
+
+  it('maps a non-exportable draft to 422 with the errors', async () => {
+    const r = await parts(new DraftNotExportableError(['y']));
+    expect(r?.status).toBe(422);
+    expect(r?.body.details).toEqual({ errors: ['y'] });
   });
 
   it('maps a missing source theme to 400', async () => {
