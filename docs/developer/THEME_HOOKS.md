@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE — DO NOT EDIT BY HAND. Source: lib/themes/hooks/. Regenerate with `npm run generate:theme-hooks-doc`. -->
 
-The structural hooks a theme's custom CSS may rely on — catalogue version **2**, 226 hooks. Anything not listed here is an implementation detail and may change without notice. The catalogue lives in `lib/themes/hooks/`; `npm run lint` fails when the markup and the catalogue drift apart.
+The structural hooks a theme's custom CSS may rely on — catalogue version **2**, 228 hooks. Anything not listed here is an implementation detail and may change without notice. The catalogue lives in `lib/themes/hooks/`; `npm run lint` fails when the markup and the catalogue drift apart.
 
 ## Conventions
 
@@ -134,6 +134,8 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | `.qt-chat-narration` | Narration. A roleplay span marking narration. The class name is stored in roleplay templates. | `.qt-chat-message-content` |  |  |
 | `.qt-chat-ooc` | Out-of-character aside. A roleplay span marking an out-of-character remark. The class name is stored in roleplay templates. | `.qt-chat-message-content` |  |  |
 | `.qt-chat-inner-monologue` | Inner monologue. A roleplay span marking unspoken thought. The class name is stored in roleplay templates. | `.qt-chat-message-content` |  |  |
+| `.qt-roleplay-emphasis` | Emphasis. A roleplay span marking stress, a title or a foreign word, inside any voice. Markdown emphasis is styled the same way. The class name is stored in roleplay templates. | `.qt-chat-message-content` |  |  |
+| `.qt-roleplay-quiet` | Quiet narration. A roleplay span with no chip, set in softer ink: prose narration beside full-strength dialogue. The class name is stored in roleplay templates. | `.qt-chat-message-content` |  |  |
 | `.qt-chat-composer-actions` | Composer actions. The cluster of buttons beside the composer input; Send and Stop sit in it. | `.qt-chat-composer` |  |  |
 | `.qt-chat-stop-button` | Stop button. Takes the place of Send while a turn is being written. | `.qt-chat-composer-actions` |  |  |
 | `.qt-chat-attachment-chip` | Attachment chip. A file waiting in the composer to be sent. | `.qt-chat-composer` |  |  |

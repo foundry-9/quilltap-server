@@ -472,6 +472,9 @@
   --qt-roleplay-3-fg: var(--theme-roleplay-chip-3-foreground);
   --qt-roleplay-4-bg: var(--theme-roleplay-chip-4);
   --qt-roleplay-4-fg: var(--theme-roleplay-chip-4-foreground);
+  --qt-rp-emphasis-style: italic;
+  --qt-rp-emphasis-style-in-italic: normal;
+  --qt-rp-quiet-color: color-mix(in srgb, currentColor 82%, transparent);
 
   /* ==========================================================================
      BADGE

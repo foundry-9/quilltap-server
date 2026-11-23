@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE — DO NOT EDIT BY HAND. Source: lib/themes/registry/. Regenerate with `npm run generate:theme-tokens-doc`. -->
 
-Every token a theme's `tokens.json` may set — 712 tokens in 50 groups. A theme stores only what it changes: a value for both modes, or `{ "value": …, "dark": … }`. Defaults may reference other tokens with `var()`. The registry lives in `lib/themes/registry/`; the authoring guide is [THEME_DEVELOPMENT.md](THEME_DEVELOPMENT.md) and the structural hooks are in [THEME_HOOKS.md](THEME_HOOKS.md).
+Every token a theme's `tokens.json` may set — 715 tokens in 50 groups. A theme stores only what it changes: a value for both modes, or `{ "value": …, "dark": … }`. Defaults may reference other tokens with `var()`. The registry lives in `lib/themes/registry/`; the authoring guide is [THEME_DEVELOPMENT.md](THEME_DEVELOPMENT.md) and the structural hooks are in [THEME_HOOKS.md](THEME_HOOKS.md).
 
 **Visibility:** `standard` tokens are the ones themes set often; `advanced` ones rarely; `internal` ones are app plumbing a theme should leave alone.
 
@@ -697,7 +697,7 @@ Sans-serif throughout — no serif in assistant messages. The user bubble matche
 
 ## Roleplay annotation
 
-Group id `roleplay-annotation`, 31 tokens.
+Group id `roleplay-annotation`, 34 tokens.
 
 Subdued — this theme is for power users, not immersive RP. Annotations are functional, not atmospheric.
 
@@ -734,6 +734,9 @@ Subdued — this theme is for power users, not immersive RP. Annotations are fun
 | `--qt-roleplay-3-fg` | color | `var(--theme-roleplay-chip-3-foreground)` |  |  | standard | Roleplay 3 text colour |
 | `--qt-roleplay-4-bg` | color | `var(--theme-roleplay-chip-4)` |  |  | standard | Roleplay 4 background |
 | `--qt-roleplay-4-fg` | color | `var(--theme-roleplay-chip-4-foreground)` |  |  | standard | Roleplay 4 text colour |
+| `--qt-rp-emphasis-style` | font-style | `italic` |  |  | standard | Roleplay emphasis style |
+| `--qt-rp-emphasis-style-in-italic` | font-style | `normal` |  |  | advanced | Roleplay emphasis style inside an italic voice |
+| `--qt-rp-quiet-color` | color | `color-mix(in srgb, currentColor 82%, transparent)` |  |  | standard | Roleplay quiet ink |
 
 ## Badge
 

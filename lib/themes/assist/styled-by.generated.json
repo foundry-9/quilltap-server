@@ -286,13 +286,19 @@
    {"when":"inside .qt-chat-message-user .qt-chat-message-content","properties":[{"property":"--qt-rp-fg","vars":["--qt-chat-user-fg","--qt-rp-user-dialogue-color"]}]}
   ],
   "qt-chat-narration": [
-   {"when":"inside .qt-chat-message-content","properties":[{"property":"--qt-rp-bg","vars":["--qt-rp-narration-bg"]},{"property":"--qt-rp-fg","vars":["--qt-rp-narration-color"]},{"property":"background","vars":["--qt-rp-bg"]},{"property":"border-radius","vars":["--qt-rp-narration-radius"]},{"property":"color","vars":["--qt-rp-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-style","vars":["--qt-rp-narration-style"]},{"property":"padding","vars":["--qt-rp-narration-padding"]}]}
+   {"when":"inside .qt-chat-message-content","properties":[{"property":"--qt-rp-bg","vars":["--qt-rp-narration-bg"]},{"property":"--qt-rp-fg","vars":["--qt-rp-narration-color"]},{"property":"--qt-rp-voice-style","vars":["--qt-rp-narration-style"]},{"property":"background","vars":["--qt-rp-bg"]},{"property":"border-radius","vars":["--qt-rp-narration-radius"]},{"property":"color","vars":["--qt-rp-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-style","vars":["--qt-rp-narration-style"]},{"property":"padding","vars":["--qt-rp-narration-padding"]}]}
   ],
   "qt-chat-ooc": [
    {"when":"inside .qt-chat-message-content","properties":[{"property":"--qt-rp-bg","vars":["--qt-rp-ooc-bg"]},{"property":"--qt-rp-fg","vars":["--qt-rp-ooc-color"]},{"property":"background","vars":["--qt-rp-bg"]},{"property":"border-radius","vars":["--qt-rp-ooc-radius"]},{"property":"color","vars":["--qt-rp-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-family","vars":["--qt-rp-ooc-font"]},{"property":"padding","vars":["--qt-rp-ooc-padding"]}]}
   ],
   "qt-chat-inner-monologue": [
-   {"when":"inside .qt-chat-message-content","properties":[{"property":"--qt-rp-bg","vars":["--qt-rp-inner-monologue-bg"]},{"property":"--qt-rp-fg","vars":["--qt-rp-inner-monologue-color"]},{"property":"background","vars":["--qt-rp-bg"]},{"property":"border-radius","vars":["--qt-rp-inner-monologue-radius"]},{"property":"color","vars":["--qt-rp-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-style","vars":["--qt-rp-inner-monologue-style"]},{"property":"padding","vars":["--qt-rp-inner-monologue-padding"]}]}
+   {"when":"inside .qt-chat-message-content","properties":[{"property":"--qt-rp-bg","vars":["--qt-rp-inner-monologue-bg"]},{"property":"--qt-rp-fg","vars":["--qt-rp-inner-monologue-color"]},{"property":"--qt-rp-voice-style","vars":["--qt-rp-inner-monologue-style"]},{"property":"background","vars":["--qt-rp-bg"]},{"property":"border-radius","vars":["--qt-rp-inner-monologue-radius"]},{"property":"color","vars":["--qt-rp-fg"]},{"property":"display","vars":[],"literal":true},{"property":"font-style","vars":["--qt-rp-inner-monologue-style"]},{"property":"padding","vars":["--qt-rp-inner-monologue-padding"]}]}
+  ],
+  "qt-roleplay-emphasis": [
+   {"when":"inside .qt-chat-message-content","properties":[{"property":"font-style","vars":["--qt-rp-emphasis-style","--qt-rp-emphasis-style-in-italic"]}]}
+  ],
+  "qt-roleplay-quiet": [
+   {"when":"inside .qt-chat-message-content","properties":[{"property":"color","vars":["--qt-rp-quiet-color"]}]}
   ],
   "qt-chat-composer-actions": [
    {"when":"","properties":[{"property":"align-items","vars":[],"literal":true},{"property":"display","vars":[],"literal":true},{"property":"flex-direction","vars":[],"literal":true},{"property":"flex-shrink","vars":[],"literal":true},{"property":"gap","vars":[],"literal":true}]}

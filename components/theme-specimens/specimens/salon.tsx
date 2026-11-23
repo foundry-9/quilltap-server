@@ -420,6 +420,34 @@ export const SALON_SPECIMENS: SpecimenTable = {
   'qt-chat-narration': { render: ({ el }) => <Roleplay el={el} /> },
   'qt-chat-ooc': { render: ({ el }) => <Roleplay el={el} /> },
   'qt-chat-inner-monologue': { render: ({ el }) => <Roleplay el={el} /> },
+  'qt-roleplay-emphasis': {
+    render: ({ el }) => (
+      <Row>
+        <div className="chat-message qt-chat-message-assistant">
+          <div className="qt-chat-message-content">
+            <p>
+              <span className="qt-chat-dialogue">“I said I would <span {...el}>try</span>,” she said.</span>{' '}
+              <span className="qt-rp-italic">Aboard the <span className="qt-roleplay-emphasis">Specimen</span>, nothing stirred.</span>
+            </p>
+          </div>
+        </div>
+      </Row>
+    ),
+  },
+  'qt-roleplay-quiet': {
+    render: ({ el }) => (
+      <Row>
+        <div className="chat-message qt-chat-message-assistant">
+          <div className="qt-chat-message-content">
+            <p>
+              <span {...el}>She set down the specimen cup.</span>{' '}
+              <span className="qt-chat-dialogue">“Nothing happened,” she said.</span>
+            </p>
+          </div>
+        </div>
+      </Row>
+    ),
+  },
   'qt-chat-composer-actions': { render: ({ el }) => <Composer actions={el} /> },
   'qt-chat-stop-button': {
     render: ({ el }) => (

@@ -12,6 +12,8 @@ import {
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { NOVEL_TEMPLATE } from '@/lib/chat/novel-template';
+import { UNDERSCORE_WRAP_REGEX } from '@/lib/chat/annotations';
+import { EMPHASIS_CLASS } from '@/lib/chat/roleplay-rendering';
 import { builtInRoleplayTemplateId } from '@/lib/roleplay-templates/built-in-ids';
 import {
   encodeNarrationDelimiters,
@@ -43,7 +45,10 @@ You must adhere to the following standard roleplay syntax for all outputs.
 3. OUT-OF-CHARACTER (OOC): Enclose meta-comments, questions, or clarifications in PARENTHESES ( ) or DOUBLE PARENTHESES (( )).
    - Example: ((Should we skip to the next morning?))
 
-4. EMPHASIS: Use Markdown bold (**text**) for vocal stress within dialogue. Do NOT use italics for emphasis inside dialogue to avoid confusion with actions.
+4. EMPHASIS: Put one UNDERSCORE on each side of a stressed word or short phrase, in dialogue or in narration. Use it sparingly: vocal stress, a title, a foreign word.
+   - Example: "I said I would _try_."
+   - Never use single asterisks for emphasis. Asterisks mark actions.
+   - Markdown bold (**text**) is for force, such as a shout, and should be rare.
    - Example: "I said **stop** moving!"
 
 5. STRICT COMPLIANCE: Ensure a clear visual separation between actions (* *) and speech (" ").`,
@@ -51,6 +56,7 @@ You must adhere to the following standard roleplay syntax for all outputs.
     tags: [],
     delimiters: [
       { kind: 'wrap', name: 'Narration', buttonName: 'Nar', delimiters: '*', style: 'qt-chat-narration' },
+      { kind: 'wrap', name: 'Emphasis', buttonName: 'Emph', delimiters: '_', style: EMPHASIS_CLASS, hideDelimiter: true },
       { kind: 'wrap', name: 'Out of Character', buttonName: 'OOC', delimiters: ['((', '))'], style: 'qt-chat-ooc' },
     ],
     // Rendering patterns for message content styling
@@ -61,6 +67,10 @@ You must adhere to the following standard roleplay syntax for all outputs.
       { pattern: '[""\u201c][^""\u201d]+[""\u201d]', className: 'qt-chat-dialogue' },
       // Narration: *actions* - single asterisks (not bold **)
       { pattern: '(?<!\\*)\\*[^*]+\\*(?!\\*)', className: 'qt-chat-narration' },
+      // Emphasis: _stress_ - where Markdown has not already read it (inside
+      // narration, whose interior is escaped); elsewhere Markdown's <em> is
+      // styled the same way.
+      { pattern: UNDERSCORE_WRAP_REGEX, className: EMPHASIS_CLASS, hideDelimiters: true },
     ],
     // Paragraph-level dialogue detection (handles dialogue with formatting inside)
     dialogueDetection: {
@@ -83,7 +93,7 @@ You must adhere to the following custom syntax for all outputs. Do NOT use stand
 
 1. SPOKEN DIALOGUE: Write as bare text. Do NOT use quotation marks.
    - Example: Put the gun down, John.
-   - Markdown Italics (*text*) denote VOCAL EMPHASIS only, never action.
+   - Single asterisks (*text*) denote EMPHASIS only (vocal stress, a title, a foreign word), never action. They may be used inside brackets and braces too.
 
 2. ACTION & NARRATION: Enclose all physical movements, facial expressions, and environmental descriptions in SQUARE BRACKETS [ ].
    - Example: [I lean back in the chair, crossing my arms.]
@@ -100,12 +110,17 @@ You must adhere to the following custom syntax for all outputs. Do NOT use stand
     delimiters: [
       { kind: 'wrap', name: 'Narration', buttonName: 'Nar', delimiters: ['[', ']'], style: 'qt-chat-narration' },
       { kind: 'wrap', name: 'Internal Monologue', buttonName: 'Int', delimiters: ['{', '}'], style: 'qt-chat-inner-monologue' },
+      { kind: 'wrap', name: 'Emphasis', buttonName: 'Emph', delimiters: '*', style: EMPHASIS_CLASS, hideDelimiter: true },
       { kind: 'linePrefix', name: 'Out of Character', buttonName: 'OOC', marker: '// ', style: 'qt-chat-ooc' },
     ],
     renderingPatterns: [
       { pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm', scope: 'line' },
       { pattern: '\\[[^\\]]+\\](?!\\()', className: 'qt-chat-narration' },
       { pattern: '\\{[^}]+\\}', className: 'qt-chat-inner-monologue' },
+      // Emphasis: *stress* - where Markdown has not already read it (inside
+      // brackets and braces, whose interiors are escaped); elsewhere
+      // Markdown's <em> is styled the same way.
+      { pattern: '(?<!\\*)\\*(?<rpBody>[^*]+)\\*(?!\\*)', className: EMPHASIS_CLASS, hideDelimiters: true },
     ],
     dialogueDetection: null,
     narrationDelimiters: ['[', ']'],

@@ -347,6 +347,24 @@ export const SALON_HOOKS: readonly HookDef[] = [
     since: 1,
   },
   {
+    className: 'qt-roleplay-emphasis',
+    surface: 'salon',
+    label: 'Emphasis',
+    description:
+      'A roleplay span marking stress, a title or a foreign word, inside any voice. Markdown emphasis is styled the same way. The class name is stored in roleplay templates.',
+    within: ['qt-chat-message-content'],
+    since: 2,
+  },
+  {
+    className: 'qt-roleplay-quiet',
+    surface: 'salon',
+    label: 'Quiet narration',
+    description:
+      'A roleplay span with no chip, set in softer ink: prose narration beside full-strength dialogue. The class name is stored in roleplay templates.',
+    within: ['qt-chat-message-content'],
+    since: 2,
+  },
+  {
     className: 'qt-chat-composer-actions',
     surface: 'salon',
     label: 'Composer actions',

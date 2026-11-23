@@ -60,7 +60,7 @@ describe('levels', () => {
       counts.component += g.component.length
       counts.advanced += g.advanced.length
     }
-    expect(counts).toEqual({ essential: 139, component: 239, advanced: 296 })
+    expect(counts).toEqual({ essential: 139, component: 241, advanced: 297 })
     expect(THEME_TOKENS.filter((t) => placeOf(t) === null).every((t) => t.visibility === 'internal')).toBe(true)
   })
 

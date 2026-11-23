@@ -1043,9 +1043,8 @@
     @apply font-bold;
   }
 
-  .qt-chat-message-content em {
-    @apply italic;
-  }
+  /* <em> is Emphasis: its slant, and the upright flip inside an italic voice,
+     live with .qt-roleplay-emphasis in _roleplay.css. */
 
   .qt-chat-message-content del {
     @apply line-through;
@@ -2104,6 +2103,7 @@
     color: var(--qt-rp-fg);
     background: var(--qt-rp-bg);
     font-style: var(--qt-rp-narration-style);
+    --qt-rp-voice-style: var(--qt-rp-narration-style);
     padding: var(--qt-rp-narration-padding);
     border-radius: var(--qt-rp-narration-radius);
     display: inline;
@@ -2120,6 +2120,7 @@
     color: var(--qt-rp-fg);
     background: var(--qt-rp-bg);
     font-style: var(--qt-rp-inner-monologue-style);
+    --qt-rp-voice-style: var(--qt-rp-inner-monologue-style);
     padding: var(--qt-rp-inner-monologue-padding);
     border-radius: var(--qt-rp-inner-monologue-radius);
     display: inline;

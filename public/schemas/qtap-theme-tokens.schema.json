@@ -11314,6 +11314,58 @@
           ],
           "description": "Roleplay dialogue color — color, group roleplay-annotation — default: var(--theme-roleplay-dialogue-foreground)"
         },
+        "--qt-rp-emphasis-style": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Roleplay emphasis style — font-style, group roleplay-annotation — default: italic"
+        },
+        "--qt-rp-emphasis-style-in-italic": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Roleplay emphasis style inside an italic voice — font-style, group roleplay-annotation — default: normal"
+        },
         "--qt-rp-inner-monologue-bg": {
           "anyOf": [
             {
@@ -11703,6 +11755,32 @@
             }
           ],
           "description": "Roleplay out-of-character radius — radius, group roleplay-annotation — default: 0.1875rem"
+        },
+        "--qt-rp-quiet-color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dark": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Roleplay quiet ink — color, group roleplay-annotation — default: color-mix(in srgb, currentColor 82%, transparent)"
         },
         "--qt-scrollbar-radius": {
           "anyOf": [

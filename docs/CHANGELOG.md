@@ -4,6 +4,21 @@
 
 ### 4.14-dev
 
+#### Feature: Emphasis is its own roleplay style
+
+- Roleplay text had no italics that meant only emphasis. Novel set narration in italics, so its `*emphasis*` had to be bold + italic; Standard told models to use bold for stress
+- New style class `qt-roleplay-emphasis` (theme hook, specimen, tokens `--qt-rp-emphasis-style` = `italic` and `--qt-rp-emphasis-style-in-italic` = `normal`). Markdown `<em>` in a message is styled by the same rule. Emphasis sets no colour; it takes the ink of the voice around it
+- Inside an italic voice, emphasis turns upright. A voice declares its slant in `--qt-rp-voice-style`; the italic flourish (`qt-rp-italic`) is matched by class, and voices slanted by a theme variable (narration, inner monologue) by a container style query. A browser without style queries leaves emphasis there in the voice's slant
+- New style class `qt-roleplay-quiet` (theme hook, specimen, token `--qt-rp-quiet-color` = 82% of the inherited colour): a chipless voice in softer ink
+- The tokenizer (`lib/chat/roleplay-rendering.ts`) nests an emphasis span inside the unmarked text it sits in instead of emitting it as a sibling, so it inherits that voice's ink and slant; runs of unmarked text and emphasis become one span. The server's `stripUnmarkedSpans` now pairs tags, since an unmarked span can hold a nested span
+- Novel: narration is `qt-roleplay-quiet` (upright), emphasis is `qt-roleplay-emphasis` (italic). Was italic narration and bold + italic emphasis
+- Standard: new Emphasis delimiter `_word_`; the prompt asks for underscores for stress and keeps `**bold**` for force. Quilltap RP: new Emphasis delimiter `*word*`, so emphasis inside `[brackets]` and `{braces}` is styled too. Both get an Emph toolbar button
+- A `_` wrap delimiter now follows Markdown's rule (`UNDERSCORE_WRAP_REGEX`, `lib/chat/annotations.ts`): no word character before the opening mark or after the closing one, so `snake_case_name` is left alone. Applies to templates saved from now on
+- Built-in templates update on the next start. Copies of Novel made earlier keep the old styling
+- Template editor: Emphasis and Quiet added to the style list
+- Regenerated theme variables, token and hook docs, the tokens schema, the styled-by table, the CLI theme engine and snapshot fixtures
+- Help: `roleplay-templates.md`, `roleplay-templates-settings.md`
+
 #### Fix: selected text and Novel composer colours were too faint
 
 - The default theme's `--qt-selection-bg` was 18% alpha, barely distinguishable from unselected text; it is now `hsl(225 65% 50% / 0.40)`. The six bundled themes' selection tints were raised to 42%

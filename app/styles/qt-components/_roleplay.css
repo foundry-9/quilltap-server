@@ -8,6 +8,9 @@
  *   2. qt-roleplay-{danger,…}  — semantic chips off the shared --color-* tokens
  *   3. qt-rp-{bold,italic,…}   — add-ons (bold/italic/reverse/underline/border/font)
  *
+ * Two chipless styles sit beside them: qt-roleplay-quiet (a voice in softer ink)
+ * and qt-roleplay-emphasis (stress inside any voice — see below).
+ *
  * Scoped under .qt-chat-message-content to override Tailwind prose, mirroring the
  * legacy .qt-chat-* roleplay classes in _chat.css. Add-ons are declared AFTER the
  * base chips so equal-specificity ties resolve in the add-on's favour (e.g.
@@ -119,12 +122,30 @@
     font-family: var(--font-mono);
   }
 
+  /* ---- Quiet ink ---------------------------------------------------------
+     A voice with no chip, set a little softer than the text around it — prose
+     narration beside full-strength dialogue. The default mixes the inherited
+     colour, so it follows whichever bubble it sits in. */
+  .qt-chat-message-content .qt-roleplay-quiet {
+    color: var(--qt-rp-quiet-color);
+  }
+
+  /* ---- Emphasis ----------------------------------------------------------
+     Slant belongs to emphasis: vocal stress, a title, a foreign word. Markdown's
+     <em> and a template's Emphasis mark are the same thing and are styled as
+     one. Emphasis carries no colour of its own; it takes the ink of the voice
+     it sits in. */
+  .qt-chat-message-content :is(em, .qt-roleplay-emphasis) {
+    font-style: var(--qt-rp-emphasis-style);
+  }
+
   /* ---- Add-on flourishes (declared last so they win the tie) ------------- */
   .qt-chat-message-content .qt-rp-bold {
     font-weight: 700;
   }
   .qt-chat-message-content .qt-rp-italic {
     font-style: italic;
+    --qt-rp-voice-style: italic;
   }
   .qt-chat-message-content .qt-rp-underline {
     text-decoration: underline;
@@ -167,5 +188,20 @@
   }
   .qt-chat-message-content .qt-rp-font-script {
     font-family: var(--qt-rp-font-script, "Segoe Script", "Brush Script MT", cursive);
+  }
+  /* ---- Emphasis inside an italic voice -----------------------------------
+     Where the surrounding voice is already slanted, emphasis turns upright, as
+     print sets it. A voice announces its slant in --qt-rp-voice-style. The
+     italic add-on is a class, so its rule works everywhere; a voice whose slant
+     comes from a theme variable (narration, inner monologue) needs a container
+     style query, and where a browser has none the emphasis there simply keeps
+     the voice's slant. */
+  .qt-chat-message-content .qt-rp-italic :is(em, .qt-roleplay-emphasis) {
+    font-style: var(--qt-rp-emphasis-style-in-italic);
+  }
+  @container style(--qt-rp-voice-style: italic) or style(--qt-rp-voice-style: oblique) {
+    .qt-chat-message-content :is(em, .qt-roleplay-emphasis) {
+      font-style: var(--qt-rp-emphasis-style-in-italic);
+    }
   }
 }
