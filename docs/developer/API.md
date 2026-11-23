@@ -6947,9 +6947,14 @@ Calliope Live Spec G. Open a `.qtap-theme` as a new draft. `multipart/form-data`
 
 `{ draft: DraftDetail }`: `id`, `manifest` (parsed, or `null`), `tokens` (or `null` when missing or unparseable), `revision` (content hash of `tokens.json`, or `missing`), `uri` (the folder's `qtap://` address), `compiled` (`{ fontFaces, icons, custom }` — the parts the editor cannot change yet, compiled server-side; empty when invalid), `subsystems` (manifest overrides with image paths turned into draft asset URLs), `issues` (`{ severity, message, file?, line? }[]` — `file` is the bundle path and `line` the 1-based line where the engine knows them, Spec G), `updatedAt`, `version`, `mountPointId` (Quilltap General, for a Scriptorium link), `styles` (`{ path, text, revision }` — the custom stylesheet named by `stylesPath`, `revision` its content hash — or `null` when the manifest names none), `images` (`{ path, type, url }[]` — every image file), `manifestRevision` (content hash of `theme.json`, sent back with every manifest or file operation), `files` (`{ path, size, kind, users, usedBy, unused, font? }[]` — `kind` is `manifest` / `tokens` / `styles` / `font` / `licence` / `image` / `other`; `users` are `BundleFileUse` entries from `bundleFileUsage` (`lib/themes/engine/usage.ts`) and `usedBy` the same in words; `unused` marks a font or image nothing refers to; `font` is what a font file says it is — family, weight, style, variable, embedding, licence, licence URL — or `null` when unreadable) and `totals` (`{ files, bytes, limits: { files, bytes, fileBytes } }`, the limits from `bundle-archive`).
 
-#### `GET /api/v1/theme-drafts/[id]?action=export`
+#### `GET /api/v1/theme-drafts/[id]?action=export&form=theme|draft`
 
-Download the draft as a `.qtap-theme` archive (`application/zip`, `Content-Disposition: attachment; filename="<id>-<version>.qtap-theme"`). The archive is every file in the draft as stored: originals kept, nothing converted, unused files included, version unchanged — opening it with `?action=import` gives back the same draft. `422 { errors }` while the draft has validation errors; the packed archive is also run through `validateThemeBundle`, so an exported file always installs and imports. Writes nothing. `exportDraft` (`lib/themes/drafts/service.ts`).
+Download the draft as a `.qtap-theme` archive (`application/zip`, `Content-Disposition: attachment`). `form` (strict query; default `draft`, anything else `400`):
+
+- `theme` — the installable build, made by the same step as `?action=install` (`writeBuiltDraft`): unused fonts and images left out, raster images as WebP, TrueType / OpenType fonts as WOFF2, references rewritten. Named `<id>-<version>.qtap-theme`.
+- `draft` — every file as stored: originals kept, nothing converted, unused files included. Named `<id>-<version>-draft.qtap-theme`; opening it with `?action=import` gives back the same draft.
+
+Neither installs anything or bumps the draft's version. `422 { errors }` while the draft has validation errors or a file will not convert; the packed archive is also run through `validateThemeBundle`, so an exported file always installs and imports. Writes nothing. `exportDraft(id, form)` (`lib/themes/drafts/service.ts`).
 
 #### `PUT /api/v1/theme-drafts/[id]`
 

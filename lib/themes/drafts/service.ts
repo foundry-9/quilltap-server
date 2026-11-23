@@ -903,6 +903,49 @@ export function bumpPatch(version: string): string {
   return `${version}.1`;
 }
 
+interface BuiltDraft {
+  conversion: ThemeImageConversion;
+  fontConversion: ThemeFontConversion;
+  leftOut: string[];
+  /** Images or fonts that would not convert; the directory is then not a bundle to ship. */
+  errors: string[];
+}
+
+/**
+ * Write a draft's installable form into `dir` (created here): the font and
+ * image files nothing uses are left out (Spec F decision 3), raster images
+ * become WebP and TrueType and OpenType fonts WOFF2. The draft keeps its
+ * originals. Install and the `theme` export both build through this, so the
+ * file a friend installs is the one this Quilltap installs.
+ */
+async function writeBuiltDraft(store: DraftsStore, id: string, files: DraftFileEntry[], read: DraftRead, dir: string): Promise<BuiltDraft> {
+  await fs.mkdir(dir);
+  // Unused files are decided first, so nothing is converted that will not
+  // ship; a converted file stays used under its new name, because the
+  // conversions rewrite every reference they rename.
+  const leftOut = read.detail.files
+    .filter((f) => f.users.length === 0 && LEFT_OUT_WHEN_UNUSED.has(f.kind))
+    .map((f) => f.path);
+  const skip = new Set(leftOut);
+  for (const file of files) {
+    if (skip.has(file.path)) continue;
+    const target = await resolveInside(dir, file.path);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, await readDraftBytes(store, id, file.path));
+  }
+  const conversion = await convertThemeImages(dir);
+  if (conversion.errors.length > 0) return { conversion, fontConversion: { converted: {}, errors: [] }, leftOut, errors: conversion.errors };
+  const fontConversion = await convertThemeFonts(dir);
+  logger.debug('Built theme draft for shipping', {
+    draftId: id,
+    leftOut,
+    images: Object.keys(conversion.converted).length,
+    fonts: Object.keys(fontConversion.converted).length,
+    errors: fontConversion.errors.length,
+  });
+  return { conversion, fontConversion, leftOut, errors: fontConversion.errors };
+}
+
 /**
  * Install a draft: refuse one with validation errors; otherwise write its
  * files to a temporary directory, leave out the font and image files nothing
@@ -928,24 +971,8 @@ export async function installDraft(id: string): Promise<DraftInstallResult> {
   const work = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-draft-'));
   try {
     const dir = path.join(work, 'bundle');
-    await fs.mkdir(dir);
-    // Unused files are decided first, so nothing is converted that will not
-    // ship; a converted file stays used under its new name, because the
-    // conversions rewrite every reference they rename.
-    const leftOut = read.detail.files
-      .filter((f) => f.users.length === 0 && LEFT_OUT_WHEN_UNUSED.has(f.kind))
-      .map((f) => f.path);
-    const skip = new Set(leftOut);
-    for (const file of files) {
-      if (skip.has(file.path)) continue;
-      const target = await resolveInside(dir, file.path);
-      await fs.mkdir(path.dirname(target), { recursive: true });
-      await fs.writeFile(target, await readDraftBytes(store, id, file.path));
-    }
-    const conversion = await convertThemeImages(dir);
-    if (conversion.errors.length > 0) throw new DraftNotInstallableError(conversion.errors);
-    const fontConversion = await convertThemeFonts(dir);
-    if (fontConversion.errors.length > 0) throw new DraftNotInstallableError(fontConversion.errors);
+    const { conversion, fontConversion, leftOut, errors: buildErrors } = await writeBuiltDraft(store, id, files, read, dir);
+    if (buildErrors.length > 0) throw new DraftNotInstallableError(buildErrors);
 
     const archive = path.join(work, `${id}.qtap-theme`);
     await packThemeDirectory(dir, archive);
@@ -987,22 +1014,34 @@ export async function installDraft(id: string): Promise<DraftInstallResult> {
 // Exporting
 // ============================================================================
 
+/**
+ * Which shape an export takes. `draft`: every file as stored, originals and
+ * unused files included, to be opened again in an Atelier. `theme`: what an
+ * install ships — WebP pictures, WOFF2 fonts, nothing unused — to be installed
+ * and worn.
+ */
+export type DraftExportForm = 'draft' | 'theme';
+
 export interface DraftExport {
-  /** `<id>-<version>.qtap-theme` (a valid draft always has a version; `<id>.qtap-theme` is the fallback). */
+  /** `<id>-<version>.qtap-theme` for a theme, `<id>-<version>-draft.qtap-theme` for a draft. */
   fileName: string;
   bytes: Buffer;
+  form: DraftExportForm;
+  /** Files left out as unused (theme form only; empty for a draft). */
+  leftOut: string[];
 }
 
 /**
- * Export a draft as a `.qtap-theme` archive, exactly as it is: every file in
- * the folder, originals kept (no WebP or WOFF2 conversion, nothing left out as
- * unused), and the version unchanged. Opened in an Atelier, it comes back as
- * the same draft. A draft with validation errors is refused, and the packed
+ * Export a draft as a `.qtap-theme` archive, in one of two forms (see
+ * `DraftExportForm`). A `draft` export is the folder exactly as it is and
+ * opens again as the same draft; a `theme` export is built by the same step
+ * as an install (`writeBuiltDraft`). Neither moves the draft's version — only
+ * an install does. A draft with validation errors is refused, and the packed
  * archive goes through the same checks an install or an import makes, so an
  * exported file always installs and always opens. Nothing is written to the
  * draft; the temporary directory is removed whatever happens.
  */
-export async function exportDraft(id: string): Promise<DraftExport> {
+export async function exportDraft(id: string, form: DraftExportForm = 'draft'): Promise<DraftExport> {
   const { store, files, read } = await loadDraft(id);
   const errors = read.detail.issues.filter((i) => i.severity === 'error').map((i) => i.message);
   if (errors.length > 0) throw new DraftNotExportableError(errors);
@@ -1010,11 +1049,18 @@ export async function exportDraft(id: string): Promise<DraftExport> {
   const work = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-draft-export-'));
   try {
     const dir = path.join(work, 'bundle');
-    await fs.mkdir(dir);
-    for (const file of files) {
-      const target = await resolveInside(dir, file.path);
-      await fs.mkdir(path.dirname(target), { recursive: true });
-      await fs.writeFile(target, await readDraftBytes(store, id, file.path));
+    let leftOut: string[] = [];
+    if (form === 'theme') {
+      const built = await writeBuiltDraft(store, id, files, read, dir);
+      if (built.errors.length > 0) throw new DraftNotExportableError(built.errors);
+      leftOut = built.leftOut;
+    } else {
+      await fs.mkdir(dir);
+      for (const file of files) {
+        const target = await resolveInside(dir, file.path);
+        await fs.mkdir(path.dirname(target), { recursive: true });
+        await fs.writeFile(target, await readDraftBytes(store, id, file.path));
+      }
     }
     const archive = path.join(work, `${id}.qtap-theme`);
     await packThemeDirectory(dir, archive);
@@ -1023,9 +1069,10 @@ export async function exportDraft(id: string): Promise<DraftExport> {
 
     const bytes = await fs.readFile(archive);
     const version = read.detail.version;
-    const fileName = version ? `${id}-${version}.qtap-theme` : `${id}.qtap-theme`;
-    logger.info('Exported theme draft', { draftId: id, version, files: files.length, bytes: bytes.length });
-    return { fileName, bytes };
+    const stem = version ? `${id}-${version}` : id;
+    const fileName = form === 'theme' ? `${stem}.qtap-theme` : `${stem}-draft.qtap-theme`;
+    logger.info('Exported theme draft', { draftId: id, form, version, files: checked.fileCount, bytes: bytes.length, leftOut });
+    return { fileName, bytes, form, leftOut };
   } finally {
     await fs.rm(work, { recursive: true, force: true });
   }

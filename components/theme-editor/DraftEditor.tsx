@@ -78,6 +78,7 @@ import {
   saveThemeDraft,
   themeDraftAction,
   type DraftDetail,
+  type DraftExportForm,
   type DraftInstallResult,
   type ThemeDraftSave,
 } from './use-theme-drafts'
@@ -462,7 +463,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
   const queryClient = useQueryClient()
   const [previewing, setPreviewing] = useState(true)
   const [installing, setInstalling] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [exporting, setExporting] = useState<DraftExportForm | null>(null)
   const [installErrors, setInstallErrors] = useState<string[] | null>(null)
   const [installed, setInstalled] = useState<DraftInstallResult | null>(null)
   const nameId = useId()
@@ -843,16 +844,16 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
     }
   }
 
-  const exportDraftFile = async () => {
-    setExporting(true)
+  const exportDraftFile = async (form: DraftExportForm) => {
+    setExporting(form)
     try {
       await flushAll()
-      const { blob, fileName } = await exportThemeDraft(detail.id)
+      const { blob, fileName } = await exportThemeDraft(detail.id, form)
       await triggerDownload(blob, fileName)
     } catch (err) {
-      showErrorToast(apiErrorMessage(err, 'The atelier could not export the draft.'))
+      showErrorToast(apiErrorMessage(err, form === 'theme' ? 'The atelier could not export the theme.' : 'The atelier could not export the draft.'))
     } finally {
-      setExporting(false)
+      setExporting(null)
     }
   }
 
@@ -940,13 +941,24 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
             <button
               type="button"
               className="qt-button qt-button-secondary qt-button-sm"
-              onClick={exportDraftFile}
-              disabled={exporting || errors.length > 0}
+              onClick={() => void exportDraftFile('draft')}
+              disabled={exporting !== null || errors.length > 0}
               aria-describedby={errors.length > 0 ? `${nameId}-errors` : undefined}
-              title="Save this draft as a .qtap-theme file, originals and all"
+              title="Save this draft as a .qtap-theme file, originals and all, to open again in an Atelier"
             >
               <Icon name="download" className="w-4 h-4" />
-              <span className="ml-1">{exporting ? 'Exporting…' : 'Export'}</span>
+              <span className="ml-1">{exporting === 'draft' ? 'Exporting…' : 'Export draft'}</span>
+            </button>
+            <button
+              type="button"
+              className="qt-button qt-button-secondary qt-button-sm"
+              onClick={() => void exportDraftFile('theme')}
+              disabled={exporting !== null || errors.length > 0}
+              aria-describedby={errors.length > 0 ? `${nameId}-errors` : undefined}
+              title="Save the finished theme as a .qtap-theme file: WebP pictures, WOFF2 fonts, nothing unused"
+            >
+              <Icon name="download" className="w-4 h-4" />
+              <span className="ml-1">{exporting === 'theme' ? 'Exporting…' : 'Export theme'}</span>
             </button>
             <button
               type="button"

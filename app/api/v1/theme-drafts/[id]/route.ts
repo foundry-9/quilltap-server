@@ -2,7 +2,9 @@
  * One theme draft (Calliope Live, Spec D)
  *
  * GET    /api/v1/theme-drafts/[id]                         - The draft: tokens, revisions, compiled parts, files and their users, totals, issues
- * GET    /api/v1/theme-drafts/[id]?action=export           - Download the draft as a `.qtap-theme`, originals kept (422 when it has errors)
+ * GET    /api/v1/theme-drafts/[id]?action=export&form=…    - Download a `.qtap-theme` (422 when it has errors): `form=theme`
+ *                                                            the installable build (WebP, WOFF2, nothing unused); `form=draft`
+ *                                                            (default) every file as stored, originals kept
  * PUT    /api/v1/theme-drafts/[id]                         - Save `{ revision, tokens }`, or the stylesheet `{ stylesRevision, css }`; 409 when the revision is stale
  * DELETE /api/v1/theme-drafts/[id]                         - Delete the draft folder (an installed copy stays)
  * POST   /api/v1/theme-drafts/[id]?action=install          - Install the draft as a theme (422 when it has errors)
@@ -168,10 +170,17 @@ const handleGet: Handler = async (_req, _ctx, { id }) => {
   return answering(() => readDraft(id), (draft) => successResponse({ draft }));
 };
 
-const handleExport: Handler = async (_req, _ctx, { id }) => {
+const ExportQuerySchema = z.strictObject({
+  action: z.literal('export'),
+  form: z.enum(['draft', 'theme']).default('draft'),
+});
+
+const handleExport: Handler = async (request, _ctx, { id }) => {
+  const query = ExportQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
+  if (!query.success) return badRequest('form must be "draft" or "theme"');
   const { exportDraft } = await getDrafts();
-  logger.debug('Exporting theme draft', { context: 'theme-drafts-api', draftId: id });
-  return answering(() => exportDraft(id), ({ fileName, bytes }) =>
+  logger.debug('Exporting theme draft', { context: 'theme-drafts-api', draftId: id, form: query.data.form });
+  return answering(() => exportDraft(id, query.data.form), ({ fileName, bytes }) =>
     new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {

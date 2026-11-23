@@ -14,10 +14,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiFetchError, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import type { DraftDetail, DraftImportResult, DraftInstallResult, DraftSummary } from '@/lib/themes/drafts/service'
+import type { DraftDetail, DraftExportForm, DraftImportResult, DraftInstallResult, DraftSummary } from '@/lib/themes/drafts/service'
 import type { ThemeTokensDocument } from '@/lib/themes/engine/client'
 
-export type { DraftDetail, DraftSummary, DraftInstallResult, DraftImportResult }
+export type { DraftDetail, DraftExportForm, DraftSummary, DraftInstallResult, DraftImportResult }
 
 const BASE = '/api/v1/theme-drafts'
 const itemUrl = (id: string) => `${BASE}/${encodeURIComponent(id)}`
@@ -163,12 +163,13 @@ export function installThemeDraft(id: string): Promise<DraftInstallResult> {
 }
 
 /**
- * Export a draft as a `.qtap-theme` archive, originals kept. Answers the bytes
- * and the file name the server chose; throws `ApiFetchError` (422 with
+ * Export a draft as a `.qtap-theme` archive: `theme` is the installable build
+ * (WebP, WOFF2, nothing unused), `draft` every file as stored. Answers the
+ * bytes and the file name the server chose; throws `ApiFetchError` (422 with
  * `info.details.errors` when the draft has errors).
  */
-export async function exportThemeDraft(id: string): Promise<{ blob: Blob; fileName: string }> {
-  const url = `${itemUrl(id)}?action=export`
+export async function exportThemeDraft(id: string, form: DraftExportForm): Promise<{ blob: Blob; fileName: string }> {
+  const url = `${itemUrl(id)}?action=export&form=${form}`
   const res = await fetch(url)
   if (!res.ok) {
     let info: unknown = undefined
@@ -180,5 +181,5 @@ export async function exportThemeDraft(id: string): Promise<{ blob: Blob; fileNa
     throw new ApiFetchError(`Request to ${url} failed: ${res.status} ${res.statusText}`, res.status, info)
   }
   const named = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')
-  return { blob: await res.blob(), fileName: named?.[1] ?? `${id}.qtap-theme` }
+  return { blob: await res.blob(), fileName: named?.[1] ?? (form === 'theme' ? `${id}.qtap-theme` : `${id}-draft.qtap-theme`) }
 }

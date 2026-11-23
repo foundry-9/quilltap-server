@@ -42,6 +42,7 @@ export {
   type DraftServedSet,
   type DraftInstallResult,
   type DraftExport,
+  type DraftExportForm,
 } from './service';
 export {
   addDraftFont,

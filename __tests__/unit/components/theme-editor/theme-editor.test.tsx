@@ -309,27 +309,31 @@ describe('installing', () => {
 describe('exporting', () => {
   it('is disabled while the draft has errors', async () => {
     await openEditor(detail({ issues: [{ severity: 'error', message: 'The manifest has no author' }] }))
-    expect(screen.getByRole('button', { name: /^Export/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Export draft' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Export theme' })).toBeDisabled()
   })
 
-  it('downloads the archive under the name the server gives', async () => {
+  it.each([
+    ['Export theme', 'theme', 'my-theme-0.1.0.qtap-theme'],
+    ['Export draft', 'draft', 'my-theme-0.1.0-draft.qtap-theme'],
+  ])('%s downloads the archive under the name the server gives', async (label, form, fileName) => {
     await openEditor()
     const fetchMock = global.fetch as jest.Mock
     const base = fetchMock.getMockImplementation()!
     fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input) === '/api/v1/theme-drafts/my-theme?action=export') {
+      if (String(input) === `/api/v1/theme-drafts/my-theme?action=export&form=${form}`) {
         return {
           ok: true,
           status: 200,
           statusText: '200',
-          headers: new Headers({ 'content-disposition': 'attachment; filename="my-theme-0.1.0.qtap-theme"' }),
+          headers: new Headers({ 'content-disposition': `attachment; filename="${fileName}"` }),
           blob: async () => new Blob(['zip']),
         }
       }
       return base(input, init)
     })
-    fireEvent.click(screen.getByRole('button', { name: /^Export/ }))
-    await waitFor(() => expect(downloads.triggerDownload).toHaveBeenCalledWith(expect.anything(), 'my-theme-0.1.0.qtap-theme'))
+    fireEvent.click(screen.getByRole('button', { name: label }))
+    await waitFor(() => expect(downloads.triggerDownload).toHaveBeenCalledWith(expect.anything(), fileName))
     expect(toast.showErrorToast).not.toHaveBeenCalled()
   })
 
@@ -338,10 +342,10 @@ describe('exporting', () => {
     const fetchMock = global.fetch as jest.Mock
     const base = fetchMock.getMockImplementation()!
     fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).endsWith('?action=export')) return respond(422, { error: 'The draft cannot be exported: broken' })
+      if (String(input).includes('?action=export')) return respond(422, { error: 'The draft cannot be exported: broken' })
       return base(input, init)
     })
-    fireEvent.click(screen.getByRole('button', { name: /^Export/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Export theme' }))
     await waitFor(() => expect(toast.showErrorToast).toHaveBeenCalledWith('The draft cannot be exported: broken'))
     expect(downloads.triggerDownload).not.toHaveBeenCalled()
   })

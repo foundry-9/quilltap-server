@@ -12,6 +12,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { decompress } from 'wawoff2';
+import sharp from 'sharp';
+import { execFileSync } from 'node:child_process';
 
 const mockThemesDir = path.join(os.tmpdir(), `qtap-test-draft-ops-themes-${process.pid}-${Date.now()}`);
 
@@ -40,6 +42,7 @@ import {
   DraftManifestUnreadableError,
   DraftOperationRefusedError,
   DraftUploadRefusedError,
+  exportDraft,
   installDraft,
   readDraft,
   readUploadedFont,
@@ -375,5 +378,73 @@ describe('install', () => {
     await expect(fs.access(path.join(installed, 'README.md'))).resolves.toBeUndefined();
     await expect(fs.access(path.join(installed, 'fonts/OFL.txt'))).resolves.toBeUndefined();
     expect(fake.get('leanest', 'images/spare.png')).toBeDefined();
+  });
+});
+
+describe('export as a theme', () => {
+  /** Unzip an export into a fresh directory and list its files. */
+  async function unpack(bytes: Buffer): Promise<{ dir: string; files: string[] }> {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-test-theme-export-'));
+    const archive = path.join(dir, 'theme.qtap-theme');
+    await fs.writeFile(archive, bytes);
+    const out = path.join(dir, 'out');
+    await fs.mkdir(out);
+    execFileSync('unzip', ['-q', archive, '-d', out]);
+    const files: string[] = [];
+    const walk = async (rel: string) => {
+      for (const e of await fs.readdir(path.join(out, rel), { withFileTypes: true })) {
+        const child = rel ? `${rel}/${e.name}` : e.name;
+        if (e.isDirectory()) await walk(child);
+        else files.push(child);
+      }
+    };
+    await walk('');
+    return { dir: out, files: files.sort() };
+  }
+
+  it('ships what an install ships: WOFF2, WebP, nothing unused, no originals', async () => {
+    const draft = await seed('shipping');
+    await addDraftFont('shipping', { revision: draft.manifestRevision, file: { fileName: 'Lora-BoldItalic.ttf', bytes: loraTtf }, license: 'OFL-1.1' });
+    const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#a83' } }).png().toBuffer();
+    fake.put('Themes/shipping/images/grain.png', png);
+    fake.put('Themes/shipping/theme.json', JSON.stringify({ ...manifestOf('shipping'), previewImage: 'images/grain.png' }));
+    fake.put('Themes/shipping/images/spare.png', PNG);
+    const before = new Map([...fake.files.entries()].filter(([k]) => k.startsWith('Themes/shipping/')).map(([k, v]) => [k, v.data]));
+
+    const exported = await exportDraft('shipping', 'theme');
+    expect(exported.fileName).toBe(`shipping-${manifestOf('shipping').version}.qtap-theme`);
+    expect(exported.leftOut).toEqual(['images/spare.png']);
+
+    const { dir, files } = await unpack(exported.bytes);
+    expect(files).toContain('fonts/Lora-BoldItalic.woff2');
+    expect(files).toContain('images/grain.webp');
+    expect(files).not.toContain('fonts/Lora-BoldItalic.ttf');
+    expect(files).not.toContain('images/grain.png');
+    expect(files).not.toContain('images/spare.png');
+    expect(files).toContain('fonts/OFL.txt');
+    const manifest = JSON.parse(await fs.readFile(path.join(dir, 'theme.json'), 'utf-8'));
+    expect(manifest.fonts[1].src).toBe('fonts/Lora-BoldItalic.woff2');
+    expect(manifest.previewImage).toBe('images/grain.webp');
+    expect(sniffFontFormat(await fs.readFile(path.join(dir, 'fonts/Lora-BoldItalic.woff2')))).toBe('woff2');
+
+    // The draft is untouched, version included, and nothing was installed.
+    const after = new Map([...fake.files.entries()].filter(([k]) => k.startsWith('Themes/shipping/')).map(([k, v]) => [k, v.data]));
+    expect(after).toEqual(before);
+    await expect(fs.access(path.join(mockThemesDir, 'shipping'))).rejects.toThrow();
+    await fs.rm(path.dirname(dir), { recursive: true, force: true });
+  });
+
+  it('a draft export keeps everything, under a -draft name', async () => {
+    const draft = await seed('keeping');
+    await addDraftFont('keeping', { revision: draft.manifestRevision, file: { fileName: 'Lora-BoldItalic.ttf', bytes: loraTtf }, license: 'OFL-1.1' });
+    fake.put('Themes/keeping/images/spare.png', PNG);
+    const exported = await exportDraft('keeping', 'draft');
+    expect(exported.fileName).toBe(`keeping-${manifestOf('keeping').version}-draft.qtap-theme`);
+    expect(exported.leftOut).toEqual([]);
+    const { dir, files } = await unpack(exported.bytes);
+    expect(files).toContain('fonts/Lora-BoldItalic.ttf');
+    expect(files).toContain('images/spare.png');
+    expect(files).not.toContain('fonts/Lora-BoldItalic.woff2');
+    await fs.rm(path.dirname(dir), { recursive: true, force: true });
   });
 });

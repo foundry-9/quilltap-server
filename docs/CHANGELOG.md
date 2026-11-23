@@ -4,13 +4,15 @@
 
 ### 4.14-dev
 
-#### Feature: export a theme draft from the Atelier
+#### Feature: export a theme or its draft from the Atelier
 
-- The Atelier had no way to get a draft out as a file; the only route was to install it and export the installed copy from Appearance, which converts images to WebP, fonts to WOFF2 and drops unused files
-- New `GET /api/v1/theme-drafts/[id]?action=export` (`exportDraft`, `lib/themes/drafts/service.ts`): packs every draft file as stored into a `.qtap-theme` named `<id>-<version>.qtap-theme`. Nothing is converted or left out and the draft's version is not bumped, so importing the file gives back the same draft
-- Refused with `422 { errors }` (`DraftNotExportableError`) while the draft has validation errors; the packed archive is also checked with `validateThemeBundle`
-- Editor: an Export button beside Install, disabled while the draft has errors; downloads through `triggerDownload`, so the Electron shell gets its save dialog
-- Help: `theme-editor.md` (new "Exporting a draft" section), `making-a-theme.md`. Also `API.md`
+- The Atelier had no way to get a draft out as a file; the only route was to install it and export the installed copy from Appearance
+- New `GET /api/v1/theme-drafts/[id]?action=export&form=theme|draft` (`exportDraft`, `lib/themes/drafts/service.ts`). Neither form installs anything or bumps the draft's version
+- `form=theme`: the installable build, unused fonts and images left out, images as WebP, TTF/OTF fonts as WOFF2, named `<id>-<version>.qtap-theme`. Install and this export share one build step (`writeBuiltDraft`, split out of `installDraft`)
+- `form=draft` (default): every draft file as stored, named `<id>-<version>-draft.qtap-theme`; importing it gives back the same draft
+- Refused with `422 { errors }` (`DraftNotExportableError`) while the draft has validation errors or a file will not convert; the packed archive is also checked with `validateThemeBundle`
+- Editor: Export theme and Export draft buttons beside Install, disabled while the draft has errors; downloads through `triggerDownload`, so the Electron shell gets its save dialog
+- Help: `theme-editor.md` (new "Exporting" section), `making-a-theme.md`. Also `API.md`
 
 #### Feature: home page rebuilt as bands
 

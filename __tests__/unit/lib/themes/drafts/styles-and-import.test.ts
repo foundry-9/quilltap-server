@@ -435,7 +435,7 @@ describe('export', () => {
     const before = draftFiles('round-trip');
 
     const exported = await exportDraft('round-trip');
-    expect(exported.fileName).toBe('round-trip-0.3.0.qtap-theme');
+    expect(exported.fileName).toBe('round-trip-0.3.0-draft.qtap-theme');
 
     const archive = path.join(work, exported.fileName);
     await fs.writeFile(archive, exported.bytes);
