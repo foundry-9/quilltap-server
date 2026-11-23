@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 4.14-dev
+### 4.14.0
 
 #### Docs: release checklist adds a fresh-instance dogfood step
 
