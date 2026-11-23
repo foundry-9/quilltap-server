@@ -37,7 +37,7 @@ export const PAGE_TOKENS: readonly TokenDef[] = [
     group: 'page',
     label: "Text selection background",
     description: "The ::selection rule in _base.css. A theme's own unlayered ::selection rule still wins.",
-    default: "hsl(225 55% 48% / 0.18)",
+    default: "hsl(225 65% 50% / 0.40)",
     visibility: 'standard',
   },
   {

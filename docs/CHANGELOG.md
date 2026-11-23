@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Fix: selected text and Novel composer colours were too faint
+
+- The default theme's `--qt-selection-bg` was 18% alpha, barely distinguishable from unselected text; it is now `hsl(225 65% 50% / 0.40)`. The six bundled themes' selection tints were raised to 42%
+- Prose-mode composer preview: narration was a mix of foreground and `--color-primary`, which is the foreground itself in Earl Grey and nearly so in the light modes of Art Deco, Great Estate and Old School, so narration and dialogue looked the same. `--qt-composer-narration-fg` is now 40% foreground + 60% `--color-info`, and `--qt-composer-narration-bg` a 12% `--color-info` tint (was 7% primary). Narration now differs from dialogue by ΔE 25+ in every bundled theme and mode, at 6.6:1 or better against the input
+- A selected `((aside))` in the composer vanished in light themes: `::selection` always sets the text colour over a custom highlight, so the selection's dark ink sat on the aside's dark out-of-character background. `PunctuationLintPlugin` now lifts the `qt-composer-ooc` paint from whatever the selection covers (`subtractRange`, re-run on `selectionchange` without re-linting), so a selected aside reads as ordinary selected text and gets its colours back when the selection moves
+- Theme snapshot fixtures and the theme tokens schema regenerated
+
 #### Feature: Brahma reads a conversation's live state
 
 - `@Brahma` answered "what does Riya have equipped right now?" from her `Inventory/` object file, whose `equippedByDefault` is only an arrival default, and said nothing was equipped while the chat's equipped set still held it. It also had no way to know which conversation "now" meant

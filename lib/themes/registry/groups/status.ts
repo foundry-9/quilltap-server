@@ -161,7 +161,7 @@ export const STATUS_TOKENS: readonly TokenDef[] = [
     group: 'status',
     label: "Composer narration text colour",
     description: "Prose mode composer preview: narration, and ((out of character)) asides",
-    default: "color-mix(in srgb, var(--color-foreground) 65%, var(--color-primary))",
+    default: "color-mix(in srgb, var(--color-foreground) 40%, var(--color-info))",
     visibility: 'advanced',
   },
   {
@@ -170,7 +170,7 @@ export const STATUS_TOKENS: readonly TokenDef[] = [
     type: 'color',
     group: 'status',
     label: "Composer narration background",
-    default: "color-mix(in srgb, var(--color-primary) 7%, transparent)",
+    default: "color-mix(in srgb, var(--color-info) 12%, transparent)",
     visibility: 'advanced',
   },
   {

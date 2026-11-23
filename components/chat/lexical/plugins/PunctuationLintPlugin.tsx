@@ -312,6 +312,66 @@ function paint(editor: LexicalEditor, warnings: boolean, proseMode: boolean): Pa
 }
 
 // ---------------------------------------------------------------------------
+// Selection — the aside steps aside
+// ---------------------------------------------------------------------------
+
+/** Order two DOM points: negative when `a` is before `b`, 0 when equal. */
+function comparePoints(aNode: Node, aOffset: number, bNode: Node, bOffset: number): number {
+  const at = document.createRange()
+  at.setStart(aNode, aOffset)
+  return -at.comparePoint(bNode, bOffset)
+}
+
+/**
+ * `range` with `cut` removed: zero, one or two ranges. Used to keep the
+ * out-of-character paint off selected text.
+ */
+export function subtractRange(range: Range, cut: Range): Range[] {
+  const cutStartBeforeEnd =
+    comparePoints(cut.startContainer, cut.startOffset, range.endContainer, range.endOffset) < 0
+  const cutEndAfterStart =
+    comparePoints(cut.endContainer, cut.endOffset, range.startContainer, range.startOffset) > 0
+  if (!cutStartBeforeEnd || !cutEndAfterStart) return [range]
+
+  const pieces: Range[] = []
+  if (comparePoints(range.startContainer, range.startOffset, cut.startContainer, cut.startOffset) < 0) {
+    const head = document.createRange()
+    head.setStart(range.startContainer, range.startOffset)
+    head.setEnd(cut.startContainer, cut.startOffset)
+    pieces.push(head)
+  }
+  if (comparePoints(cut.endContainer, cut.endOffset, range.endContainer, range.endOffset) < 0) {
+    const tail = document.createRange()
+    tail.setStart(cut.endContainer, cut.endOffset)
+    tail.setEnd(range.endContainer, range.endOffset)
+    pieces.push(tail)
+  }
+  return pieces
+}
+
+/**
+ * The painting as it should show while `selection` is held. `::selection`
+ * always sets the text colour over a custom highlight, so a selected aside
+ * keeps its dark out-of-character background under the selection's ink — the
+ * text vanishes in a light theme. Where the selection covers an aside, the
+ * aside's paint is lifted and the text reads as any other selected text.
+ */
+function clipToSelection(painting: Painting, selection: Selection | null): Painting {
+  const ooc = painting.ranges[OOC_HIGHLIGHT_NAME]
+  if (!ooc?.length || !selection || selection.rangeCount === 0 || selection.isCollapsed) return painting
+  const cut = selection.getRangeAt(0)
+  const clipped = ooc.flatMap((range) => {
+    try {
+      return subtractRange(range, cut)
+    } catch {
+      // A range from another root (or a node since removed) cannot be compared.
+      return [range]
+    }
+  })
+  return { ...painting, ranges: { ...painting.ranges, [OOC_HIGHLIGHT_NAME]: clipped } }
+}
+
+// ---------------------------------------------------------------------------
 // Hover explanation
 // ---------------------------------------------------------------------------
 
@@ -354,15 +414,22 @@ export function PunctuationLintPlugin({ proseMode = false }: PunctuationLintPlug
     // Without the CSS Custom Highlight API there is nothing to paint with.
     if (!highlightsSupported()) return
 
+    let painting = EMPTY_PAINTING
+    const publish = () => publishRanges(owner, clipToSelection(painting, document.getSelection()))
+
     const refresh = () => {
-      const painting = paint(editor, enabled, proseMode)
+      painting = paint(editor, enabled, proseMode)
       paintedRef.current = painting.explained
-      publishRanges(owner, painting)
+      publish()
     }
 
     refresh()
     const unregister = editor.registerUpdateListener(refresh)
+    // A selection can change without an editor update (a drag, select-all
+    // before Lexical reconciles); only the clipping needs redoing, not the lint.
+    document.addEventListener('selectionchange', publish)
     return () => {
+      document.removeEventListener('selectionchange', publish)
       unregister()
       paintedRef.current = []
       publishRanges(owner, EMPTY_PAINTING)

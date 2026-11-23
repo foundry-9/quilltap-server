@@ -96,8 +96,8 @@
   --qt-punctuation-no-dialogue-underline: var(--color-warning);
 
   /* Prose mode composer preview: narration, and ((out of character)) asides */
-  --qt-composer-narration-fg: color-mix(in srgb, var(--color-foreground) 65%, var(--color-primary));
-  --qt-composer-narration-bg: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  --qt-composer-narration-fg: color-mix(in srgb, var(--color-foreground) 40%, var(--color-info));
+  --qt-composer-narration-bg: color-mix(in srgb, var(--color-info) 12%, transparent);
   --qt-composer-ooc-fg: var(--qt-rp-ooc-color);
   --qt-composer-ooc-bg: var(--qt-rp-ooc-bg);
 
@@ -208,7 +208,7 @@
   --qt-color-scheme: normal;
 
   /* The ::selection rule in _base.css. A theme's own unlayered ::selection rule still wins. */
-  --qt-selection-bg: hsl(225 55% 48% / 0.18);
+  --qt-selection-bg: hsl(225 65% 50% / 0.40);
   --qt-selection-fg: var(--color-foreground);
 
   /* scrollbar-width on the root: auto, thin or none. */

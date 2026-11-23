@@ -6268,7 +6268,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Composer narration background — color, group status — default: color-mix(in srgb, var(--color-primary) 7%, transparent)"
+          "description": "Composer narration background — color, group status — default: color-mix(in srgb, var(--color-info) 12%, transparent)"
         },
         "--qt-composer-narration-fg": {
           "anyOf": [
@@ -6294,7 +6294,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Composer narration text colour — color, group status — default: color-mix(in srgb, var(--color-foreground) 65%, var(--color-primary))"
+          "description": "Composer narration text colour — color, group status — default: color-mix(in srgb, var(--color-foreground) 40%, var(--color-info))"
         },
         "--qt-composer-ooc-bg": {
           "anyOf": [
@@ -11910,7 +11910,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "Text selection background — color, group page — default: hsl(225 55% 48% / 0.18)"
+          "description": "Text selection background — color, group page — default: hsl(225 65% 50% / 0.40)"
         },
         "--qt-selection-fg": {
           "anyOf": [
