@@ -126,6 +126,7 @@
 - The release notes, `help/navigation.md` and the shell contract's status name quilltap-shell 4.2.7 as the shell that builds its menu bar from the navigation listing; 4.2.7 is now the recommended shell
 - The release notes now cover characters reading and editing their own memories, the `search` double-send fix and Brahma's cold-memory note
 - The release notes now cover the rebuilt home page, the Emphasis and Quiet roleplay styles, the selection and Novel composer contrast fix, `lookup_chat_state`, the scene-state "as told" fix and the latest dependency versions; the hook count is corrected to 232 and the roleplay spans to six
+- The release notes now cover exporting a theme or its draft from the Atelier, exporting a character from Summon From Lore, the rewritten Lorian and Riya, and Reset Built-in Characters keeping their ids; the drafts-and-exports lines in the Atelier section and Upgrading now point at the Atelier's export
 
 #### Fix: Claude through OpenRouter (or any gateway) failed every multi-character turn
 
