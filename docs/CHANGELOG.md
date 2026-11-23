@@ -4,6 +4,12 @@
 
 ### 4.14-dev
 
+#### Feature: export a character from Summon From Lore
+
+- The AI import wizard (Aurora's Summon From Lore, and the Salon's Summon from Lore in Add Character) could only import its result. The review step now has Export as .qtap beside Import Character, and again on the success screen
+- The wizard's result is already a complete `QuilltapExport`; `exportCharacter` (`useAIImport`) downloads it as single-JSON `.qtap` through `triggerDownload`, named from the character (`qtapFilenameStem`). The importer reads that shape as it does NDJSON, so the file imports anywhere. No server change
+- Help: `ai-character-import.md`, `chat-participants.md`
+
 #### Feature: export a theme or its draft from the Atelier
 
 - The Atelier had no way to get a draft out as a file; the only route was to install it and export the installed copy from Appearance

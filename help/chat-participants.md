@@ -314,7 +314,7 @@ Every field you complete is set down faithfully — Scenario and Physical Descri
 
 #### Summoning from Lore
 
-When the soul you want is already implied by your notes, click **Summon from Lore** to open the summoning apparatus. Upload lore files or paste text, choose a connection profile for the conjuration, and let the wizard draw out a fully-formed character. The summoned character is added to your library and preselected in the picker, where you finish as you would for any other arrival.
+When the soul you want is already implied by your notes, click **Summon from Lore** to open the summoning apparatus. Upload lore files or paste text, choose a connection profile for the conjuration, and let the wizard draw out a fully-formed character. The summoned character is added to your library and preselected in the picker, where you finish as you would for any other arrival. Should you prefer to keep the conjuration in your pocket rather than seat it, **Export as .qtap** on the review page saves the character to a file without importing them.
 
 A single summoning produces a single soul; should the lore yield more than one (or none at all), the apparatus will say so and leave the picker untouched — repair to **Aurora** to sort out a crowded conjuration.
 

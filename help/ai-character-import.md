@@ -72,9 +72,10 @@ Review the generated character before importing:
 - **Generated Content** — Which fields were successfully generated and which had issues
 - **Content Counts** — Number of memories, system prompts, wardrobe items and outfits, and chat messages generated
 
-Three actions are available:
+Four actions are available:
 
 - **Import Character** — Imports the character into Quilltap immediately
+- **Export as .qtap** — Saves the freshly conjured soul to a `.qtap` file instead, without admitting them to your library. The file carries everything the wizard drew up (memories, prompts, wardrobe and example chat included) and may be brought in later through the ordinary import, here or on another instance entirely. The button lingers on the success page as well, should you wish to keep a copy of someone you have already let in.
 - **Add More & Regenerate** — Go back to Step 1 with existing material preserved, add new sources, and re-run generation. Only failed or missing steps re-run.
 - **Start Over** — Clear everything and begin fresh
 
