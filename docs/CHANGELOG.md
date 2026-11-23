@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Test: flaky theme-draft export temp-directory check
+
+- `export › removes its temporary directory whatever happens` (`styles-and-import.test.ts`) diffed the shared `os.tmpdir()` before and after `exportDraft`. `operations.test.ts` also exports, in another Jest worker, and its short-lived `qtap-theme-draft-export-*` directory was sometimes caught between the two listings, failing CI intermittently
+- The test now spies on `fs.mkdtemp`, records the one directory its own export made, and checks that path is gone. No app change
+
 #### Fix: Reset Built-in Characters kept neither character's id
 
 - The reset rewrote the seed bundle's character ids to the existing ones, then imported without `preserveIds`, so the importer minted new ids anyway. Chats and links that named the old Lorian or Riya were left pointing at rows that no longer existed

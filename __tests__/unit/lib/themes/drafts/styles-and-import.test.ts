@@ -466,11 +466,24 @@ describe('export', () => {
   });
 
   it('removes its temporary directory whatever happens', async () => {
-    const prefix = 'qtap-theme-draft-export-';
-    const before = new Set((await fs.readdir(os.tmpdir())).filter((n) => n.startsWith(prefix)));
-    await seed('tidy');
-    await exportDraft('tidy');
-    const after = (await fs.readdir(os.tmpdir())).filter((n) => n.startsWith(prefix) && !before.has(n));
-    expect(after).toEqual([]);
+    // Watch the directory this export makes rather than diffing os.tmpdir():
+    // other Jest workers (operations.test.ts) export at the same time and
+    // leave their own short-lived qtap-theme-draft-export-* directories there.
+    const prefix = path.join(os.tmpdir(), 'qtap-theme-draft-export-');
+    const realMkdtemp = fs.mkdtemp.bind(fs) as (p: string) => Promise<string>;
+    const made: string[] = [];
+    const spy = jest.spyOn(fs, 'mkdtemp').mockImplementation((async (p: string) => {
+      const dir = await realMkdtemp(p);
+      if (p === prefix) made.push(dir);
+      return dir;
+    }) as typeof fs.mkdtemp);
+    try {
+      await seed('tidy');
+      await exportDraft('tidy');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(made).toHaveLength(1);
+    await expect(fs.access(made[0])).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
