@@ -1,8 +1,8 @@
-# Release Checklist 13 — UI, Look-and-Feel & WCAG Compliance
+# Release Checklist 14 — UI, Look-and-Feel & WCAG Compliance
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 13 of 14):** Take a fresh look at the whole UI — not just this cycle's diff — under every bundled theme in every mode it supports, and make sure it looks deliberate and meets **WCAG 2.2 Level AA**. Item 7 checks that components *use* `qt-*` classes; this item checks what those classes, and the themes behind them, actually *render*.
+**Goal (checklist item 14 of 15):** Take a fresh look at the whole UI — not just this cycle's diff — under every bundled theme in every mode it supports, and make sure it looks deliberate and meets **WCAG 2.2 Level AA**. Item 8 checks that components *use* `qt-*` classes; this item checks what those classes, and the themes behind them, actually *render*.
 
 ## Scope
 

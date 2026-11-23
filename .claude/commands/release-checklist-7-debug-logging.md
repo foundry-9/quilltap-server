@@ -1,8 +1,8 @@
-# Release Checklist 6 — Prune Leftover Debug Logging
+# Release Checklist 7 — Prune Leftover Debug Logging
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 6 of 14):** We always add debug logging to new backend work. Before release, remove the noisy scaffolding logging we no longer need — while keeping the deliberate, appropriately-leveled logs the logging convention calls for.
+**Goal (checklist item 7 of 15):** We always add debug logging to new backend work. Before release, remove the noisy scaffolding logging we no longer need — while keeping the deliberate, appropriately-leveled logs the logging convention calls for.
 
 ## Scope
 

@@ -1,8 +1,8 @@
-# Release Checklist 11 — GitHub Actions (lint / test / build)
+# Release Checklist 12 — GitHub Actions (lint / test / build)
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 11 of 14):** Make sure lint, test, and build are passing in GitHub Actions.
+**Goal (checklist item 12 of 15):** Make sure lint, test, and build are passing in GitHub Actions.
 
 ## Steps
 

@@ -408,23 +408,24 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 
 1. Unless we're implementing an interface or an instance of a generic provider of some kind, we should never directly access the filesystem in this app; we should be using our generic file provider for that
 2. Create unit tests to expand coverage for any new functionality, and test specifically for the bugs that were fixed when we apply bugfixes (to ensure there are no regression issues going forward)
-3. Refactor according to best practices, including:
+3. Dogfood a brand-new instance end to end in the browser — first-run setup, the setup wizard with real API keys, a first chat, memory, character creation, tools, projects, images, backup/restore and a restart — and fix whatever a new user would trip over
+4. Refactor according to best practices, including:
    - respect encapsulation and single source of truth. If a feature requires duplicate code, consider inheritance
    - SRP
    - DRY
    - KISS
    - YAGNI
-4. Ensure that API endpoints adhere to the `/api/v{version}/{entityname}` standard (currently `/api/v1/{entityname}`), with only these non-versioned exceptions: `/api/health`, `/api/plugin-routes/[...path]`, and `/api/themes/*`.
-5. Run a test for dead code and refactor that out. Use `npx knip` if it's helpful. We have a [dead code report](DEAD-CODE-REPORT.md) (in the same directory) and that should be updated.
-6. Ensure that the debug logging we always create for new work has been removed unless we still need it.
-7. Verify that new UI components that were created adhere to the standard of using `qt-*` theme utility classes
-8. As much as possible, plugins should be self-contained or use `plugin-types` and `plugin-utils` to access Quilltap internals; even distributed plugins in `plugins/dist/` should use these, since these plugins are models to independent plugin developers
-9. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
-10. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
-11. Make sure that lint/test/build in Github Actions are working
-12. Verify that documentation, completions, and tooling for the [Quilltap CLI](../../packages/quilltap/) are up-to-date
-13. Take a fresh look at the whole UI and its look-and-feel under every bundled theme, in light and dark mode, and verify it meets WCAG 2.2 Level AA (contrast, keyboard and focus, accessible names, reflow, colour-only cues)
-14. Check the following Markdown files to be sure they are up-to-date:
+5. Ensure that API endpoints adhere to the `/api/v{version}/{entityname}` standard (currently `/api/v1/{entityname}`), with only these non-versioned exceptions: `/api/health`, `/api/plugin-routes/[...path]`, and `/api/themes/*`.
+6. Run a test for dead code and refactor that out. Use `npx knip` if it's helpful. We have a [dead code report](DEAD-CODE-REPORT.md) (in the same directory) and that should be updated.
+7. Ensure that the debug logging we always create for new work has been removed unless we still need it.
+8. Verify that new UI components that were created adhere to the standard of using `qt-*` theme utility classes
+9. As much as possible, plugins should be self-contained or use `plugin-types` and `plugin-utils` to access Quilltap internals; even distributed plugins in `plugins/dist/` should use these, since these plugins are models to independent plugin developers
+10. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
+11. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
+12. Make sure that lint/test/build in Github Actions are working
+13. Verify that documentation, completions, and tooling for the [Quilltap CLI](../../packages/quilltap/) are up-to-date
+14. Take a fresh look at the whole UI and its look-and-feel under every bundled theme, in light and dark mode, and verify it meets WCAG 2.2 Level AA (contrast, keyboard and focus, accessible names, reflow, colour-only cues)
+15. Check the following Markdown files to be sure they are up-to-date:
     - [README](../../README.md)
     - [Changelog](../CHANGELOG.md)
     - [API Documentation](API.md)

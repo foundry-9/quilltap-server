@@ -32,7 +32,7 @@ Then include the standard installation section (copy from the most recent releas
 
 ### Major or minor releases (from `main` branch)
 
-Ask the developer: "Would you like to write the release notes yourself, or shall I draft them in the Quilltap style?" If they want you to write them, review all commits since the previous minor release (`git log rel/X.(Y-1).0..HEAD`) and write substantial release notes in the standard prose style using the procedure in [release-checklist-14-docs](release-checklist-14-docs.md#drafting-release-notes-minor-or-major-release) (normally already drafted while walking the checklist). Include the standard installation section.
+Ask the developer: "Would you like to write the release notes yourself, or shall I draft them in the Quilltap style?" If they want you to write them, review all commits since the previous minor release (`git log rel/X.(Y-1).0..HEAD`) and write substantial release notes in the standard prose style using the procedure in [release-checklist-15-docs](release-checklist-15-docs.md#drafting-release-notes-minor-or-major-release) (normally already drafted while walking the checklist). Include the standard installation section.
 
 ## If current branch is `main`
 

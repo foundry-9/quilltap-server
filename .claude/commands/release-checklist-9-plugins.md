@@ -1,8 +1,8 @@
-# Release Checklist 8 — Plugin Self-Containment
+# Release Checklist 9 — Plugin Self-Containment
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 8 of 14):** Plugins should be self-contained or reach Quilltap internals only through `plugin-types` and `plugin-utils`. Even the distributed plugins in `plugins/dist/` must follow this — they're the reference examples independent plugin developers copy.
+**Goal (checklist item 9 of 15):** Plugins should be self-contained or reach Quilltap internals only through `plugin-types` and `plugin-utils`. Even the distributed plugins in `plugins/dist/` must follow this — they're the reference examples independent plugin developers copy.
 
 ## Steps
 

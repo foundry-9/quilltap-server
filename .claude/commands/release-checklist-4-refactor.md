@@ -1,8 +1,8 @@
-# Release Checklist 3 — Refactor to Best Practices
+# Release Checklist 4 — Refactor to Best Practices
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 3 of 14):** Refactor according to best practices:
+**Goal (checklist item 4 of 15):** Refactor according to best practices:
 
 - Respect **encapsulation** and **single source of truth**. If a feature requires duplicate code, consider inheritance.
 - **SRP** — single responsibility per module/function.

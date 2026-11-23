@@ -1,8 +1,8 @@
-# Release Checklist 14 — Documentation Freshness
+# Release Checklist 15 — Documentation Freshness
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 14 of 14):** Verify these Markdown/doc files are up to date for the release:
+**Goal (checklist item 15 of 15):** Verify these Markdown/doc files are up to date for the release:
 
 - [README](../../README.md)
 - [Changelog](../../docs/CHANGELOG.md)
@@ -23,7 +23,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 2. Walk each file:
    - **README** — features list, version badge, anything user-facing that changed. **This is not a CHANGELOG, this is an indicator of how to use the Github repo, how to install and run the software, and how to develop it, with some attempt to market Quilltap as a potential application for people who want to keep secure roleplayed LLM-based characters and do a variety of real and simulated things with them.** Include direct links to JSON schemas (see below).
    - **CHANGELOG** — every notable change recorded. **Plain American English, no steampunk voice** (CLAUDE.md override). Don't duplicate section headers — append under the existing one.
-   - **API.md** — matches the actual `/api/v1/` routes (ties to checklist item 4).
+   - **API.md** — matches the actual `/api/v1/` routes (ties to checklist item 5).
    - **DEVELOPMENT.md** — dev workflow still accurate. Everything necessary to make changes in this repo and propose them. Links to PRs and Issues in Github.
    - **CLAUDE.md** — any new conventions/chokepoints/glossary entries introduced this cycle.
    - **about/AboutView.tsx** (content; `page.tsx` is a wrapper) — version, credits, feature blurbs. Must be kept up-to-date for version numbers and libraries on which we rely.

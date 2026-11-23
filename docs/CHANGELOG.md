@@ -4,6 +4,11 @@
 
 ### 4.14-dev
 
+#### Docs: release checklist adds a fresh-instance dogfood step
+
+- New `/release-checklist-3-dogfood`: start a brand-new instance in a scratchpad data directory on its own port, walk first-run setup and the setup wizard in the browser with real API keys (entered by the developer), then a first chat, memory, character creation, tools, projects, images, Brahma, a settings sweep, backup and restore into a second fresh instance, and a restart. Findings are fixed with a regression test or reported
+- The old checklist items 3–14 are now 4–15; command files, `DEVELOPMENT.md`'s release list, and references in `CLAUDE.md`, `tag-for-release.md`, `DEAD-CODE-REPORT.md` and two feature specs follow. Earlier CHANGELOG entries keep the numbers they were written with
+
 #### Test: flaky theme-draft export temp-directory check
 
 - `export › removes its temporary directory whatever happens` (`styles-and-import.test.ts`) diffed the shared `os.tmpdir()` before and after `exportDraft`. `operations.test.ts` also exports, in another Jest worker, and its short-lived `qtap-theme-draft-export-*` directory was sometimes caught between the two listings, failing CI intermittently

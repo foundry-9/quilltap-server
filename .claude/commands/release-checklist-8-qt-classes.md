@@ -1,8 +1,8 @@
-# Release Checklist 7 — `qt-*` Theme Utility Classes
+# Release Checklist 8 — `qt-*` Theme Utility Classes
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 7 of 14):** New UI components must use `qt-*` theme utility classes rather than raw Tailwind, so themes can restyle them. Where you'd reach for a new Tailwind class, add a `qt-*` utility and apply that instead.
+**Goal (checklist item 8 of 15):** New UI components must use `qt-*` theme utility classes rather than raw Tailwind, so themes can restyle them. Where you'd reach for a new Tailwind class, add a `qt-*` utility and apply that instead.
 
 ## Scope
 

@@ -82,7 +82,7 @@ A lint script beside `scripts/check-qt-classes.mjs`, wired into `npm run lint`: 
 - `BaseModal` tests for each new prop, for stacking (Escape closes only the topmost; a click inside a child is not outside the parent), and for `busy`.
 - A component test for #171: with Summon from Lore open, a mousedown inside it does not close Add Character.
 - Browser check on V4test in both a workspace tab and a plain route: each migrated dialog opens above the toolbar, traps focus, restores focus on close.
-- `/release-checklist-13-ui` is the full accessibility check; run its dialog section.
+- `/release-checklist-14-ui` is the full accessibility check; run its dialog section.
 - Expected size: 600–800 lines removed; low risk per dialog, which is why the batches are small.
 - CHANGELOG cites `#171`. No help-doc change.
 
@@ -115,7 +115,7 @@ A lint script beside `scripts/check-qt-classes.mjs`, wired into `npm run lint`: 
 
 **Still owed:**
 
-- The browser check of §6 on V4test (workspace tab and plain route: above the toolbar, focus trapped and restored) and `/release-checklist-13-ui`'s dialog section.
+- The browser check of §6 on V4test (workspace tab and plain route: above the toolbar, focus trapped and restored) and `/release-checklist-14-ui`'s dialog section.
 - Shell wishes from the migration, not done: a `maxHeight` prop (five dialogs use `!max-h-[80vh]` / `!max-h-[92vh]`), an arbitrary width (the photo gallery uses `!max-w-[90vw]`), an optional body scroll lock.
 - `FullScreenImageViewer` never takes focus and is not in the stack, so `PhotoGalleryModal` keeps a `closeOnEscape={!childOpen}` guard. Folding the lightboxes into one viewer (the follow-up in the index) should mark it as a stack member.
 - `ItemControlDialogShell`'s `overlayOpen` lock is now redundant with the stack; harmless, left alone.
