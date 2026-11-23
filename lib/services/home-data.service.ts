@@ -2,7 +2,7 @@
  * Home dashboard data service.
  *
  * Single source of truth for the home dashboard payload (recent chats,
- * projects, characters, plus the greeting name and "continue last" chat id).
+ * projects, characters, plus the greeting name).
  * Extracted from `app/page.tsx` so it can feed both the server-rendered `/`
  * route and the client-fetched workspace home tab
  * (`/api/v1/system/home` → `HomeViewContainer`). See
@@ -14,18 +14,27 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { enrichWithDefaultImage } from '@/lib/api/middleware'
 import { enrichChatsForList, cleanEnrichedChats } from '@/lib/services/chat-enrichment.service'
+import { summaryExcerpt } from '@/lib/chat/summary-excerpt'
+import { logger } from '@/lib/logger'
 import type {
   RecentChat,
   HomepageProject,
   HomepageCharacter,
+  HomepageCharacterLatestChat,
 } from '@/components/homepage'
+
+/** Chats sent to the home page: more than it shows, so quick-hide has spares. */
+const RECENT_CHAT_LIMIT = 12
+/** Characters sent to the home page: enough for two rows on a very wide window. */
+const CHARACTER_LIMIT = 48
 
 export interface HomeData {
   displayName: string
-  lastChatId: string | null
   recentChats: RecentChat[]
   projects: HomepageProject[]
   characters: HomepageCharacter[]
+  /** Every character the home page could show, the ones in `characters` included. */
+  characterTotal: number
 }
 
 type Repos = ReturnType<typeof getRepositories>
@@ -58,10 +67,7 @@ export async function getHomeData(
   const cleanedChats = cleanEnrichedChats(enrichedChats)
 
   // Get more chats than we'll display to account for quick-hide filtering
-  const recentEnrichedChats = cleanedChats.slice(0, 12)
-
-  // Get the last chat ID for "Continue Last" button
-  const lastChatId = recentEnrichedChats.length > 0 ? recentEnrichedChats[0].id : null
+  const recentEnrichedChats = cleanedChats.slice(0, RECENT_CHAT_LIMIT)
 
   // Transform enriched chats to the homepage format
   const recentChats: RecentChat[] = recentEnrichedChats.map((chat) => ({
@@ -75,6 +81,10 @@ export async function getHomeData(
     conciergeReason: chat.conciergeReason,
     dangerCategories: chat.dangerCategories,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
+    project: chat.project
+      ? { id: chat.project.id, name: chat.project.name, color: chat.project.color ?? null }
+      : null,
+    summaryExcerpt: summaryExcerpt(chat.contextSummary),
     participants: chat.participants.map((p) => ({
       id: p.id,
       type: p.type,
@@ -186,9 +196,26 @@ export async function getHomeData(
     }
   }
 
+  // Each character's most recently active salon chat, for the portrait's
+  // "resume" link. The enriched list is newest first, so the first hit wins.
+  const latestChatByCharacter = new Map<string, HomepageCharacterLatestChat>()
+  for (const chat of cleanedChats) {
+    const characterTags = chat.participants.flatMap((p) => p.character?.tags ?? [])
+    for (const participant of chat.participants) {
+      const characterId = participant.character?.id
+      if (!characterId || latestChatByCharacter.has(characterId)) continue
+      latestChatByCharacter.set(characterId, {
+        id: chat.id,
+        title: chat.title,
+        characterTags,
+        conciergeState: chat.conciergeState,
+      })
+    }
+  }
+
   // Get AI-controlled characters only (exclude NPCs and user-controlled characters)
-  const sortedCharacters = allCharacters
-    .filter((c) => !c.npc && c.controlledBy !== 'user')
+  const eligibleCharacters = allCharacters.filter((c) => !c.npc && c.controlledBy !== 'user')
+  const sortedCharacters = eligibleCharacters
     .sort((a, b) => {
       if (a.isFavorite !== b.isFavorite) {
         return a.isFavorite ? -1 : 1
@@ -200,7 +227,7 @@ export async function getHomeData(
       }
       return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
     })
-    .slice(0, 24)
+    .slice(0, CHARACTER_LIMIT)
 
   // Add default images to sorted characters
   const characters: HomepageCharacter[] = await Promise.all(
@@ -218,11 +245,25 @@ export async function getHomeData(
         npc: char.npc ?? false,
         chatCount: characterChatCounts.get(char.id) ?? 0,
         defaultConnectionProfileId: char.defaultConnectionProfileId || null,
+        latestChat: latestChatByCharacter.get(char.id) ?? null,
       }
     })
   )
 
   const displayName = user?.name || fallbackName || 'there'
 
-  return { displayName, lastChatId, recentChats, projects, characters }
+  logger.debug('[home-data] built home dashboard payload', {
+    recentChats: recentChats.length,
+    projects: projects.length,
+    characters: characters.length,
+    characterTotal: eligibleCharacters.length,
+  })
+
+  return {
+    displayName,
+    recentChats,
+    projects,
+    characters,
+    characterTotal: eligibleCharacters.length,
+  }
 }

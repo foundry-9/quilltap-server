@@ -4,6 +4,19 @@
 
 ### 4.14-dev
 
+#### Feature: home page rebuilt as bands
+
+- The home page was three equal columns clipped to the viewport: Projects sat half empty, chat titles were cut at about 20 characters, and eight of the character cards fit. It is now a header line and three bands, each as tall as its content; the page scrolls
+- Header: the greeting and the quick actions share one line. "Continue Last" is gone
+- First band: a resume card for the newest chat (story background at size, full title, cast, project, a line from the context summary, one Resume button) beside the six chats before it, in rows wide enough for a two-line title. `ChatsBand` applies quick-hide once, so the resume card is the newest chat still on show; the old button opened the newest chat even when quick-hide was hiding it. One chat takes the whole row; none shows an invitation
+- Second band, "The Company": portraits two rows deep (three on a phone-width pane), favourites starred, the last place a link to everyone else. `CharactersSection` reads the grid's resolved columns instead of estimating card sizes, and no longer depends on the band's height. Clicking a portrait opens the New Chat dialog; hover or keyboard focus opens a card with the title, model badge, a link to the character's latest chat and a link to their page. The card closes on Escape, opens above every row but the last so it never covers a portrait, and is not opened by focus that did not come from the keyboard
+- Third band: projects as tiles in an auto-fill grid. With no projects the band is not rendered
+- The bands answer to the pane's width through a container query on `qt-homepage-grid`, not the window's, so a split workspace stacks them correctly. The full-width overrides for the old grid are removed
+- Home payload (`lib/services/home-data.service.ts`, `GET /api/v1/system/home`): chats gain `project` and `summaryExcerpt` (`lib/chat/summary-excerpt.ts`: first content line of the context summary, Markdown stripped, 240 characters); characters gain `latestChat` with the tags and Concierge state quick-hide asks about; `characterTotal` added; the character cap is 48 (was 24); `lastChatId` removed
+- Home rows no longer carry `hover:qt-bg-muted/50`, a class that never existed; hover is on `qt-homepage-row` in CSS
+- Theme hooks: new `qt-homepage-header`, `qt-homepage-resume-picture`, `qt-homepage-resume-title`, `qt-character-card-popover`, and the `resume` value of `data-section`, each with a specimen. `qt-character-card` is now an unbordered portrait tile. No hook was removed, so the catalogue version stays 2. Regenerated the hooks doc, the styled-by table and the CLI theme engine
+- Help: `homepage.md` rewritten (it described buttons that no longer existed), `quick-hide.md`. Also `API.md`
+
 #### Feature: Emphasis is its own roleplay style
 
 - Roleplay text had no italics that meant only emphasis. Novel set narration in italics, so its `*emphasis*` had to be bold + italic; Standard told models to use bold for stress

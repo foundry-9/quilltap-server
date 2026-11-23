@@ -228,27 +228,28 @@ export const SHELL_SPECIMENS: SpecimenTable = {
   'qt-homepage-container': {
     render: ({ el }) => (
       <div {...el}>
-        <div className="qt-homepage-welcome"><p className="qt-heading-2">Good evening, Specimen.</p></div>
+        <HomeHeader />
+      </div>
+    ),
+  },
+  'qt-homepage-header': {
+    render: ({ el }) => (
+      <div className="qt-homepage-container">
+        <HomeHeader el={el} />
       </div>
     ),
   },
   'qt-homepage-welcome': {
     render: ({ el }) => (
       <div className="qt-homepage-container">
-        <div {...el}>
-          <p className="qt-heading-2">Good evening, Specimen.</p>
-          <p className="qt-text-small">A welcome invented for the gallery.</p>
-        </div>
+        <HomeHeader part="welcome" el={el} />
       </div>
     ),
   },
   'qt-quick-actions': {
     render: ({ el }) => (
       <div className="qt-homepage-container">
-        <div {...el}>
-          <button type="button" className="qt-button qt-button-primary">New chat</button>
-          <button type="button" className="qt-button qt-button-secondary">New character</button>
-        </div>
+        <HomeHeader part="actions" el={el} />
       </div>
     ),
   },
@@ -276,6 +277,8 @@ export const SHELL_SPECIMENS: SpecimenTable = {
       </div>
     ),
   },
+  'qt-homepage-resume-picture': { render: ({ el }) => <ResumeCard part="picture" el={el} /> },
+  'qt-homepage-resume-title': { render: ({ el }) => <ResumeCard part="title" el={el} /> },
   'qt-characters-grid': {
     render: ({ el }) => (
       <div className="qt-homepage-section" data-section="characters">
@@ -294,6 +297,14 @@ export const SHELL_SPECIMENS: SpecimenTable = {
         <CharacterCard name="Miss Specimen" el={el} />
       </div>
     ),
+  },
+  'qt-character-card-popover': {
+    render: ({ el }) => (
+      <div className="qt-characters-grid" style={{ minHeight: '15rem' }}>
+        <CharacterCard name="Miss Specimen" popover={el} />
+      </div>
+    ),
+    note: 'Drawn open; in the app it appears when a portrait is rested on or focused.',
   },
 
   // --- Left rail
@@ -387,11 +398,60 @@ function HomeSection({ section = 'chats', part, el }: { section?: string; part?:
   )
 }
 
-function CharacterCard({ name, el }: { name: string; el?: Record<string, string> & { className: string } }) {
+function HomeHeader({ part, el }: { part?: 'welcome' | 'actions'; el?: Record<string, string> & { className: string } }) {
+  const on = (which: typeof part, fallback: string) => (part === which && el ? el : { className: fallback })
+  return (
+    <div {...(part === undefined && el ? el : { className: 'qt-homepage-header' })}>
+      <div {...on('welcome', 'qt-homepage-welcome')}>
+        <p className="qt-heading-2">Good evening, Specimen.</p>
+      </div>
+      <div {...on('actions', 'qt-quick-actions')}>
+        <button type="button" className="qt-button qt-button-primary">Start a chat</button>
+        <button type="button" className="qt-button qt-button-secondary">New project</button>
+      </div>
+    </div>
+  )
+}
+
+function ResumeCard({ part, el }: { part: 'picture' | 'title'; el: Record<string, string> & { className: string } }) {
+  const on = (which: typeof part, fallback: string) => (part === which ? el : { className: fallback })
+  return (
+    <section className="qt-homepage-section" data-section="resume">
+      <div {...on('picture', 'qt-homepage-resume-picture')}>
+        <span className="qt-text-small qt-text-secondary">A story background would hang here</span>
+      </div>
+      <div className="qt-homepage-resume-body">
+        <div className="qt-homepage-section-header">
+          <p className="qt-homepage-section-title">Where you left off</p>
+          <span className="qt-meta">an hour ago</span>
+        </div>
+        <div className="qt-homepage-section-content">
+          <p {...on('title', 'qt-homepage-resume-title')}>A Conversation Invented for the Gallery, With a Title Long Enough to Wrap</p>
+          <p className="qt-card-subtitle">Miss Specimen + Mr Example</p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CharacterCard({ name, el, popover }: { name: string; el?: Record<string, string> & { className: string }; popover?: Record<string, string> & { className: string } }) {
   return (
     <div {...(el ?? { className: 'qt-character-card' })}>
-      <span className="qt-avatar-image inline-flex items-center justify-center w-10 h-10 rounded-full qt-bg-muted">{name.slice(0, 1)}</span>
-      <span className="qt-text-small">{name}</span>
+      <button type="button" className="qt-character-card-button">
+        <span className="qt-character-card-portrait">
+          <span className="qt-avatar-image inline-flex items-center justify-center w-20 h-20 rounded-full qt-bg-muted">{name.slice(0, 1)}</span>
+        </span>
+        <span className="qt-character-card-name">{name}</span>
+      </button>
+      {popover && (
+        <div {...popover} data-align="start" data-placement="below">
+          <p className="qt-card-title">{name}</p>
+          <p className="qt-card-subtitle italic">A title invented for the gallery</p>
+          <div className="qt-character-card-links">
+            <a href="#specimen" className="qt-character-card-link">Open {name}&rsquo;s page</a>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

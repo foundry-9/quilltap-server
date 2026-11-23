@@ -8144,7 +8144,36 @@ Returns deployment information. This endpoint is unauthenticated as it is needed
 
 #### `GET /api/v1/system/home`
 
-Returns the home dashboard payload for the client-rendered workspace home tab: greeting name, the "continue last" chat id, recent chats, active projects, and characters. The server-rendered `/` route computes the same payload directly through the shared `home-data` service, so this endpoint exists for the workspace tab to fetch it client-side. See `docs/developer/features/complete/tabbed-workspace.md`.
+Returns the home dashboard payload for the workspace home tab, built by the shared `home-data` service (`lib/services/home-data.service.ts`). See `docs/developer/features/complete/tabbed-workspace.md`.
+
+```jsonc
+{
+  "displayName": "Charlie",
+  // Newest first, up to 12 (more than the page shows, so quick-hide has spares). Salon chats only.
+  "recentChats": [{
+    "id": "…", "title": "…", "lastMessageAt": "…",
+    "storyBackgroundUrl": "…",                        // the picture's path, or null
+    "project": { "id": "…", "name": "The Estate", "color": null },   // or null
+    "summaryExcerpt": "One plain line cut from the context summary.", // or null
+    "conciergeState": "moderated",
+    "participants": [ /* id, isActive, displayOrder, character { id, name, defaultImage, tags } */ ],
+    "_count": { "messages": 93 }
+  }],
+  // Most recently active first, up to 12.
+  "projects": [{ "id": "…", "name": "…", "description": null, "color": null, "chatCount": 5, "lastActivity": "…" }],
+  // Favourites, then most used; up to 48. NPCs and user-controlled characters are left out.
+  "characters": [{
+    "id": "…", "name": "…", "title": null, "isFavorite": true, "chatCount": 12, "tags": [],
+    "defaultImage": { "id": "…", "filepath": "…" }, "defaultConnectionProfileId": null,
+    // The newest salon chat the character sits in, with what quick-hide asks about that chat. Or null.
+    "latestChat": { "id": "…", "title": "…", "characterTags": [], "conciergeState": "moderated" }
+  }],
+  // Every character the page could show, the ones in `characters` included.
+  "characterTotal": 43
+}
+```
+
+There is no "continue last" chat id: the resume card is the newest chat quick-hide allows, which only the client can decide. `summaryExcerpt` is `summaryExcerpt()` (`lib/chat/summary-excerpt.ts`) over `contextSummary`; the summary itself is not sent.
 
 **Response**: `200 OK` — the home dashboard data object.
 

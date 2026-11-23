@@ -54,10 +54,10 @@ export function HomeViewContainer() {
   return (
     <HomeView
       displayName={data.displayName}
-      lastChatId={data.lastChatId}
       recentChats={data.recentChats}
       projects={data.projects}
       characters={data.characters}
+      characterTotal={data.characterTotal}
       backgroundUrl={dynamicUrl}
     />
   )

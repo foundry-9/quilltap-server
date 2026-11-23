@@ -123,11 +123,14 @@ describe('getHomeData — greeting', () => {
 
     expect(data).toMatchObject({
       displayName: 'there',
-      lastChatId: null,
       recentChats: [],
       projects: [],
       characters: [],
+      characterTotal: 0,
     })
+    // "Continue last" left with the button: the resume card picks the newest
+    // chat quick-hide allows, which only the client can know.
+    expect(data).not.toHaveProperty('lastChatId')
     const spies = repos as never as Record<string, Record<string, jest.Mock>>
     expect(spies.users.findById).not.toHaveBeenCalled()
     expect(spies.chats.findByUserId).not.toHaveBeenCalled()
@@ -152,22 +155,53 @@ describe('getHomeData — recent chats', () => {
     expect(data.recentChats.map((c) => c.id)).toEqual(['salon', 'untyped'])
   })
 
-  it('caps the list at 12 and points "continue last" at the first of them', async () => {
+  it('caps the list at 12, newest first', async () => {
     const chats = Array.from({ length: 20 }, (_, i) => chat({ id: `c${i}` }))
 
     const data = await getHomeData(makeRepos({ chats }), { userId: 'u1' })
 
     expect(data.recentChats).toHaveLength(12)
-    expect(data.lastChatId).toBe('c0')
+    expect(data.recentChats[0].id).toBe('c0')
   })
 
-  it('reports a null last chat when nothing survives filtering', async () => {
+  it('reports no recent chats when nothing survives filtering', async () => {
     const data = await getHomeData(makeRepos({ chats: [chat({ chatType: 'help' })] }), {
       userId: 'u1',
     })
 
-    expect(data.lastChatId).toBeNull()
     expect(data.recentChats).toEqual([])
+  })
+
+  it('names the project a chat is filed under, and null for a loose one', async () => {
+    const repos = makeRepos({
+      chats: [
+        chat({ id: 'filed', project: { id: 'proj-1', name: 'The Estate', color: '#336699' } }),
+        chat({ id: 'loose', project: null }),
+      ],
+    })
+
+    const [filed, loose] = (await getHomeData(repos, { userId: 'u1' })).recentChats
+
+    expect(filed.project).toEqual({ id: 'proj-1', name: 'The Estate', color: '#336699' })
+    expect(loose.project).toBeNull()
+  })
+
+  it('carries one plain line of the context summary, never the summary itself', async () => {
+    const repos = makeRepos({
+      chats: [
+        chat({
+          id: 'told',
+          contextSummary: '## Active threads\n- The bridge is **down**; the ford is the only crossing.\n- A second thread.',
+        }),
+        chat({ id: 'untold', contextSummary: null }),
+      ],
+    })
+
+    const [told, untold] = (await getHomeData(repos, { userId: 'u1' })).recentChats
+
+    expect(told.summaryExcerpt).toBe('The bridge is down; the ford is the only crossing.')
+    expect(told).not.toHaveProperty('contextSummary')
+    expect(untold.summaryExcerpt).toBeNull()
   })
 
   it('flattens participants and story background into the card shape', async () => {
@@ -397,14 +431,117 @@ describe('getHomeData — characters', () => {
     expect(data.characters[0].chatCount).toBe(2)
   })
 
-  it('caps the character list at 24', async () => {
-    const characters = Array.from({ length: 30 }, (_, i) =>
+  it('caps the character list at 48 and still counts everyone', async () => {
+    const characters = Array.from({ length: 60 }, (_, i) =>
       character({ id: `c${i}`, name: `Name${String(i).padStart(2, '0')}` })
     )
 
     const data = await getHomeData(makeRepos({ characters }), { userId: 'u1' })
 
-    expect(data.characters).toHaveLength(24)
+    expect(data.characters).toHaveLength(48)
+    expect(data.characterTotal).toBe(60)
+  })
+
+  it('counts only the characters the home page could show', async () => {
+    const repos = makeRepos({
+      characters: [
+        character({ id: 'ai', name: 'Ai' }),
+        character({ id: 'npc', name: 'Npc', npc: true }),
+        character({ id: 'mine', name: 'Mine', controlledBy: 'user' }),
+      ],
+    })
+
+    expect((await getHomeData(repos, { userId: 'u1' })).characterTotal).toBe(1)
+  })
+
+  describe('latest chat', () => {
+    const seat = (characterId: string, tags: string[] = []) => ({
+      id: `p-${characterId}`,
+      type: 'CHARACTER',
+      isActive: true,
+      displayOrder: 0,
+      characterId,
+      character: { id: characterId, name: characterId, tags },
+    })
+
+    it('is the newest chat the character sits in', async () => {
+      // The enriched list arrives newest first.
+      const repos = makeRepos({
+        characters: [character({ id: 'aster' })],
+        chats: [
+          chat({ id: 'newest', title: 'Newest', participants: [seat('aster')] }),
+          chat({ id: 'older', title: 'Older', participants: [seat('aster')] }),
+        ],
+      })
+
+      const [c] = (await getHomeData(repos, { userId: 'u1' })).characters
+
+      expect(c.latestChat).toMatchObject({ id: 'newest', title: 'Newest' })
+    })
+
+    it('is null for a character who has never been in one', async () => {
+      const repos = makeRepos({
+        characters: [character({ id: 'aster' }), character({ id: 'wallflower', name: 'Wallflower' })],
+        chats: [chat({ id: 'c1', participants: [seat('aster')] })],
+      })
+
+      const data = await getHomeData(repos, { userId: 'u1' })
+
+      expect(data.characters.find((c) => c.id === 'wallflower')?.latestChat).toBeNull()
+    })
+
+    it('reaches past the twelve recent chats', async () => {
+      const chats = [
+        ...Array.from({ length: 15 }, (_, i) => chat({ id: `busy-${i}`, participants: [seat('aster')] })),
+        chat({ id: 'long-ago', title: 'Long Ago', participants: [seat('aster'), seat('recluse')] }),
+      ]
+      const repos = makeRepos({
+        characters: [character({ id: 'aster' }), character({ id: 'recluse', name: 'Recluse' })],
+        chats,
+      })
+
+      const data = await getHomeData(repos, { userId: 'u1' })
+
+      expect(data.characters.find((c) => c.id === 'recluse')?.latestChat).toMatchObject({ id: 'long-ago' })
+    })
+
+    it('skips help chats', async () => {
+      const repos = makeRepos({
+        characters: [character({ id: 'aster' })],
+        chats: [
+          chat({ id: 'help', chatType: 'help', participants: [seat('aster')] }),
+          chat({ id: 'salon', participants: [seat('aster')] }),
+        ],
+      })
+
+      const [c] = (await getHomeData(repos, { userId: 'u1' })).characters
+
+      expect(c.latestChat).toMatchObject({ id: 'salon' })
+    })
+
+    // The client asks quick-hide about the chat, not the character: a hidden
+    // co-star or an Unmoderated chat must not surface through a visible face.
+    it('carries what quick-hide asks about the chat', async () => {
+      const repos = makeRepos({
+        characters: [character({ id: 'aster' })],
+        chats: [
+          chat({
+            id: 'c1',
+            conciergeState: 'unmoderated',
+            participants: [seat('aster', ['tag-a']), seat('costar', ['tag-b'])],
+          }),
+        ],
+      })
+
+      const [c] = (await getHomeData(repos, { userId: 'u1' })).characters
+
+      expect(c.latestChat).toEqual({
+        id: 'c1',
+        title: 'A Chat',
+        characterTags: ['tag-a', 'tag-b'],
+        conciergeState: 'unmoderated',
+      })
+    })
   })
 
   it('resolves the default image through the shared enricher', async () => {

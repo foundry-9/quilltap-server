@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE — DO NOT EDIT BY HAND. Source: lib/themes/hooks/. Regenerate with `npm run generate:theme-hooks-doc`. -->
 
-The structural hooks a theme's custom CSS may rely on — catalogue version **2**, 228 hooks. Anything not listed here is an implementation detail and may change without notice. The catalogue lives in `lib/themes/hooks/`; `npm run lint` fails when the markup and the catalogue drift apart.
+The structural hooks a theme's custom CSS may rely on — catalogue version **2**, 232 hooks. Anything not listed here is an implementation detail and may change without notice. The catalogue lives in `lib/themes/hooks/`; `npm run lint` fails when the markup and the catalogue drift apart.
 
 ## Conventions
 
@@ -55,18 +55,22 @@ The catalogue version rises by one in any change that removes a hook, removes a 
 | Class | What it is | Inside | Variants | States |
 |---|---|---|---|---|
 | `.qt-homepage-container` | Home page. A picture a theme paints behind the home page should stand aside while `qt-homepage-backdrop` is set: a dynamic-backgrounds collage is showing instead. |  |  | `.qt-homepage-backdrop` — A dynamic background is showing |
-| `.qt-homepage-welcome` | Welcome block. The greeting at the top of the home page. | `.qt-homepage-container` |  |  |
-| `.qt-quick-actions` | Quick actions row | `.qt-homepage-container` |  |  |
-| `.qt-homepage-grid` | Home card grid. Holds the three home cards side by side. | `.qt-homepage-container` |  |  |
-| `.qt-homepage-section` | Home page card | `.qt-homepage-grid` | `data-section`: `chats`, `projects`, `characters` |  |
-| `.qt-homepage-section-header` | Home card header | `.qt-homepage-section` |  |  |
-| `.qt-homepage-section-title` | Home card title | `.qt-homepage-section-header` |  |  |
-| `.qt-homepage-section-link` | Home card "View all" link | `.qt-homepage-section-header` |  |  |
-| `.qt-homepage-section-content` | Home card body | `.qt-homepage-section` |  |  |
-| `.qt-homepage-row` | Home list row. One chat or project in the Recent Chats or Active Projects card. | `.qt-homepage-section-content` |  |  |
-| `.qt-homepage-empty` | Home card empty state | `.qt-homepage-section-content` |  |  |
-| `.qt-characters-grid` | Favourite characters grid | `.qt-homepage-section-content` |  |  |
-| `.qt-character-card` | Favourite character card | `.qt-characters-grid` |  |  |
+| `.qt-homepage-header` | Home header line. The greeting and the quick actions, side by side at the top of the home page. | `.qt-homepage-container` |  |  |
+| `.qt-homepage-welcome` | Welcome block. The greeting at the top of the home page. | `.qt-homepage-header` |  |  |
+| `.qt-quick-actions` | Quick actions row | `.qt-homepage-header` |  |  |
+| `.qt-homepage-grid` | Home band stack. Holds the home bands, one under another. | `.qt-homepage-container` |  |  |
+| `.qt-homepage-section` | Home page band | `.qt-homepage-grid` | `data-section`: `resume`, `chats`, `characters`, `projects` |  |
+| `.qt-homepage-section-header` | Home band header | `.qt-homepage-section` |  |  |
+| `.qt-homepage-section-title` | Home band title | `.qt-homepage-section-header` |  |  |
+| `.qt-homepage-section-link` | Home band "View all" link | `.qt-homepage-section-header` |  |  |
+| `.qt-homepage-section-content` | Home band body | `.qt-homepage-section` |  |  |
+| `.qt-homepage-row` | Home list row. One conversation in the recent list, or one project tile on the projects shelf. | `.qt-homepage-section-content` |  |  |
+| `.qt-homepage-empty` | Home band empty state | `.qt-homepage-section-content` |  |  |
+| `.qt-homepage-resume-picture` | Resume card picture. The story background of the conversation last touched (or its cast, when it has none), across the top of the resume card. | `.qt-homepage-section` |  |  |
+| `.qt-homepage-resume-title` | Resume card title. The title, in full, of the conversation last touched. | `.qt-homepage-section-content` |  |  |
+| `.qt-characters-grid` | Character portrait wall | `.qt-homepage-section-content` |  |  |
+| `.qt-character-card` | Character portrait. One character on the home page: a portrait and a name. The last place on the wall, for everyone who did not fit, wears it too. | `.qt-characters-grid` |  |  |
+| `.qt-character-card-popover` | Character portrait card. The card that opens on a portrait at rest or in focus: title, model, the latest conversation and the character's page. | `.qt-character-card` |  |  |
 
 ## Left rail
 

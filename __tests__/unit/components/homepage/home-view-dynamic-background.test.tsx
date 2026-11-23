@@ -22,7 +22,7 @@ import { HOME_HOOKS } from '@/lib/themes/hooks/home'
 jest.mock('@/components/homepage', () => ({
   WelcomeSection: () => <div data-testid="welcome" />,
   QuickActionsRow: () => <div data-testid="quick-actions" />,
-  RecentChatsSection: () => <div data-testid="recent-chats" />,
+  ChatsBand: () => <div data-testid="chats-band" />,
   ProjectsSection: () => <div data-testid="projects" />,
   CharactersSection: () => <div data-testid="characters" />,
 }))
@@ -44,10 +44,10 @@ jest.mock('@/components/workspace/workspace-backdrop', () => ({
 
 const baseProps = {
   displayName: 'Bertie',
-  lastChatId: null,
   recentChats: [],
   projects: [],
   characters: [],
+  characterTotal: 0,
 }
 
 function homeRoot(container: HTMLElement): HTMLElement {

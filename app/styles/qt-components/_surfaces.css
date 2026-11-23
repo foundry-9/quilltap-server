@@ -79,22 +79,113 @@
   }
 
   /**
-   * Compact character card for homepage grid
-   * Centered layout with avatar, name, title, provider badge, and action button
+   * Character portrait on the home page's wall: a picture and a name, the
+   * whole of it a button. Not a bordered card - twenty of them sit together.
    */
   .qt-character-card {
-    @apply flex flex-col items-center gap-2 h-full rounded-lg;
-    padding: var(--qt-character-card-padding, 0.75rem);
-    background: var(--qt-card-bg);
-    color: var(--qt-card-fg);
-    border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
-    box-shadow: var(--qt-card-shadow);
-    transition: var(--qt-card-transition);
+    @apply relative rounded-lg;
+    min-width: 0;
   }
 
-  .qt-character-card:hover {
-    border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
-    box-shadow: var(--qt-card-shadow-hover);
+  .qt-character-card-button,
+  .qt-character-card[data-kind="all"] {
+    @apply flex flex-col items-center gap-1.5 w-full rounded-lg;
+    padding: var(--qt-character-card-padding, 0.5rem) 0.25rem;
+    color: var(--color-foreground);
+    transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .qt-character-card-button:hover,
+  .qt-character-card[data-kind="all"]:hover {
+    background: color-mix(in srgb, var(--color-muted) 60%, transparent);
+  }
+
+  .qt-character-card-portrait {
+    @apply relative inline-flex;
+  }
+
+  /* The star a favourite wears on the corner of the portrait */
+  .qt-character-card-favorite {
+    @apply absolute inline-flex items-center justify-center rounded-full;
+    top: -0.25rem;
+    right: -0.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    background: var(--qt-card-bg, var(--color-card));
+    color: var(--color-warning);
+    border: 1px solid var(--color-border);
+  }
+
+  .qt-character-card-name {
+    @apply block w-full truncate text-center text-sm font-medium;
+  }
+
+  /* The last place on the wall: everyone who did not fit. It stands as tall
+     as its neighbours whatever shape the portraits are, name on their line. */
+  .qt-character-card[data-kind="all"] {
+    height: 100%;
+    justify-content: space-between;
+  }
+
+  .qt-character-card-more {
+    @apply inline-flex items-center justify-center rounded-full;
+    width: 5rem;
+    height: 5rem;
+    margin-block: auto;
+    color: var(--color-muted-foreground);
+    border: 1px dashed var(--color-border);
+  }
+
+  /**
+   * The card that opens on a portrait at rest or in focus: title, model, the
+   * way back into the latest conversation, the character's page. It touches
+   * the portrait (no gap) so the pointer can cross into it, and opens away
+   * from the wall - above every row but the last - so it never covers a
+   * portrait.
+   */
+  .qt-character-card-popover {
+    @apply absolute flex flex-col items-start gap-1.5 p-3 rounded-lg text-left;
+    z-index: 20;
+    width: 16rem;
+    max-width: 80vw;
+    background: var(--color-popover);
+    color: var(--color-popover-foreground);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--qt-dialog-shadow, 0 10px 25px hsl(225 18% 10% / 0.15), 0 4px 10px hsl(225 18% 10% / 0.08));
+  }
+
+  .qt-character-card-popover[data-placement="below"] {
+    top: 100%;
+  }
+
+  .qt-character-card-popover[data-placement="above"] {
+    bottom: 100%;
+  }
+
+  .qt-character-card-popover[data-align="start"] {
+    left: 0;
+  }
+
+  .qt-character-card-popover[data-align="end"] {
+    right: 0;
+  }
+
+  .qt-character-card-links {
+    @apply flex flex-col gap-0.5 w-full mt-1 pt-2;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .qt-character-card-link {
+    @apply flex items-start gap-2 px-2 py-1.5 rounded-md text-sm;
+    transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .qt-character-card-link > .qt-icon {
+    margin-top: 0.2rem;
+  }
+
+  .qt-character-card-link:hover {
+    background: var(--color-muted);
   }
 
   /**

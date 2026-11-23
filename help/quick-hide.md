@@ -77,8 +77,8 @@ When you hide a tag, it affects visibility in several places:
 
 ### Homepage
 
-- Favorite characters with hidden tags are hidden from the "Favorite Characters" section
-- Recent chats involving only hidden-tag characters are filtered
+- Characters with hidden tags are taken down from "The Company", and a character's card no longer offers to resume a conversation that is itself hidden
+- Hidden conversations leave both "Recent Conversations" and the "Where You Left Off" card, which falls back to the newest conversation still on show
 - The homepage shows only your active, visible content
 
 ### Quick Actions

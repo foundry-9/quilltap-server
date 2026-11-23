@@ -3,7 +3,8 @@
 /**
  * RecentChatItem
  *
- * Individual chat item for the homepage recent chats list.
+ * One conversation in the home page's recent list: its picture, its title in
+ * full (two lines if it needs them), and a line saying who, where and when.
  */
 
 import Link from 'next/link'
@@ -13,6 +14,7 @@ import { useWorkspaceLink } from '@/components/workspace/useWorkspaceLink'
 import type { RecentChat } from './types'
 import { chatActivityAt } from '@/lib/chat/chat-activity'
 import { ConciergeMark } from '@/components/chat/ConciergeMark'
+import { activeCast, castNames } from './chat-cast'
 
 interface RecentChatItemProps {
   chat: RecentChat
@@ -24,45 +26,31 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
   // navigation on the legacy home route.
   const openInWorkspace = useWorkspaceLink()
   const href = `/salon/${chat.id}`
-  // Get active character participants for avatar display
-  const characters = chat.participants
-    .filter(p => p.type === 'CHARACTER' && p.isActive && p.character)
-    .sort((a, b) => a.displayOrder - b.displayOrder)
-    .map(p => p.character!)
-
-  // Format character names
-  const characterNames = characters.length === 0
-    ? 'Unknown'
-    : characters.length === 1
-      ? characters[0].name
-      : characters.length === 2
-        ? `${characters[0].name} + ${characters[1].name}`
-        : characters.map(c => c.name).join(' + ')
+  const cast = activeCast(chat)
 
   return (
     <Link
       href={href}
       onClick={(e) => openInWorkspace(href, e)}
-      className="qt-homepage-row flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted/50 transition-colors"
+      className="qt-homepage-row"
     >
       {/* Story background thumbnail (preferred) or Avatar stack */}
       {chat.storyBackgroundUrl ? (
-        <div className="flex-shrink-0 w-16 h-11 rounded-md overflow-hidden qt-bg-muted -my-1">
-          <img
-            src={chat.storyBackgroundUrl}
-            alt=""
-            className="w-full h-full object-cover"
-          />
+        <div className="qt-homepage-row-picture">
+          <img src={chat.storyBackgroundUrl} alt="" />
         </div>
       ) : (
-        <AvatarStack entities={characters} size="sm" maxDisplay={2} />
+        <div className="qt-homepage-row-picture" data-kind="avatars">
+          <AvatarStack entities={cast} size="sm" maxDisplay={2} />
+        </div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="qt-card-title truncate">
+        <p className="qt-card-title qt-homepage-row-title">
           {chat.title}
         </p>
         <p className="qt-card-subtitle truncate">
-          {characterNames}
+          {castNames(cast)}
+          {chat.project && <> &middot; {chat.project.name}</>}
         </p>
       </div>
       <div className="flex flex-col items-end shrink-0">
