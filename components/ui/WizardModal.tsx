@@ -111,7 +111,7 @@ export function WizardModal({
       className="w-[90vw]"
       bodyClassName={bodyClassName}
       footer={footer === undefined ? standardFooter : footer}
-      footerClassName={`qt-dialog-footer flex gap-3 flex-shrink-0 ${onBack || done ? 'justify-between' : ''}`}
+      footerClassName={`qt-dialog-footer-default flex gap-3 flex-shrink-0 ${onBack || done ? 'justify-between' : ''}`}
     >
       {children}
     </BaseModal>

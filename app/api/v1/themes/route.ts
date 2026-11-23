@@ -1,7 +1,7 @@
 /**
  * Theme API Routes (v1)
  *
- * GET  /api/v1/themes - Get list of available themes
+ * GET  /api/v1/themes - Get list of available themes (and those refused)
  * GET  /api/v1/themes?action=registry - Browse registry themes
  * GET  /api/v1/themes?action=registry-sources - List configured registries
  * GET  /api/v1/themes?action=updates - Check for available theme updates
@@ -13,7 +13,8 @@
  * POST /api/v1/themes?action=install-registry - Install a theme from a registry
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { successResponse, badRequest, serverError, created } from '@/lib/api/responses';
 import { dispatchAction } from '@/lib/api/middleware/actions';
@@ -24,6 +25,48 @@ const getThemeRegistry = () => import('@/lib/themes/theme-registry');
 const getBundleLoader = () => import('@/lib/themes/bundle-loader');
 const getRegistryClient = () => import('@/lib/themes/registry-client');
 
+
+// ============================================================================
+// Request bodies
+// ============================================================================
+
+const requiredString = (field: string) =>
+  z.string({ error: `Missing or invalid "${field}" field` }).min(1, `Missing or invalid "${field}" field`);
+
+const urlString = requiredString('url').refine((value) => URL.canParse(value), 'Invalid URL format');
+
+const installFromUrlSchema = z.object({ url: urlString });
+const addSourceSchema = z.object({
+  url: urlString,
+  name: z.string().optional(),
+  publicKey: z.string().optional(),
+});
+const removeSourceSchema = z.object({ name: requiredString('name') });
+const installRegistrySchema = z.object({
+  themeId: requiredString('themeId'),
+  registryUrl: requiredString('registryUrl'),
+});
+
+/**
+ * Read an action's JSON body against its schema. The answer is the parsed
+ * body, or the 400 to return: unparseable JSON, or the first thing wrong
+ * with it, in the schema's own words.
+ */
+async function readBody<T>(request: NextRequest, schema: z.ZodType<T>): Promise<T | NextResponse> {
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? 'Invalid request body';
+    logger.debug('Refused a theme action body', { context: 'themes-api', message });
+    return badRequest(message);
+  }
+  return parsed.data;
+}
 
 async function ensureInitialized() {
   const { isPluginSystemInitialized, initializePlugins } = await getPluginInit();
@@ -68,15 +111,33 @@ export async function GET(request: NextRequest) {
 async function handleGetThemes() {
   const { themeRegistry } = await getThemeRegistry();
   const themes = themeRegistry.getThemeList();
+  const refused = themeRegistry.getRefused();
   const stats = themeRegistry.getStats();
+  logger.debug('Listing themes', { context: 'themes-api', count: themes.length, refused: refused.length });
   return successResponse({
     themes,
+    refused,
     stats: {
       total: stats.total,
       withDarkMode: stats.withDarkMode,
-      withCssOverrides: stats.withCssOverrides,
+      refused: stats.refused,
     },
   });
+}
+
+/**
+ * Register a freshly installed bundle with the running registry, so it can be
+ * worn without a restart.
+ */
+async function hotLoadInstalledTheme(themeId: string | undefined): Promise<void> {
+  const { hotLoadInstalledTheme: hotLoad } = await import('@/lib/themes/hot-load');
+  await hotLoad(themeId);
+}
+
+/** The 400 for a failed install: an earlier theme's refusal speaks for itself. */
+function installFailure(prefix: string, result: { error?: string; refused?: { message: string } }) {
+  if (result.refused) return badRequest(result.refused.message);
+  return badRequest(`${prefix}: ${result.error}`);
 }
 
 /**
@@ -166,11 +227,17 @@ async function handleInstall(request: NextRequest) {
   const fs = await import('node:fs/promises');
   const path = await import('node:path');
   const os = await import('node:os');
-  const { installThemeBundle, loadInstalledBundles } = await getBundleLoader();
+  const { installThemeBundle } = await getBundleLoader();
 
   // Write to temp file
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-upload-'));
-  const tempFile = path.join(tempDir, file.name || 'theme.qtap-theme');
+  // The upload's filename is caller-supplied: only its last segment is kept
+  // (the validator names an id-less bundle after it), never a path.
+  const uploadName = path.basename(file.name || '');
+  const tempFile = path.join(
+    tempDir,
+    uploadName && uploadName !== '.' && uploadName !== '..' ? uploadName : 'theme.qtap-theme'
+  );
 
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -179,16 +246,10 @@ async function handleInstall(request: NextRequest) {
     const result = await installThemeBundle(tempFile);
 
     if (!result.success) {
-      return badRequest(`Theme installation failed: ${result.error}`);
+      return installFailure('Theme installation failed', result);
     }
 
-    // Hot-load the newly installed theme into the registry
-    const { themeRegistry } = await getThemeRegistry();
-    const bundles = await loadInstalledBundles();
-    const newBundle = bundles.find(b => b.manifest.id === result.themeId);
-    if (newBundle) {
-      themeRegistry.registerBundleTheme(newBundle);
-    }
+    await hotLoadInstalledTheme(result.themeId);
 
     return created({
       message: 'Theme installed successfully',
@@ -205,38 +266,17 @@ async function handleInstall(request: NextRequest) {
  * Accepts { url: string } in JSON body
  */
 async function handleInstallFromUrl(request: NextRequest) {
-  let body: { url?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return badRequest('Invalid JSON body');
-  }
+  const body = await readBody(request, installFromUrlSchema);
+  if (body instanceof NextResponse) return body;
 
-  if (!body.url || typeof body.url !== 'string') {
-    return badRequest('Missing or invalid "url" field');
-  }
-
-  // Basic URL validation
-  try {
-    new URL(body.url);
-  } catch {
-    return badRequest('Invalid URL format');
-  }
-
-  const { installThemeBundleFromUrl, loadInstalledBundles } = await getBundleLoader();
+  const { installThemeBundleFromUrl } = await getBundleLoader();
   const result = await installThemeBundleFromUrl(body.url);
 
   if (!result.success) {
-    return badRequest(`Theme installation failed: ${result.error}`);
+    return installFailure('Theme installation failed', result);
   }
 
-  // Hot-load the newly installed theme into the registry
-  const { themeRegistry } = await getThemeRegistry();
-  const bundles = await loadInstalledBundles();
-  const newBundle = bundles.find(b => b.manifest.id === result.themeId);
-  if (newBundle) {
-    themeRegistry.registerBundleTheme(newBundle);
-  }
+  await hotLoadInstalledTheme(result.themeId);
 
   return created({
     message: 'Theme installed successfully',
@@ -254,22 +294,8 @@ async function handleInstallFromUrl(request: NextRequest) {
  * Add a new registry source
  */
 async function handleAddSource(request: NextRequest) {
-  let body: { name?: string; url?: string; publicKey?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return badRequest('Invalid JSON body');
-  }
-
-  if (!body.url || typeof body.url !== 'string') {
-    return badRequest('Missing or invalid "url" field');
-  }
-
-  try {
-    new URL(body.url);
-  } catch {
-    return badRequest('Invalid URL format');
-  }
+  const body = await readBody(request, addSourceSchema);
+  if (body instanceof NextResponse) return body;
 
   try {
     const { addSource } = await getRegistryClient();
@@ -293,16 +319,8 @@ async function handleAddSource(request: NextRequest) {
  * Remove a registry source by name
  */
 async function handleRemoveSource(request: NextRequest) {
-  let body: { name?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return badRequest('Invalid JSON body');
-  }
-
-  if (!body.name || typeof body.name !== 'string') {
-    return badRequest('Missing or invalid "name" field');
-  }
+  const body = await readBody(request, removeSourceSchema);
+  if (body instanceof NextResponse) return body;
 
   const { removeSource } = await getRegistryClient();
   const removed = await removeSource(body.name);
@@ -331,35 +349,17 @@ async function handleRefresh() {
  * Install a theme from a registry
  */
 async function handleInstallFromRegistryAction(request: NextRequest) {
-  let body: { themeId?: string; registryUrl?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return badRequest('Invalid JSON body');
-  }
-
-  if (!body.themeId || typeof body.themeId !== 'string') {
-    return badRequest('Missing or invalid "themeId" field');
-  }
-  if (!body.registryUrl || typeof body.registryUrl !== 'string') {
-    return badRequest('Missing or invalid "registryUrl" field');
-  }
+  const body = await readBody(request, installRegistrySchema);
+  if (body instanceof NextResponse) return body;
 
   const { installFromRegistry } = await getRegistryClient();
   const result = await installFromRegistry(body.themeId, body.registryUrl);
 
   if (!result.success) {
-    return badRequest(`Registry installation failed: ${result.error}`);
+    return installFailure('Registry installation failed', result);
   }
 
-  // Hot-load the newly installed theme into the registry
-  const { themeRegistry } = await getThemeRegistry();
-  const { loadInstalledBundles } = await getBundleLoader();
-  const bundles = await loadInstalledBundles();
-  const newBundle = bundles.find(b => b.manifest.id === result.themeId);
-  if (newBundle) {
-    themeRegistry.registerBundleTheme(newBundle);
-  }
+  await hotLoadInstalledTheme(result.themeId);
 
   return created({
     message: 'Theme installed from registry',

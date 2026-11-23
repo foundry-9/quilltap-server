@@ -2,11 +2,12 @@
  * Regression test for the SHA-256 recorded by the story-background generation
  * handler.
  *
- * Same invariant as the character-avatar handler: the handler must hash the
- * *post-WebP-conversion* buffer (the bytes it actually persists), not the raw
- * provider bytes, and pass that exact digest to repos.files.create. The two
- * handlers carry an identical inline hashing line; this locks story-background's
- * copy independently so a change to one can't silently desync the other.
+ * The row must carry the hash of the bytes the store kept — the bridge's
+ * reported `sha256` — not the raw provider bytes, and not the handler's own
+ * WebP conversion either: the bridge may re-encode again, and a row hashing
+ * bytes that exist nowhere matches no vault copy (the stale-chat sweep deleted
+ * a default avatar that way). `createGeneratedFileRow` reads the hash from
+ * `StoredImageBytes`, so no handler can pass another.
  *
  * The handler is driven with NO participant characters and NO recent messages so
  * the appearance-resolution and scene-derivation branches collapse to nulls,
@@ -76,6 +77,9 @@ const CHAT_ID = 'chat-1'
 
 const RAW_PROVIDER_BYTES = Buffer.from('raw png bytes from provider')
 const CONVERTED_WEBP_BYTES = Buffer.from('converted webp bytes — different from raw')
+// What the bridge reports having kept: it may re-encode after the handler's
+// own conversion, so this differs from either buffer's hash.
+const STORED_SHA = 'b'.repeat(64)
 
 const filesCreate = jest.fn()
 
@@ -182,12 +186,12 @@ beforeEach(() => {
     relativePath: 'generated/story.webp',
     storedMimeType: 'image/webp',
     sizeBytes: CONVERTED_WEBP_BYTES.length,
-    sha256: 'unused-bridge-sha',
+    sha256: STORED_SHA,
   } as any)
 })
 
 describe('story-background handler — sha256 of stored bytes', () => {
-  it('records the sha256 of the converted (stored) buffer, not the raw provider bytes', async () => {
+  it('records the sha256 the store reported, not the raw or handler-converted bytes', async () => {
     await handleStoryBackgroundGeneration(makeJob())
 
     expect(filesCreate).toHaveBeenCalledTimes(1)
@@ -196,13 +200,14 @@ describe('story-background handler — sha256 of stored bytes', () => {
     const expectedConverted = createHash('sha256').update(new Uint8Array(CONVERTED_WEBP_BYTES)).digest('hex')
     const rawHash = createHash('sha256').update(new Uint8Array(RAW_PROVIDER_BYTES)).digest('hex')
 
-    expect(arg.sha256).toBe(expectedConverted)
+    expect(arg.sha256).toBe(STORED_SHA)
+    expect(arg.sha256).not.toBe(expectedConverted)
     expect(arg.sha256).not.toBe(rawHash)
     expect(arg.source).toBe('GENERATED')
     expect(arg.category).toBe('IMAGE')
   })
 
-  it('hands the converted bytes (matching the recorded hash) to the Lantern mount writer', async () => {
+  it('hands the converted bytes to the Lantern mount writer', async () => {
     await handleStoryBackgroundGeneration(makeJob())
 
     expect(mockWriteLantern).toHaveBeenCalledTimes(1)

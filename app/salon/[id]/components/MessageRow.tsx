@@ -33,6 +33,7 @@ import { isLanternBackgroundRefusal, type ConciergeRetryHandlers } from '../conc
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+import type { SalonRowRole } from '@/lib/themes/hooks/salon'
 
 const TERMINAL_SESSION_ID_RE = /<!--\s*terminalSessionId:([0-9a-f-]+)\s*-->/i
 
@@ -40,6 +41,17 @@ function extractTerminalSessionId(content: string | null | undefined): string | 
   if (!content) return null
   const m = content.match(TERMINAL_SESSION_ID_RE)
   return m ? m[1] : null
+}
+
+/**
+ * The `data-role` a message row carries: who, in kind, wrote it. Staff
+ * announcements are `staff` whatever their stored role; never an id.
+ */
+function messageRowRole(message: Pick<Message, 'role' | 'systemSender'>): SalonRowRole {
+  if (message.systemSender) return 'staff'
+  if (message.role === 'USER') return 'user'
+  if (message.role === 'TOOL') return 'tool'
+  return 'assistant'
 }
 
 interface MessageRowProps {
@@ -245,6 +257,13 @@ function MessageRowInner({
     messageRowClasses.push('qt-chat-message-row-assistant')
   }
   if (isFactBand) messageRowClasses.push('qt-chat-established-fact-row')
+  // Theme hooks (lib/themes/hooks/salon.ts): the class above says user or
+  // not; data-role tells a Staff announcement and a tool row from a
+  // character's line, and data-staff names the Staff member who posted it.
+  const rowHookAttributes = {
+    'data-role': messageRowRole(message),
+    'data-staff': message.systemSender ?? undefined,
+  }
 
   // "Not Dangerous" overrides a flag; only flags still standing blur or
   // collapse the message. The chips themselves stay (struck through) as the
@@ -288,6 +307,7 @@ function MessageRowInner({
         data-message-id={message.id}
         key={message.id}
         className={messageRowClasses.concat(['qt-chat-message-row-courier']).join(' ')}
+        {...rowHookAttributes}
       >
         {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && (
           <MessageDesktopAvatar
@@ -319,7 +339,7 @@ function MessageRowInner({
     // The chip itself owns the id/data-message-id scroll anchor, so the wrapper
     // omits them to avoid a duplicate id.
     return (
-      <div key={message.id} className={messageRowClasses.join(' ')}>
+      <div key={message.id} className={messageRowClasses.join(' ')} {...rowHookAttributes}>
         <AnnouncementChip
           message={message}
           chatId={chatId}
@@ -337,6 +357,7 @@ function MessageRowInner({
       data-message-id={message.id}
       key={message.id}
       className={messageRowClasses.join(' ')}
+      {...rowHookAttributes}
     >
       {/* Desktop avatar - assistant (left side). An established-fact band has
           no speaker, so no avatar. */}

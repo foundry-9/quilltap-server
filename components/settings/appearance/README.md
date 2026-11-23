@@ -14,6 +14,7 @@ appearance/
 │   ├── ThemeCard.tsx              # Individual theme card component (Preview button opens the modal)
 │   ├── ThemePreviewModal.tsx      # Full-page theme preview modal (banner, live preview, gallery, icon sheet)
 │   ├── ThemeBrowser.tsx           # Registry browser for discovering/installing themes
+│   ├── RefusedThemes.tsx          # Themes made for an earlier Quilltap, with Uninstall for bundles
 │   ├── ColorModeSelector.tsx      # Color mode selection component
 │   ├── DebugThemeInfo.tsx         # Development debug info component
 │   ├── ThemePreviewPanel.tsx      # Theme preview panel component
@@ -37,10 +38,10 @@ appearance/
 - Default theme with preview
 - Bundled themes (Art Deco, Earl Grey, Great Estate, Madman's Box, Old School, Rains)
 - User-installed bundle themes (.qtap-theme format)
-- Legacy plugin-provided themes (deprecated, shown with badge)
+- Refused themes (version 1 bundles, plugin themes) listed by `RefusedThemes` with an explanation and, for bundles, an Uninstall button
 - Live preview of color swatches
 - Dark mode support badges
-- Source badges ("Built-in" / "Bundle" / "Plugin (deprecated)")
+- Source badges ("Built-in" / "Bundle")
 - Install Theme button for uploading .qtap-theme files
 - Uninstall button for user-installed bundle themes
 - Export button for any theme
@@ -59,7 +60,7 @@ appearance/
 - `.svg` overrides use mask mode (tinted by `currentColor`); `.webp` and other non-SVG formats use image mode (full color as authored)
 - `brand` is always image mode regardless of extension
 - Overrides are injected into the same `<style>` block as tokens — no reload, live theme-switch applies them instantly
-- Canonical icon names and the override recipe are documented in `docs/developer/ICON_INVENTORY.md` and the `@quilltap/theme-storybook` Icons story
+- Canonical icon names and the override recipe are documented in `docs/developer/ICON_INVENTORY.md` and listed in full in the theme editor's Icons section
 
 ### Theme Browser (Registry)
 - Browse themes from configured remote registries

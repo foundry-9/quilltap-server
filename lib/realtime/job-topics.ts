@@ -150,6 +150,9 @@ const TOPIC_ID_FIELDS: Record<RealtimeTopic, readonly string[]> = {
   // Holds never open in the job child (autonomous runs go ahead as rolled);
   // the registry publishes from the parent.
   customToolInterventions: [],
+  // Themes are installed and hot-loaded in the parent only
+  // (`lib/themes/hot-load.ts`).
+  themes: [],
 };
 
 /**

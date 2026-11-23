@@ -229,7 +229,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
           </div>
 
           {/* Footer */}
-          <div className="qt-dialog-footer">
+          <div className="qt-dialog-footer qt-dialog-footer-default">
             <button
               type="button"
               onClick={handleClose}

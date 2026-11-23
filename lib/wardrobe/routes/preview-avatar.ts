@@ -2,7 +2,7 @@
  * Wardrobe Avatar Preview API v1
  *
  * POST /api/v1/wardrobe?action=preview-avatar (formerly the
- * `/api/v1/wardrobe/preview-avatar` path, which still answers for one release)
+ * `/api/v1/wardrobe/preview-avatar` path, removed in 4.14)
  *
  * Generates a one-off character avatar against an arbitrary equipped-slot
  * snapshot the dialog is showing. The result is saved as a regular generated
@@ -191,7 +191,6 @@ const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestCon
     // label (bug 132): the prompt is the account of record.
     const file = await createGeneratedFileRow(repos, {
       userId: user.id,
-      sha256: decoded.sha256,
       originalFilename: decoded.filename,
       stored: written,
       width: decoded.width,
@@ -203,6 +202,7 @@ const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestCon
         model: failover.profile.modelName,
         revisedPrompt: decoded.revisedPrompt,
       },
+      generationModeration: failover.moderation,
     });
 
     logger.info('[Avatar Preview] Preview saved', {

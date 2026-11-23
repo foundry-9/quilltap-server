@@ -16,14 +16,19 @@
 import { useId, useState, type ReactNode } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { useAnchorReveal } from '@/hooks/useAnchorReveal'
+import type { CharacterSectionAnchor } from '@/lib/themes/hooks/character'
 
 export interface SectionCardProps {
   title: string
   description?: ReactNode
   actions?: ReactNode
   children: ReactNode
-  /** Anchor id, so a stat link can scroll to this card. */
-  anchor?: string
+  /**
+   * Anchor id, so a stat link can scroll to this card; also written as
+   * `data-section` for themes, which is why every card has one. A new one is added to the hook catalogue's
+   * `CHARACTER_SECTION_ANCHORS` (lib/themes/hooks/character.ts) first.
+   */
+  anchor: CharacterSectionAnchor
   /** Start collapsed behind a disclosure heading; the body mounts when opened. */
   collapsible?: boolean
   /** Shown beside a collapsible card's title (a count, say). */
@@ -38,8 +43,8 @@ export function SectionCard({ title, description, actions, children, anchor, col
   const open = !collapsible || expanded
 
   return (
-    <section id={anchor} aria-labelledby={headingId} className="qt-card scroll-mt-48 space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section id={anchor} data-section={anchor} aria-labelledby={headingId} className="qt-card qt-section-card scroll-mt-48 space-y-4">
+      <div className="qt-section-card-header flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h2 id={headingId} className="qt-heading-4 qt-text">
             {collapsible ? (
@@ -64,12 +69,12 @@ export function SectionCard({ title, description, actions, children, anchor, col
       </div>
       {collapsible ? (
         open && (
-          <div id={bodyId} className="space-y-4">
+          <div id={bodyId} className="qt-section-card-body space-y-4">
             {children}
           </div>
         )
       ) : (
-        children
+        <div className="qt-section-card-body space-y-4">{children}</div>
       )}
     </section>
   )

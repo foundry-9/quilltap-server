@@ -24,7 +24,7 @@ Uploading files to Quilltap allows you to:
 
 Upload to your general file library (accessible in any chat):
 
-1. Click **Files** in the sidebar
+1. Open **Library** and choose **Files**
 2. Navigate to desired folder (or stay in root)
 3. Click **Upload** button
 4. Select file(s) from your computer

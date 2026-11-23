@@ -23,6 +23,39 @@ export type FileSource = z.infer<typeof FileSourceEnum>;
 export const FileCategoryEnum = z.enum(['IMAGE', 'DOCUMENT', 'AVATAR', 'ATTACHMENT', 'EXPORT', 'BACKUP', 'ARCHIVE']);
 export type FileCategory = z.infer<typeof FileCategoryEnum>;
 
+/**
+ * How a generated picture's provider came to draw it, as far as moderation
+ * goes. Recorded only on pictures Quilltap generates for avatars, story
+ * backgrounds and the image tool / dialog; null on every other file.
+ *
+ * - `moderated` — an ordinary (moderated) profile drew it.
+ * - `uncensored-profile` — the profile chosen was itself uncensored
+ *   (marked uncensored-compatible, or the Concierge's image desk).
+ * - `uncensored-routed` — the Concierge sent it to an uncensored profile
+ *   before the call (an Unmoderated chat, a pre-screen verdict, a retry).
+ * - `uncensored-failover` — an ordinary profile refused and the Concierge's
+ *   uncensored understudy drew it.
+ *
+ * Derived only by `generationModerationOf`
+ * (`lib/services/dangerous-content/image-failover.ts`).
+ */
+export const GenerationModerationEnum = z.enum([
+  'moderated',
+  'uncensored-profile',
+  'uncensored-routed',
+  'uncensored-failover',
+]);
+export type GenerationModeration = z.infer<typeof GenerationModerationEnum>;
+
+/** The values that mean an uncensored profile drew the picture. */
+export const UNCENSORED_GENERATION_MODERATIONS: readonly GenerationModeration[] =
+  GenerationModerationEnum.options.filter((v) => v !== 'moderated');
+
+/** True when the picture was drawn by an uncensored profile, however it got there. */
+export function isUncensoredGeneration(value: GenerationModeration | null | undefined): boolean {
+  return value != null && value !== 'moderated';
+}
+
 export const FileStatusEnum = z.enum(['ok', 'orphaned']);
 export type FileStatus = z.infer<typeof FileStatusEnum>;
 
@@ -62,6 +95,10 @@ export const FileEntrySchema = z.object({
   // Set only on cached-avatar rows; every other file leaves it null. Derived
   // exclusively by `lib/image-gen/avatar-cache.ts`.
   generationKey: z.string().nullable().optional(),
+  // How the picture's provider came to draw it, moderation-wise. Set only on
+  // generated avatars, story backgrounds and image-tool / dialog pictures;
+  // null everywhere else (uploads, imports, wardrobe/inventory/Atlas pictures).
+  generationModeration: GenerationModerationEnum.nullable().optional(),
   description: z.string().nullable().optional(),  // AI description or user-provided description
 
   // Tags

@@ -166,7 +166,7 @@ function ToolbarSlot({
 }) {
   const [editor] = useLexicalComposerContext()
   return (
-    <div className="qt-doc-toolbar">
+    <div className="qt-doc-toolbar qt-doc-toolbar-sticky">
       <FormattingToolbar
         roleplayTemplateId={roleplayTemplateId}
         editor={editor}
@@ -239,7 +239,7 @@ export default function MarkdownLexicalEditor({
   const composerKey = `${remountKey ?? 'default'}-${sourceLeaveCount}`
 
   const frameClassName = [
-    'rounded-lg border qt-border-default qt-bg-card qt-shadow-sm overflow-hidden',
+    'rounded-lg border qt-border-default qt-bg-card qt-shadow-sm overflow-clip',
     'focus-within:outline-none focus-within:ring-2 focus-within:ring-ring',
     className,
   ]

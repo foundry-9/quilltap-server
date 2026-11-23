@@ -69,7 +69,7 @@ jest.mock('@/lib/brahma-console/writing-context', () => ({
   renderConsoleContextManifest: jest.fn(),
 }))
 
-jest.mock('../turn-attachments', () => ({
+jest.mock('@/lib/services/console-engine/turn-attachments', () => ({
   loadConsoleTurnAttachments: jest.fn(),
   composeAttachmentContent: jest.fn((content: string, payload?: { addressLines: string[] }) =>
     payload ? `${content}\n\n${payload.addressLines.join('\n')}` : content),
@@ -110,7 +110,7 @@ import {
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { resolveBrahmaMaxAgentTurns } from '../turn-budget'
 import { resolveConsoleContext, renderConsoleContextManifest } from '@/lib/brahma-console/writing-context'
-import { loadConsoleTurnAttachments } from '../turn-attachments'
+import { loadConsoleTurnAttachments } from '@/lib/services/console-engine/turn-attachments'
 import { applyImageTransportBudget } from '@/lib/chat/image-transport-budget'
 import { BRAHMA_WRITING_ASSISTANT_BRIEF } from '@/lib/brahma-console/system-prompt-builder'
 import { resolveToolPermit, offeredTools } from '@/lib/tools/effects'
@@ -220,7 +220,7 @@ describe('buildConsoleTurnPlan', () => {
 
   it('is the ordinary Console otherwise', () => {
     const plan = buildConsoleTurnPlan({ consoleMode: null })
-    expect(plan).toMatchObject({ writing: false, docToolsMode: 'full', effectCeiling: undefined, agentKind: 'research' })
+    expect(plan).toMatchObject({ writing: false, docToolsMode: 'full', effectCeiling: undefined, agentKind: 'inquiry' })
   })
 })
 

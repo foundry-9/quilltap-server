@@ -23,6 +23,7 @@
  * Client-safe: no server imports.
  *
  * Design of record: docs/developer/features/complete/character-kind-and-roleplay-defaults.md
+ * (the story section and the recall rule: docs/developer/features/roleplay-character-latitude.md)
  */
 
 export const CHARACTER_KINDS = ['roleplay', 'assistant'] as const
@@ -81,11 +82,19 @@ export interface KindPolicy {
   agentFlavor: AgentModeFlavor
   toolRules: ToolRulesVariant
   generatorDirection: GeneratorDirectionKey
+  /**
+   * Whether the character hears the fixed "Playing your part" section
+   * (`lib/chat/context/story-character-section.ts`) on every turn and as a
+   * Carina answerer: latitude to invent within what is established, to be
+   * played at their worst, and to be preoccupied. A story character does; an
+   * assistant, whose job is accuracy, does not.
+   */
+  storySection: boolean
 }
 
 const KIND_POLICIES: Readonly<Record<CharacterKind, KindPolicy>> = {
-  roleplay: { kind: 'roleplay', agentFlavor: 'in-character', toolRules: 'roleplay', generatorDirection: 'stakes' },
-  assistant: { kind: 'assistant', agentFlavor: 'research', toolRules: 'assistant', generatorDirection: 'task' },
+  roleplay: { kind: 'roleplay', agentFlavor: 'in-character', toolRules: 'roleplay', generatorDirection: 'stakes', storySection: true },
+  assistant: { kind: 'assistant', agentFlavor: 'research', toolRules: 'assistant', generatorDirection: 'task', storySection: false },
 }
 
 /** The behaviour a kind decides. The only place a kind turns into behaviour. */

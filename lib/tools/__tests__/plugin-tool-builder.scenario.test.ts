@@ -142,3 +142,61 @@ describe('buildToolsForProvider — pluginToolAllowlist', () => {
     expect(names).toContain('some_other_plugin_tool')
   })
 })
+
+describe('buildToolsForProvider — the research kit (research-kit.md §5.2)', () => {
+  beforeEach(() => {
+    mockedGetConfiguredToolDefinitions.mockReset()
+    mockedGetConfiguredToolDefinitions.mockResolvedValue([])
+  })
+
+  const base = {
+    agentMode: true,
+    includeWorkspaceTools: false,
+    includePluginTools: false,
+    rng: false,
+    state: false,
+  }
+  const RECORD_TOOLS = [
+    'lookup_character', 'lookup_memories', 'lookup_messages', 'read_messages',
+    'lookup_conversations', 'lookup_group', 'lookup_project', 'lookup_wardrobe', 'lookup_atlas', 'lookup_chat_state',
+  ]
+
+  it("'documents' adds the document tools and withholds doc_grep / doc_list_files", async () => {
+    const names = (await buildToolsForProvider('OPENAI', { ...base, docToolsMode: 'read', researchKit: 'documents' })).map(toolName)
+    expect(names).toEqual(expect.arrayContaining(['find_documents', 'list_documents', 'doc_read_file']))
+    expect(names).not.toContain('doc_grep')
+    expect(names).not.toContain('doc_list_files')
+    for (const record of RECORD_TOOLS) expect(names).not.toContain(record)
+  })
+
+  it("'full' adds the record tools too, and keeps the write tools under docToolsMode 'full'", async () => {
+    const names = (await buildToolsForProvider('OPENAI', { ...base, docToolsMode: 'full', researchKit: 'full' })).map(toolName)
+    expect(names).toEqual(expect.arrayContaining(['find_documents', 'list_documents', ...RECORD_TOOLS]))
+    expect(names).toContain('doc_write_file')
+    expect(names).not.toContain('doc_grep')
+    expect(names).not.toContain('doc_list_files')
+  })
+
+  it('off leaves the slate as it was', async () => {
+    const names = (await buildToolsForProvider('OPENAI', { ...base, docToolsMode: 'read' })).map(toolName)
+    expect(names).toContain('doc_grep')
+    expect(names).not.toContain('find_documents')
+  })
+})
+
+describe('buildToolsForProvider — memoryEdit', () => {
+  beforeEach(() => {
+    mockedGetConfiguredToolDefinitions.mockReset()
+    mockedGetConfiguredToolDefinitions.mockResolvedValue([])
+  })
+
+  const base = { includeWorkspaceTools: false, includePluginTools: false, rng: false, state: false }
+
+  it('offers read_memory and edit_memory together, and only when asked', async () => {
+    const on = (await buildToolsForProvider('OPENAI', { ...base, memoryEdit: true })).map(toolName)
+    expect(on).toEqual(expect.arrayContaining(['read_memory', 'edit_memory']))
+    const off = (await buildToolsForProvider('OPENAI', base)).map(toolName)
+    expect(off).not.toContain('read_memory')
+    expect(off).not.toContain('edit_memory')
+  })
+})

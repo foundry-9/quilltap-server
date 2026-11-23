@@ -12,6 +12,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
 import { isEmbeddingProfileReady } from '@/lib/embedding/profile-readiness';
+import { themeDraftPathTester } from '@/lib/themes/drafts/location';
 
 const logger = createServiceLogger('MountIndex:EmbeddingScheduler');
 
@@ -31,12 +32,19 @@ export async function enqueueEmbeddingJobsForMountPoint(mountPointId: string): P
   // links and (b) erases any vectors a blocked link still carries (e.g. the
   // flag flipped after the doc was already embedded). Build the allow map and
   // the blocked-link set up front from the link rows.
+  //
+  // A theme draft's files (`Themes/` in Quilltap General) are blocked the
+  // same way, whatever their policy says: a theme is not knowledge. The
+  // chunker already declines them; this is the backstop for chunks any
+  // other path made.
   const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
+  const isDraftPath = await themeDraftPathTester(mountPointId);
   const allowEmbedByLink = new Map<string, boolean>();
   const blockedLinkIds: string[] = [];
   for (const link of links) {
-    allowEmbedByLink.set(link.id, link.allowEmbed);
-    if (!link.allowEmbed) blockedLinkIds.push(link.id);
+    const allowed = link.allowEmbed && !isDraftPath(link.relativePath);
+    allowEmbedByLink.set(link.id, allowed);
+    if (!allowed) blockedLinkIds.push(link.id);
   }
 
   // Erase lingering embeddings for blocked links (NULL, don't delete — chunk

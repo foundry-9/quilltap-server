@@ -125,6 +125,18 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     throw new Error(`Chat not found: ${payload.chatId}`);
   }
 
+  // A refresh held for the next turn was asked for under the chat's
+  // auto-avatar setting; if it was switched off while the job waited, honour that.
+  if (payload.awaitingTurn && (!chat.avatarGenerationEnabled || chat.chatType === 'autonomous')) {
+    logger.info('[CharacterAvatar] Held refresh skipped: the chat no longer auto-updates avatars', {
+      context: 'background-jobs.character-avatar',
+      jobId: job.id,
+      chatId: payload.chatId,
+      characterId: payload.characterId,
+    });
+    return;
+  }
+
   // 2. Load character
   const character = await repos.characters.findById(payload.characterId);
   if (!character) {
@@ -463,7 +475,6 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     await createGeneratedFileRow(repos, {
       id: fileId,
       userId: job.userId,
-      sha256: decoded.sha256,
       originalFilename: decoded.filename,
       stored: written,
       width: decoded.width,
@@ -481,6 +492,8 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       // for this character in this outfit. Keyed on the requested profile, not
       // the rerouted one.
       generationKey: cacheKeys.key,
+      // Moderated, uncensored by choice, sent to the desk, or the understudy's.
+      generationModeration: failover.moderation,
     });
 
     logger.info('[CharacterAvatar] Avatar image saved', {

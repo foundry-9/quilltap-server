@@ -1,0 +1,90 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`compiled CSS (3.2, 3.3) emits only what the theme sets 1`] = `
+"/* Theme v2-sample 1.0.0: tokens (generated) */
+
+[data-theme="v2-sample"],
+[data-theme="v2-sample"].light,
+[data-theme="v2-sample"].dark {
+  --p-gold: #C19015;
+  --p-ink: hsl(220 30% 14%);
+  --p-line-thin: 1px;
+  --theme-primary: var(--p-gold);
+  --theme-foreground: var(--p-ink);
+  --theme-background: hsl(40 33% 96%);
+  --theme-font-sans: "Rethink Sans", system-ui, sans-serif;
+  --theme-category-character: hsl(200 60% 45%);
+  --qt-card-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+  --qt-dialog-border-width: var(--p-line-thin);
+  --qt-heading-letter-spacing: 0.04em;
+  --qt-page-background-image: url("/api/themes/assets/bundle:v2-sample/textures/paper.webp?v=1.0.0");
+  --qt-scrollbar-thumb: color-mix(in srgb, var(--p-gold) 60%, transparent);
+  --qt-scrollbar-track: transparent;
+  --qt-color-scheme: light;
+}
+
+[data-theme="v2-sample"].dark {
+  --p-gold: #F4BE34;
+  --p-ink: hsl(40 20% 90%);
+  --theme-background: hsl(30 15% 9%);
+  --theme-category-character: hsl(200 60% 60%);
+  --qt-card-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+  --qt-page-background-image: url("/api/themes/assets/bundle:v2-sample/textures/paper-dark.webp?v=1.0.0");
+  --qt-color-scheme: dark;
+}
+"
+`;
+
+exports[`compiled CSS (3.2, 3.3) scopes the custom CSS 1`] = `
+"@scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) {
+
+:scope {
+  --sample-glow: 0 0 6px var(--p-gold);
+}
+
+:scope.dark .qt-card {
+  border-color: var(--p-gold);
+}
+
+:scope body {
+  letter-spacing: 0.01em;
+}
+
+:scope .qt-homepage-section::before {
+  content: "";
+  background-image: url("/api/themes/assets/bundle:v2-sample/textures/paper.webp?v=1.0.0");
+  opacity: 0.2;
+}
+}
+
+@keyframes v2-sample-glow {
+  from { box-shadow: none; }
+  to { box-shadow: var(--sample-glow); }
+}
+
+@scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) {
+
+:scope .qt-button-primary:hover {
+  animation: v2-sample-glow 1.2s ease-in-out infinite alternate;
+}
+}
+
+@media (max-width: 640px) {
+  @scope ([data-theme="v2-sample"]) to ([data-theme]:not([data-theme="v2-sample"])) {
+  :scope .qt-card {
+    padding: 0.75rem;
+  }
+}
+}
+"
+`;
+
+exports[`compiled CSS (3.2, 3.3) writes font faces and icons with escaped, versioned asset URLs 1`] = `
+"@font-face {
+  font-family: "Rethink Sans";
+  src: url("/api/themes/fonts/bundle:v2-sample/fonts/RethinkSans-latin-ext.woff2?v=1.0.0") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}"
+`;

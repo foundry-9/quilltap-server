@@ -212,6 +212,38 @@ export function isMigrationCompleted(state: MigrationState, migrationId: string)
 }
 
 /**
+ * Record migrations as settled without running them — the runner's baseline
+ * (see `migrations/lib/baseline.ts`). One ledger row per id, written in a
+ * single save, each carrying why it was baselined.
+ */
+export async function recordBaselinedMigrations(
+  state: MigrationState,
+  baselines: Array<{ id: string; reason: string }>
+): Promise<MigrationState> {
+  if (baselines.length === 0) return state;
+
+  const now = new Date().toISOString();
+  const version = getQuilltapVersion();
+  const records: MigrationRecord[] = baselines.map(({ id, reason }) => ({
+    id,
+    completedAt: now,
+    quilltapVersion: version,
+    itemsAffected: 0,
+    message: `Baselined without running: ${reason}`,
+  }));
+
+  const updatedState: MigrationState = {
+    ...state,
+    completedMigrations: [...state.completedMigrations, ...records],
+    lastChecked: now,
+    quilltapVersion: version,
+  };
+
+  await saveMigrationState(updatedState);
+  return updatedState;
+}
+
+/**
  * Record a completed migration
  */
 export async function recordCompletedMigration(

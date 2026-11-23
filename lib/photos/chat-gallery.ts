@@ -39,6 +39,10 @@ import type { ChatEvent, ChatMetadata } from '@/lib/schemas/chat.types';
 import type { Character } from '@/lib/schemas/character.types';
 import type { FileEntry } from '@/lib/schemas/types';
 
+import type { GenerationModeration } from '@/lib/schemas/file.types';
+import { withGenerationModeration } from './uncensored-images';
+import { isAvatarFile, isStoryBackgroundFile } from './generated-image-kind';
+
 const log = logger.child({ module: 'photos.chat-gallery' });
 
 // ============================================================================
@@ -101,6 +105,11 @@ export interface ChatGalleryEntry {
   deletable: boolean;
   /** How many albums already hold these bytes. */
   linkSummary?: PhotoLinkSummary;
+  /**
+   * Set when an uncensored profile drew these bytes (`findUncensoredImages`,
+   * by sha256); null otherwise. Drives the gallery's Uncensored badge.
+   */
+  generationModeration?: GenerationModeration | null;
 }
 
 export interface ChatGalleryResult {
@@ -279,7 +288,7 @@ export async function listChatGallery(
   await passCastPortraits(chat, cast, collector, repos);
   await passInlineMarkdown(events, chat, cast, collector, repos);
 
-  const entries = collector.finish();
+  const entries = await withGenerationModeration(repos, collector.finish());
   log.debug('Chat gallery enumerated', {
     chatId,
     total: entries.length,
@@ -496,27 +505,6 @@ function resolveAvatarOverrideOwners(cast: Cast, chatId: string): Map<string, st
     }
   }
   return owners;
-}
-
-/**
- * A Lantern backdrop, recognised by where it was stored: `generated/` in its
- * own mount, or the `/story-backgrounds/` folder the job files every backdrop
- * under. A superseded backdrop is no longer `storyBackgroundImageId`, so one
- * that never reached a mount is known only by its folder.
- */
-function isStoryBackgroundFile(file: FileEntry, paths: readonly string[]): boolean {
-  if (file.folderPath === '/story-backgrounds/') return true;
-  return paths.some((p) => p.toLowerCase().startsWith('generated/'));
-}
-
-/**
- * An Aurora repaint, recognised by where it was stored: `images/history/` in
- * the character's vault, or the legacy `/character-avatars/` project folder
- * for a chat whose files live in a project mount.
- */
-function isAvatarFile(file: FileEntry, paths: readonly string[]): boolean {
-  if (file.folderPath === '/character-avatars/') return true;
-  return paths.some((p) => p.toLowerCase().startsWith('images/history/'));
 }
 
 // ============================================================================

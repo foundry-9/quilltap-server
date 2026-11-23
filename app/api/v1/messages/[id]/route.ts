@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { badRequest, notFound, serverError, successResponse, created, validationError } from '@/lib/api/responses';
 import {
   regenerateMessageAsSwipe,
@@ -216,8 +217,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
 // DELETE /api/v1/messages/[id] - Delete a message
 // =============================================================================
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id: messageId }) => {
+  withActionDispatch<{ id: string }>({}, async (req, { user, repos }, { id: messageId }) => {
     try {
       // Parse query params for memory handling
       const { searchParams } = req.nextUrl;
@@ -304,7 +306,7 @@ const result = await findMessageInUserChats(repos, user.id, messageId);
       logger.error('[Messages API v1] Error deleting message', {}, error instanceof Error ? error : undefined);
       return serverError('Failed to delete message');
     }
-  }
+  })
 );
 
 // =============================================================================

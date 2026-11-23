@@ -10,7 +10,7 @@ import { isBundleRelativePath, QtapThemeManifestSchema } from '@/lib/themes/type
 
 const BASE = {
   format: 'qtap-theme',
-  formatVersion: 1,
+  formatVersion: 2,
   id: 'sample',
   name: 'Sample',
   version: '1.0.0',
@@ -37,7 +37,7 @@ describe('QtapThemeManifestSchema', () => {
       ...BASE,
       stylesPath: 'styles.css',
       previewImage: 'preview.webp',
-      fonts: [{ family: 'A', src: 'fonts/A.woff2' }],
+      fonts: [{ family: 'A', src: 'fonts/A.woff2', license: 'OFL-1.1' }],
       icons: { close: 'icons/close.svg' },
     })
     expect(result.success).toBe(true)

@@ -71,6 +71,13 @@ export interface CommonplaceParts {
    */
   knowledge?: string;
   /**
+   * What the character knows of the things in the story — entries they can
+   * reach that are named in the scene or the recent conversation, then
+   * entries the conversation bears on (`lib/atlas/prompt-section.ts`).
+   * Already rendered, one block per thing.
+   */
+  lore?: string;
+  /**
    * The relevant-past-conversations list (already rendered as a markdown block
    * with its `read_conversation` call note). Used by the fold-triggered refresh
    * whisper; the per-turn consolidated whisper leaves this empty (its
@@ -86,6 +93,10 @@ export interface CommonplaceParts {
   retrospectiveRecall?: string;
 }
 
+/** The line the model reads above the lore. Never names the Atlas. */
+export const COMMONPLACE_LORE_LEAD =
+  'This is what you know of the things being spoken of, and of others that bear on this moment:';
+
 /**
  * Build the persona-voiced consolidated whisper for the chat transcript / UI.
  * The Commonplace Book speaks once, bundling whichever sections are non-empty.
@@ -97,6 +108,7 @@ export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string 
   const relevant = parts.relevant?.trim();
   const interChar = parts.interChar?.trim();
   const knowledge = parts.knowledge?.trim();
+  const lore = parts.lore?.trim();
   const relevantConversations = parts.relevantConversations?.trim();
   const retrospectiveRecall = parts.retrospectiveRecall?.trim();
 
@@ -118,6 +130,11 @@ export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string 
   if (interChar) {
     sections.push(
       `The Commonplace Book opens to the pages where you have noted those present.\n\n${interChar}`,
+    );
+  }
+  if (lore) {
+    sections.push(
+      `The Commonplace Book unrolls the Atlas across the table and lays a finger upon the things now spoken of, and upon one or two the talk has merely drifted toward:\n\n${lore}`,
     );
   }
   if (knowledge) {
@@ -150,6 +167,7 @@ export function buildCommonplaceLLMContext(parts: CommonplaceParts): string {
   const relevant = parts.relevant?.trim();
   const interChar = parts.interChar?.trim();
   const knowledge = parts.knowledge?.trim();
+  const lore = parts.lore?.trim();
   const relevantConversations = parts.relevantConversations?.trim();
   const retrospectiveRecall = parts.retrospectiveRecall?.trim();
 
@@ -164,6 +182,9 @@ export function buildCommonplaceLLMContext(parts: CommonplaceParts): string {
   }
   if (interChar) {
     sections.push(`You also recall about the others present:\n\n${interChar}`);
+  }
+  if (lore) {
+    sections.push(`${COMMONPLACE_LORE_LEAD}\n\n${lore}`);
   }
   if (knowledge) {
     sections.push(`You also recall the following from your knowledge base:\n\n${knowledge}`);

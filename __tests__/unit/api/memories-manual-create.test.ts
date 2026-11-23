@@ -104,7 +104,6 @@ beforeEach(() => {
         findById: jest.fn(async (id: string) =>
           id === MEMORY_ID ? { id, characterId: CHAR_ID, tags: [], lastAccessedAt: null } : null
         ),
-        updateAccessTime: jest.fn(async () => undefined),
       },
       tags: { findAll: jest.fn(async () => []) },
     },
@@ -227,6 +226,7 @@ describe('GET /api/v1/memories/[id] (bug 219)', () => {
     const res: any = await GET_ITEM(req(), { params: Promise.resolve({ id: MEMORY_ID }) } as any)
     expect(res.status).toBe(200)
     expect(res.body.memory.id).toBe(MEMORY_ID)
-    expect(mockCtx.repos.memories.updateAccessTime).not.toHaveBeenCalled()
+    // The memories mock offers a read and nothing else: any stamp would throw.
+    expect(res.body.memory.lastAccessedAt).toBeNull()
   })
 })

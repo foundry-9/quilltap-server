@@ -12,7 +12,7 @@ The Inventory is not the [Wardrobe](wardrobe.md). The Wardrobe dresses a charact
 
 ## Where to find it
 
-- **The left rail's Inventory button** (the open box) opens the Inventory as a workspace tab, from which every shelf in the house may be browsed.
+- Open **Objects** and choose **Inventory**, and the Inventory opens as a workspace tab, from which every shelf in the house may be browsed.
 - **In a Salon chat**, each character's card in the participant list carries an Inventory button. That opens the Inventory *for that character in that chat*, with the **Carrying now** pane alongside and an Equip button on every row.
 - **On a character's page in Aurora**, the **Inventory** card in the **Appearance** section has an **Open inventory** button for that character's own shelf, and lists what they carry by default when they arrive in a chat.
 - **On a project's page in Prospero**, the **Inventory** card browses the project's own shelf (see [Project Inventory](project-inventory.md)).

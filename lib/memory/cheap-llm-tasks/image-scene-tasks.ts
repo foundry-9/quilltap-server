@@ -169,6 +169,19 @@ export function capClothingSummary(value: unknown): string {
 }
 
 /**
+ * How the tracker writes `action`. The transcript it reads is prose only (tool
+ * calls and their records are stripped), so it cannot tell a deed done from a
+ * deed described — and the `## Current State` block hands its answer back to
+ * every character as present truth. A character who wrote "she puts the candle
+ * away" without the tool call was then told she had, by her own scene state,
+ * beside a "Carried and equipped" record saying she still held it. The
+ * examples use a `<name>` placeholder so no invented name rides into the
+ * output (bug 161). So an action
+ * is reported as the telling it is, attributed to whoever told it.
+ */
+export const SCENE_ACTION_RULE = `- action: what the character is doing RIGHT NOW at the end of the conversation, written as a TELLING, attributed to whoever told it — never as accomplished fact. The conversation is prose; it cannot show whether a described deed (putting something away, handing an object over, picking something up, changing clothes) actually happened, and the system keeps its own records of what is carried and worn. So write "<name> says she has put the lamp away in the drawer", "<name>'s line has him setting the cup on the table", "<name> describes himself sitting down" — not "<name> has put the lamp away" — always with the character's real name in place of <name>. Keep it short and concrete.`
+
+/**
  * Scene state tracking prompt for first turn
  * Analyzes conversation and character data to produce a structured scene state
  */
@@ -181,7 +194,7 @@ Output ONLY valid JSON with this exact schema:
     {
       "characterId": "the character's ID (from baselines)",
       "characterName": "the character's name",
-      "action": "what the character is doing right now",
+      "action": "what the character is doing right now, as the conversation tells it (e.g. \"says she has ...\")",
       "appearance": "what the character currently looks like",
       "clothing": "describe current clothing state — see rules below"
     }
@@ -195,7 +208,7 @@ CRITICAL RULES — read carefully:
 - If a character undresses, is described as nude/naked, or removes clothing in the narrative, clothing should reflect that accurately — do not fall back to baseline clothing. Undressing removes clothing but does NOT remove a hairstyle; keep the hairstyle in the summary unless the narrative explicitly changes it (hair let down, ribbon pulled loose).
 - Baselines are ONLY used when the conversation gives NO information about a character's current state.
 - location: concise (1-2 sentences). Derive from scenario and conversation context.
-- action: what the character is doing RIGHT NOW at the end of the conversation.
+${SCENE_ACTION_RULE}
 - appearance: complete snapshot of current state. Use baseline if the conversation provides no appearance info.
 - clothing: a concise, salience-based summary of what the character is visibly wearing RIGHT NOW. It MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visually prominent (an outer layer may hide what is under it — summarise the look, do not rattle off every piece, and drop per-item trivia and style commentary). No markdown, no bullet lists, no parentheticals, no quoted item names. ALWAYS provide a string; NEVER use null. If the character has undressed or is naked, say so plainly (e.g. "nude", "naked", "wearing only underwear"). Only lean on the baseline clothing when the conversation has not described any clothing change. Use "unknown" only when neither the conversation nor the baseline gives any clothing information. Include the character's current hairstyle in this summary ONLY when one is actually set (e.g. "hair in a tight braid"). If no hairstyle is set, say NOTHING about hair at all — do not write "no hairstyle", "hair down", "unstyled", or anything implying the character lacks hair; their natural hair is already covered by their physical description.
 - Be concise and accurate. Output ONLY the JSON object.`
@@ -213,7 +226,7 @@ Output ONLY valid JSON with this exact schema:
     {
       "characterId": "the character's ID",
       "characterName": "the character's name",
-      "action": "what the character is doing right now",
+      "action": "what the character is doing right now, as the conversation tells it (e.g. \"says she has ...\")",
       "appearance": "what the character currently looks like",
       "clothing": "describe current clothing state — see rules below"
     }
@@ -228,6 +241,8 @@ CRITICAL RULES — read carefully:
 - If nothing changed for a field, carry it forward from the previous state.
 - Update location if the scene has moved.
 - Update action to reflect what each character is doing NOW at the end of the new messages.
+${SCENE_ACTION_RULE}
+- An action carried forward from the previous state that is phrased as fact must be rewritten as a telling under the same rule.
 - clothing: a concise, salience-based summary of what the character is visibly wearing RIGHT NOW. It MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visually prominent (an outer layer may hide what is under it — summarise the look, do not rattle off every piece, and drop per-item trivia and style commentary). No markdown, no bullet lists, no parentheticals, no quoted item names. ALWAYS provide a string; NEVER use null. If a character has undressed or is naked, say so plainly (e.g. "nude", "naked", "wearing only underwear"). If the previous state had clothing as null or missing, check the character baselines and new messages to determine the current clothing state. Include the character's current hairstyle in this summary ONLY when one is actually set (e.g. "hair in a tight braid"). If no hairstyle is set, say NOTHING about hair at all — do not write "no hairstyle", "hair down", "unstyled", or anything implying the character lacks hair; their natural hair is already covered by their physical description.
 - Character baselines are provided for reference — use them to fill in null or missing fields from the previous state, but the new messages always take priority.
 - Be concise and accurate. Output ONLY the JSON object.`

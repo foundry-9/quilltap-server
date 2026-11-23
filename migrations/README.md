@@ -159,6 +159,19 @@ Migration state is stored in SQLite in the `migrations_state` table:
 }
 ```
 
+## Baseline (skipped migrations that can never have work)
+
+A migration whose `shouldRun()` answers false writes no ledger row, so it is asked again at every boot. That is right while legacy data may still arrive, and wrong when it never can: on a database created this boot the migrations run before the app creates its tables and seeds its rows, so every historical data pass answers "nothing to do" — and a later boot used to find rows written by current code and convert them as if they were legacy (the photo-to-vault pass nulled the seeded avatars; the about-character backfill re-attributed the seeded memories).
+
+So the runner (`migrations/lib/baseline.ts`) writes a skipped migration to the ledger as settled, with a `Baselined without running: …` message and no `run()`, when:
+
+- **the database is fresh** — the run began with an empty ledger and no tables (`isMainDatabaseEmpty`); or
+- **the migration predates the database** — its `introducedInVersion` is strictly older than the release recorded on the `sqlite-initial-schema-v1` ledger row (pre-release tags ignored, so a migration from the birth release itself stays armed).
+
+It never baselines a migration whose `shouldRun()` threw, one deferred this boot, one with a dependency not yet settled, or one marked `skipMeansNotYet: true`.
+
+**Set `skipMeansNotYet: true`** when your `shouldRun()` can answer false because it is waiting on something later in startup (a startup task setting an instance flag, as `drop-wardrobe-items-table-v1` does) rather than because there is nothing to do. Without it, a fresh database settles the migration before it ever gets its turn.
+
 ## Idempotency
 
 All migrations must be idempotent:

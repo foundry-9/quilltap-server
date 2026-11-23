@@ -1,7 +1,7 @@
 /**
  * ProjectItem
  *
- * Individual project item for the homepage projects list.
+ * One project on the home page's shelf.
  */
 
 import Link from 'next/link'
@@ -15,10 +15,11 @@ interface ProjectItemProps {
 
 export function ProjectItem({ project }: ProjectItemProps) {
   return (
-    <div className="flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted/50 transition-colors">
+    <div className="qt-homepage-row">
       <Link
         href={`/prospero/${project.id}`}
         className="flex items-center gap-3 flex-1 min-w-0"
+        title={project.description || undefined}
       >
         <div className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md qt-bg-muted">
           <Icon name="folder" className="w-5 h-5" style={project.color ? { color: project.color } : undefined} />
@@ -27,19 +28,13 @@ export function ProjectItem({ project }: ProjectItemProps) {
           <p className="qt-card-title truncate">
             {project.name}
           </p>
-          {project.description && (
-            <p className="qt-card-subtitle truncate">
-              {project.description}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col items-end shrink-0">
-          <span className="qt-meta">
-            {formatMessageTime(project.lastActivity)}
-          </span>
-          <span className="qt-meta qt-text-brand">
-            {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
-          </span>
+          <p className="qt-meta truncate">
+            <span className="qt-text-brand">
+              {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
+            </span>
+            <span aria-hidden="true"> &middot; </span>
+            <span>{formatMessageTime(project.lastActivity)}</span>
+          </p>
         </div>
       </Link>
       <Link

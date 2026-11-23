@@ -117,11 +117,10 @@ quilltap/
 ├── plugins/                  # Plugin source code
 │   ├── dist/                 # Built plugins (loaded at runtime)
 │   └── src/                  # Plugin source files
-├── packages/                 # Published npm packages for plugin development
+├── packages/                 # Published npm packages (plugin development, the CLI)
 │   ├── plugin-types/         # TypeScript types (@quilltap/plugin-types)
 │   ├── plugin-utils/         # Plugin utilities (@quilltap/plugin-utils)
-│   ├── theme-storybook/      # Storybook preset for theme development (@quilltap/theme-storybook)
-│   └── create-quilltap-theme/ # Scaffolding CLI for new themes
+│   └── quilltap/             # The quilltap CLI (npx quilltap)
 ├── themes/                   # Bundled and built themes
 │   └── bundled/              # 6 .qtap-theme bundles (art-deco, earl-grey, great-estate, madmans-box, old-school, rains)
 ├── hooks/                    # Custom React hooks
@@ -263,9 +262,14 @@ utility families (`qt-bg-`, `qt-text-`, `qt-border-`, `qt-shadow-`) plus any
 on hover" but an undefined class name, since Tailwind generates variants only for
 utilities it knows about and anything declared inside `@layer utilities` is
 invisible to it. Every state form has to be written out by hand in
-`app/styles/qt-components/_utilities.css`. Bare component classes (`qt-card` and friends) are
-deliberately out of scope: plenty of those exist purely as hooks for themes to
-target. `lint:fix` does not run this check — use `npm run lint` before committing.
+`app/styles/qt-components/_utilities.css`. A bare class in `app/` or
+`components/` markup (`qt-card` and friends) must be defined by the app's CSS (a
+`::highlight(qt-…)` name counts), be a catalogued theme hook or state class
+(`lib/themes/hooks/`), or be listed in the script's `MARKERS` with a reason — an
+anchor with no look of its own. A marker that is no longer written, or has since
+been defined or catalogued, fails too. The script reads the hook catalogue, so it
+runs under `tsx`. `lint:fix` does not run this check — use `npm run lint` before
+committing.
 
 ### Building Plugins
 
@@ -365,29 +369,30 @@ See [plugins/README.md](plugins/README.md) for the plugin developer guide.
 
 ### Theme Development
 
-Themes are now distributed as `.qtap-theme` bundles — declarative zip archives containing JSON tokens, CSS, fonts, and images. No npm, esbuild, or TypeScript required.
+Themes are version 2 `.qtap-theme` bundles — a manifest, a tokens document, optional custom CSS, fonts, icons and images, zipped. No npm, esbuild, or TypeScript. Version 1 bundles and npm theme plugins are refused.
+
+Make one in Calliope's Atelier (**Settings → Appearance → Design a theme**, `/calliope`). For a text editor, the CLI writes the same blank theme the Atelier starts a draft from:
 
 ```bash
-# Create a new theme (bundle format, recommended)
-npx create-quilltap-theme my-theme
-
-# Create a legacy npm plugin theme (deprecated)
-npx create-quilltap-theme my-theme --plugin
+# Write a blank theme bundle to ./my-theme/
+npx quilltap themes create "My Theme"
 ```
 
 Manage themes via CLI:
 
 ```bash
-npx quilltap themes list              # List all installed themes
-npx quilltap themes validate my.qtap-theme  # Validate a bundle
+npx quilltap themes list                    # List all installed themes
+npx quilltap themes validate ./my-theme     # Validate a bundle directory or .qtap-theme file
 npx quilltap themes install my.qtap-theme   # Install a bundle
 npx quilltap themes export earl-grey        # Export any theme as a bundle
 npx quilltap themes search "dark"           # Search registries
 ```
 
+The CLI validates with the app's own engine (`packages/quilltap/lib/theme-engine.generated.js`, rebuilt by `npm run build:cli-theme-engine`; lint fails when it is stale).
+
 Bundled themes ship in `themes/bundled/`. User-installed themes go to `<dataDir>/themes/<themeId>/`.
 
-See [THEME_PLUGIN_DEVELOPMENT.md](THEME_PLUGIN_DEVELOPMENT.md) for the legacy plugin format guide.
+See [THEME_DEVELOPMENT.md](THEME_DEVELOPMENT.md) for the authoring guide, [THEME_TOKENS.md](THEME_TOKENS.md) for every token and [THEME_HOOKS.md](THEME_HOOKS.md) for every hook.
 
 ## Logging
 
@@ -403,23 +408,24 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 
 1. Unless we're implementing an interface or an instance of a generic provider of some kind, we should never directly access the filesystem in this app; we should be using our generic file provider for that
 2. Create unit tests to expand coverage for any new functionality, and test specifically for the bugs that were fixed when we apply bugfixes (to ensure there are no regression issues going forward)
-3. Refactor according to best practices, including:
+3. Dogfood a brand-new instance end to end in the browser — first-run setup, the setup wizard with real API keys, a first chat, memory, character creation, tools, projects, images, backup/restore and a restart — and fix whatever a new user would trip over
+4. Refactor according to best practices, including:
    - respect encapsulation and single source of truth. If a feature requires duplicate code, consider inheritance
    - SRP
    - DRY
    - KISS
    - YAGNI
-4. Ensure that API endpoints adhere to the `/api/v{version}/{entityname}` standard (currently `/api/v1/{entityname}`), with only these non-versioned exceptions: `/api/health`, `/api/plugin-routes/[...path]`, and `/api/themes/*`.
-5. Run a test for dead code and refactor that out. Use `npx knip` if it's helpful. We have a [dead code report](DEAD-CODE-REPORT.md) (in the same directory) and that should be updated.
-6. Ensure that the debug logging we always create for new work has been removed unless we still need it.
-7. Verify that new UI components that were created adhere to the standard of using `qt-*` theme utility classes
-8. As much as possible, plugins should be self-contained or use `plugin-types` and `plugin-utils` to access Quilltap internals; even distributed plugins in `plugins/dist/` should use these, since these plugins are models to independent plugin developers
-9. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
-10. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
-11. Make sure that lint/test/build in Github Actions are working
-12. Verify that documentation, completions, and tooling for the [Quilltap CLI](../../packages/quilltap/) are up-to-date
-13. Take a fresh look at the whole UI and its look-and-feel under every bundled theme, in light and dark mode, and verify it meets WCAG 2.2 Level AA (contrast, keyboard and focus, accessible names, reflow, colour-only cues)
-14. Check the following Markdown files to be sure they are up-to-date:
+5. Ensure that API endpoints adhere to the `/api/v{version}/{entityname}` standard (currently `/api/v1/{entityname}`), with only these non-versioned exceptions: `/api/health`, `/api/plugin-routes/[...path]`, and `/api/themes/*`.
+6. Run a test for dead code and refactor that out. Use `npx knip` if it's helpful. We have a [dead code report](DEAD-CODE-REPORT.md) (in the same directory) and that should be updated.
+7. Ensure that the debug logging we always create for new work has been removed unless we still need it.
+8. Verify that new UI components that were created adhere to the standard of using `qt-*` theme utility classes
+9. As much as possible, plugins should be self-contained or use `plugin-types` and `plugin-utils` to access Quilltap internals; even distributed plugins in `plugins/dist/` should use these, since these plugins are models to independent plugin developers
+10. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
+11. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
+12. Make sure that lint/test/build in Github Actions are working
+13. Verify that documentation, completions, and tooling for the [Quilltap CLI](../../packages/quilltap/) are up-to-date
+14. Take a fresh look at the whole UI and its look-and-feel under every bundled theme, in light and dark mode, and verify it meets WCAG 2.2 Level AA (contrast, keyboard and focus, accessible names, reflow, colour-only cues)
+15. Check the following Markdown files to be sure they are up-to-date:
     - [README](../../README.md)
     - [Changelog](../CHANGELOG.md)
     - [API Documentation](API.md)

@@ -5,7 +5,8 @@
  * Two effects, and every surface that changes an outfit fires them here:
  *
  *   - the character's per-chat avatar is refreshed, when the chat has opted in
- *     (`triggerAvatarGenerationIfEnabled`);
+ *     (`triggerAvatarGenerationIfEnabled`) — held until the chat's next turn,
+ *     so every change before then costs one avatar;
  *   - Aurora's wardrobe announcement is queued. Inside a model turn the
  *     orchestrator hands the tools a per-turn `pendingWardrobeAnnouncements`
  *     set, so N wardrobe edits in one response collapse into one

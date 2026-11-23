@@ -31,6 +31,8 @@
  * never interleave on one row. `applyConsolidation` is the same rule for the
  * consolidation phase: the parent re-reads each cluster's rows under the lock
  * and writes counts, links and members as deltas (A9).
+ * `editMemory` is a character's `edit_memory` call from an autonomous room:
+ * the hand-edit chokepoint (`updateMemory`) is parent-only.
  *
  * Each bridge short-circuits to `callHost(...)` when running in the child;
  * the parent re-enters the same bridge here on its RW connection (where
@@ -143,6 +145,10 @@ async function runMethod(
     case 'applyConsolidation': {
       const { applyConsolidationPlan } = await import('@/lib/memory/admission/consolidation-writes');
       return applyConsolidationPlan(args[0] as Parameters<typeof applyConsolidationPlan>[0]);
+    }
+    case 'editMemory': {
+      const { editMemoryOnHost } = await import('@/lib/memory/admission/update-memory');
+      return editMemoryOnHost(args[0] as Parameters<typeof editMemoryOnHost>[0]);
     }
     case 'countRecentAdmissions': {
       const { countRecentAdmissionsLocal } = await import('@/lib/memory/admission/rate-ledger');

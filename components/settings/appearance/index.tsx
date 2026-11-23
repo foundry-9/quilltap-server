@@ -64,10 +64,8 @@ export default function AppearanceTab() {
     availableThemes,
     isLoading,
     error,
-    showNavThemeSelector,
     handleThemeSelect,
     handleColorModeChange,
-    handleNavThemeSelectorChange,
     refreshThemes,
   } = useAppearanceSettings()
 
@@ -82,11 +80,9 @@ export default function AppearanceTab() {
       <DisplayOptions
         colorMode={colorMode}
         resolvedColorMode={resolvedColorMode}
-        showNavThemeSelector={showNavThemeSelector}
         isLoading={isLoading}
         error={error}
         onColorModeChange={handleColorModeChange}
-        onNavThemeSelectorChange={handleNavThemeSelectorChange}
       />
 
       {/* Theme Selector - full width with expandable previews */}

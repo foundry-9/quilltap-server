@@ -242,7 +242,7 @@ export interface Chat {
   id: string
   title: string
   /** Discriminates salon chats from autonomous rooms ("enclaves"). Gates the Edit Enclave control. */
-  chatType?: 'salon' | 'autonomous' | 'help' | 'brahma'
+  chatType?: 'salon' | 'autonomous' | 'help' | 'brahma' | 'calliope'
   /** How far the chat's opening has got; the Salon opens a chat that is not 'done'. */
   openingState?: 'pending' | 'running' | 'done'
   roleplayTemplateId?: string | null

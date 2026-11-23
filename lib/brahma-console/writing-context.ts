@@ -60,15 +60,6 @@ export interface ResolvedConsoleContext {
   missing: ConsoleContextRef[]
 }
 
-export const EMPTY_CONSOLE_CONTEXT: ResolvedConsoleContext = Object.freeze({
-  conversations: [],
-  projects: [],
-  stores: [],
-  general: null,
-  characterVaults: [],
-  missing: [],
-}) as unknown as ResolvedConsoleContext
-
 /** A stable key for a ref, for de-duplication. */
 export function contextRefKey(ref: ConsoleContextRef): string {
   return ref.kind === 'general' ? 'general' : `${ref.kind}:${ref.id}`

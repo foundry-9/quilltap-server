@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, errorResponse, notFound, serverError } from '@/lib/api/responses';
@@ -149,8 +150,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/memories/[id] - Delete a memory
  */
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id: memoryId }) => {
+  withActionDispatch<{ id: string }>({}, async (req, { user, repos }, { id: memoryId }) => {
     try {// Find the memory
       const existingMemory = await repos.memories.findById(memoryId);
       if (!existingMemory) {
@@ -196,5 +198,5 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       logger.error('[Memories API v1] Error deleting memory', {}, error instanceof Error ? error : undefined);
       return serverError('Failed to delete memory');
     }
-  }
+  })
 );

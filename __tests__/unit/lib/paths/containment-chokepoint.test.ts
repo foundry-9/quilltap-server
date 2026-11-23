@@ -37,6 +37,7 @@ const STORED_BYTES_SITES = [
   'app/api/v1/mount-points/[id]/blobs/[...path]/route.ts',
   'app/api/v1/mount-points/[id]/files/[...path]/route.ts',
   'app/api/v1/chats/[id]/qtap-target/route.ts',
+  'app/api/v1/system/dynamic-backgrounds/route.ts',
   'app/api/themes/assets/[...path]/route.ts',
   'app/api/themes/fonts/[...path]/route.ts',
 ]

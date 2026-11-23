@@ -237,8 +237,8 @@ export default function BulkCharacterReplaceModal({
       title="Bulk Character Replace"
       maxWidth="lg"
       busy={isSubmitting}
-      bodyClassName="qt-dialog-body flex-1 overflow-y-auto space-y-5"
-      footerClassName="qt-dialog-footer flex justify-end gap-2"
+      bodyClassName="qt-dialog-body-default flex-1 overflow-y-auto space-y-5"
+      footerClassName="qt-dialog-footer-default flex justify-end gap-2"
       headerActions={
         <button
           aria-label="Close"

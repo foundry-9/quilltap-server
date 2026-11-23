@@ -769,6 +769,30 @@ export async function readFileWithMtime(
   }
 }
 
+/**
+ * Read the raw bytes of the on-disk file behind a filesystem-backed
+ * ResolvedPath, with its mtime. The bytes twin of {@link readFileWithMtime}'s
+ * disk branch, for callers (the document core's `readDocumentBytes`) that must
+ * hand back exactly what is stored. Database-backed paths have no disk file
+ * and are refused. Errors (ENOENT included) bubble.
+ */
+export async function readResolvedFileBytes(
+  resolved: ResolvedPath
+): Promise<{ data: Buffer; mtime: number; size: number }> {
+  if (isDatabaseBacked(resolved) || !resolved.absolutePath) {
+    throw new Error('readResolvedFileBytes needs a filesystem-backed ResolvedPath');
+  }
+  const [data, stats] = await Promise.all([
+    fs.readFile(resolved.absolutePath),
+    fs.stat(resolved.absolutePath),
+  ]);
+  logger.debug('readResolvedFileBytes: read a file on disk', {
+    absolutePath: resolved.absolutePath,
+    size: data.length,
+  });
+  return { data, mtime: stats.mtimeMs, size: data.length };
+}
+
 /** What {@link statResolvedFile} reports about a path on disk. */
 export interface ResolvedFileStat {
   isFile: boolean;
@@ -915,6 +939,11 @@ export interface AccessibleMountPointsQuery {
   guardOwnVault?: boolean;
   /** A pre-built pool that is the accessible set (see `PathResolutionContext.mountPool`). */
   mountPool?: TieredMountPool;
+  /**
+   * The operator "look everywhere" override: every enabled store (see
+   * `PathResolutionContext.operatorOverride`). Never combined with `mountPool`.
+   */
+  operatorOverride?: boolean;
 }
 
 /**
@@ -931,13 +960,14 @@ export async function getAccessibleMountPoints(
 ): Promise<AccessibleMountPoint[]> {
   try {
     const repos = getRepositories();
-    const { projectId, characterId, extraCharacterIds, guardOwnVault, mountPool } = query;
+    const { projectId, characterId, extraCharacterIds, guardOwnVault, mountPool, operatorOverride } = query;
     const ids = await collectAccessibleMountPointIds({
       projectId,
       characterId,
       characterIds: extraCharacterIds && extraCharacterIds.length > 0 ? extraCharacterIds : undefined,
       guardOwnVault,
       mountPool,
+      operatorOverride,
     });
 
     if (ids.length === 0) {

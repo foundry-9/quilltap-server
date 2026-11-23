@@ -15,6 +15,7 @@
 
 import { z } from 'zod';
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { successResponse, notFound, serverError, badRequest, created } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
@@ -133,8 +134,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
 );
 
 // DELETE /api/v1/characters/[id]/scenarios?scenarioId=xxx
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (request, { user, repos }, { id: characterId }) => {
+  withActionDispatch<{ id: string }>({}, async (request, { user, repos }, { id: characterId }) => {
     try {
       const url = new URL(request.url);
       const scenarioId = url.searchParams.get('scenarioId');
@@ -175,5 +177,5 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       logger.error('[Characters v1] Error removing character scenario', {}, error instanceof Error ? error : undefined);
       return serverError('Failed to remove character scenario');
     }
-  }
+  })
 );

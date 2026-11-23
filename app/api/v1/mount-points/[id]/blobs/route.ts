@@ -22,9 +22,7 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, created, notFound, serverError } from '@/lib/api/responses';
 import { storeMountFile } from '@/lib/mount-index/store-file';
-import { FileOpError } from '@/lib/mount-index/file-op-error';
-import { DatabaseStoreError } from '@/lib/mount-index/database-store';
-import { fileOpStatus } from '@/lib/mount-index/file-op-status';
+import { fileOpFailure } from '@/lib/api/file-op-failure';
 
 export const GET = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
@@ -124,18 +122,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
       });
       return created({ blob });
     } catch (error) {
-      if (error instanceof FileOpError || error instanceof DatabaseStoreError) {
-        return NextResponse.json(
-          { error: error.message, code: error.code },
-          { status: fileOpStatus(error) }
-        );
-      }
-      logger.error(
-        '[Mount Points v1] Error uploading blob',
-        { mountPointId: id },
-        error instanceof Error ? error : undefined
-      );
-      return serverError('Failed to upload blob');
+      return fileOpFailure(error, 'upload blob', { mountPointId: id });
     }
   }
 );

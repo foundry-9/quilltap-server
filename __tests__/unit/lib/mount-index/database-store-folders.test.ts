@@ -110,7 +110,6 @@ interface MockRepos {
   };
   docMountBlobs: {
     listByMountPoint: jest.Mock;
-    updatePath: jest.Mock;
   };
 }
 
@@ -164,7 +163,6 @@ function createMockRepos(): MockRepos {
     },
     docMountBlobs: {
       listByMountPoint: jest.fn().mockResolvedValue([]),
-      updatePath: jest.fn().mockResolvedValue(true),
     },
   };
 }

@@ -169,6 +169,9 @@ export interface ChildShutdownAckMessage {
  *   - `applyConsolidation` — maintenance's consolidation writes
  *     (`applyConsolidationPlan`): the child plans and embeds, the parent
  *     re-reads and writes each cluster as deltas under admission's lock (A9)
+ *   - `editMemory` — a character's `edit_memory` call (`editMemoryOnHost`):
+ *     the hand-edit chokepoint publishes realtime hints and invalidates the
+ *     parent's archive cache, so it runs in the parent
  * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore`/
  * `writeWardrobeItemImage` embed a
  * server-generated `blobId`/`linkId` (deduped by sha, so the id may reference a
@@ -194,7 +197,8 @@ export interface ChildHostRpcRequestMessage {
     | 'admitMemory'
     | 'countRecentAdmissions'
     | 'foldNearDuplicates'
-    | 'applyConsolidation';
+    | 'applyConsolidation'
+    | 'editMemory';
   args: unknown[];
 }
 

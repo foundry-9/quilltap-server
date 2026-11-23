@@ -84,20 +84,6 @@ export function clearDiagramRenderCache(): void {
   renderCache.clear()
 }
 
-// Each distinct theme-tokens object gets a stable number, so the theme part of
-// a cache key is the same for every diagram on the page.
-const tokenIds = new WeakMap<object, number>()
-let nextTokenId = 1
-function tokensId(tokens: object | undefined): number {
-  if (!tokens) return 0
-  let id = tokenIds.get(tokens)
-  if (id === undefined) {
-    id = nextTokenId++
-    tokenIds.set(tokens, id)
-  }
-  return id
-}
-
 function cacheKeyFor(engine: DiagramEngine, style: DiagramStyle, themeKey: string, source: string): string {
   // Raw SVG ignores both the style and the theme.
   return engine === 'svg' ? `svg|${source}` : `${engine}|${style}|${themeKey}|${source}`
@@ -107,7 +93,7 @@ const BLOT_NOTE = 'The draughtsman’s pen has blotted — the diagram below cou
 
 export function DiagramBlock({ engine, language, source, style, streaming = false }: DiagramBlockProps) {
   const theme = useContext(ThemeContext)
-  const themeKey = `${theme?.activeThemeId ?? 'default'}|${theme?.resolvedColorMode ?? 'light'}|${tokensId(theme?.tokens)}`
+  const themeKey = `${theme?.activeThemeId ?? 'default'}|${theme?.resolvedColorMode ?? 'light'}|${theme?.themeRevision ?? 0}`
   const cacheKey = cacheKeyFor(engine, style, themeKey, source)
 
   const stageRef = useRef<HTMLDivElement>(null)

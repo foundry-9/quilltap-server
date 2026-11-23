@@ -97,6 +97,21 @@ function makeRepos() {
       searchMessagesGlobal: jest.fn(async () => [] as unknown[]),
       getMessages: jest.fn(async () => [] as unknown[]),
     },
+    groupCharacterMembers: {
+      findByCharacterId: jest.fn(async (id: string) => (id === 'char-laura' ? [{ groupId: 'grp-crew' }] : [])),
+    },
+    groups: {
+      findByIdRaw: jest.fn(async (id: string) => (id === 'grp-crew' ? { id: 'grp-crew', name: 'Flight Crew' } : null)),
+    },
+    projects: {
+      findByCharacterId: jest.fn(async (id: string) => (id === 'char-laura' ? [{ id: 'prj-1', name: 'Skyward' }] : [])),
+    },
+    wardrobe: {
+      findByCharacterId: jest.fn(async (id: string) => (id === 'char-laura' ? [{ id: 'w1' }, { id: 'w2' }] : [])),
+    },
+    docMountPoints: {
+      findById: jest.fn(async () => null),
+    },
   }
 }
 
@@ -117,7 +132,17 @@ describe('lookup_character', () => {
       physicalDescription: 'Tall, dark braid.',
       memoriesHeld: 12,
       conversations: { count: 1, first: { id: 'chat-a', title: 'Breakfast' } },
+      groups: ['Flight Crew'],
+      projects: ['Skyward'],
+      wardrobePieces: 2,
     })
+  })
+
+  it('returns only the asked-for parts, with a conversation count in place of the list', async () => {
+    const result = await executeLookupCharacterTool({ character: 'laura', fields: ['identity'] }, ctx)
+    expect(result).toMatchObject({ success: true, name: 'Laura', identity: 'Laura Red Cloud, twenty-nine, a pilot.' })
+    expect(result).not.toHaveProperty('personality')
+    expect(result).not.toHaveProperty('conversations')
   })
 
   it('resolves an alias through the hydrated rows', async () => {
@@ -171,7 +196,7 @@ describe('lookup_memories', () => {
           memoryId: 'm1',
           heldBy: 'Friday',
           about: 'Laura',
-          importance: 0.8,
+          content: 'memory m1',
           conversation: { id: 'chat-a', title: 'Breakfast' },
         },
       ],
@@ -212,9 +237,10 @@ describe('lookup_messages', () => {
     ])
     const result = await executeLookupMessagesTool({ query: 'twenty-nine' }, ctx)
 
-    expect(repos.chats.searchMessagesGlobal).toHaveBeenCalledWith(['chat-a', 'chat-b'], 'twenty-nine', 10)
+    expect(repos.chats.searchMessagesGlobal).toHaveBeenCalledWith(['chat-a', 'chat-b'], 'twenty-nine', 200)
     expect(result).toMatchObject({
       success: true,
+      totalHits: '1',
       hits: [
         {
           conversation: { id: 'chat-a', title: 'Breakfast', createdAt: '2026-10-01T10:00:00.000Z' },
@@ -224,6 +250,27 @@ describe('lookup_messages', () => {
         },
       ],
     })
+  })
+
+  it('falls back to every word in any order when the words are not a phrase', async () => {
+    const line = { messageId: 'msg-sell', chatId: 'chat-a', role: 'USER', participantId: 'seat-charlie', createdAt: '2026-10-13T13:52:00.000Z', content: "I've decided to sell the Packard and buy a dirigible share." }
+    const other = { ...line, messageId: 'msg-other', content: 'The dirigible rose at dawn.' }
+    // The index matches a phrase: "Packard dirigible" finds nothing; "dirigible" finds both lines.
+    repos.chats.searchMessagesGlobal.mockImplementation(async (_ids: string[], q: string) =>
+      (q === 'dirigible' ? [line, other] : []) as never
+    )
+    const result = await executeLookupMessagesTool({ query: 'Packard dirigible' }, ctx)
+
+    expect(repos.chats.searchMessagesGlobal).toHaveBeenNthCalledWith(1, ['chat-a', 'chat-b'], 'Packard dirigible', 200)
+    expect(repos.chats.searchMessagesGlobal).toHaveBeenNthCalledWith(2, ['chat-a', 'chat-b'], 'dirigible', 200)
+    expect(result).toMatchObject({ success: true, totalHits: '1', matchedAs: expect.stringContaining('every word') })
+    expect((result as { hits: Array<{ messageId: string }> }).hits.map(h => h.messageId)).toEqual(['msg-sell'])
+  })
+
+  it('does not fall back for a single word', async () => {
+    const result = await executeLookupMessagesTool({ query: 'zeppelin' }, ctx)
+    expect(repos.chats.searchMessagesGlobal).toHaveBeenCalledTimes(1)
+    expect(result).not.toHaveProperty('matchedAs')
   })
 
   it('filters by speaker and date after over-fetching', async () => {

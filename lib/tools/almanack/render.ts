@@ -344,7 +344,7 @@ function renderMachinery(push: Push, data: AlmanackReportData): void {
   push(`- **Colour Mode**: ${data.themeInfo.colorMode}`);
   push(`- **Total Themes**: ${data.themeInfo.stats.total}`);
   push(`- **With Dark Mode**: ${data.themeInfo.stats.withDarkMode}`);
-  push(`- **With CSS Overrides**: ${data.themeInfo.stats.withCssOverrides}`);
+  push(`- **Refused (earlier format)**: ${data.themeInfo.stats.refused}`);
   push(`- **Shipping Icon Overrides**: ${data.themeInfo.themesWithIcons}`);
   push(`- **Total Icon Overrides**: ${data.themeInfo.totalIconOverrides}`);
   if (data.themeInfo.totalUnknownIconOverrides > 0) {
@@ -516,6 +516,7 @@ function renderLedgers(push: Push, data: AlmanackReportData): void {
   push(`- **May dress themselves**: ${data.characterBreakdown.canDressThemselves}`);
   push(`- **May create outfits**: ${data.characterBreakdown.canCreateOutfits}`);
   push(`- **May manage their inventory**: ${data.characterBreakdown.canManageInventory}`);
+  push(`- **May edit their own memories**: ${data.characterBreakdown.canEditMemories}`);
   push(`- **With a Core-whisper override**: ${data.characterBreakdown.coreWhisperOverrides}`, '');
 
   renderFeatureConfig(push, data);
@@ -712,6 +713,11 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
 
   push('#### Wardrobe Images', '');
   push(`- **Has Designated Image Profile**: ${yesNo(fc.wardrobeImages.hasDesignatedImageProfile)}`, '');
+
+  push('#### Dynamic Backgrounds', '');
+  push(`- **Enabled**: ${yesNo(fc.dynamicBackgrounds.enabled)}`);
+  push(`- **Allow Uncensored**: ${yesNo(fc.dynamicBackgrounds.allowUncensored)}`);
+  push(`- **Minutes Between Changes**: ${fc.dynamicBackgrounds.refreshMinutes}`, '');
 
   push('#### Aurora (Core Whisper)', '');
   push(`- **Enabled**: ${yesNo(fc.coreWhisper.enabled)}`);

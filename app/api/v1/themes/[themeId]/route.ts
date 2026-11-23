@@ -2,9 +2,9 @@
  * Theme Item API Routes (v1)
  *
  * GET    /api/v1/themes/:themeId              - Get theme metadata
- * GET    /api/v1/themes/:themeId?action=tokens - Get tokens for a specific theme
+ * GET    /api/v1/themes/:themeId?action=tokens - What the client needs to apply a theme
  * GET    /api/v1/themes/:themeId?action=export - Export theme as .qtap-theme download
- * DELETE /api/v1/themes/:themeId              - Uninstall a bundle theme
+ * DELETE /api/v1/themes/:themeId              - Uninstall a bundle theme (or a refused one)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,7 +15,7 @@ import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { successResponse, notFound, badRequest, serverError, messageResponse } from '@/lib/api/responses';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { uninstallThemeBundle, exportThemeAsBundle } from '@/lib/themes/bundle-loader';
-import type { QtapThemeManifest } from '@/lib/themes/types';
+import { compiledThemeCss } from '@/lib/themes/engine/compile';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -32,92 +32,74 @@ async function ensureInitialized() {
 
 /**
  * Handle GET ?action=tokens
- * Returns the tokens and fonts for a specific theme
+ * Returns what the client needs to apply a theme: its compiled CSS (font
+ * faces, tokens, icons, scoped custom CSS, built and validated server-side),
+ * its choices, the app-owned features it switches on, and its fonts, icons,
+ * subsystem overrides and preview images. The default theme's CSS is empty:
+ * the app's own stylesheet is the default.
  */
 async function handleGetTokens(themeId: string): Promise<Response> {
-  if (!themeRegistry.has(themeId)) {
+  const theme = themeRegistry.get(themeId);
+  if (!theme) {
     return notFound('Theme');
   }
 
-  const theme = themeRegistry.get(themeId);
-  const tokens = themeRegistry.getTokens(themeId);
-  const loadedFonts = themeRegistry.getFonts(themeId);
-  const loadedIcons = themeRegistry.getIcons(themeId);
-  const cssOverrides = themeRegistry.getCSSOverrides(themeId);
-
-  const fonts = loadedFonts.map(font => ({
+  const fonts = themeRegistry.getFonts(themeId).map(font => ({
     family: font.family,
-    src: font.isEmbedded && font.embeddedData
-      ? font.embeddedData
-      : `/api/themes/fonts/${font.pluginName}/${font.src}`,
+    src: `/api/themes/fonts/${font.pluginName}/${font.src}`,
     weight: font.weight,
     style: font.style,
     display: font.display,
   }));
 
-  // Icon overrides resolve through the existing assets route (not the fonts route).
+  // Icon overrides resolve through the assets route (not the fonts route).
   // The assets route serves with `Cache-Control: immutable`, so the URL must
   // change when the theme changes — version the query string or browsers keep
-  // serving a prior release's glyph from cache. The extension sniff in
-  // generateIconOverrideRule strips the query before deciding mask vs image.
-  const iconVersion = encodeURIComponent(theme?.version || '0');
-  const icons = loadedIcons.map(icon => ({
+  // serving a prior release's glyph from cache. The compiled override rules
+  // (iconOverrides, lib/themes/engine/compile.ts) carry the same ?v= query.
+  const iconVersion = encodeURIComponent(theme.version || '0');
+  const icons = themeRegistry.getIcons(themeId).map(icon => ({
     name: icon.name,
     src: `/api/themes/assets/${icon.pluginName}/${icon.src}?v=${iconVersion}`,
   }));
 
-  const subsystems = theme?.subsystems || undefined;
-  const images = themeRegistry.getImages(themeId);
-
-  return successResponse({ tokens, fonts, icons, cssOverrides, subsystems, images });
+  logger.debug('Serving theme', {
+    context: 'theme-item-api',
+    themeId,
+    choices: theme.compiled?.choices,
+    features: theme.compiled?.features,
+  });
+  return successResponse({
+    css: theme.compiled ? compiledThemeCss(theme.compiled) : '',
+    choices: theme.compiled?.choices ?? {},
+    features: theme.compiled?.features ?? { pageBackground: false, focusRing: false, scrollbar: false },
+    fonts,
+    icons,
+    subsystems: theme.subsystems || undefined,
+    images: themeRegistry.getImages(themeId),
+  });
 }
 
 /**
  * Handle GET ?action=export
- * Export any theme as a .qtap-theme bundle download
+ * Export a bundle theme as a .qtap-theme download
  */
 async function handleExport(themeId: string): Promise<Response> {
   const theme = themeRegistry.get(themeId);
   if (!theme) {
     return notFound('Theme');
   }
+  if (!theme.bundlePath) {
+    return badRequest(`Theme "${theme.name}" is built in and has no bundle to export.`);
+  }
 
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-export-'));
   const outputPath = path.join(tempDir, `${themeId}.qtap-theme`);
 
   try {
-    const manifest: QtapThemeManifest = {
-      format: 'qtap-theme',
-      formatVersion: 1,
-      id: theme.id,
-      name: theme.name,
-      description: theme.description,
-      version: theme.version,
-      author: theme.author,
-      supportsDarkMode: theme.supportsDarkMode,
-      tags: theme.tags,
-      tokens: theme.tokens,
-    };
-
-    const fonts = theme.fonts?.map(f => ({
-      src: f.src,
-      filePath: f.filePath,
-      family: f.family,
-      weight: f.weight,
-      style: f.style,
-      display: f.display,
-    }));
-
-    await exportThemeAsBundle(themeId, outputPath, {
-      manifest,
-      tokens: theme.tokens,
-      cssOverrides: theme.cssOverrides,
-      fonts,
-      installPath: theme.bundlePath,
-    });
-
+    await exportThemeAsBundle(themeId, theme.bundlePath, outputPath);
     const fileBuffer = await fs.readFile(outputPath);
-
+    logger.debug('Exported theme bundle', { context: 'theme-item-api', themeId, bytes: fileBuffer.length });
     return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
@@ -194,31 +176,8 @@ export async function DELETE(
     await ensureInitialized();
     const { themeId } = await params;
 
-    const theme = themeRegistry.get(themeId);
-    if (!theme) {
-      return notFound('Theme');
-    }
-
-    if (theme.source !== 'bundle') {
-      return badRequest(
-        `Cannot uninstall ${theme.source} theme "${theme.name}". Only bundle themes can be uninstalled.`
-      );
-    }
-
-    logger.info('Uninstalling bundle theme', {
-      context: 'DELETE /api/v1/themes/[themeId]',
-      themeId,
-    });
-
-    const result = await uninstallThemeBundle(themeId);
-    if (!result.success) {
-      return serverError(`Failed to uninstall theme: ${result.error}`);
-    }
-
-    // Hot-unload from registry
-    themeRegistry.unregisterTheme(themeId);
-
-    return messageResponse(`Theme "${theme.name}" uninstalled successfully`);
+    // No actions on DELETE: an unknown `?action=` is a 400, never an uninstall.
+    return await dispatchAction(request, {}, () => handleUninstall(themeId));
   } catch (error) {
     logger.error(
       'Failed to delete theme',
@@ -227,4 +186,46 @@ export async function DELETE(
     );
     return serverError('Failed to uninstall theme');
   }
+}
+
+/** Uninstall a bundle theme, or forget a refused one. */
+async function handleUninstall(themeId: string): Promise<Response> {
+  const theme = themeRegistry.get(themeId);
+  const refused = theme ? null : themeRegistry.getRefusedTheme(themeId);
+  if (!theme && !refused) {
+    return notFound('Theme');
+  }
+  const name = theme?.name ?? refused!.name;
+
+  if (refused && refused.source !== 'bundle') {
+    return badRequest(
+      `“${name}” arrives with a plugin; it departs when the plugin is removed from the Plugins card.`
+    );
+  }
+  if (theme && theme.source !== 'bundle') {
+    return badRequest(
+      `Cannot uninstall ${theme.source} theme "${theme.name}". Only bundle themes can be uninstalled.`
+    );
+  }
+
+  logger.info('Uninstalling bundle theme', {
+    context: 'DELETE /api/v1/themes/[themeId]',
+    themeId,
+    refused: !!refused,
+  });
+
+  const result = await uninstallThemeBundle(themeId);
+  if (!result.success) {
+    return serverError(`Failed to uninstall theme: ${result.error}`);
+  }
+
+  if (refused) {
+    themeRegistry.forgetRefused(themeId);
+    return messageResponse(`Theme "${name}" uninstalled successfully`);
+  }
+
+  // Hot-unload from registry
+  themeRegistry.unregisterTheme(themeId);
+
+  return messageResponse(`Theme "${name}" uninstalled successfully`);
 }

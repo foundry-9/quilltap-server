@@ -7,6 +7,7 @@ import { useDialogFocus } from '@/hooks/useDialogFocus'
 import DeletedImagePlaceholder from '../DeletedImagePlaceholder'
 import { ImageActions } from './ImageActions'
 import { ImageMetadata } from './ImageMetadata'
+import { UncensoredBadge } from '@/components/images/UncensoredBadge'
 import { useImageActions } from './hooks/useImageActions'
 import type { ImageDetailModalProps, Character, CharacterGalleryLink } from './types'
 import { useCharactersList } from '@/lib/hooks/use-characters-list'
@@ -130,6 +131,12 @@ export default function ImageDetailModal({
             className="max-w-full max-h-[70vh] w-auto h-auto object-contain"
             onError={() => setImageMissing(true)}
           />
+        )}
+
+        {!imageMissing && image.generationModeration && (
+          <div className="mt-2 flex justify-center">
+            <UncensoredBadge moderation={image.generationModeration} />
+          </div>
         )}
 
         {/* Character gallery panel */}

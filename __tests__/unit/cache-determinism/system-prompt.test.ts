@@ -168,10 +168,17 @@ describe('cache-determinism: system prompt', () => {
   //   937ea8197a65d022 → e38cd30373a0b89c  (2026-11-06) the physical
   //     description's name and usage context retired (builder version 3):
   //     the appearance line drops its quoted label and "(best used: …)" note.
+  //   e38cd30373a0b89c → ffbcbb1ad0cd36a4  (2026-11-18) the story-character
+  //     section ("## Playing your part") added for roleplay characters, after
+  //     the Taboo section and before the standing instructions. NOT an
+  //     identity-stack change: the stack golden above is untouched and the
+  //     builder version stays at 3. An assistant-kind character's prompt is
+  //     unchanged (story-character-section.test.ts holds that).
+  //     See docs/developer/features/roleplay-character-latitude.md §5.1.
   it('buildSystemPrompt fixture hash matches checked-in golden', () => {
     const golden = process.env.UPDATE_GOLDEN_PROMPT_HASH === '1'
       ? hash(buildSystemPrompt(FIXTURE_OPTIONS))
-      : 'e38cd30373a0b89c'
+      : 'ffbcbb1ad0cd36a4'
     const actual = hash(buildSystemPrompt(FIXTURE_OPTIONS))
     if (actual !== golden) {
       // Surface the new hash so the engineer can update the golden
@@ -200,10 +207,12 @@ describe('cache-determinism: system prompt', () => {
   // person-consistency wording (builder version 2) as the base golden above.
   // bc37032e92411263 → 9eb848b166a7f17f (2026-11-06), the retired appearance
   // label and usage context (builder version 3).
+  // 9eb848b166a7f17f → a96c7ca8f76e6254 (2026-11-18), the same story-character
+  // section as the base golden above.
   it('buildSystemPrompt with a Taboo list matches its own checked-in golden', () => {
     const golden = process.env.UPDATE_GOLDEN_PROMPT_HASH === '1'
       ? hash(buildSystemPrompt(FIXTURE_OPTIONS_WITH_TABOO))
-      : '9eb848b166a7f17f'
+      : 'a96c7ca8f76e6254'
     const actual = hash(buildSystemPrompt(FIXTURE_OPTIONS_WITH_TABOO))
     if (actual !== golden) {
       console.error(

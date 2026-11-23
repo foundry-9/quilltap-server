@@ -30,6 +30,7 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { buildImageGenParams } from '@/lib/image-gen/params-builder';
+import { findUncensoredImages } from '@/lib/photos/uncensored-images';
 import { generateImageWithConciergeFailover } from '@/lib/services/dangerous-content/image-failover';
 import { resolveUncensoredTextUnderstudy } from '@/lib/services/dangerous-content/understudy';
 import { supportsImageGeneration } from '@/lib/llm/image-capable';
@@ -113,6 +114,9 @@ export const GET = createContextHandler(async (request, { user, repos }) => {
     // Build tag type lookup maps
     const characterIds = new Set(allCharacters.map(c => c.id));
 
+    // The gallery's Uncensored badge: asked by content hash, like every gallery.
+    const uncensored = await findUncensoredImages(repos, images.map(img => img.sha256));
+
     const data = images.map(img => {
       // Count characters using this image as default
       const charactersUsingAsDefault = allCharacters.filter(
@@ -159,6 +163,7 @@ export const GET = createContextHandler(async (request, { user, repos }) => {
         source,
         generationPrompt: img.generationPrompt,
         generationModel: img.generationModel,
+        generationModeration: uncensored.get(img.sha256) ?? null,
         createdAt: img.createdAt,
         updatedAt: img.updatedAt,
         tags,
@@ -541,6 +546,8 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
         generationPrompt: prompt,
         generationModel: profile.modelName,
         generationRevisedPrompt: generatedImage.revisedPrompt || null,
+        // Moderated, uncensored by choice, sent to the desk, or the understudy's.
+        generationModeration: failover.moderation,
         tags: inheritedTags,
         storageKey,
       }, { id: fileId });
@@ -564,6 +571,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
   logger.info('[Images v1] Image generation complete', {
     userId: user.id,
     generatedCount: savedImages.length,
+    generationModeration: failover.moderation,
   });
 
   return successResponse({

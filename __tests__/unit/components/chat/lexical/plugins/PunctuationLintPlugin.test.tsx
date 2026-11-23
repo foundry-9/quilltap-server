@@ -178,6 +178,39 @@ describe('PunctuationLintPlugin', () => {
       expect(paintedText(NARRATION_HIGHLIGHT_NAME)).toEqual(['She waits.'])
     })
 
+    it('lifts the aside paint from selected text and restores it after', () => {
+      mount(undefined, true)
+      act(() => seedParagraph(harness.editor, 'You came, Theo said. ((brb))'))
+      const root = harness.editor.getRootElement()!
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+      const text = walker.nextNode() as Text
+      const at = text.data.indexOf('((')
+      const select = (start: number, end: number) =>
+        act(() => {
+          const range = document.createRange()
+          range.setStart(text, start)
+          range.setEnd(text, end)
+          const selection = document.getSelection()!
+          selection.removeAllRanges()
+          selection.addRange(range)
+          document.dispatchEvent(new Event('selectionchange'))
+        })
+
+      select(0, text.length)
+      expect(paintedText(OOC_HIGHLIGHT_NAME)).toEqual([])
+      expect(paintedText(NARRATION_HIGHLIGHT_NAME)).toEqual(['You came, Theo said.'])
+
+      select(at, at + 3)
+      expect(paintedText(OOC_HIGHLIGHT_NAME)).toEqual(['rb))'])
+
+      select(at + 3, at + 4)
+      expect(paintedText(OOC_HIGHLIGHT_NAME)).toEqual(['((b', 'b))'])
+
+      select(at, at)
+      expect(paintedText(OOC_HIGHLIGHT_NAME)).toEqual(['((brb))'])
+      expect(readText(harness.editor)).toBe('You came, Theo said. ((brb))')
+    })
+
     it('ranks a specific warning above the tint above the preview', () => {
       mount(undefined, true)
       act(() => seedParagraph(harness.editor, 'She waits." ((brb))'))

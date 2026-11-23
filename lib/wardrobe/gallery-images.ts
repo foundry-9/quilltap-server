@@ -19,6 +19,8 @@
  */
 
 import { logger } from '@/lib/logger';
+import type { GenerationModeration } from '@/lib/schemas/file.types';
+import { findUncensoredImages } from '@/lib/photos/uncensored-images';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { loadWearablePool } from '@/lib/wardrobe/pool';
 import { wardrobeImageThumbnailUrl, wardrobeImageUrl } from '@/lib/wardrobe/item-images';
@@ -51,6 +53,11 @@ export interface WardrobeGalleryImageEntry {
   itemArchived: boolean;
   /** True when this is the item's chosen picture (`imageFileId`). */
   isCurrentItemImage: boolean;
+  /**
+   * Set when an uncensored profile drew these bytes (`findUncensoredImages`,
+   * by sha256); null otherwise. Drives the gallery's Uncensored badge.
+   */
+  generationModeration?: GenerationModeration | null;
 }
 
 export interface ListWardrobeGalleryImagesOutput {
@@ -86,6 +93,8 @@ export async function listWardrobeGalleryImages(
   const itemsById = new Map(items.map((item) => [item.id, item]));
   const files = await repos.files.findByLinkedToAny(items.map((item) => item.id));
 
+  const uncensored = await findUncensoredImages(repos, files.map((f) => f.sha256));
+
   const entries: WardrobeGalleryImageEntry[] = [];
   for (const file of files) {
     if (file.category !== 'IMAGE' || file.source !== 'GENERATED') continue;
@@ -109,6 +118,7 @@ export async function listWardrobeGalleryImages(
       locationLabel: wardrobeOriginLabel(item.origin) ?? OWN_WARDROBE_LABEL,
       itemArchived: !!item.archivedAt,
       isCurrentItemImage: item.imageFileId === file.id,
+      generationModeration: uncensored.get(file.sha256) ?? null,
     });
   }
 

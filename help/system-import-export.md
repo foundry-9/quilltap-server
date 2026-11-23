@@ -291,6 +291,8 @@ setting than gamble with a live one.
 
 **Document stores arrive shuttered.** A filesystem or Obsidian store in a `.qtap` import comes in disabled, and the preview names the folder it points at; once you are satisfied that the folder is one you recognise, enable the store in the Scriptorium. Choosing Overwrite never alters an existing store's folder or type. Exports likewise leave out any plugin setting marked secret, the MCP server list among them.
 
+**Theme drafts stay in the Atelier.** The `Themes/` folder of your Quilltap General store — where [Calliope's Atelier](theme-editor.md) keeps its works in progress — is left out of every `.qtap` export, the rest of General travelling as usual. A finished theme travels as a `.qtap-theme` bundle instead (**Settings → Appearance**, or `quilltap themes export`). Backups are another matter: they carry your drafts like everything else.
+
 **Instance settings overwrite, on purpose.** That is what "move my setup" means.
 A handful of keys never travel regardless — the pointers to this instance's own
 document stores, the housekeeping clock, and the version guard — because they

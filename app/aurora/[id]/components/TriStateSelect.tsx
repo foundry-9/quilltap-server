@@ -98,7 +98,7 @@ export function ToggleRow({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-5 w-5 flex-shrink-0 qt-accent-primary"
+        className="qt-checkbox h-5 w-5 flex-shrink-0"
       />
     </div>
   )

@@ -41,7 +41,6 @@ const themePreferenceUpdateSchema = z.object({
   activeThemeId: z.string().nullable().optional(),
   colorMode: z.enum(['light', 'dark', 'system']).optional(),
   customOverrides: z.record(z.string(), z.string()).optional(),
-  showNavThemeSelector: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -69,7 +68,6 @@ async function handleGetThemePreference({ user, repos }: RequestContext): Promis
       themePreference: {
         activeThemeId: null,
         colorMode: 'system',
-        showNavThemeSelector: false,
       },
     });
   }
@@ -78,7 +76,6 @@ async function handleGetThemePreference({ user, repos }: RequestContext): Promis
   const themePreference: ThemePreference = chatSettings?.themePreference ?? {
     activeThemeId: null,
     colorMode: 'system',
-    showNavThemeSelector: false,
   };
 
   return successResponse({ data: themePreference });
@@ -146,7 +143,6 @@ async function handleUpdateThemePreference(
   const currentPreference = chatSettings?.themePreference ?? {
     activeThemeId: null,
     colorMode: 'system',
-    showNavThemeSelector: false,
   };
 
   // Build updated preference
@@ -155,7 +151,6 @@ async function handleUpdateThemePreference(
     ...(validated.activeThemeId !== undefined && { activeThemeId: validated.activeThemeId }),
     ...(validated.colorMode !== undefined && { colorMode: validated.colorMode }),
     ...(validated.customOverrides !== undefined && { customOverrides: validated.customOverrides }),
-    ...(validated.showNavThemeSelector !== undefined && { showNavThemeSelector: validated.showNavThemeSelector }),
   };
 
   // Validate the complete preference

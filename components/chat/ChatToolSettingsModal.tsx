@@ -113,7 +113,7 @@ export default function ChatToolSettingsModal({
       onClose={handleDismiss}
       title="LLM Tool Settings"
     >
-      <div className="qt-dialog-body">
+      <div className="qt-dialog-body qt-dialog-body-default">
         {profileToolsDisabled && (
           <div className="qt-warning-box mb-4">
             <p className="qt-label">Tools disabled by connection profile</p>
@@ -135,7 +135,7 @@ export default function ChatToolSettingsModal({
       </div>
 
       {/* Footer with save/cancel buttons */}
-      <div className="qt-dialog-footer">
+      <div className="qt-dialog-footer qt-dialog-footer-default">
         <button
           type="button"
           onClick={handleDismiss}

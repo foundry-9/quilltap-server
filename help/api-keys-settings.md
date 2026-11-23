@@ -16,7 +16,7 @@ An API key is a unique credential that authorizes Quilltap to access your accoun
 
 ## Finding Your Keys
 
-1. Click **Settings** (gear icon) in the left sidebar
+1. Click **Settings** (gear icon) on the rail
 2. Choose the **Connections** group and open the **Providers** card
 3. Make sure the view toggle at the top of the card reads **By provider** (the default)
 4. Click a provider's card to open it — its keys are listed first

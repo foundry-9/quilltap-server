@@ -15,9 +15,10 @@
  *   qt-settings-attention        — the strip of lit conditions; qt-settings-attention-chip one of them
  *   qt-settings-advanced-divider — the "Advanced" rule inside a group
  *   qt-settings-provider-card    — one provider's card in Connections → Providers
+ *   qt-settings-sources          — Auto-Configure's "where each value came from" list
+ *                                  (qt-settings-sources-list / -row / -term / -note)
  *
- * Plain CSS (no @apply) so the theme-storybook mirror is the same text. Every
- * colour reads a --qt-settings-* hook with a token fallback.
+ * Plain CSS (no @apply). Every colour reads a --qt-settings-* hook with a token fallback.
  *
  * Component: app/settings/SettingsView.tsx
  */
@@ -381,5 +382,41 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Appearance: a version 2 theme previewed inside the page. The container
+     carries its own data-theme, so these read the previewed theme's tokens
+     (the --color-* / --font-* map is re-declared on [data-theme] elements in
+     _theme-defaults.css), not the page theme's. */
+  .qt-theme-preview-surface {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  /* Auto-Configure's source list (components/settings/connection-profiles/AutoConfigureSources.tsx) */
+  .qt-settings-sources {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .qt-settings-sources-list {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 0.75rem;
+    row-gap: 0.25rem;
+  }
+
+  .qt-settings-sources-row {
+    display: contents;
+  }
+
+  .qt-settings-sources-term {
+    font-weight: 500;
+  }
+
+  .qt-settings-sources-note {
+    margin-top: 0.5rem;
   }
 }

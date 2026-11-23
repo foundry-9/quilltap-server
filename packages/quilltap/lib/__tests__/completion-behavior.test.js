@@ -132,6 +132,20 @@ describe('bash completion looks up names against the addressed instance', () => 
   });
 });
 
+describe('bash completion offers paths where a theme verb takes a bundle', () => {
+  const prefix = path.join(COMPLETION_DIR, 'bash.t');
+
+  it.each(['install', 'validate'])('completes a path after themes %s', (verb) => {
+    expect(bashComplete(`quilltap themes ${verb} ${prefix}`)).toContain(
+      path.join(COMPLETION_DIR, 'bash.template'),
+    );
+  });
+
+  it('offers no paths where the verb takes a theme id', () => {
+    expect(bashComplete(`quilltap themes uninstall ${prefix}`)).toEqual([]);
+  });
+});
+
 describe('zsh completion parses positions instead of counting words', () => {
   const tpl = fs.readFileSync(path.join(COMPLETION_DIR, 'zsh.template'), 'utf8');
 

@@ -20,6 +20,7 @@ import type { AtlasEntryWithOrigin } from '@/lib/schemas/atlas.types'
 import { encodeAtlasContainer, type AtlasContainer } from '@/lib/atlas/container'
 import { folderCrumb } from '@/lib/atlas/folders'
 import { OWN_TIER } from '@/lib/folder-browser/view'
+import { compareTitles } from '@/lib/utils/title-sort'
 import { useAtlasFolders } from '@/lib/hooks/use-atlas'
 import { ItemFolderPickerDialog, type ItemFolderPickerWording } from '@/components/item-browser/ItemFolderPickerDialog'
 import { FolderBrowserShell } from '@/components/item-browser/FolderBrowserShell'
@@ -73,7 +74,7 @@ export function AtlasBrowser({
     const term = search.trim().toLowerCase()
     return entries
       .filter((entry) => !term || haystackOf(entry).includes(term))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+      .sort((a, b) => compareTitles(a.name, b.name))
   }, [entries, search])
 
   const state = useFolderBrowserState({
@@ -161,9 +162,19 @@ export function AtlasBrowser({
       )}
       folderFiling={{ open: actions.openFolderPicker }}
       footer={(
-        <button type="button" className="qt-button-primary qt-button-sm" disabled={!container} onClick={() => actions.openCreate(createFolder)}>
-          + New Entry
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="qt-button-primary qt-button-sm" disabled={!container} onClick={() => actions.openCreate(createFolder)}>
+            + New Entry
+          </button>
+          <button
+            type="button"
+            className="qt-button-secondary qt-button-sm"
+            disabled={!container}
+            onClick={() => actions.openLoreWizard(createFolder)}
+          >
+            New Entry from Lore…
+          </button>
+        </div>
       )}
     >
       {picker && (

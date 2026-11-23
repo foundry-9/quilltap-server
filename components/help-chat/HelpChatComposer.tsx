@@ -12,7 +12,7 @@
  * Without the prop the composer is exactly the Help Chat's.
  */
 
-import { useState, useCallback, useRef, type KeyboardEvent, type RefObject, type ClipboardEvent, type DragEvent } from 'react'
+import { useState, useCallback, useEffect, useRef, type KeyboardEvent, type RefObject, type ClipboardEvent, type DragEvent } from 'react'
 import { Icon } from '@/components/ui/icon'
 import type { ConsoleAttachmentsApi } from '@/components/brahma-console/hooks/useConsoleAttachments'
 
@@ -24,10 +24,21 @@ interface HelpChatComposerProps {
   inputRef?: RefObject<HTMLTextAreaElement | null>
   /** Enable attachments (attach, paste, drop, chips). Absent → no attachments. */
   attachments?: ConsoleAttachmentsApi
+  /**
+   * Text to put in the composer, for the author to read and send (Calliope's
+   * hand-offs). A new `nonce` replaces what is there; the same one does nothing.
+   */
+  seed?: { text: string; nonce: number } | null
 }
 
-export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a question...', inputRef, attachments }: HelpChatComposerProps) {
-  const [content, setContent] = useState('')
+export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a question...', inputRef, attachments, seed }: HelpChatComposerProps) {
+  const [content, setContent] = useState(seed?.text ?? '')
+  // A new seed replaces the text (adjusted during render, not in an effect).
+  const [seedNonce, setSeedNonce] = useState(seed?.nonce ?? null)
+  if (seed && seed.nonce !== seedNonce) {
+    setSeedNonce(seed.nonce)
+    setContent(seed.text)
+  }
   const [dragOver, setDragOver] = useState(false)
   const internalRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -53,6 +64,18 @@ export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a questi
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- textareaRef is a stable ref
   }, [content, canSend, onSend, attachments, readyIds])
+
+  // Bring a seeded message into view: grow the box to fit and put the caret at its end.
+  useEffect(() => {
+    if (seedNonce === null) return
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+    el.focus()
+    el.setSelectionRange(el.value.length, el.value.length)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- textareaRef is a stable ref
+  }, [seedNonce])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

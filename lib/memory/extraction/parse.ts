@@ -108,14 +108,52 @@ export function coerceMemoryDraft(item: Record<string, unknown>): MemoryDraft | 
   return draft
 }
 
-/** The SELF parser: a flat array, capped with the event slot. */
-export function parseSelfDrafts(raw: string, cap: number): MemoryDraft[] {
+/** Stated-particulars memories one SELF call may add beyond its cap. */
+export const STATED_PARTICULARS_EXTRA_SLOT = 1
+
+/**
+ * The reserved keyword a stated-particulars memory is stored with. It is how
+ * the next extraction finds what the holder has already told
+ * (`MemoriesRepository.findRecentWithKeyword`), so a retelling is not recorded
+ * twice. A keyword, like the targeting tags, so no column is needed.
+ */
+export const STATED_PARTICULARS_KEYWORD = 'stated particulars'
+
+export interface ParseSelfDraftsOptions {
+  /**
+   * The call asked for stated particulars (`prompts/self.ts`): items the model
+   * marked `"stated": true` do not compete with the ordinary candidates. At
+   * most {@link STATED_PARTICULARS_EXTRA_SLOT} of them is kept, beside the
+   * capped rest; any further marked item is dropped. The kept one carries
+   * {@link STATED_PARTICULARS_KEYWORD} in its keywords and nothing else of
+   * the mark. Off (the default), the mark is ignored and a marked item is an
+   * ordinary candidate.
+   */
+  statedSlot?: boolean
+}
+
+/**
+ * The SELF parser: a flat array, capped with the event slot — plus, when the
+ * call asked for them, one stated-particulars memory in a slot of its own.
+ */
+export function parseSelfDrafts(raw: string, cap: number, options: ParseSelfDraftsOptions = {}): MemoryDraft[] {
   const items = parseJsonItems(raw)
   if (!items) return []
-  const drafts = items
-    .map(item => (item && typeof item === 'object' ? coerceMemoryDraft(item as Record<string, unknown>) : null))
-    .filter((d): d is MemoryDraft => d !== null)
-  return capWithEventSlot(drafts, cap)
+  const ordinary: MemoryDraft[] = []
+  const stated: MemoryDraft[] = []
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
+    const record = item as Record<string, unknown>
+    const draft = coerceMemoryDraft(record)
+    if (!draft) continue
+    if (options.statedSlot && record.stated === true) {
+      const keywords = (draft.keywords ?? []).filter(k => k !== STATED_PARTICULARS_KEYWORD)
+      stated.push({ ...draft, keywords: [...keywords, STATED_PARTICULARS_KEYWORD] })
+    } else {
+      ordinary.push(draft)
+    }
+  }
+  return [...capWithEventSlot(ordinary, cap), ...stated.slice(0, STATED_PARTICULARS_EXTRA_SLOT)]
 }
 
 /**

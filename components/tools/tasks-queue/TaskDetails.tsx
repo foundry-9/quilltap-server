@@ -3,6 +3,7 @@
 import { Icon } from '@/components/ui/icon'
 import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import type { FullJobDetail } from './types'
+import { isHeldForNextTurn } from '@/lib/schemas/job.types'
 
 interface TaskDetailsProps {
   job: FullJobDetail
@@ -122,7 +123,7 @@ export function TaskDetails({
           </div>
           <div>
             <span className="qt-text-xs">Scheduled</span>
-            <div className="font-medium text-sm">{formatDate(job.scheduledAt)}</div>
+            <div className="font-medium text-sm">{isHeldForNextTurn(job) ? 'Waiting for the next turn' : formatDate(job.scheduledAt)}</div>
           </div>
         </div>
 

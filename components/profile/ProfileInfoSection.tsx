@@ -71,7 +71,7 @@ export function ProfileInfoSection({ profile }: ProfileInfoSectionProps) {
           System information about your account
         </p>
       </div>
-      <div className="qt-card-content">
+      <div className="qt-card-body">
         <dl>
           <InfoField label="User ID" value={profile.id} copyable />
           <InfoField label="Username" value={profile.username} />

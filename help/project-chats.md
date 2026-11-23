@@ -94,7 +94,7 @@ For listing, reading, and searching project files, the AI uses the Scriptorium d
 
 **From the Chats Page:**
 
-1. Go to **Chats** in sidebar
+1. Open **Conversations** and choose **Chats**
 2. Project chats show a project badge
 3. Filter by project if available
 4. Click to open any chat

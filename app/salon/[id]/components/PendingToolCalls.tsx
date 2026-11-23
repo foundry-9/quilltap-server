@@ -40,7 +40,7 @@ export function PendingToolCalls({ pendingToolCalls, embedded = false, beforePro
   }
 
   const details = (
-    <details className="group" open={pendingToolCalls.some(tc => tc.status === 'pending')}>
+    <details className="qt-chat-pending-tools group" open={pendingToolCalls.some(tc => tc.status === 'pending')}>
           <summary className="px-4 py-2 rounded-lg qt-bg-muted border qt-border-default cursor-pointer list-none flex items-center gap-2">
             <Icon name="chevron-right" className="w-4 h-4 transition-transform group-open:rotate-90" />
             <span className="text-sm qt-text-primary">
@@ -85,7 +85,7 @@ export function PendingToolCalls({ pendingToolCalls, embedded = false, beforePro
 
   // Standalone: full-width assistant row with the tool emoji as the avatar.
   return (
-    <div className="qt-chat-message-row qt-chat-message-row-assistant">
+    <div className="qt-chat-message-row qt-chat-message-row-assistant" data-role="tool">
       <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full qt-bg-muted text-lg">
         {getEmojiForTools()}
       </div>

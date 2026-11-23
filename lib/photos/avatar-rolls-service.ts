@@ -36,6 +36,8 @@ import type { FileEntry } from '@/lib/schemas/types';
 import { getPhotoLinkSummaryBySha256, type PhotoLinker } from './photo-link-summary';
 import { buildMountFileUrl, buildLegacyFileUrl } from './resolve-character-avatar';
 import { saveFileToCharacterGallery } from './character-gallery-service';
+import type { GenerationModeration } from '@/lib/schemas/file.types';
+import { withGenerationModeration } from './uncensored-images';
 
 /** One developed plate, as the gallery renders it. */
 export interface AvatarRollEntry {
@@ -67,6 +69,11 @@ export interface AvatarRollEntry {
   isPortrait: boolean;
   /** How many of the character's chats are currently displaying this plate. */
   usedInChatCount: number;
+  /**
+   * Set when an uncensored profile drew these bytes (`findUncensoredImages`,
+   * by sha256); null otherwise. Drives the gallery's Uncensored badge.
+   */
+  generationModeration?: GenerationModeration | null;
 }
 
 export interface ListAvatarRollsInput {
@@ -142,7 +149,7 @@ export async function listAvatarRolls(
   }
 
   return {
-    entries,
+    entries: await withGenerationModeration(repos, entries),
     total: rolls.length,
     hasMore: effectiveOffset + page.length < rolls.length,
   };
@@ -316,7 +323,7 @@ export async function deleteAvatarRoll(
  * is written by the avatar cache and by nothing else, so it is the membership
  * test; the tag scopes it to one character.
  */
-async function findRollsForCharacter(
+export async function findRollsForCharacter(
   characterId: string,
   repos: ReturnType<typeof getRepositories>
 ): Promise<FileEntry[]> {

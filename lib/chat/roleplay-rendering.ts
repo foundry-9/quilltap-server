@@ -61,6 +61,13 @@ export const DEFAULT_DIALOGUE_DETECTION: DialogueDetection = {
   className: 'qt-chat-dialogue',
 }
 
+/**
+ * The Emphasis style: vocal stress, a title, a foreign word. Emphasis is not a
+ * voice of its own, so a span wearing this class stays inside whatever voice
+ * surrounds it (see {@link tokenizeInline}) and takes that voice's ink.
+ */
+export const EMPHASIS_CLASS = 'qt-roleplay-emphasis'
+
 // ============================================================================
 // COMPILED RULES
 // ============================================================================
@@ -99,6 +106,8 @@ export interface CompiledRule {
    * matched prefix from the block (see {@link lineMatchFor}).
    */
   hideDelimiters: boolean
+  /** The rule's class list carries {@link EMPHASIS_CLASS}. */
+  emphasis: boolean
 }
 
 /**
@@ -122,9 +131,11 @@ export function compileRenderingPatterns(patterns: RenderingPattern[]): Compiled
     } catch {
       continue
     }
+    const className = sanitizeClassName(p.className)
     rules.push({
       regex,
-      className: sanitizeClassName(p.className),
+      className,
+      emphasis: className.split(/\s+/).includes(EMPHASIS_CLASS),
       scope: p.scope === 'line' ? 'line' : p.scope === 'unmarked' ? 'unmarked' : 'inline',
       hideDelimiters: p.hideDelimiters ?? false,
     })
@@ -193,8 +204,16 @@ function tokenizeWith(
   depth: number,
 ): Segment[] {
   const segments: Segment[] = []
+  // Indexes into `segments` of the unclaimed runs and of the emphasis spans,
+  // kept only while there is an unmarked voice for emphasis to sit inside.
+  const unclaimed = new Set<number>()
+  const emphasized = new Set<number>()
   let remaining = text
-  const plain = (t: string): Segment => (unmarkedClassName ? { text: t, className: unmarkedClassName } : { text: t })
+  const plain = (t: string): Segment => {
+    if (!unmarkedClassName) return { text: t }
+    unclaimed.add(segments.length)
+    return { text: t, className: unmarkedClassName }
+  }
 
   while (remaining.length > 0) {
     // `advance` is always the FULL match length (delimiters consumed); `text` is
@@ -234,6 +253,7 @@ function tokenizeWith(
         const inner = others.length > 0 ? tokenizeWith(earliest.text, others, undefined, depth + 1) : []
         if (inner.some((seg) => seg.className)) claimed.children = inner
       }
+      if (unmarkedClassName && earliest.rule.emphasis) emphasized.add(segments.length)
       segments.push(claimed)
       remaining = remaining.substring(earliest.index + earliest.advance)
     } else {
@@ -242,7 +262,50 @@ function tokenizeWith(
     }
   }
 
-  return segments
+  if (!unmarkedClassName || emphasized.size === 0) return segments
+  return foldEmphasisIntoUnmarked(segments, unclaimed, emphasized, unmarkedClassName)
+}
+
+/**
+ * Emphasis among unmarked text belongs to it: each run of unclaimed text and
+ * emphasis spans becomes ONE unmarked span with the emphasis nested inside, so
+ * the stressed word keeps the narration's ink and a theme can tell that it sits
+ * in narration. Runs with no emphasis in them are left as they were.
+ */
+function foldEmphasisIntoUnmarked(
+  segments: Segment[],
+  unclaimed: Set<number>,
+  emphasized: Set<number>,
+  unmarkedClassName: string,
+): Segment[] {
+  const out: Segment[] = []
+  let run: Segment[] = []
+  let runHasEmphasis = false
+  const flush = () => {
+    if (run.length === 0) return
+    if (runHasEmphasis) {
+      out.push({
+        text: run.map((seg) => seg.text).join(''),
+        className: unmarkedClassName,
+        children: run.map((seg) => (seg.className === unmarkedClassName && !seg.children ? { text: seg.text } : seg)),
+      })
+    } else {
+      out.push(...run)
+    }
+    run = []
+    runHasEmphasis = false
+  }
+  segments.forEach((seg, i) => {
+    if (unclaimed.has(i) || emphasized.has(i)) {
+      run.push(seg)
+      if (emphasized.has(i)) runHasEmphasis = true
+    } else {
+      flush()
+      out.push(seg)
+    }
+  })
+  flush()
+  return out
 }
 
 // ============================================================================

@@ -22,8 +22,8 @@ import { isQuoteSensitiveRoleplayConfig } from '@/lib/markdown/typography'
 import { generateFormattingPromptHint } from '@/lib/chat/template-prompt-hint'
 import { RoleplayTemplateSchema } from '@/lib/schemas/template.types'
 
-const NARRATION = 'qt-roleplay-plain qt-rp-italic'
-const EMPHASIS = 'qt-roleplay-plain qt-rp-bold qt-rp-italic'
+const NARRATION = 'qt-roleplay-quiet'
+const EMPHASIS = 'qt-roleplay-emphasis'
 const DIALOGUE = 'qt-chat-dialogue'
 const OOC = 'qt-chat-ooc'
 
@@ -45,7 +45,7 @@ describe('Novel template', () => {
     })
     expect(parsed.narrationDelimiters).toBeNull()
     expect(parsed.markdownAsterisks).toBe(false)
-    expect(parsed.unmarkedStyle?.style).toBe('qt-roleplay-plain')
+    expect(parsed.unmarkedStyle?.style).toBe('qt-roleplay-quiet')
   })
 
   it('derives its patterns from the editor-reachable fields alone', () => {
@@ -61,11 +61,11 @@ describe('Novel template', () => {
   })
 
   describe('display', () => {
-    it('sets plain prose as italic narration', () => {
+    it('sets plain prose as quiet, upright narration', () => {
       expect(html('She set the cup down.')).toBe(`<span class="${NARRATION}">She set the cup down.</span>`)
     })
 
-    it('leaves straight-quoted dialogue upright, narration italic around it', () => {
+    it('leaves straight-quoted dialogue at full strength, narration quiet around it', () => {
       expect(html('"You\'re late," he said.')).toBe(
         `<span class="${DIALOGUE}">"You're late,"</span><span class="${NARRATION}"> he said.</span>`,
       )
@@ -80,9 +80,26 @@ describe('Novel template', () => {
       expect(html('"And then I went home.')).toBe(`<span class="${DIALOGUE}">"And then I went home.</span>`)
     })
 
-    it('styles emphasis in narration, concealing the asterisks', () => {
+    it('keeps emphasis inside the narration it sits in, concealing the asterisks', () => {
       expect(html('It was *urgent*.')).toBe(
-        `<span class="${NARRATION}">It was </span><span class="${EMPHASIS}">urgent</span><span class="${NARRATION}">.</span>`,
+        `<span class="${NARRATION}">It was <span class="${EMPHASIS}">urgent</span>.</span>`,
+      )
+    })
+
+    it('folds emphasis into narration only, never into the dialogue beside it', () => {
+      expect(html('"No," she said, *very* quietly. He left.')).toBe(
+        `<span class="${DIALOGUE}">"No,"</span>` +
+          `<span class="${NARRATION}"> she said, <span class="${EMPHASIS}">very</span> quietly. He left.</span>`,
+      )
+    })
+
+    it('wraps emphasis that stands alone in a run', () => {
+      expect(html('*Never*')).toBe(`<span class="${NARRATION}"><span class="${EMPHASIS}">Never</span></span>`)
+    })
+
+    it('leaves emphasis a plain sibling where the text has no unmarked voice', () => {
+      expect(segmentsToHtml(tokenizeInline('It was *urgent*.', rules))).toBe(
+        `It was <span class="${EMPHASIS}">urgent</span>.`,
       )
     })
 
@@ -143,6 +160,17 @@ describe('Novel template', () => {
     it('does not style text inside a wrap-block span as narration', () => {
       const out = applyRoleplayPatterns(`<p><span class="${EMPHASIS}">Damn.</span></p>`, rules)
       expect(out).toBe(`<p><span class="${EMPHASIS}">Damn.</span></p>`)
+    })
+
+    it('sheds a narration span that carries emphasis from a block a line rule claims', () => {
+      const lineRules = compileRenderingPatterns([
+        ...patterns,
+        { pattern: '^// (?<rpBody>.+)$', className: OOC, flags: 'm', scope: 'line', hideDelimiters: true },
+      ])
+      const inline = applyRoleplayPatterns('<p>// an *urgent* aside</p>', lineRules)
+      expect(applyLineScopedClasses(inline, lineRules)).toBe(
+        `<p class="${OOC}">an <span class="${EMPHASIS}">urgent</span> aside</p>`,
+      )
     })
 
     it('sheds narration spans from a block a line rule claims', () => {

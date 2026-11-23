@@ -36,6 +36,12 @@ const config: Config = {
   // nodejs/node#62393, suppressed by the --no-sparkplug guard in
   // jest.global-setup.js and the npm test scripts.
   workerIdleMemoryLimit: '512MB',
+  // Per-test ceiling. Jest's 5 s default is far too tight for CI: the Test job
+  // runs ~1,500 suites under v8 coverage on a shared runner, and render-heavy
+  // jsdom suites (the theme editor most of all) routinely take several times
+  // longer there than locally. Matches the integration config. Testing
+  // Library's own findBy / waitFor ceiling is raised in jest.setup.ts.
+  testTimeout: 30000,
   // Runs once before the whole suite: arms the V8 Sparkplug segfault guard
   // (nodejs/node#62393 — see the note in jest.global-setup.js) and rebuilds the
   // real SQLCipher binding if it was compiled against a different Node ABI than

@@ -21,6 +21,13 @@ export const PROVIDER_PROFILE_KIND_LABELS: Record<ProviderProfileKind, string> =
   embedding: 'Embedding',
 }
 
+/**
+ * The group a Courier connection profile is listed under. Not a real provider:
+ * a Courier profile's `provider` field is informational (older ones say
+ * `OPENAI`), and the request is carried by hand.
+ */
+export const COURIER_PROVIDER_GROUP = 'COURIER'
+
 interface KeyLike {
   id: string
   provider: string
@@ -32,6 +39,8 @@ interface ProfileLike {
   name: string
   provider?: string | null
   apiKeyId?: string | null
+  /** Connection profiles only: `'courier'` sends the profile to {@link COURIER_PROVIDER_GROUP}. */
+  transport?: string | null
 }
 
 export interface ProviderGroup<K, C, I, E> {
@@ -76,6 +85,7 @@ export function groupByProvider<
   }
 
   const providerOf = (profile: ProfileLike): string | null =>
+    (profile.transport === 'courier' ? COURIER_PROVIDER_GROUP : null) ||
     profile.provider || (profile.apiKeyId ? keyProvider.get(profile.apiKeyId) ?? null : null)
 
   for (const key of input.keys) {

@@ -10,9 +10,11 @@
  * Two rules it keeps for every caller:
  *
  * - **Stored, not sent.** The bridges transcode bitmaps to WebP, so the row's
- *   `mimeType` and `size` are the bridge's `storedMimeType` / `sizeBytes`,
- *   never the input's — a vision provider rejects bytes whose declared type
- *   is wrong ("media_type X but image is Y").
+ *   `mimeType`, `size` and `sha256` are the bridge's `storedMimeType` /
+ *   `sizeBytes` / `sha256`, never the input's — a vision provider rejects
+ *   bytes whose declared type is wrong ("media_type X but image is Y"), and a
+ *   provider-bytes hash matches no vault copy (the stale-chat sweep deleted a
+ *   default avatar that way).
  * - **No label on a generated picture.** `description` is what
  *   `describe_image` and the blind-model fallback read as "what this picture
  *   shows"; a stub such as "Story background for: <title>" shadowed the
@@ -29,7 +31,7 @@
 
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
-import type { FileEntry, FileSource } from '@/lib/schemas/file.types';
+import type { FileEntry, FileSource, GenerationModeration } from '@/lib/schemas/file.types';
 
 const LOG_CONTEXT = 'files.generated-file-row';
 
@@ -38,14 +40,18 @@ export interface StoredImageBytes {
   storageKey: string;
   storedMimeType: string;
   sizeBytes: number;
+  /**
+   * Hash of the bytes the store kept — after any transcode. Never the
+   * provider's input hash: the two differ whenever the bridge re-encodes, and
+   * a row carrying the input hash matches no vault copy by sha256.
+   */
+  sha256: string;
 }
 
 export interface GeneratedFileRowInput {
   userId: string;
   /** Pre-chosen row id; a fresh UUID when omitted. */
   id?: string;
-  /** Hash of the stored bytes. */
-  sha256: string;
   originalFilename: string;
   stored: StoredImageBytes;
   width?: number | null;
@@ -62,6 +68,12 @@ export interface GeneratedFileRowInput {
   };
   /** The avatar configuration cache key; null on every other picture. */
   generationKey?: string | null;
+  /**
+   * How the picture's provider came to draw it (`generationModerationOf`).
+   * Passed only by avatars, story backgrounds and the image tool; every other
+   * picture leaves it null.
+   */
+  generationModeration?: GenerationModeration | null;
   /** A real description only — never a label (bug 132). Default null. */
   description?: string | null;
   projectId?: string | null;
@@ -92,7 +104,7 @@ export async function createGeneratedFileRow(
   const file = await repos.files.create(
     {
       userId: input.userId,
-      sha256: input.sha256,
+      sha256: input.stored.sha256,
       originalFilename: input.originalFilename,
       mimeType: input.stored.storedMimeType,
       size: input.stored.sizeBytes,
@@ -105,6 +117,7 @@ export async function createGeneratedFileRow(
       generationModel: input.generation?.model ?? null,
       generationRevisedPrompt: input.generation?.revisedPrompt ?? null,
       generationKey: input.generationKey ?? null,
+      generationModeration: input.generationModeration ?? null,
       description: input.description ?? null,
       tags: input.tags ?? [],
       storageKey: input.stored.storageKey,
@@ -122,6 +135,7 @@ export async function createGeneratedFileRow(
     sizeBytes: input.stored.sizeBytes,
     linkedTo: input.linkedTo,
     hasGenerationKey: !!input.generationKey,
+    generationModeration: input.generationModeration ?? null,
   });
 
   return file;

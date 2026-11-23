@@ -15,6 +15,7 @@ import { getImageProviderConstraints } from '@/lib/plugins/provider-registry';
 import { resolveProfileLoras } from '@/lib/image-gen/params-builder';
 import { decodeProviderImage, makeLoggedImageAttempt, type DecodedProviderImage } from '@/lib/image-gen/image-attempt';
 import { createGeneratedFileRow } from '@/lib/files/generated-file-row';
+import type { GenerationModeration } from '@/lib/schemas/file.types';
 import type { ImageGenParams, ImageOrientation } from '@quilltap/plugin-types';
 import {
   ImageGenerationToolInput,
@@ -136,6 +137,8 @@ async function saveGeneratedImage(
     provider: string;
     /** The Concierge's call sheet, when the picture was refused on the way. */
     routeTrail?: RouteAttempt[];
+    /** How the answering profile came to draw it (`generationModerationOf`). */
+    moderation?: GenerationModeration;
   }
 ): Promise<GeneratedImageResult> {
   try {
@@ -174,7 +177,6 @@ async function saveGeneratedImage(
     const fileEntry = await createGeneratedFileRow(repos, {
       id: fileId,
       userId,
-      sha256,
       originalFilename,
       stored: written,
       width: decoded.width,
@@ -186,6 +188,7 @@ async function saveGeneratedImage(
         model: metadata.model,
         revisedPrompt: metadata.revisedPrompt,
       },
+      generationModeration: metadata.moderation ?? null,
     });
 
     // Always use API route for S3-backed files
@@ -408,6 +411,7 @@ async function generateImagesWithProvider(
           model: activeProfile.modelName,
           provider: activeProfile.provider,
           routeTrail: outcome.trail.length > 0 ? outcome.trail : undefined,
+          moderation: outcome.moderation,
         });
       }),
     );

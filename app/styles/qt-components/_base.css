@@ -1,0 +1,173 @@
+/**
+ * Quilltap theme base — the hand-written root rules every theme sits on.
+ *
+ * The --qt-* / --theme-* variable defaults are generated into _variables.css
+ * from lib/themes/registry/; these rules are not variables, so they live here,
+ * imported straight after it (the order they always had). The root baseline
+ * stays scoped to the default theme: applied to every theme it would change
+ * text-rendering and font smoothing for bundles that do not set them.
+ *
+ * Default Theme — Professional Neutral
+ *
+ * A clean, business-appropriate theme for power users who work with
+ * Quilltap as a serious tool. System font stack throughout — San Francisco
+ * on Mac, Segoe UI on Windows, Roboto on Android/Chrome OS. No decorative
+ * fonts, no flourishes. The interface should feel like Notion, Linear, or
+ * Stripe: confident, quiet, and out of the way.
+ *
+ * Design Philosophy:
+ * Light and dark modes are siblings — same personality, different lighting.
+ * No pure white or pure black. Slightly cooler hue family (225 vs 220)
+ * with lower saturation for a more corporate, less "crafty" feel.
+ * Tighter radii and restrained shadows for a precise, engineered look.
+ *
+ * Color Foundation:
+ * Base hue: 225 (cool blue-gray) — neutral, precise, professional.
+ * Primary: A confident but not flashy indigo-blue.
+ * Saturation: Low across the board. Color is for meaning, not decoration.
+ */
+
+/* ============================================================================
+   ROOT BASELINE - SHARED BETWEEN MODES
+   ============================================================================ */
+/* Every theme: smoothed text and smooth scrolling. The scrollbar width is a
+   token (--qt-scrollbar-width, thin by default), set in the layered rule below. */
+:root {
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+}
+
+[data-theme="default"] {
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ============================================================================
+   APP-OWNED ROOT RULES (token-driven)
+   Each reads tokens from the registry (lib/themes/registry/groups/page.ts).
+   They sit in @layer base — or behind an attribute the theme provider sets —
+   so a version 1 theme's own unlayered rules still win, and with their tokens
+   at the defaults they render as the app always has.
+   ============================================================================ */
+@layer base {
+  :root {
+    color-scheme: var(--qt-color-scheme);
+    font-weight: var(--qt-body-font-weight, normal);
+    scrollbar-width: var(--qt-scrollbar-width);
+    /* An unset thumb gives "auto transparent", which is invalid and so
+       computes to "auto": the browser's own scrollbar. A thumb with no track
+       gets a transparent track, the registry default. */
+    scrollbar-color: var(--qt-scrollbar-thumb, auto) var(--qt-scrollbar-track, transparent);
+  }
+
+  /* A nested theme container (the Atelier's panel, the specimen gallery's
+     stages, theme previews) re-establishes what the root and <body> compute
+     once and every element inherits: computed with the page theme's tokens,
+     they would otherwise carry that theme's type into the container. */
+  [data-theme]:not(:root) {
+    color-scheme: var(--qt-color-scheme);
+    font-family: var(--font-sans);
+    font-weight: var(--qt-body-font-weight, normal);
+  }
+
+  ::selection {
+    background-color: var(--qt-selection-bg);
+    color: var(--qt-selection-fg);
+  }
+}
+
+/* WebKit-only scrollbar styling (Safari ignores scrollbar-color). Any
+   ::-webkit-scrollbar rule switches WebKit to custom scrollbars, so these
+   apply only for a theme that asks for them. */
+@layer base {
+  :root[data-qt-scrollbar] ::-webkit-scrollbar {
+    width: var(--qt-scrollbar-size);
+    height: var(--qt-scrollbar-size);
+  }
+
+  :root[data-qt-scrollbar] ::-webkit-scrollbar-track {
+    background-color: var(--qt-scrollbar-track, transparent);
+  }
+
+  :root[data-qt-scrollbar] ::-webkit-scrollbar-thumb {
+    background-color: var(--qt-scrollbar-thumb, currentColor);
+    border-radius: var(--qt-scrollbar-radius);
+  }
+
+  :root[data-qt-scrollbar] ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--qt-scrollbar-thumb-hover, var(--qt-scrollbar-thumb, currentColor));
+  }
+}
+
+/* The focus ring from the version 1 effects tokens. No default value of an
+   outline is a no-op against the browser's own ring, so it applies only for a
+   theme that turns it on. */
+@layer base {
+  :root[data-qt-focus-ring] :focus-visible {
+    outline: var(--theme-focus-ring-width) solid var(--qt-focus-ring-color);
+    outline-offset: var(--theme-focus-ring-offset);
+    box-shadow: var(--qt-focus-ring-glow);
+  }
+}
+
+/* ============================================================================
+   PAGE BACKGROUND
+   With --qt-page-background-image set, the theme provider marks <html> with
+   data-qt-page-background: the image is painted on body and the page surfaces
+   go transparent over it. A story background takes precedence — while one is
+   showing (the app marks it with --story-background-url inline, as _content.css
+   reads it), none of this applies — that includes a dynamic-backgrounds
+   collage, which home, project and character pages mark the same way. A
+   kept-alive workspace tab that is not on screen (aria-hidden) does not
+   count. Unlayered, so the transparency beats the Tailwind bg-background
+   utility on the shell.
+   ============================================================================ */
+:root[data-qt-page-background] body:not(:has([style*="--story-background-url"]:not(.qt-tab-pane[aria-hidden="true"] *))) {
+  background-image: var(--qt-page-background-image);
+  background-size: var(--qt-page-background-size);
+  background-position: var(--qt-page-background-position);
+  background-attachment: var(--qt-page-background-attachment);
+  background-repeat: var(--qt-page-background-repeat);
+}
+
+:root[data-qt-page-background] body:not(:has([style*="--story-background-url"]:not(.qt-tab-pane[aria-hidden="true"] *))) :is(
+  .bg-background,
+  .qt-app-layout,
+  .qt-app-main,
+  .qt-page,
+  .qt-page-with-navbar,
+  .qt-content,
+  .qt-content-scroll,
+  .qt-auth-page,
+  .qt-page-container
+) {
+  background: transparent;
+}
+
+/* The texture over the page background (--qt-page-background-texture), shown
+   under the same condition as the image. */
+:root[data-qt-page-background] body:not(:has([style*="--story-background-url"]:not(.qt-tab-pane[aria-hidden="true"] *)))::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--qt-page-background-texture);
+  background-repeat: repeat;
+  opacity: var(--qt-page-background-texture-opacity);
+}
+
+/* ============================================================================
+   REDUCED MOTION
+   ============================================================================ */
+/* Every theme, not just the default: a bundle's own animations (and the
+   infinite pulses in qt-components) must honour the OS setting too. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

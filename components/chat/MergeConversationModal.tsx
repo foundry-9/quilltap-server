@@ -46,7 +46,7 @@ interface MergeChatRow {
   updatedAt: string
   lastMessageAt: string | null
   participants: MergeChatParticipant[]
-  chatType?: 'salon' | 'help' | 'autonomous' | 'brahma'
+  chatType?: 'salon' | 'help' | 'autonomous' | 'brahma' | 'calliope'
 }
 
 interface OutfitSummaryResponse {
@@ -252,7 +252,7 @@ export function MergeConversationModal({
       title={step === 'pick' ? 'Merge a Conversation In' : `Merge “${selectedSource?.title ?? ''}”`}
       maxWidth="2xl"
       busy={isMerging}
-      footerClassName="qt-dialog-footer flex items-center justify-between"
+      footerClassName="qt-dialog-footer-default flex items-center justify-between"
       headerActions={
         <button aria-label="Close" onClick={handleClose} className="qt-button qt-button-ghost p-2" disabled={isMerging}>
           <Icon name="close" className="w-6 h-6" />

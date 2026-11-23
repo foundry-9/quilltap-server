@@ -29,6 +29,7 @@ export {
   readFileWithMtime,
   writeFileWithMtimeCheck,
   statResolvedFile,
+  readResolvedFileBytes,
   moveResolvedFile,
   deleteResolvedFile,
   getAccessibleMountPoints,

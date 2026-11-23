@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
-import { dispatchAction } from '@/lib/api/middleware/actions';
+import { withActionDispatch, dispatchAction } from '@/lib/api/middleware/actions';
 import { ensureProcessorRunning } from '@/lib/background-jobs';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -40,8 +40,9 @@ export const GET = createContextParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/system/jobs/[id] - Delete a specific job
  */
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 
       const job = await repos.backgroundJobs.findById(id);
@@ -67,7 +68,7 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       logger.error('[System Jobs v1] Error in DELETE', { error: errorMessage });
       return serverError(errorMessage);
     }
-  }
+  })
 );
 
 /**

@@ -145,7 +145,7 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
         )}
 
         {isDatabaseBacked && (
-          <div className="mb-4 qt-callout">
+          <div className="mb-4 qt-alert-info">
             <p className="qt-body">
               Database-backed stores live entirely inside Quilltap&apos;s encrypted mount-index database — no
               filesystem path required. Documents and blobs you upload are included in the standard Quilltap backups.

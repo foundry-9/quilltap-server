@@ -81,6 +81,11 @@ export interface WardrobeBrowserProps {
   wear?: WardrobeRowWearControls
   /** Character view only: open the import-from-image flow. */
   onImportFromImage?: () => void
+  /**
+   * Open the import-from-instructions flow for the browsed tier, filing into
+   * `folder` (the open folder when it is this tier's own, else the root).
+   */
+  onImportFromInstructions?: (folder: string) => void
   /** Open the portrait-cue (image prompt) optimizer for the browsed tier. */
   onOptimizePrompts?: () => void
   /** Cap the list's height (the dialog) instead of letting it grow (a card). */
@@ -112,6 +117,7 @@ export function WardrobeBrowser({
   onShowArchivedChange,
   wear,
   onImportFromImage,
+  onImportFromInstructions,
   onOptimizePrompts,
   scrollList = true,
   pronounFilter,
@@ -374,6 +380,17 @@ export function WardrobeBrowser({
               title="Import wardrobe items from a reference image"
             >
               Import from image
+            </button>
+          )}
+          {/* Import-from-instructions designs for whichever tier is browsed. */}
+          {onImportFromInstructions && (
+            <button
+              type="button"
+              onClick={() => onImportFromInstructions(inOwnTier ? currentFolder : '')}
+              className="qt-button-ghost qt-button-sm"
+              title="Have Aurora design pieces from a written brief"
+            >
+              Import from instructions
             </button>
           )}
           {/* The portrait-cue wizard reviews only the browsed tier's own pieces. */}

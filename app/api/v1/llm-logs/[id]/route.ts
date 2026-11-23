@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { successResponse, serverError, notFound, forbidden } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 
@@ -37,8 +38,9 @@ export const GET = createContextParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/llm-logs/[id] - Delete a log entry
  */
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id: logId }) => {
+  withActionDispatch<{ id: string }>({}, async (req, { user, repos }, { id: logId }) => {
     try {
 
       const log = await repos.llmLogs.findById(logId);
@@ -63,5 +65,5 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       );
       return serverError('Failed to delete LLM log');
     }
-  }
+  })
 );

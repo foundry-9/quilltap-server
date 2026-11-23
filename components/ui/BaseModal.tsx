@@ -56,11 +56,15 @@ export interface BaseModalProps {
   className?: string
   /**
    * Classes for the body wrapper, replacing the default
-   * `qt-dialog-body flex-1 overflow-y-auto` — for dialogs whose body is a
-   * split pane or a full-bleed list.
+   * `qt-dialog-body-default flex-1 overflow-y-auto` — for dialogs whose body
+   * is a split pane or a full-bleed list. The `qt-dialog-body` theme hook is
+   * always applied; pass `qt-dialog-body-default` to keep its padding.
    */
   bodyClassName?: string
-  /** Classes for the footer, replacing the default `qt-dialog-footer` */
+  /**
+   * Classes for the footer, replacing the default `qt-dialog-footer-default`.
+   * The `qt-dialog-footer` theme hook is always applied.
+   */
   footerClassName?: string
   /**
    * Additional classes for the full-screen overlay — e.g. a raised `z-[…]`
@@ -196,8 +200,8 @@ export function BaseModal({
   busy = false,
   headerless = false,
   className = '',
-  bodyClassName = 'qt-dialog-body flex-1 overflow-y-auto',
-  footerClassName = 'qt-dialog-footer',
+  bodyClassName = 'qt-dialog-body-default flex-1 overflow-y-auto',
+  footerClassName = 'qt-dialog-footer-default',
   overlayClassName = '',
   showCloseButton = false,
   closeOnClickOutside = true,
@@ -242,7 +246,7 @@ export function BaseModal({
       type="button"
       onClick={() => { if (!busy) onClose() }}
       disabled={busy}
-      className="qt-text-secondary hover:qt-text transition-colors disabled:opacity-50"
+      className="qt-dialog-close qt-text-secondary hover:qt-text transition-colors disabled:opacity-50"
       aria-label="Close"
     >
       <Icon name="close" className="w-5 h-5" />
@@ -281,9 +285,11 @@ export function BaseModal({
             </div>
           )}
 
-          <div className={bodyClassName}>{children}</div>
+          {/* The identity classes are theme hooks and carry no styling; the
+              look is the `-default` modifier (or whatever the caller passed). */}
+          <div className={`qt-dialog-body ${bodyClassName}`}>{children}</div>
 
-          {footer && <div className={footerClassName}>{footer}</div>}
+          {footer && <div className={`qt-dialog-footer ${footerClassName}`}>{footer}</div>}
         </ModalTitleContext.Provider>
       </div>
     </div>,

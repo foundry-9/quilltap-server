@@ -1,10 +1,10 @@
 /**
  * The built-in "Novel" roleplay template.
  *
- * Prose as a published novel prints it: narration is plain, unmarked text (set
- * in italics), dialogue sits in straight or curly double quotes, a single `*`
- * marks emphasis (bold + italic), `**` means nothing, and ((double parentheses))
- * are out of character.
+ * Prose as a published novel prints it: narration is plain, unmarked text set
+ * upright in a quieter ink, dialogue sits in straight or curly double quotes at
+ * full strength, a single `*` marks emphasis (italics), `**` means nothing, and
+ * ((double parentheses)) are out of character.
  *
  * Novel deliberately uses nothing but the capabilities the template editor
  * offers — unmarked narration, an unmarked-text style, Markdown asterisks off,
@@ -17,12 +17,14 @@
 
 import type { RoleplayTemplate, TemplateDelimiter, UnmarkedStyle } from '@/lib/schemas/template.types'
 import { generateTemplateRenderingPatterns } from '@/lib/chat/annotations'
+import { EMPHASIS_CLASS } from '@/lib/chat/roleplay-rendering'
 
 /**
  * Novel's formatting marks. Dialogue accepts straight or curly quotes in any mix
  * and may run unclosed to the end of a paragraph (speech carried over several
- * paragraphs). Emphasis is a single asterisk, concealed, bold + italic — it
- * claims `*` because Novel takes asterisks away from Markdown.
+ * paragraphs). Emphasis is a single asterisk, concealed, in the Emphasis style
+ * (italics, upright inside an italic voice) — it claims `*` because Novel takes
+ * asterisks away from Markdown.
  */
 export const NOVEL_DELIMITERS: TemplateDelimiter[] = [
   {
@@ -39,17 +41,18 @@ export const NOVEL_DELIMITERS: TemplateDelimiter[] = [
     name: 'Emphasis',
     buttonName: 'Emph',
     delimiters: '*',
-    style: 'qt-roleplay-plain',
+    style: EMPHASIS_CLASS,
     hideDelimiter: true,
-    addOns: { bold: true, italic: true, reverse: false, underline: 'none', border: 'none', font: '' },
   },
   { kind: 'wrap', name: 'Out of Character', buttonName: 'OOC', delimiters: ['((', '))'], style: 'qt-chat-ooc' },
 ]
 
-/** Novel's narration: whatever no mark claims, set in italics. */
+/**
+ * Novel's narration: whatever no mark claims, upright in quiet ink. Slant is
+ * left free for emphasis.
+ */
 export const NOVEL_UNMARKED_STYLE: UnmarkedStyle = {
-  style: 'qt-roleplay-plain',
-  addOns: { bold: false, italic: true, reverse: false, underline: 'none', border: 'none', font: '' },
+  style: 'qt-roleplay-quiet',
 }
 
 /**

@@ -49,6 +49,7 @@ describe('parseHrefToIntent', () => {
     expect(parseHrefToIntent('/files')).toEqual({ kind: 'files' })
     expect(parseHrefToIntent('/photos')).toEqual({ kind: 'photos' })
     expect(parseHrefToIntent('/scenarios')).toEqual({ kind: 'scenarios' })
+    expect(parseHrefToIntent('/calliope/specimens')).toEqual({ kind: 'theme-specimens' })
   })
 
   it('preserves settings deep-link params', () => {

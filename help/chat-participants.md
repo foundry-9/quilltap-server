@@ -301,7 +301,7 @@ Click any chip to unfold it into its full announcement; click it again — or th
 5. Click **Add** to confirm
 6. Character appears in the sidebar — and is dressed in plain view
 
-A newcomer is received precisely as an opening cast is. The dialog closes at once and **The Green Room** unfolds above the conversation to narrate the arrival: the wardrobe consultation (should they be choosing for themselves), what they packed, the Host's welcome, and Aurora's note of what they walked in wearing — after which, if the chat draws avatars, their portrait is brought up to date to match. The same courtesy attends a character returning from removal, who keeps whatever they had on unless you chose otherwise, and characters folded in by **Merge In…**, who arrive dressed as they were in the conversation they came from.
+A newcomer is received precisely as an opening cast is. The dialog closes at once and **The Green Room** unfolds above the conversation to narrate the arrival: the wardrobe consultation (should they be choosing for themselves), what they packed, the Host's welcome, and Aurora's note of what they walked in wearing — after which, if the chat draws avatars, their portrait is brought up to date to match as soon as the conversation takes its next turn. The same courtesy attends a character returning from removal, who keeps whatever they had on unless you chose otherwise, and characters folded in by **Merge In…**, who arrive dressed as they were in the conversation they came from.
 
 #### Creating an Ad-Hoc NPC
 
@@ -314,7 +314,7 @@ Every field you complete is set down faithfully — Scenario and Physical Descri
 
 #### Summoning from Lore
 
-When the soul you want is already implied by your notes, click **Summon from Lore** to open the summoning apparatus. Upload lore files or paste text, choose a connection profile for the conjuration, and let the wizard draw out a fully-formed character. The summoned character is added to your library and preselected in the picker, where you finish as you would for any other arrival.
+When the soul you want is already implied by your notes, click **Summon from Lore** to open the summoning apparatus. Upload lore files or paste text, choose a connection profile for the conjuration, and let the wizard draw out a fully-formed character. The summoned character is added to your library and preselected in the picker, where you finish as you would for any other arrival. Should you prefer to keep the conjuration in your pocket rather than seat it, **Export as .qtap** on the review page saves the character to a file without importing them.
 
 A single summoning produces a single soul; should the lore yield more than one (or none at all), the apparatus will say so and leave the picker untouched — repair to **Aurora** to sort out a crowded conjuration.
 

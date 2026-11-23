@@ -43,7 +43,7 @@ A character may have many items in each slot, and equip multiple of them at once
 
 ## Creating Wardrobe Items
 
-To furnish a character's wardrobe, open the **Wardrobe** dialog — the clothes-hanger icon on the left sidebar, reachable from any page that bears the sidebar (Salon, Aurora, Prospero, and so on). Opening it from a character's Aurora page conveniently preselects that character.
+To furnish a character's wardrobe, open the **Wardrobe** dialog — to be had by opening **Objects** and choosing **Wardrobe**, from any page that bears the rail (Salon, Aurora, Prospero, and so on). Opening it from a character's Aurora page conveniently preselects that character.
 
 1. Pick a wardrobe from the dropdown at the top of the dialog — a character, Quilltap General, a project, or a group (if one isn't already selected)
 2. Click **+ New Item**
@@ -57,7 +57,7 @@ You may edit or remove your personal items at any time via each row's `⋮` menu
 
 ## The Wardrobe Control Dialog
 
-For day-to-day fussing-about with what a character is wearing, there is a more direct instrument than the Aurora page's tabs and panels: the **Wardrobe** dialog. A small clothes-hanger icon dwells on the left sidebar (between Themes, when shown, and Settings) and is accessible from every page that bears the sidebar — Salon, Aurora, Prospero, the Foundry, and so on.
+For day-to-day fussing-about with what a character is wearing, there is a more direct instrument than the Aurora page's tabs and panels: the **Wardrobe** dialog. It is reached by opening **Objects** and choosing **Wardrobe**, from every page that bears the rail — Salon, Aurora, Prospero, the Foundry, and so on.
 
 What the dialog allows you to do, with the directness of a valet pulling out the morning's tweeds:
 
@@ -82,7 +82,7 @@ For those moments when visual inspiration strikes --- a photograph discovered in
 
 To use this feature:
 
-1. Open the **Wardrobe** dialog (the clothes-hanger icon on the left sidebar) and select the character
+1. Open the **Wardrobe** dialog (open **Objects** and choose **Wardrobe**) and select the character
 2. Click **Import from image** (it sits beside **+ New Item** at the foot of the wardrobe list)
 3. Drop an image file into the upload zone, or click to browse (JPEG, PNG, WebP, or GIF, up to 10 MB)
 4. Choose who reads it under **Reading the photograph** --- a list of every connection profile whose model reads pictures *and* whose provider will actually deliver one, preset to the profile the dialog would have chosen for you
@@ -116,6 +116,51 @@ A few particulars:
 - Should a piece fail to arrive, the outfit is assembled from those that did; should fewer than two arrive, or the outfit itself fail, the pieces are kept and a notice says the outfit was not made.
 
 **Requirements:** This feature requires at least one vision-capable provider to be configured (Anthropic Claude, OpenAI GPT-4o, Google Gemini, or xAI Grok). If you have configured an **Image Description Profile** in your Chat settings, that profile will be used; otherwise Quilltap will select any available vision-capable provider from your connection profiles.
+
+### Import from Instructions
+
+There are occasions when one has no photograph to hand --- only a notion. *The uniform a Pan Am stewardess wore in 1968. What she would put on for her brother's funeral. Three plain working outfits for a dockhand.* For these, the wardrobe keeps **Aurora** on retainer: tell her what is wanted in plain words, and she will consult what the house already knows, make her enquiries abroad where the matter calls for it, and lay a design before you for approval.
+
+To engage her:
+
+1. Open the **Wardrobe** dialog and select whose wardrobe is to receive the pieces --- a character's, a group's, a project's, or Quilltap General. (Unlike its photographic cousin, this wizard is at home on every rail.)
+2. Click **Import from instructions** (beside **Import from image** at the foot of the wardrobe list). Should you be standing in a folder of that wardrobe, the new pieces will be filed there.
+3. Under **What shall Aurora design?**, write what you want. A sentence will do; a paragraph of particulars does better.
+4. Decide what she may consult:
+   - **Search the stores and records** --- Aurora may read your documents, your characters and your conversations, which is how she finds the dress described in chapter nine or the livery a faction was given three scenes ago. She keeps to the same research discipline as [the Brahma Console](brahma-console.md#how-the-console-researches): the quickest look-up first, nothing searched for twice, and a stop once she can design with what she has. She reads; she alters nothing.
+   - **Consult the wider web** --- Aurora may look up real uniforms, periods, makers and costumes, and open the pages she finds. Her enquiries go to your search provider, and she is under strict instruction to ask about *the subject* and never about *your story*: no character's name, no line of your prose, travels with them.
+5. Choose the **Model**, and click **Set Aurora to work**.
+
+Whatever you tick, Aurora begins with a brief the house prepares for her: who the wardrobe belongs to (for a character, their looks, pronouns and manner), any dressing instructions on file, and a numbered list of what already hangs on the rail --- so that she designs *for* the wearer and does not stitch a second navy blazer when a perfectly good one is already there.
+
+While she works, the dialog shows each enquiry as it is made --- *Enquiring abroad about…*, *Leafing through the stores for…*, *Reading* such-and-such a site --- and a **Stop** button returns you to your instructions, untouched, with nothing created.
+
+#### When the Wider World Is Out of Reach
+
+The web has two halves, and Aurora may have either, both, or neither:
+
+- **Searching** wants a search provider (a search plugin with its API key, under *Settings*) **and** *Allow web search* ticked on the chosen model's connection profile.
+- **Opening pages** wants the `curl` plugin with at least one permitted address pattern. On this errand it may only fetch; it is refused should it attempt to send anything.
+
+If neither is to be had, the box greys itself out and says why; if only one, a line beneath says which. Aurora carries on regardless, designing from what she knows and saying in her note where she was unsure. Nothing here is a reason not to proceed --- merely a reason to read her note with a little more care.
+
+#### The Design, Reviewed
+
+Aurora returns with the same sort of review screen as **Import from Image**: a card for every piece, each with its title, slots, appropriateness, **Portrait Cue** and description, all editable, each with a tick to keep or decline it; and beneath them the card headed **Also create an outfit from these pieces**. Above it all sits her **note** --- a short paragraph on what the design rests upon and anything she could not establish.
+
+Two things are particular to this wizard:
+
+- **Also include from this rail.** Where a piece already in the wardrobe belongs in the look, Aurora names it rather than designing it afresh, and it appears in the outfit card as a ticked line. Leave it ticked and the new outfit borrows the old piece; untick it and the outfit goes without. Only pieces from *this* wardrobe may be borrowed so.
+- **Revise.** Type a further instruction --- *make the skirt longer, and drop the gloves* --- and Aurora goes round again, beginning from the design *as you have amended it*, with only the pieces you left ticked. Your hand edits are not thrown away.
+
+**Start over** returns you to your instructions. **Import** stitches the ticked pieces and, if you asked for one, assembles the outfit --- by default one that *replaces* whatever occupies its slots when worn. **Nothing whatever is created before that button is pressed:** you may close the dialog at any point and the wardrobe is exactly as you found it. The pieces arrive without pictures; commission those from each garment's own page at your leisure (see [Portraits of the Garments](#portraits-of-the-garments)).
+
+A few particulars:
+
+- A request for a single garment yields a single piece and no outfit card worth ticking; an outfit wants two pieces, counting any borrowed from the rail.
+- Aurora designs at most a dozen pieces at a sitting.
+- A model with tool use switched off can neither search nor look anything up, and is offered only when both boxes are unticked.
+- She does not dress anybody. The pieces are hung on the rail; wearing them is your affair, or the character's.
 
 ### Where Wardrobe Items Come From (Four Tiers)
 

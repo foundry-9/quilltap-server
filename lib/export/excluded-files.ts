@@ -16,9 +16,18 @@
  *   is reachable through `characters.archiveFileId`, and it survives a wipe
  *   only by the operator's explicit "keep archived characters" choice; an
  *   export is not the place to smuggle copies of it.
+ *
+ * Document stores have one exclusion of their own:
+ *
+ * - **Theme drafts** — `Themes/` in Quilltap General (Calliope's Atelier,
+ *   `lib/themes/drafts/location.ts`). A draft is a work in progress, and its
+ *   finished form travels as a `.qtap-theme` bundle. Backups still carry
+ *   drafts; only `.qtap` exports leave them out.
  */
 
 import type { FileEntry } from '@/lib/schemas/file.types';
+import { THEME_DRAFTS_FOLDER, themeDraftPathTester } from '@/lib/themes/drafts/location';
+import { foldStorePath } from '@/lib/mount-index/store-path-fold';
 
 /** Categories whose files are never written into an export. */
 export const EXPORT_EXCLUDED_FILE_CATEGORIES = ['BACKUP', 'ARCHIVE'] as const;
@@ -37,4 +46,22 @@ export function isFileExcludedFromExport(
       (file.folderPath ?? '') as (typeof EXPORT_EXCLUDED_FOLDER_PATHS)[number]
     )
   );
+}
+
+/**
+ * A test for the paths of one document store: true when the folder, document
+ * or blob at that store-relative path is left out of an export (the `Themes`
+ * folder itself included). Asks once per store; outside Quilltap General
+ * nothing is excluded.
+ */
+export async function docStoreExportExclusion(
+  mountPointId: string
+): Promise<(relativePath: string) => boolean> {
+  const isDraftPath = await themeDraftPathTester(mountPointId);
+  // The tester answers by the folder rule alone once the store is General.
+  if (!isDraftPath(`${THEME_DRAFTS_FOLDER}/probe`)) return () => false;
+  const draftsRoot = foldStorePath(THEME_DRAFTS_FOLDER);
+  return (relativePath: string) =>
+    isDraftPath(relativePath) ||
+    foldStorePath(relativePath.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')) === draftsRoot;
 }

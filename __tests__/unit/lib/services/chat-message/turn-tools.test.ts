@@ -70,12 +70,19 @@ describe('resolveTurnToolSlate', () => {
       canDressThemselves: true,
       canCreateOutfits: true,
       canManageInventory: true,
+      // Memory editing is granted, never assumed.
+      canEditMemories: false,
       // Linked project stores open the doc tools.
       docToolsMode: 'full',
       // No answerer and not transparent.
       askCarinaEnabled: false,
       customToolContext: expect.objectContaining({ characterId: 'char-1', chatId: 'chat-1' }),
     })
+  })
+
+  it('offers the memory tools only to a character granted canEditMemories', async () => {
+    await resolveTurnToolSlate(params({ character: { id: 'char-1', name: 'Riya', canEditMemories: true } as never }))
+    expect(jest.mocked(buildTools).mock.calls[0][0].canEditMemories).toBe(true)
   })
 
   it('withholds self_inventory from a character not opted into transparency', async () => {

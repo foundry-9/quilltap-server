@@ -22,6 +22,7 @@ import {
   type PromptFieldHint,
   type PromptFieldHintKey,
 } from '@/components/prompt-fields/field-hints';
+import { activateOnKey } from '@/components/ui/activate-on-key';
 
 // ============================================================================
 // Step Indicator
@@ -125,6 +126,10 @@ function SourceMaterialStep({
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onClick={() => fileInputRef.current?.click()}
+          onKeyDown={activateOnKey}
+          role="button"
+          tabIndex={0}
+          aria-label="Choose source files: drop them here or press to browse"
         >
           <input
             ref={fileInputRef}
@@ -398,6 +403,7 @@ function ReviewStep({
   importing,
   importResult,
   onImport,
+  onExport,
   onAddMore,
   onStartOver,
   onDone,
@@ -408,6 +414,7 @@ function ReviewStep({
   importing: boolean;
   importResult: { success: boolean; importedCount: number; warnings: string[] } | null;
   onImport: () => void;
+  onExport: () => void;
   onAddMore: () => void;
   onStartOver: () => void;
   onDone?: () => void;
@@ -495,6 +502,9 @@ function ReviewStep({
         <div className="flex gap-3">
           <button onClick={onStartOver} className="qt-button-primary">
             Import Another Character
+          </button>
+          <button onClick={onExport} className="qt-button-secondary">
+            Export as .qtap
           </button>
           {onDone && (
             <button onClick={onDone} className="qt-button-secondary">
@@ -628,6 +638,13 @@ function ReviewStep({
         >
           {importing ? 'Importing...' : 'Import Character'}
         </button>
+        <button
+          onClick={onExport}
+          disabled={importing}
+          className="qt-button-secondary"
+        >
+          Export as .qtap
+        </button>
         <button onClick={onAddMore} className="qt-button-secondary">
           Add More & Regenerate
         </button>
@@ -682,6 +699,7 @@ export default function AIImportWizard({ onClose, onImportSuccess }: AIImportWiz
     importing,
     importResult,
     importCharacter,
+    exportCharacter,
     // Navigation
     nextStep,
     prevStep,
@@ -752,6 +770,7 @@ export default function AIImportWizard({ onClose, onImportSuccess }: AIImportWiz
           importing={importing}
           importResult={importResult}
           onImport={handleImport}
+          onExport={exportCharacter}
           onAddMore={addMoreMaterial}
           onStartOver={reset}
           onDone={onClose}

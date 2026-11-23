@@ -586,6 +586,15 @@ export const SETTINGS_CARDS: readonly SettingsCard[] = [
     help: 'appearance-settings',
   },
   {
+    id: 'dynamic-backgrounds',
+    group: 'appearance',
+    title: 'Dynamic Backgrounds',
+    description: 'Let the house hang a changing collage of your own pictures behind the home, project and character pages',
+    persona: 'lantern',
+    keywords: ['background', 'collage', 'wallpaper', 'dynamic', 'uncensored', 'refresh', 'rotate'],
+    help: 'dynamic-backgrounds',
+  },
+  {
     id: 'avatar-settings',
     group: 'appearance',
     title: 'Avatar Settings',
@@ -593,6 +602,15 @@ export const SETTINGS_CARDS: readonly SettingsCard[] = [
     persona: 'aurora',
     keywords: ['avatar', 'portrait', 'picture', 'icon'],
     help: 'appearance-settings',
+  },
+  {
+    id: 'calliope',
+    group: 'appearance',
+    title: 'Calliope',
+    description: 'The engine Calliope works on in the theme editor, and how many turns she may take',
+    persona: 'calliope',
+    keywords: ['calliope', 'theme assistant', 'theme editor', 'muse', 'model', 'tool turns'],
+    help: 'theme-editor',
   },
   {
     id: 'tags',
@@ -725,11 +743,6 @@ export function isSettingsGroupId(id: string | null | undefined): id is Settings
 /** Cards hosted inside another card's body. */
 export function hostedCardsOf(hostId: string): SettingsCard[] {
   return SETTINGS_CARDS.filter((c) => c.hostedBy === hostId)
-}
-
-/** Personas that own at least one card — the lens can be any of them. */
-export function personasWithCards(): SettingsPersona[] {
-  return Array.from(new Set(SETTINGS_CARDS.map((c) => c.persona)))
 }
 
 export function isSettingsPersona(id: string | null | undefined): id is SettingsPersona {

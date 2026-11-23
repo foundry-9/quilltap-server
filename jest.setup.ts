@@ -1,5 +1,14 @@
 import '@testing-library/jest-dom'
 import fetchMock from 'jest-fetch-mock'
+import { configure } from '@testing-library/react'
+
+// Testing Library's findBy* / waitFor give up after 1 s by default. On CI,
+// under coverage and a full suite's worth of parallel workers, a render that
+// takes 200 ms locally can take several seconds, so the default fails tests
+// that are merely slow. Ten seconds sits well inside the 30 s per-test ceiling
+// in jest.config.ts. A call that passes its own `timeout` should only ever
+// raise this, never lower it.
+configure({ asyncUtilTimeout: 10000 })
 
 fetchMock.enableMocks()
 

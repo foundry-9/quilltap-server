@@ -25,7 +25,7 @@ jest.mock('@/lib/services/agent-loop/one-shot-loop', () => ({
   runOneShotToolLoop: jest.fn(),
 }))
 jest.mock('@/lib/tools/handlers/web-search-handler', () => ({
-  isWebSearchConfigured: jest.fn(() => false),
+  isWebSearchConfigured: jest.fn(async () => false),
 }))
 jest.mock('@/lib/plugins/tool-registry', () => ({
   toolRegistry: { hasPlugin: jest.fn(() => false) },
@@ -100,7 +100,7 @@ beforeEach(() => {
 
 describe('runScenarioBuilder — tool-slate gating', () => {
   test('real mode, allowWebSearch false → webSearch off in buildTools options; prompt says the web is unavailable', async () => {
-    jest.mocked(isWebSearchConfigured).mockReturnValue(true)
+    jest.mocked(isWebSearchConfigured).mockResolvedValue(true)
     const opts = baseOptions()
     opts.connectionProfile = { ...MOCK_PROFILE, allowWebSearch: false } as never
     const controller = makeController()
@@ -121,7 +121,7 @@ describe('runScenarioBuilder — tool-slate gating', () => {
   })
 
   test('real mode, allowWebSearch true + isWebSearchConfigured true → webSearch true and pluginToolAllowlist [curl]', async () => {
-    jest.mocked(isWebSearchConfigured).mockReturnValue(true)
+    jest.mocked(isWebSearchConfigured).mockResolvedValue(true)
     const opts = baseOptions()
     opts.connectionProfile = { ...MOCK_PROFILE, allowWebSearch: true } as never
     const controller = makeController()
@@ -138,7 +138,7 @@ describe('runScenarioBuilder — tool-slate gating', () => {
   })
 
   test('in-world mode → webSearch always false, pluginToolAllowlist []', async () => {
-    jest.mocked(isWebSearchConfigured).mockReturnValue(true)
+    jest.mocked(isWebSearchConfigured).mockResolvedValue(true)
     const opts = baseOptions({ mode: 'in-world' })
     opts.connectionProfile = { ...MOCK_PROFILE, allowWebSearch: true } as never
     const controller = makeController()

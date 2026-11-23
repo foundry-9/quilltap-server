@@ -11,6 +11,8 @@ import { useState, useCallback, useMemo } from 'react';
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles';
 import type { ConnectionProfile } from '@/lib/schemas/types';
 import type { QuilltapExport } from '@/lib/export/types';
+import { triggerDownload } from '@/lib/download-utils';
+import { showErrorToast } from '@/lib/toast';
 import type {
   WizardUIStep,
   AIImportStepName,
@@ -336,6 +338,25 @@ export function useAIImport() {
     }
   }, [generation.result]);
 
+  // Save the generated .qtap data to a file instead of (or as well as)
+  // importing it. The wizard's result is already a complete, self-contained
+  // QuilltapExport (no connection profile, no links to the uploaded source
+  // files), and the importer reads this single-JSON shape as readily as the
+  // streamed NDJSON one, so the file round-trips through Aurora's import.
+  const exportCharacter = useCallback(async () => {
+    if (!generation.result) return;
+    try {
+      const filename = `${qtapFilenameStem(characterName)}.qtap`;
+      const blob = new Blob([JSON.stringify(generation.result, null, 2)], {
+        type: 'application/json',
+      });
+      await triggerDownload(blob, filename);
+    } catch (err) {
+      console.error('AI Import export failed', { error: err instanceof Error ? err.message : String(err) });
+      showErrorToast('The .qtap file could not be written — do try again.');
+    }
+  }, [generation.result, characterName]);
+
   // Reset wizard completely
   const reset = useCallback(() => {
     setCurrentStep(1);
@@ -394,6 +415,7 @@ export function useAIImport() {
     importing,
     importResult,
     importCharacter,
+    exportCharacter,
 
     // Navigation
     nextStep,
@@ -404,4 +426,18 @@ export function useAIImport() {
     reset,
     addMoreMaterial,
   };
+}
+
+/**
+ * A filename stem from the summoned character's name: path separators and
+ * characters Windows or macOS refuse are dropped, runs of whitespace collapse,
+ * and an empty result falls back to `character`.
+ */
+export function qtapFilenameStem(name: string | null | undefined): string {
+  const stem = (name ?? '')
+    .replace(/\s+/g, ' ')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '')
+    .trim()
+    .replace(/^\.+/, '');
+  return stem || 'character';
 }

@@ -7,7 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
-import { buildToolsForProvider, checkModelSupportsTools, type DocToolsMode } from '@/lib/tools'
+import { buildToolsForProvider, checkModelSupportsTools, type DocToolsMode, type ResearchKitMode } from '@/lib/tools'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
@@ -20,6 +20,7 @@ import { currentTurnStopSignal } from '@/lib/chat/turn-control'
 import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
 import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
+import type { UniversalTool } from '@/lib/plugins/interfaces'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
 import type { StorytellerBid, StorytellerRound } from '@/lib/schemas/storyteller.types'
@@ -39,9 +40,10 @@ import {
   isWithinCeiling,
   maxEffectOfTool,
   offeredTools,
-  toolEffectSpecOf,
+  toolEffectSpecFor,
   type ToolEffect,
   type ToolEffectContext,
+  type ToolEffectSpec,
   type ToolOffer,
 } from '@/lib/tools/effects'
 
@@ -175,8 +177,8 @@ function applyEffectCeilingToTools(
       kept.push(tool)
       continue
     }
-    const spec = toolEffectSpecOf(name)
-    const note = spec && isComputedToolEffect(spec) ? spec.usesAllowedUnder(ceiling) : null
+    const spec = toolEffectSpecFor(name, ctx)
+    const note = isComputedToolEffect(spec) ? spec.usesAllowedUnder(ceiling) : null
     if (!note) {
       dropped.push(name)
       continue
@@ -230,6 +232,8 @@ export interface BuildToolsOptions {
   docToolsMode?: DocToolsMode
   /** Whether the ask_carina tool is enabled for this character */
   askCarinaEnabled?: boolean
+  /** read_memory / edit_memory on the character's own memories (`canEditMemories`; default off) */
+  canEditMemories?: boolean
   /**
    * Whether to include the always-on "workspace" tool set (mail, annotations,
    * terminal, conversation reading, self-inventory, RNG/state). Defaults to
@@ -242,10 +246,17 @@ export interface BuildToolsOptions {
    */
   excludeMemorySearch?: boolean
   /**
-   * When true, include the read-only `run_sql` tool (Brahma Console only).
-   * Execution is additionally gated on `operatorSurface` in the tool executor.
+   * When true, include the read-only `run_sql` tool, and nothing else (the
+   * operator's surfaces only). Execution is additionally gated on
+   * `operatorSurface` in the tool executor.
    */
   sqlAccess?: boolean
+  /**
+   * The research kit (`lib/research/`): `'documents'` offers `find_documents`
+   * and `list_documents`; `'full'` adds the record lookups. When on,
+   * `doc_grep` and `doc_list_files` are withheld. Default `'off'`.
+   */
+  researchKit?: ResearchKitMode
   /**
    * Pascal's custom-tool roster perspective — the RESPONDING character's, since
    * a character-tier store shadows the farther tiers. Pass it to offer
@@ -267,6 +278,8 @@ export interface BuildToolsOptions {
   documentsOnlySearch?: boolean
   /** `false` withholds `search_web` even when the profile allows it. */
   webSearch?: boolean
+  /** `false` withholds the stores' `search` tool (it is otherwise on every surface). */
+  storeSearch?: boolean
   /**
    * The turn's effect ceiling (a storyteller turn, an autonomous room without
    * destructive permission). A tool whose static effect is above it is
@@ -275,6 +288,11 @@ export interface BuildToolsOptions {
    * guarantee; this only spares the model offers it can't use.
    */
   effectCeiling?: ToolEffect
+  /**
+   * A surface's whole slate (Calliope's `theme_*` tools): exactly these, plus
+   * `submit_final_response` under agent mode; every flag above is ignored.
+   */
+  onlyTools?: readonly UniversalTool[]
 }
 
 export interface BuiltTools {
@@ -283,8 +301,8 @@ export interface BuiltTools {
   useNativeWebSearch: boolean
   /** Custom tool name → derived effect, for the roster offered this turn (empty when none). */
   customToolEffects: Map<string, ToolEffect>
-  /** Plugin / MCP tool name → declared effect (undeclared tools are absent and count as `write`). */
-  pluginToolEffects: Map<string, ToolEffect>
+  /** Plugin / MCP tool name → declared effect, plain or computed (undeclared tools are absent and count as `write`). */
+  pluginToolEffects: Map<string, ToolEffectSpec>
   /**
    * The names this seat was offered, for the executor's tool permit: every
    * tool the surface flags, the per-character switches and the chat's
@@ -315,17 +333,21 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     canManageInventory,
     docToolsMode,
     askCarinaEnabled,
+    canEditMemories,
     includeWorkspaceTools,
     excludeMemorySearch,
     sqlAccess,
+    researchKit,
     customToolContext,
     pluginToolAllowlist,
     documentsOnlySearch,
     webSearch,
+    storeSearch,
     effectCeiling,
+    onlyTools,
   } = options
   const customToolEffects = new Map<string, ToolEffect>()
-  let pluginToolEffects = new Map<string, ToolEffect>()
+  let pluginToolEffects = new Map<string, ToolEffectSpec>()
   const provider = await createLLMProvider(
     connectionProfile.provider,
     connectionProfile.baseUrl || undefined
@@ -414,15 +436,19 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     docToolsMode: docToolsMode ?? 'off',
     pluginToolAllowlist,
     documentsOnlySearch: !!documentsOnlySearch,
+    storeSearch: storeSearch !== false,
     askCarina: askCarinaEnabled,
+    memoryEdit: canEditMemories === true,
     includeWorkspaceTools: includeWorkspaceTools !== false,
     excludeMemorySearch: !!excludeMemorySearch,
     sqlAccess: !!sqlAccess,
+    researchKit: researchKit ?? 'off',
     customTools,
     // The editor rides on the same switch as the roster, not on the roster's
     // contents: an empty table is exactly when a first tool needs writing.
     editCustomTool: !!customToolContext,
     toolConfigs,
+    onlyTools,
   })
 
   // Filter out disabled tools (individual IDs and group patterns)

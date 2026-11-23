@@ -36,8 +36,7 @@ const TRAILING_SECTION_SEPARATOR = '\n\n---\n\n'
  * carrying (progressions, then the Inventory), what the operator says is so
  * (the inform block — after recall, so a memory that contradicts it comes
  * first — then the established facts posted since the seat last spoke, so
- * the operator's vouched words travel together), who the conversation is about (the referent ledger), what it is
- * about (the Atlas: things named in the scene), the line being
+ * the operator's vouched words travel together), who the conversation is about (the referent ledger), the line being
  * answered (the closing echo), and the turn notes last. Empty-is-absent: an
  * empty section adds nothing, not even a separator.
  */
@@ -51,8 +50,6 @@ export interface TrailingSections {
   /** Established facts since this seat last spoke (`established-fact-reminder.ts`); '' when none. */
   establishedFacts?: string
   referentLedger: string
-  /** The things being spoken of (`lib/atlas/prompt-section.ts`); '' when none. Right after the people. */
-  atlas?: string
   closingEcho: string
   turnSkip: string
   turnYield: string
@@ -71,7 +68,6 @@ function orderedSections(s: TrailingSections): string[] {
     s.inform,
     s.establishedFacts,
     s.referentLedger,
-    s.atlas,
     s.closingEcho,
     s.turnSkip,
     s.turnYield,
@@ -177,7 +173,7 @@ export interface RecentSpokenLine {
 }
 
 /**
- * The recent window both the referent ledger and the Atlas section read: the
+ * The recent window both the referent ledger and the lore (`lib/atlas/prompt-section.ts`) read: the
  * last {@link REFERENT_LEDGER_WINDOW_LINES} spoken lines (`spokenText`),
  * oldest first, plus the new user message when it is not yet persisted (it is
  * still the line being answered). One read of the shared transcript, so both
@@ -214,9 +210,9 @@ export async function buildReferentSections(input: {
   activeUserParticipantId?: string | null
   newUserMessage?: string
   transcript: TurnTranscript
-  /** The recent window, when the caller has it (shared with the Atlas section). */
+  /** The recent window, when the caller has it (shared with the lore). */
   recentLines?: Promise<RecentSpokenLine[]>
-  /** The workspace's characters, when the caller has them (shared with the Atlas section). */
+  /** The workspace's characters, when the caller has them (shared with the lore). */
   workspaceCharacters?: Promise<WorkspacePerson[]>
 }): Promise<{ referentLedger: string; closingEcho: string }> {
   const { chat, respondingParticipant } = input

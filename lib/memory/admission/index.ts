@@ -41,6 +41,9 @@ export type {
 } from './types'
 export {
   updateMemory,
+  requestMemoryEdit,
+  editMemoryOnHost,
+  type MemoryEditRequest,
   type MemoryEditPatch,
   type UpdateMemoryResult,
 } from './update-memory'

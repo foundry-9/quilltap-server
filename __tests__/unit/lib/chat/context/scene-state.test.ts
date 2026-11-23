@@ -3,7 +3,7 @@
  * (`lib/chat/context/scene-state.ts`).
  */
 
-import { formatCurrentSceneState } from '@/lib/chat/context/scene-state'
+import { formatCurrentSceneState, SCENE_ACTION_NOTE } from '@/lib/chat/context/scene-state'
 import type { Provider } from '@/lib/schemas/types'
 import type { SceneState } from '@/lib/schemas/chat.types'
 
@@ -62,6 +62,19 @@ describe('formatCurrentSceneState', () => {
     expect(r.emittedByCharacter.size).toBe(0)
   })
 
+  it('frames every Action as a telling, not a record', () => {
+    const r = formatCurrentSceneState(scene(), null, provider)
+    expect(r.content).toContain(`- ${SCENE_ACTION_NOTE}`)
+    expect(SCENE_ACTION_NOTE).toMatch(/a telling, not a record/)
+    // The note sits in the header list, before any character's section.
+    expect(r.content.indexOf(SCENE_ACTION_NOTE)).toBeLessThan(r.content.indexOf('### Friday'))
+  })
+
+  it('omits the Action note when no one is present', () => {
+    const r = formatCurrentSceneState(scene({ characters: [] }), null, provider)
+    expect(r.content).not.toContain(SCENE_ACTION_NOTE)
+  })
+
   it('renders the canonical Current State block with all fields', () => {
     const r = formatCurrentSceneState(scene(), '10:42 PM', provider)
     expect(r.content).toContain('## Current State')
@@ -70,7 +83,7 @@ describe('formatCurrentSceneState', () => {
     expect(r.content).toContain('- **Time**: 10:42 PM')
     expect(r.content).toContain('- **Active Now**: true')
     expect(r.content).toContain('### Friday')
-    expect(r.content).toContain('#### Action')
+    expect(r.content).toContain('#### Action (as told)')
     expect(r.content).toContain('Sipping coffee while planning the day.')
     expect(r.content).toContain('#### Clothing')
     expect(r.content).toContain('Charcoal Sweater, Charcoal Cigarette Trousers, barefoot')

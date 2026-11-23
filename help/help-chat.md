@@ -6,13 +6,13 @@ tags: [help, chat, assistant, navigation, tools]
 
 # Help Chat
 
-> **The Help Chat is available from every screen via the question-mark icon in the sidebar.**
+> **The Help Chat is available from every screen via the question-mark on the rail.**
 
 Picture, if you will, a well-appointed establishment where every guest is attended by a personal concierge of impeccable knowledge and unwavering patience --- one who not only knows every corridor and curiosity of the house, but who can escort you there on a moment's notice. That, dear reader, is your Help Chat: a contextual, LLM-driven assistant that hovers at your elbow on every page of Quilltap, ready to illuminate the obscure, untangle the perplexing, and point you toward whatever you seek.
 
 ## Opening Help
 
-At the bottom of the left sidebar, you will find a **question-mark icon** --- the universal signal that enlightenment lies behind a single click. Press it, and a dialog shall appear, offering you two tabs of assistance:
+At the foot of the rail, you will find a **question-mark icon** --- the universal signal that enlightenment lies behind a single click. Press it, and a dialog shall appear, offering you two tabs of assistance:
 
 ### The Guide Tab
 
@@ -111,14 +111,14 @@ These links, the "See also" suggestions beneath an answer, the Guide's topic lis
 
 ## In-Chat Navigation
 
-To direct the user to the sidebar where the help button lives:
+To direct the user to the rail where the help button lives:
 ```
 help_navigate(url: "/")
 ```
 
 ## Related Pages
 
-- [Left Sidebar](sidebar.md) --- Where the help button lives
+- [The Rail and Its Menus](navigation.md) --- Where the help button lives
 - [Chats Overview](chats.md) --- The Salon chat system
 - [Using Tools](tools-usage.md) --- AI tools available during chat
 - [Characters](characters.md) --- Create and manage characters, including help tool access

@@ -38,7 +38,11 @@
  *  - its bytes also surface as a `photos/` album link or a 'character'-vault
  *    link (via the sha256 reverse index); or
  *  - the file is referenced as a character `defaultImageId` or an
- *    `avatarOverrides[].imageId`.
+ *    `avatarOverrides[].imageId`; or
+ *  - any vault link the delete would take (for a `mount-blob:` key, every
+ *    link to the blob's file) is a `photos/` link, a link id in the keep-set,
+ *    or a link id held as a character default / override. Judged from the
+ *    storageKey, not `files.sha256`, which can disagree with the vault's hash.
  *
  * And if a chat's keep-set can't be fully resolved (a keep-id resolution
  * throws), the whole chat's collapse is skipped for that run rather than risk
@@ -50,6 +54,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 import { getPhotoLinkSummaryBySha256 } from '@/lib/photos/photo-link-summary';
 import { deleteFileCompletely } from '@/lib/cascade-delete';
+import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
+import { parseMountBlobStorageKey } from '@/lib/file-storage/mount-blob-key';
 import type { ChatMetadata, FileEntry } from '@/lib/schemas/types';
 import { resolveStaleChatDays, retentionCutoff } from './retention-constants';
 
@@ -207,13 +213,51 @@ async function skipReason(
 
   // Promoted to a character default or used as an avatar override (possibly in
   // another, still-active chat): character-level content, out of scope.
-  const [asDefault, asOverride] = await Promise.all([
-    repos.characters.findByDefaultImageId(file.id),
-    repos.characters.findByAvatarOverrideImageId(file.id),
-  ]);
-  if (asDefault.length > 0 || asOverride.length > 0) return 'character-reference';
+  if (await isCharacterReferenced(file.id, repos)) return 'character-reference';
+
+  // The links this delete would actually take. A `mount-blob:` key's delete
+  // drops EVERY link to the blob's file (`deleteMountBlob`), so judge those
+  // links directly rather than through `files.sha256` — which disagrees with
+  // the vault's own hash for a fifth of generated images, and so once let a
+  // character's default avatar (stored as a vault LINK id, in `photos/`) be
+  // reaped with its chat's leftovers.
+  for (const link of await linksTakenByDelete(file, repos)) {
+    if (isPhotosRelativePath(link.relativePath)) return 'doomed-album-link';
+    if (keepIds.has(link.id)) return 'doomed-current-link';
+    if (await isCharacterReferenced(link.id, repos)) return 'doomed-character-link';
+  }
 
   return null;
+}
+
+/** True when an id (a `files.id` or a vault link id) is any character's default or avatar override. */
+async function isCharacterReferenced(
+  imageId: string,
+  repos: ReturnType<typeof getRepositories>,
+): Promise<boolean> {
+  const [asDefault, asOverride] = await Promise.all([
+    repos.characters.findByDefaultImageId(imageId),
+    repos.characters.findByAvatarOverrideImageId(imageId),
+  ]);
+  return asDefault.length > 0 || asOverride.length > 0;
+}
+
+/**
+ * Every mount-index link that `deleteFileCompletely(file.id)` would remove:
+ * for a `mount-blob:` storageKey, all links to the blob's underlying file.
+ * Empty for a filesystem key or an already-missing blob. A lookup failure
+ * propagates, so the rest of the chat is left for the next sweep ("when
+ * unsure, skip").
+ */
+async function linksTakenByDelete(
+  file: FileEntry,
+  repos: ReturnType<typeof getRepositories>,
+): Promise<Array<{ id: string; relativePath: string }>> {
+  const parsed = file.storageKey ? parseMountBlobStorageKey(file.storageKey) : null;
+  if (!parsed) return [];
+  const blob = await repos.docMountBlobs.findById(parsed.blobId);
+  if (!blob) return [];
+  return repos.docMountFileLinks.findByFileId(blob.fileId);
 }
 
 /** Collapse a single stale chat. Idempotent — a no-op once already collapsed. */
@@ -236,6 +280,7 @@ async function collapseOneChat(
   for (const file of candidates) {
     const skip = await skipReason(file, keepIds, keepShas, repos);
     if (skip) {
+      moduleLogger.debug('Kept stale-chat asset', { chatId: chat.id, fileId: file.id, reason: skip });
       continue;
     }
 

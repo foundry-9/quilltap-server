@@ -88,14 +88,14 @@ describe('retrieveKnowledgeForTurn', () => {
 
     const result = await retrieveKnowledgeForTurn(baseParams)
 
-    expect(result).toEqual({ content: '', tokenCount: 0, debug: [] })
+    expect(result).toEqual({ content: '', tokenCount: 0, lore: '', loreTokenCount: 0, debug: [] })
     expect(mockFindFileByPath).not.toHaveBeenCalled()
   })
 
   it('returns empty when query is blank', async () => {
     const result = await retrieveKnowledgeForTurn({ ...baseParams, query: '   ' })
 
-    expect(result).toEqual({ content: '', tokenCount: 0, debug: [] })
+    expect(result).toEqual({ content: '', tokenCount: 0, lore: '', loreTokenCount: 0, debug: [] })
     expect(mockSearchDocumentChunks).not.toHaveBeenCalled()
   })
 
@@ -107,7 +107,7 @@ describe('retrieveKnowledgeForTurn', () => {
       globalMountPointId: null,
     })
 
-    expect(result).toEqual({ content: '', tokenCount: 0, debug: [] })
+    expect(result).toEqual({ content: '', tokenCount: 0, lore: '', loreTokenCount: 0, debug: [] })
     expect(mockSearchDocumentChunks).not.toHaveBeenCalled()
   })
 
@@ -184,7 +184,7 @@ describe('retrieveKnowledgeForTurn', () => {
 
     const result = await retrieveKnowledgeForTurn(baseParams)
 
-    expect(result).toEqual({ content: '', tokenCount: 0, debug: [] })
+    expect(result).toEqual({ content: '', tokenCount: 0, lore: '', loreTokenCount: 0, debug: [] })
   })
 
   it('demotes inline candidates to pointers when the budget would overflow', async () => {
@@ -210,6 +210,107 @@ describe('retrieveKnowledgeForTurn', () => {
     expect(result.content).toContain('### Knowledge (character) — qtap://self/Knowledge/big.md')
     expect(result.content).not.toContain('B'.repeat(50))
     expect(result.tokenCount).toBeLessThanOrEqual(200)
+  })
+
+  describe('lore from Atlas/', () => {
+    const loreHit = (overrides: Record<string, unknown> = {}) =>
+      knowledgeHit({ chunkId: 'ac-1', fileId: 'a-1', fileName: 'Convertible.md', relativePath: 'Atlas/Convertible.md', content: 'It leaks oil.', score: 0.8, ...overrides })
+    const atlas = (blocks: Record<string, { entryId: string; full: string; excerpt: string | null } | null>) => ({
+      resolve: jest.fn((hit: { relativePath: string }) => {
+        const block = blocks[hit.relativePath]
+        return block ? { name: block.entryId, ...block } : null
+      }),
+    })
+    const byPrefix = (knowledge: unknown[], lore: unknown[]) =>
+      mockSearchDocumentChunks.mockImplementation(async (_e: unknown, opts: any) => (opts.pathPrefix === 'Atlas/' ? lore : knowledge))
+
+    it('does not search Atlas/ without a source', async () => {
+      mockSearchDocumentChunks.mockResolvedValue([])
+      await retrieveKnowledgeForTurn(baseParams)
+      expect(mockSearchDocumentChunks.mock.calls.map((c: any) => c[1].pathPrefix)).toEqual(['Knowledge/'])
+    })
+
+    it('holds lore to its own higher floor, and to the caller\'s when that is higher still', async () => {
+      mockSearchDocumentChunks.mockResolvedValue([])
+      const source = atlas({})
+      const floors = () => Object.fromEntries(mockSearchDocumentChunks.mock.calls.map((c: any) => [c[1].pathPrefix, c[1].minScore]))
+
+      await retrieveKnowledgeForTurn({ ...baseParams, atlas: source })
+      expect(floors()).toEqual({ 'Knowledge/': 0.3, 'Atlas/': 0.4 })
+
+      mockSearchDocumentChunks.mockClear()
+      await retrieveKnowledgeForTurn({ ...baseParams, atlas: source, minScore: 0.6 })
+      expect(floors()).toEqual({ 'Knowledge/': 0.6, 'Atlas/': 0.6 })
+    })
+
+    it('returns a resolved entry whole, apart from knowledge, from the one embedding', async () => {
+      byPrefix([], [loreHit()])
+      const source = atlas({ 'Atlas/Convertible.md': { entryId: 'e-1', full: '### Convertible\n\nIt leaks oil.', excerpt: '### Convertible\n\nIt leaks oil.' } })
+
+      const result = await retrieveKnowledgeForTurn({ ...baseParams, atlas: source })
+
+      expect(result.lore).toBe('### Convertible\n\nIt leaks oil.')
+      expect(result.content).toBe('')
+      expect(result.tokenCount).toBe(0)
+      expect(result.loreTokenCount).toBeGreaterThan(0)
+      expect(result.debug).toEqual([expect.objectContaining({ filePath: 'Atlas/Convertible.md', inline: true })])
+      expect(mockGenerateEmbeddingForUser).toHaveBeenCalledTimes(1)
+      expect(mockFindFileByPath).not.toHaveBeenCalled()
+    })
+
+    it('drops a hit the source does not resolve and keeps one block per entry', async () => {
+      byPrefix([], [
+        loreHit({ chunkId: 'ac-1', score: 0.5 }),
+        loreHit({ chunkId: 'ac-2', score: 0.9, content: 'The better passage.' }),
+        loreHit({ chunkId: 'ac-3', relativePath: 'Atlas/notes.md' }),
+      ])
+      const source = atlas({ 'Atlas/Convertible.md': { entryId: 'e-1', full: '### Convertible\n\nwhole', excerpt: null } })
+
+      const result = await retrieveKnowledgeForTurn({ ...baseParams, atlas: source })
+
+      expect(result.lore).toBe('### Convertible\n\nwhole')
+      expect(result.debug).toHaveLength(1)
+      expect(result.debug[0].score).toBe(0.9)
+    })
+
+    it('gives a long entry as its matched passage, and passes over one that fits neither way', async () => {
+      byPrefix([], [
+        loreHit({ chunkId: 'ac-1', relativePath: 'Atlas/Long.md', score: 0.9 }),
+        loreHit({ chunkId: 'ac-2', relativePath: 'Atlas/Huge.md', score: 0.8 }),
+        loreHit({ chunkId: 'ac-3', relativePath: 'Atlas/Small.md', score: 0.7 }),
+      ])
+      const source = atlas({
+        'Atlas/Long.md': { entryId: 'e-long', full: `### Long\n\n${'L'.repeat(8000)}`, excerpt: '### Long\n\nthe passage' },
+        'Atlas/Huge.md': { entryId: 'e-huge', full: `### Huge\n\n${'H'.repeat(8000)}`, excerpt: null },
+        'Atlas/Small.md': { entryId: 'e-small', full: '### Small\n\ntiny', excerpt: null },
+      })
+
+      const result = await retrieveKnowledgeForTurn({ ...baseParams, atlas: source })
+
+      expect(result.lore).toBe('### Long\n\nthe passage\n\n### Small\n\ntiny')
+      expect(result.debug.map(d => d.inline)).toEqual([false, true])
+    })
+
+    it('shares one budget with knowledge, ranked by score', async () => {
+      byPrefix(
+        [knowledgeHit({ score: 0.6 })],
+        [loreHit({ score: 0.9 })],
+      )
+      mockFindFileByPath.mockResolvedValue({ id: 'f-1', fileType: 'markdown', relativePath: 'Knowledge/archives.md', fileName: 'archives.md' })
+      mockFindDocumentByPath.mockResolvedValue({ content: 'A short, well-curated note.' })
+      const source = atlas({ 'Atlas/Convertible.md': { entryId: 'e-1', full: '### Convertible\n\nIt leaks oil.', excerpt: null } })
+
+      const roomy = await retrieveKnowledgeForTurn({ ...baseParams, atlas: source })
+      expect(roomy.lore).toContain('### Convertible')
+      expect(roomy.content).toContain('### Knowledge (character)')
+      expect(roomy.debug.map(d => d.filePath)).toEqual(['Atlas/Convertible.md', 'Knowledge/archives.md'])
+
+      // Room for the lore alone: the higher score takes it and knowledge goes without.
+      const tight = await retrieveKnowledgeForTurn({ ...baseParams, atlas: source, budgetTokens: roomy.loreTokenCount })
+      expect(tight.lore).toContain('### Convertible')
+      expect(tight.content).toBe('')
+      expect(tight.loreTokenCount + tight.tokenCount).toBeLessThanOrEqual(roomy.loreTokenCount)
+    })
   })
 
   it('merges all three tiers with distinct tier headers and boost fractions', async () => {

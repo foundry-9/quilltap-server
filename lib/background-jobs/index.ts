@@ -23,7 +23,6 @@ export {
   getActivitySnapshot,
   cancelJob,
   getPendingJobsForChat,
-  cleanupOldJobs,
   type EnqueueJobOptions,
   type MemoryExtractionPayload,
   type ContextSummaryPayload,

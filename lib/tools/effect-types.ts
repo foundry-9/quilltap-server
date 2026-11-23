@@ -85,6 +85,57 @@ export function computedToolEffect<I>(options: {
   return fn;
 }
 
+/**
+ * A plugin's declaration of an effect that depends on the call's input — the
+ * host's mirror of `ToolCallEffect` in `@quilltap/plugin-types` (2.12.0+).
+ */
+export interface DeclaredToolCallEffect {
+  /** The highest effect any call of the tool can have. */
+  max: ToolEffect;
+  /** The effect of one call, from its raw input. Synchronous and pure. */
+  of: (input: Record<string, unknown>) => ToolEffect;
+  /** One line per ceiling, saying which uses that ceiling allows. */
+  notes?: Partial<Record<ToolEffect, string>>;
+}
+
+const isToolEffect = (value: unknown): value is ToolEffect =>
+  typeof value === 'string' && (TOOL_EFFECTS as readonly string[]).includes(value);
+
+/**
+ * Turn one entry of a plugin's `getToolEffects` answer into a spec: a plain
+ * effect as it is, a {@link DeclaredToolCallEffect} as a computed effect, and
+ * anything else as undefined (the tool then counts as undeclared).
+ *
+ * The plugin's `of` is never trusted to behave: a throw, a non-object input or
+ * an answer that is not an effect counts as {@link UNDECLARED_TOOL_EFFECT} for
+ * that call, and an answer above `max` stands (the stricter reading).
+ */
+export function toolEffectSpecFromDeclaration(declared: unknown): ToolEffectSpec | undefined {
+  if (isToolEffect(declared)) return declared;
+  if (!declared || typeof declared !== 'object') return undefined;
+  const { max, of, notes } = declared as Partial<DeclaredToolCallEffect>;
+  if (!isToolEffect(max) || typeof of !== 'function') return undefined;
+  const fn = ((input: unknown): ToolEffect => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return UNDECLARED_TOOL_EFFECT;
+    try {
+      const effect = of(input as Record<string, unknown>);
+      return isToolEffect(effect) ? effect : UNDECLARED_TOOL_EFFECT;
+    } catch {
+      return UNDECLARED_TOOL_EFFECT;
+    }
+  }) as ComputedToolEffect;
+  Object.defineProperty(fn, 'computed', { value: true });
+  Object.defineProperty(fn, 'maxEffect', { value: max });
+  Object.defineProperty(fn, 'usesAllowedUnder', {
+    value: (ceiling: ToolEffect): string | null => {
+      if (TOOL_EFFECT_RANK[ceiling] >= TOOL_EFFECT_RANK[max]) return null;
+      const note = notes && typeof notes === 'object' ? notes[ceiling] : undefined;
+      return typeof note === 'string' && note.trim() ? note : null;
+    },
+  });
+  return fn;
+}
+
 export function isComputedToolEffect(spec: ToolEffectSpec): spec is ComputedToolEffect {
   return typeof spec === 'function';
 }

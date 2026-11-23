@@ -12,7 +12,7 @@ This guide walks you through creating new characters in Quilltap, from simple ch
 
 ### Accessing Character Creation
 
-1. Open **Aurora** (`/aurora`) from the left sidebar
+1. Click **Characters** on the rail to open Aurora (`/aurora`)
 2. Click **Create Character** or **+ New Character**
 3. The New Character form appears
 4. Fill in whatever you like — only the name is required

@@ -77,3 +77,15 @@ export const BackgroundJobSchema = z.object({
 });
 
 export type BackgroundJob = z.infer<typeof BackgroundJobSchema>;
+
+/**
+ * The `scheduledAt` of a job held until its chat's next turn (today, only
+ * automatic avatar refreshes) — a far-future time the claimer never reaches.
+ * Releasing the job sets `scheduledAt` to now.
+ */
+export const HELD_UNTIL_NEXT_TURN = '9999-12-31T23:59:59.999Z';
+
+/** Is this job still held for its chat's next turn? Client-safe. */
+export function isHeldForNextTurn(job: { scheduledAt: string; payload?: Record<string, unknown> | null }): boolean {
+  return job.payload?.awaitingTurn === true && job.scheduledAt >= HELD_UNTIL_NEXT_TURN;
+}

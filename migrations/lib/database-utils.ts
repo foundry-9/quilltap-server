@@ -321,6 +321,22 @@ export function columnExists(db: DatabaseType, table: string, column: string): b
   return cols.some((col) => col.name === column);
 }
 
+/** The migration ledger's own tables: bookkeeping, not data. */
+const MIGRATION_LEDGER_TABLES = new Set(['migrations_state', 'migrations_metadata']);
+
+/**
+ * Whether the main database holds no table but the migration ledger's — a
+ * database being created by this boot, before any migration has run.
+ */
+export function isMainDatabaseEmpty(): boolean {
+  assertSQLiteBackend('isMainDatabaseEmpty');
+  const rows = getSQLiteDatabase().prepare(`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+  `).all() as Array<{ name: string }>;
+  return rows.every((row) => MIGRATION_LEDGER_TABLES.has(row.name));
+}
+
 /**
  * Check if a table exists in SQLite
  */

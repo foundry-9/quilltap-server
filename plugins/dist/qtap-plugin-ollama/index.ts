@@ -12,6 +12,7 @@
 
 import type { TextProviderPlugin, EmbeddingModelInfo, ProviderOptionsSchema } from './types';
 import { OllamaProvider } from './provider';
+import { fetchOllamaModelCatalog } from './model-catalog';
 import { DEFAULT_REQUEST_TIMEOUT_SECONDS } from './profile-options';
 import { OllamaEmbeddingProvider } from './embedding-provider';
 import {
@@ -303,6 +304,16 @@ export const plugin: TextProviderPlugin = {
       logger.error('Failed to fetch Ollama models', { context: 'plugin.getAvailableModels', baseUrl: url }, error instanceof Error ? error : undefined);
       return [];
     }
+  },
+
+  /**
+   * Live, detailed model list (context window, tools, vision, thinking).
+   * Throws on failure so the host does not cache a partial list.
+   */
+  getModelCatalog: async (apiKey: string, baseUrl?: string) => {
+    const url = baseUrl || config.baseUrlDefault;
+    logger.debug('Fetching Ollama model catalog', { context: 'plugin.getModelCatalog', baseUrl: url });
+    return fetchOllamaModelCatalog(url);
   },
 
   /**

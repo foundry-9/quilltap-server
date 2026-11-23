@@ -8,6 +8,7 @@
  */
 
 import { readOwnedCharacters, readOwnedProjects, readOwnedGroups, readAllLlmLogs, unreadableStoreWarning } from './owned-rows';
+import { cleanupDir } from './restore/archive';
 import { loadBundleCursors, withBundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import { execFile } from 'child_process';
 import fs from 'fs';
@@ -581,20 +582,6 @@ async function writeJsonArrayFile<T>(filePath: string, items: readonly T[]): Pro
   }
 
   await pipeline(Readable.from(chunks()), out);
-}
-
-/**
- * Recursively removes a directory and all its contents
- */
-async function cleanupDir(dirPath: string): Promise<void> {
-  try {
-    await fs.promises.rm(dirPath, { recursive: true, force: true });
-  } catch (error) {
-    moduleLogger.warn('Failed to clean up temp directory', {
-      dirPath,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
 }
 
 /**

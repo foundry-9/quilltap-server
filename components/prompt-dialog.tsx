@@ -46,7 +46,7 @@ export function PromptDialog({
       overlayClassName="z-[100]"
     >
       <form onSubmit={handleSubmit}>
-        <div className="qt-dialog-body !px-0 !py-0 mb-4">
+        <div className="qt-dialog-body qt-dialog-body-default !px-0 !py-0 mb-4">
           <ModalTitle className="text-sm font-normal qt-text whitespace-pre-wrap break-words">
             {message}
           </ModalTitle>

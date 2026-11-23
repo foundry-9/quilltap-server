@@ -16,8 +16,10 @@
  *
  *   - Anthropic 4.6+ **rejects** a request that ends with an assistant message
  *     ("This model does not support assistant message prefill"), which is why
- *     Anthropic profiles default to off. This one really is a property of the
- *     provider: it holds whether or not thinking is on.
+ *     Anthropic profiles default to off — and so does any profile whose model
+ *     is Claude served through another provider (OpenRouter, NanoGPT, an
+ *     OpenAI-compatible proxy): the refusal travels with the model. It holds
+ *     whether or not thinking is on.
  *   - A model that will run a **thinking** turn. Two providers are on record
  *     breaking on a prefill only while thinking — Ollama never opens the
  *     reasoning block behind a prefilled turn, so `message.thinking` comes
@@ -49,24 +51,53 @@
 const PREFILL_HOSTILE_PROVIDERS = new Set(['ANTHROPIC'])
 
 /**
+ * A Claude model, by name, whoever serves it: `anthropic/claude-sonnet-5`
+ * (OpenRouter), `claude-sonnet-4-6` (NanoGPT, an OpenAI-compatible proxy),
+ * `us.anthropic.claude-…` (Bedrock-style ids). Anthropic's refusal of an
+ * assistant tail travels with the model through every gateway, so a gateway
+ * profile pointed at Claude fails exactly as an Anthropic one would — every
+ * multi-character turn, the opening greeting included.
+ */
+const CLAUDE_MODEL_PATTERN = /(^|[^a-z0-9])claude([^a-z0-9]|$)/i
+
+/** Whether a model name names an Anthropic Claude model, on any provider. */
+export function isClaudeModelName(modelName: string | null | undefined): boolean {
+  return !!modelName && CLAUDE_MODEL_PATTERN.test(modelName)
+}
+
+/**
+ * Whether the model on the other end refuses a request that ends with an
+ * assistant message: an Anthropic profile, or a Claude model served through
+ * any other provider. Holds whether or not thinking is on.
+ */
+export function refusesAssistantPrefill(
+  provider: string | null | undefined,
+  modelName?: string | null
+): boolean {
+  if (provider && PREFILL_HOSTILE_PROVIDERS.has(provider.toUpperCase())) return true
+  return isClaudeModelName(modelName)
+}
+
+/**
  * The value a newly created profile should start with.
  *
- * Off for Anthropic (4.6+ hard-rejects an assistant tail) and off for any
- * profile that will run a thinking turn (bugs 68 and 85); on everywhere else,
- * which is the historic behaviour and the stronger anchor for the weak models
- * that need one.
+ * Off where the model refuses an assistant tail (Anthropic, or Claude through
+ * a gateway — `refusesAssistantPrefill`) and off for any profile that will run
+ * a thinking turn (bugs 68 and 85); on everywhere else, which is the historic
+ * behaviour and the stronger anchor for the weak models that need one.
  *
  * `runsThinkingTurn` is the answer from `lib/llm/thinking-turn` — the caller
  * supplies it because working it out needs the provider plugin, which the
- * browser cannot reach. Omit it and only the provider rule applies.
+ * browser cannot reach. Omit it and only the provider and model rules apply;
+ * omit `modelName` (no model chosen yet) and only the provider rule applies.
  */
 export function defaultMultiCharacterPrefill(
   provider: string | null | undefined,
-  runsThinkingTurn = false
+  runsThinkingTurn = false,
+  modelName?: string | null
 ): boolean {
   if (runsThinkingTurn) return false
-  if (!provider) return true
-  return !PREFILL_HOSTILE_PROVIDERS.has(provider.toUpperCase())
+  return !refusesAssistantPrefill(provider, modelName)
 }
 
 /**
@@ -76,11 +107,15 @@ export function defaultMultiCharacterPrefill(
  * us — and a null/absent one falls back to the default above.
  */
 export function profileUsesNamePrefill(
-  profile: { provider?: string | null; multiCharacterPrefill?: boolean | null },
+  profile: {
+    provider?: string | null
+    modelName?: string | null
+    multiCharacterPrefill?: boolean | null
+  },
   runsThinkingTurn = false
 ): boolean {
   if (typeof profile.multiCharacterPrefill === 'boolean') {
     return profile.multiCharacterPrefill
   }
-  return defaultMultiCharacterPrefill(profile.provider, runsThinkingTurn)
+  return defaultMultiCharacterPrefill(profile.provider, runsThinkingTurn, profile.modelName)
 }

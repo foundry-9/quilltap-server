@@ -23,4 +23,5 @@ export type {
   SubsystemOverride,
   ThemeTokensResponse,
   ThemesListResponse,
+  ThemePreview,
 } from './theme/types';

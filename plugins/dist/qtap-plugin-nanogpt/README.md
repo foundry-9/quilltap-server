@@ -45,6 +45,12 @@ used by connection profiles (chat), image profiles, and embedding profiles.
 
 ## Model catalogs
 
+Since 1.2.19 the plugin also offers a live, detailed text-model catalog
+(`getModelCatalog`, from `GET /api/v1/models?detailed=true`): context length,
+max output tokens and the vision / tool-calling / reasoning flags, each left
+unknown when NanoGPT does not state it. Connection-profile Auto-Configure uses it.
+
+
 NanoGPT's catalog is large and changes frequently, so the plugin prefers the
 live listings and keeps only small curated static lists as fallbacks (see
 `models.ts`). The `auto-model*` ids are NanoGPT's own routing meta-models and

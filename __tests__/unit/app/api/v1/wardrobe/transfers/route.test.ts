@@ -72,7 +72,10 @@ jest.mock('@/lib/wardrobe/item-images', () => ({
 }))
 
 import { randomUUID } from 'crypto'
-import { POST } from '@/app/api/v1/wardrobe/transfers/route'
+import { handleWardrobeTransfer } from '@/lib/wardrobe/routes/transfer'
+
+/** `POST /api/v1/wardrobe?action=move-to-tier | copy-to-tier`, picked from the body's `action`. */
+const POST = async (req: any) => handleWardrobeTransfer((await req.json()).action)(req, mockCtx)
 import {
   createInMount,
   deleteInMount,
@@ -235,7 +238,7 @@ describe('wardrobe transfer route', () => {
   function req(body: unknown): any {
     return {
       method: 'POST',
-      url: 'http://localhost:3000/api/v1/wardrobe/transfers',
+      url: 'http://localhost:3000/api/v1/wardrobe',
       json: async () => body,
     }
   }

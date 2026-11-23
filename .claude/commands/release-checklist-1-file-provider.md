@@ -2,14 +2,14 @@
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 1 of 14):** Unless we're implementing an interface or an instance of a generic provider, this app should **never directly access the filesystem** — it should go through our generic file provider.
+**Goal (checklist item 1 of 15):** Unless we're implementing an interface or an instance of a generic provider, this app should **never directly access the filesystem** — it should go through our generic file provider.
 
 ## Scope
 
 By default, audit only what changed since the last release. Determine the range and scan it:
 
 ```bash
-LAST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)
+LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
 echo "Auditing changes since ${LAST_TAG:-<no tag found>}"
 git diff --name-only "${LAST_TAG}"..HEAD -- '*.ts' '*.tsx' 2>/dev/null | sort -u
 ```
@@ -31,4 +31,4 @@ If the user passes `all` as an argument, audit the whole `lib/`, `app/`, and `pa
 
 ## Report
 
-List each hit as **OK** (with the reason it's allowed) or **VIOLATION** (with `file:line` and the fix applied). If there are no violations, say so explicitly. Do not commit — that's the `/commit` command's job.
+List each hit as **OK** (with the reason it's allowed) or **VIOLATION** (with `file:line` and the fix applied). If there are no violations, say so explicitly. Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

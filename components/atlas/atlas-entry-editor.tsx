@@ -45,6 +45,7 @@ import { ItemImageViewer } from '@/components/item-browser/ItemImageViewer'
 import type { AtlasEntryActions } from './hooks/useAtlasEntryActions'
 import { describeAtlasRefusal } from './hooks/useAtlasEntryActions'
 import { AtlasAliasInput } from './atlas-alias-input'
+import type { AtlasLoreDraft } from '@/lib/atlas/lore-draft/request-schema'
 
 interface AtlasEntryEditorProps {
   /** The tier a new entry is created in; an edited one's own tier. */
@@ -53,6 +54,8 @@ interface AtlasEntryEditorProps {
   /** null to create. */
   entry: AtlasEntryWithOrigin | null
   initialFolder?: string
+  /** A new entry's fields, prefilled (the lore wizard's draft). Ignored when editing. */
+  initialDraft?: AtlasLoreDraft
   actions: Pick<AtlasEntryActions, 'mutations'>
   onClose: () => void
   onSaved: () => void
@@ -66,12 +69,13 @@ interface Draft {
   folder: string
 }
 
-function draftOf(entry: AtlasEntryWithOrigin | null, folder: string): Draft {
+function draftOf(entry: AtlasEntryWithOrigin | null, folder: string, prefill?: AtlasLoreDraft): Draft {
+  const source = entry ?? prefill
   return {
-    name: entry?.name ?? '',
-    aliases: entry?.aliases ?? [],
-    graphicPrompt: entry?.graphicPrompt ?? '',
-    knowledge: entry?.knowledge ?? '',
+    name: source?.name ?? '',
+    aliases: source?.aliases ?? [],
+    graphicPrompt: source?.graphicPrompt ?? '',
+    knowledge: source?.knowledge ?? '',
     folder: entry?.folder ?? folder,
   }
 }
@@ -127,12 +131,13 @@ export function AtlasEntryEditor({
   containerLabel,
   entry,
   initialFolder = '',
+  initialDraft,
   actions,
   onClose,
   onSaved,
 }: AtlasEntryEditorProps) {
   const fieldId = useId()
-  const [draft, setDraft] = useState<Draft>(() => draftOf(entry, initialFolder))
+  const [draft, setDraft] = useState<Draft>(() => draftOf(entry, initialFolder, entry ? undefined : initialDraft))
   const [saving, setSaving] = useState(false)
   const [nameRefusal, setNameRefusal] = useState<string | null>(null)
   const { folders } = useAtlasFolders(container)

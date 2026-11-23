@@ -99,7 +99,7 @@ describe('tool permit chokepoint', () => {
     for (const known of [
       'lib/services/carina/carina.service.ts',
       'lib/services/help-chat/orchestrator.service.ts',
-      'lib/services/brahma-console/orchestrator.service.ts',
+      'lib/services/console-engine/engine.ts',
       'lib/services/brahma-console/one-shot.service.ts',
       'lib/services/scenario-builder/scenario-builder.service.ts',
       'lib/services/chat-message/turn-tools.service.ts',

@@ -698,11 +698,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger4, logLevel) {
-  if (!logger4 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger5, logLevel) {
+  if (!logger5 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger4[fnLevel].bind(logger4);
+    return logger5[fnLevel].bind(logger5);
   }
 }
 var noopLogger = {
@@ -713,22 +713,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger4 = client.logger;
+  const logger5 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger4) {
+  if (!logger5) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger4);
+  const cachedLogger = cachedLoggers.get(logger5);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger4, logLevel),
-    warn: makeLogFn("warn", logger4, logLevel),
-    info: makeLogFn("info", logger4, logLevel),
-    debug: makeLogFn("debug", logger4, logLevel)
+    error: makeLogFn("error", logger5, logLevel),
+    warn: makeLogFn("warn", logger5, logLevel),
+    info: makeLogFn("info", logger5, logLevel),
+    debug: makeLogFn("debug", logger5, logLevel)
   };
-  cachedLoggers.set(logger4, [logLevel, levelLogger]);
+  cachedLoggers.set(logger5, [logLevel, levelLogger]);
   return levelLogger;
 }
 var sensitiveQueryNames = /* @__PURE__ */ new Set([
@@ -884,7 +884,7 @@ var Stream = class _Stream {
    */
   static fromSSEResponse(response, controller, client, synthesizeEventData, streamMode = "legacy") {
     let consumed = false;
-    const logger4 = client ? loggerFor(client) : console;
+    const logger5 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -910,8 +910,8 @@ var Stream = class _Stream {
           try {
             data = JSON.parse(sse.data);
           } catch {
-            logger4.error(`Could not parse message into JSON:`);
-            logger4.error(`From chunk:`);
+            logger5.error(`Could not parse message into JSON:`);
+            logger5.error(`From chunk:`);
             throw new SyntaxError("Error reading response: malformed server-sent event JSON.");
           }
           if (streamMode === "legacy") {
@@ -1474,7 +1474,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "7.54.0";
+var VERSION = "7.62.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -13524,14 +13524,11 @@ var Events = class extends APIResource {
    *       {
    *         request_id: 'request_id',
    *         response: {
-   *           action: 'submit',
-   *           fields: [
-   *             { field_id: 'field_id', value: 'value' },
-   *           ],
-   *           type: 'browser_authentication',
+   *           decision: 'approve',
+   *           type: 'mcp_tool_call',
    *         },
    *         type:
-   *           'agent.session.input.computer_use_approval_request_result',
+   *           'agent.session.input.mcp_approval_request_result',
    *       },
    *     ],
    *   },
@@ -13554,20 +13551,14 @@ var Events = class extends APIResource {
       __security: { bearerAuth: true }
     })));
   }
-  /**
-   * Streams live events for an agent session. See
-   * [session events](https://developers.openai.com/api/docs/guides/agents-api/sessions/events).
-   *
-   * @example
-   * ```ts
-   * const agentSessionEvent =
-   *   await client.beta.agents.sessions.events.stream(
-   *     'session_id',
-   *   );
-   * ```
-   */
-  stream(sessionID, options) {
+  stream(sessionID, query = {}, options) {
+    if (arguments.length < 3) {
+      options = query;
+      query = {};
+    }
+    query = query;
     return this._client.get(path`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions51(options, (options2) => ({
+      query,
       ...options2,
       headers: buildHeaders([
         { "OpenAI-Beta": "agents=v1", Accept: "text/event-stream" },
@@ -14074,8 +14065,9 @@ var TurnState = class {
     return true;
   }
   /** Checks session termination after updating the selected turn state. */
-  terminal(event) {
-    return event.type === "agent.session.failed" || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _TurnState_turnEnded, "f");
+  terminal(event, sessionID) {
+    const type = event.type;
+    return event.type === "agent.session.failed" || type === "agent.session.budget_reached" && "session" in event && event.session?.id === sessionID && (__classPrivateFieldGet(this, _TurnState_turnID, "f") === void 0 || __classPrivateFieldGet(this, _TurnState_turnEnded, "f")) || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _TurnState_turnEnded, "f");
   }
   /** Returns each tool call once for the full invocation, including subagent turns. */
   call(event) {
@@ -14464,12 +14456,13 @@ var AgentTurnResultCollector = class {
     if (this.ready) {
       return;
     }
-    if ("session" in event) {
+    if ("session" in event && event.session) {
       __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionID, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionID, "f") ?? event.session.id, "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_requiredActions, structuredClone(event.session.required_actions ?? []), "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_checkedActionsFor, void 0, "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionFailed, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionFailed, "f") || event.type === "agent.session.failed", "f");
-      __classPrivateFieldSet(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f") || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f"), "f");
+      const type = event.type;
+      __classPrivateFieldSet(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f") || (event.type === "agent.session.idle" && __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") || type === "agent.session.budget_reached" && event.session.id === __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionID, "f") && (!__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f") || __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f"))), "f");
     }
     if (event.type === "agent.session.turn.created" && event.turn.subagent_id === null && !__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f")) {
       __classPrivateFieldSet(this, _AgentTurnResultCollector_turn, structuredClone(event.turn), "f");
@@ -14503,7 +14496,7 @@ var AgentTurnResultCollector = class {
     __classPrivateFieldSet(this, _AgentTurnResultCollector_checkedActionsFor, canHandle, "f");
   }
   get ready() {
-    return __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") && __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f");
+    return __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f");
   }
   release() {
     __classPrivateFieldGet(this, _AgentTurnResultCollector_messages, "f").clear();
@@ -14740,7 +14733,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
     if (session.status !== "idle") {
       throw new OpenAIError("sessions.stream requires an idle session; use sessions.events.stream for active sessions");
     }
-    const subscription = await __classPrivateFieldGet(this, _AgentSessionStream_sessions, "f").events.stream(__classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"), options).withResponse();
+    const subscription = await __classPrivateFieldGet(this, _AgentSessionStream_sessions, "f").events.stream(__classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"), {}, options).withResponse();
     __classPrivateFieldSet(this, _AgentSessionStream_stream, subscription.data, "f");
     __classPrivateFieldSet(this, _AgentSessionStream_response, subscription.response, "f");
     __classPrivateFieldGet(this, _AgentSessionStream_instances, "m", _AgentSessionStream_checkAbort).call(this);
@@ -14759,7 +14752,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
       if (!state2.accept(event)) {
         continue;
       }
-      const terminal = state2.terminal(event);
+      const terminal = state2.terminal(event, __classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"));
       const dispatch = __classPrivateFieldGet(this, _AgentSessionStream_dispatcher, "f").prepare(state2.call(event), __classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"));
       if (terminal) {
         __classPrivateFieldGet(this, _AgentSessionStream_stream, "f").controller.abort();
@@ -14961,8 +14954,9 @@ var Sessions = class extends APIResource {
     })));
   }
   /**
-   * Updates session tools, metadata, model, reasoning effort, or service tier. Model
-   * settings apply to subsequent turns. Omitted fields are unchanged. See
+   * Updates session tools, metadata, model, reasoning effort, service tier, or the
+   * default prompt cache lifetime. Model settings apply to subsequent turns. Omitted
+   * fields are unchanged. See
    * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
    *
    * @example
@@ -18825,13 +18819,30 @@ var Images = class extends APIResource {
     return this._client.post("/images/variations", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   edit(body, options) {
-    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions(withBodyFinalization9(((requestOptions) => ({
-      ...requestOptions,
-      body: Object.fromEntries(Object.entries(requestOptions.body ?? {}).map(([key, value]) => [
-        key,
-        key === "safety_identifier" && value === null ? void 0 : value
-      ]))
-    }))({
+    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions(withBodyFinalization9(((requestOptions) => {
+      const omitNulls = (value, paths) => {
+        if (value === null || typeof value !== "object" || Array.isArray(value))
+          return value;
+        return Object.fromEntries(Object.entries(value).map(([key, field]) => {
+          const selected = paths.filter((path2) => path2[0] === key);
+          if (field === null && selected.some((path2) => path2.length === 1))
+            return [key, void 0];
+          const children = selected.filter((path2) => path2.length > 1).map((path2) => path2.slice(1));
+          return [key, children.length === 0 ? field : omitNulls(field, children)];
+        }));
+      };
+      return {
+        ...requestOptions,
+        body: omitNulls(requestOptions.body ?? {}, [
+          ["safety_identifier"],
+          ["complexity"],
+          ["frame_count"],
+          ["frame_duration_ms"],
+          ["svg"],
+          ["svg", "reasoning"]
+        ])
+      };
+    })({
       body,
       ...options2,
       stream: body.stream ?? false,
@@ -18859,7 +18870,7 @@ var Sessions4 = class extends APIResource {
    * @example
    * ```ts
    * await client.live.sessions.accept('session_id', {
-   *   session: { model: 'gpt-live-1', type: 'live' },
+   *   session: { model: 'gpt-live-1.1', type: 'live' },
    * });
    * ```
    */
@@ -18990,7 +19001,7 @@ var Live = class extends APIResource {
    * @example
    * ```ts
    * const live = await client.live.create({
-   *   session: { model: 'gpt-live-1' },
+   *   session: { model: 'gpt-live-1.1' },
    *   transport: { sdp: 'x', type: 'webrtc' },
    * });
    * ```
@@ -24160,23 +24171,23 @@ _a3 = OpenAI, _OpenAI_encoder = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Authe
       map.set(key, entry);
   }
   return sanitizedValue;
-}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger4) {
-  if (__classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).has(logger4))
-    return logger4;
+}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger5) {
+  if (__classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).has(logger5))
+    return logger5;
   const sanitized = new globalThis.Proxy(/* @__PURE__ */ Object.create(null), {
     get: (_facade, property) => {
-      const value = globalThis.Reflect.get(logger4, property, logger4);
+      const value = globalThis.Reflect.get(logger5, property, logger5);
       if (typeof value !== "function")
         return value;
       if (typeof property !== "string" || !["debug", "info", "warn", "error", "trace", "log"].includes(property)) {
-        return value.bind(logger4);
+        return value.bind(logger5);
       }
       return (...args) => {
         const seen = /* @__PURE__ */ new WeakMap();
-        return globalThis.Reflect.apply(value, logger4, args.map((entry) => __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
+        return globalThis.Reflect.apply(value, logger5, args.map((entry) => __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
       };
     },
-    set: (_facade, property, value) => globalThis.Reflect.set(logger4, property, value, logger4)
+    set: (_facade, property, value) => globalThis.Reflect.set(logger5, property, value, logger5)
   });
   __classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).add(sanitized);
   return sanitized;
@@ -24330,7 +24341,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger4 = {
+  const logger5 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -24362,7 +24373,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger4;
+  return logger5;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -24981,8 +24992,66 @@ var OllamaProvider = class {
   }
 };
 
-// embedding-provider.ts
+// model-catalog.ts
 var logger2 = createPluginLogger("qtap-plugin-ollama");
+var SHOW_CONCURRENCY = 4;
+function contextLengthOf(modelInfo) {
+  if (!modelInfo) return void 0;
+  const arch = modelInfo["general.architecture"];
+  if (typeof arch !== "string" || !arch) return void 0;
+  const value = modelInfo[`${arch}.context_length`];
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
+async function showModel(baseUrl, name) {
+  const response = await fetch(`${baseUrl}/api/show`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "User-Agent": getQuilltapUserAgent() },
+    body: JSON.stringify({ model: name })
+  });
+  if (!response.ok) {
+    throw new Error(`Ollama /api/show failed for ${name}: ${response.status}`);
+  }
+  const data = await response.json();
+  const caps = Array.isArray(data.capabilities) ? data.capabilities : void 0;
+  if (caps && caps.includes("embedding") && !caps.includes("completion")) {
+    logger2.debug("Skipping embedding-only model", { context: "getModelCatalog", model: name });
+    return null;
+  }
+  const info = { id: name, name, contextWindow: contextLengthOf(data.model_info) };
+  if (caps) {
+    info.supportsTools = caps.includes("tools");
+    info.supportsImages = caps.includes("vision");
+    info.supportsThinking = caps.includes("thinking");
+  }
+  return info;
+}
+async function fetchOllamaModelCatalog(baseUrl) {
+  const tagsResponse = await fetch(`${baseUrl}/api/tags`, {
+    method: "GET",
+    headers: { "User-Agent": getQuilltapUserAgent() }
+  });
+  if (!tagsResponse.ok) {
+    logger2.error("Ollama model catalog listing failed", { context: "getModelCatalog", baseUrl, status: tagsResponse.status });
+    throw new Error(`Ollama /api/tags failed: ${tagsResponse.status}`);
+  }
+  const tags = await tagsResponse.json();
+  const names = (tags.models ?? []).map((m) => m.name ?? m.model).filter((n) => !!n);
+  const results = new Array(names.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < names.length) {
+      const i = next++;
+      results[i] = await showModel(baseUrl, names[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(SHOW_CONCURRENCY, names.length) }, worker));
+  const catalog = results.filter((m) => m !== null);
+  logger2.debug("Fetched Ollama model catalog", { context: "getModelCatalog", baseUrl, listed: names.length, count: catalog.length });
+  return catalog;
+}
+
+// embedding-provider.ts
+var logger3 = createPluginLogger("qtap-plugin-ollama");
 var NUM_CTX_CEILING = 16384;
 var NUM_CTX_FALLBACK = 8192;
 var numCtxCache = /* @__PURE__ */ new Map();
@@ -25037,7 +25106,7 @@ var OllamaEmbeddingProvider = class {
       body: JSON.stringify(requestPayload)
     });
     if (response.status === 404) {
-      logger2.warn("Ollama /api/embed not found (404); falling back to legacy /api/embeddings", {
+      logger3.warn("Ollama /api/embed not found (404); falling back to legacy /api/embeddings", {
         context: "OllamaEmbeddingProvider.generateEmbedding",
         model
       });
@@ -25046,7 +25115,7 @@ var OllamaEmbeddingProvider = class {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const errorMessage = error.error || response.statusText;
-      logger2.error("Ollama embedding failed", {
+      logger3.error("Ollama embedding failed", {
         context: "OllamaEmbeddingProvider.generateEmbedding",
         status: response.status,
         model,
@@ -25085,7 +25154,7 @@ var OllamaEmbeddingProvider = class {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const errorMessage = error.error || response.statusText;
-      logger2.error("Ollama embedding failed (legacy endpoint)", {
+      logger3.error("Ollama embedding failed (legacy endpoint)", {
         context: "OllamaEmbeddingProvider.generateEmbeddingLegacy",
         status: response.status,
         model,
@@ -25145,7 +25214,7 @@ var OllamaEmbeddingProvider = class {
         body: JSON.stringify({ model })
       });
       if (!response.ok) {
-        logger2.warn("Ollama /api/show failed; using fallback num_ctx", {
+        logger3.warn("Ollama /api/show failed; using fallback num_ctx", {
           context: "OllamaEmbeddingProvider.fetchModelNumCtx",
           model,
           status: response.status,
@@ -25163,7 +25232,7 @@ var OllamaEmbeddingProvider = class {
         }
       }
       if (!modelCtx) {
-        logger2.warn("Ollama /api/show returned no context_length; using fallback num_ctx", {
+        logger3.warn("Ollama /api/show returned no context_length; using fallback num_ctx", {
           context: "OllamaEmbeddingProvider.fetchModelNumCtx",
           model,
           fallback: NUM_CTX_FALLBACK
@@ -25173,7 +25242,7 @@ var OllamaEmbeddingProvider = class {
       const numCtx = Math.min(modelCtx, NUM_CTX_CEILING);
       return { numCtx, derived: true };
     } catch (error) {
-      logger2.warn(
+      logger3.warn(
         "Ollama /api/show threw; using fallback num_ctx",
         {
           context: "OllamaEmbeddingProvider.fetchModelNumCtx",
@@ -25227,7 +25296,7 @@ var OllamaEmbeddingProvider = class {
       const models = data.models?.map((m) => m.name) || [];
       return models;
     } catch (error) {
-      logger2.error("Failed to fetch Ollama models", {
+      logger3.error("Failed to fetch Ollama models", {
         context: "OllamaEmbeddingProvider.getAvailableModels",
         baseUrl: this.baseUrl
       }, error instanceof Error ? error : void 0);
@@ -25579,7 +25648,7 @@ function stripAllXMLToolMarkers(response) {
 }
 
 // index.ts
-var logger3 = createPluginLogger("qtap-plugin-ollama");
+var logger4 = createPluginLogger("qtap-plugin-ollama");
 var metadata = {
   providerName: "OLLAMA",
   displayName: "Ollama",
@@ -25787,9 +25856,18 @@ var plugin = {
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
-      logger3.error("Failed to fetch Ollama models", { context: "plugin.getAvailableModels", baseUrl: url }, error instanceof Error ? error : void 0);
+      logger4.error("Failed to fetch Ollama models", { context: "plugin.getAvailableModels", baseUrl: url }, error instanceof Error ? error : void 0);
       return [];
     }
+  },
+  /**
+   * Live, detailed model list (context window, tools, vision, thinking).
+   * Throws on failure so the host does not cache a partial list.
+   */
+  getModelCatalog: async (apiKey, baseUrl) => {
+    const url = baseUrl || config.baseUrlDefault;
+    logger4.debug("Fetching Ollama model catalog", { context: "plugin.getModelCatalog", baseUrl: url });
+    return fetchOllamaModelCatalog(url);
   },
   /**
    * Validate Ollama server connection
@@ -25802,7 +25880,7 @@ var plugin = {
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {
-      logger3.error("Error validating Ollama server", { context: "plugin.validateApiKey", baseUrl: url }, error instanceof Error ? error : void 0);
+      logger4.error("Error validating Ollama server", { context: "plugin.validateApiKey", baseUrl: url }, error instanceof Error ? error : void 0);
       return false;
     }
   },
@@ -25901,7 +25979,7 @@ var plugin = {
       const formattedTools = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger3.warn("Skipping tool with invalid format", {
+          logger4.warn("Skipping tool with invalid format", {
             context: "plugin.formatTools"
           });
           continue;
@@ -25910,7 +25988,7 @@ var plugin = {
       }
       return formattedTools;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error formatting tools for Ollama",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -25930,7 +26008,7 @@ var plugin = {
       const toolCalls = parseOpenAIToolCalls(response);
       return toolCalls;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing tool calls from Ollama response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0
@@ -25953,7 +26031,7 @@ var plugin = {
       const results = parseAllXMLAsToolCalls(text);
       return results;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing text tool calls",
         { context: "ollama.parseTextToolCalls" },
         error instanceof Error ? error : void 0

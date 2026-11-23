@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { publishRealtime } from '@/lib/realtime/bus';
 import { CharacterArchivedError } from '@/lib/characters/archive-guard';
@@ -95,8 +96,9 @@ export const PUT = createContextParamsHandler<{ id: string; promptId: string }>(
 );
 
 // DELETE /api/v1/characters/[id]/prompts/[promptId]
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string; promptId: string }>(
-  async (request, { user, repos }, { id: characterId, promptId }) => {
+  withActionDispatch<{ id: string; promptId: string }>({}, async (request, { user, repos }, { id: characterId, promptId }) => {
     try {// Verify character exists and belongs to user
       const character = await repos.characters.findById(characterId);
 
@@ -138,5 +140,5 @@ export const DELETE = createContextParamsHandler<{ id: string; promptId: string 
       logger.error('[Characters v1] Error deleting character system prompt', { characterId, promptId }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete character prompt');
     }
-  }
+  })
 );

@@ -170,3 +170,35 @@
     @apply transition-colors cursor-pointer;
   }
 }
+
+/* ==========================================================================
+   HEADING HOOKS ON THE UI'S TITLE CLASSES
+   The page, section and homepage titles read the theme's heading tokens like
+   .qt-heading-* do. Unset, each keeps the weight, colour, spacing and case
+   it has above, so the default theme renders as before.
+   ========================================================================== */
+@layer components {
+  .qt-page-title,
+  .qt-section-title,
+  .qt-homepage-section-title,
+  .qt-text-section {
+    font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, normal);
+    text-transform: var(--qt-heading-text-transform, none);
+  }
+
+  .qt-text-section {
+    font-weight: var(--qt-heading-font-weight, 500);
+  }
+
+  .qt-page-title,
+  .qt-section-title,
+  .qt-homepage-section-title {
+    color: var(--qt-heading-color, var(--color-foreground));
+  }
+
+  .qt-text-section {
+    color: var(--qt-heading-color, var(--qt-text-primary-fg, var(--color-foreground)));
+  }
+}

@@ -405,7 +405,13 @@ import { addProfileFallbackFieldsMigration } from './add-profile-fallback-fields
 import { recomputeChatLastMessageAtMigration } from './recompute-chat-last-message-at';
 import { collapseDuplicateFoldersMigration } from './collapse-duplicate-folders';
 // files.sha256 must name the bytes on disk, not the pre-transcode input (bug 117)
-import { realignFileEntrySha256Migration } from './realign-file-entry-sha256';
+import {
+  realignFileEntrySha256Migration,
+  realignFileEntrySha256V2Migration,
+} from './realign-file-entry-sha256';
+// The [Name] prefill off on profiles reaching Claude through another provider
+import { retirePrefillOnGatewayClaudeProfilesMigration } from './retire-prefill-on-gateway-claude-profiles';
+import { addCharacterMemoryEditFlagMigration } from './add-character-memory-edit-flag-v1';
 // Message route trail: routeTrail column on chat_messages (every model tried, in order)
 import { addRouteTrailMessageColumnMigration } from './add-route-trail-message-column-v1';
 // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
@@ -477,6 +483,11 @@ import { backfillDeadJobCompletedAtMigration } from './backfill-dead-job-complet
 import { symmetrizeMemoryLinksMigration } from './symmetrize-memory-links-v1';
 // Brahma Console Writing Assistant: consoleMode + consoleContext on chats
 import { addConsoleWritingAssistantFieldsMigration } from './add-console-writing-assistant-fields';
+import { addCalliopeThemeDraftFieldMigration } from './add-calliope-theme-draft-field';
+// Files: generationModeration (how a generated picture's provider came to draw it)
+import { addFileGenerationModerationColumnMigration } from './add-file-generation-moderation-column-v1';
+// Dynamic backgrounds: chat_settings.dynamicBackgrounds (the page-background collage)
+import { addDynamicBackgroundsSettingsFieldMigration } from './add-dynamic-backgrounds-settings-field-v1';
 
 /**
  * All available migrations.
@@ -986,6 +997,18 @@ export const migrations: Migration[] = [
   addConsoleWritingAssistantFieldsMigration,
   // Files: mimeType / size realigned after the 4.10 blob re-encode left them stale
   repairFilesMimeAndSizeFromMountBlobV2Migration,
+  // Calliope: chats.themeDraftId (a theme conversation belongs to one draft)
+  addCalliopeThemeDraftFieldMigration,
+  // Files: generationModeration (moderated / uncensored-profile / -routed / -failover)
+  addFileGenerationModerationColumnMigration,
+  // Dynamic backgrounds: chat_settings.dynamicBackgrounds
+  addDynamicBackgroundsSettingsFieldMigration,
+  // Files: sha256 realigned again for generated images that took the provider's raw-bytes hash
+  realignFileEntrySha256V2Migration,
+  // Connection profiles: the [Name] prefill off where a gateway serves Claude
+  retirePrefillOnGatewayClaudeProfilesMigration,
+  // Commonplace Book: characters.canEditMemories (gates read_memory and edit_memory)
+  addCharacterMemoryEditFlagMigration,
 ];
 
 export {
@@ -1459,5 +1482,11 @@ export {
   symmetrizeMemoryLinksMigration,
   addConsoleWritingAssistantFieldsMigration,
   repairFilesMimeAndSizeFromMountBlobV2Migration,
+  addCalliopeThemeDraftFieldMigration,
+  addFileGenerationModerationColumnMigration,
+  addDynamicBackgroundsSettingsFieldMigration,
+  realignFileEntrySha256V2Migration,
+  retirePrefillOnGatewayClaudeProfilesMigration,
+  addCharacterMemoryEditFlagMigration,
 };
 

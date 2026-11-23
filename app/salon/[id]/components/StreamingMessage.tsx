@@ -86,7 +86,7 @@ export function StreamingMessage({
   const lastTextIdx = parts.reduce((acc, p, i) => (p.kind === 'text' ? i : acc), -1)
 
   return (
-    <div className="qt-chat-message-row qt-chat-message-row-assistant">
+    <div className="qt-chat-message-row qt-chat-message-row-assistant" data-role="assistant">
       {shouldShowAvatars && (
         <div className={`flex-shrink-0 qt-chat-desktop-avatar${isDangerousChat ? ' qt-chat-avatar-dangerous' : ''}`}>
           <Avatar
@@ -106,7 +106,7 @@ export function StreamingMessage({
             <QuillAnimation size="lg" />
           </div>
         ) : (
-          <div className="flex-1 min-w-0 px-4 py-3 rounded-lg qt-bg-card border qt-border-default qt-text">
+          <div className="qt-chat-message-streaming flex-1 min-w-0 px-4 py-3 rounded-lg qt-bg-card border qt-border-default qt-text">
             {streamingReasoning.trim().length > 0 && (
               <ThinkingBlock
                 content={streamingReasoning}

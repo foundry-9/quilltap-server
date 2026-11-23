@@ -26,6 +26,7 @@
 import type { Database as DatabaseType } from 'better-sqlite3';
 import { logger } from '@/lib/logger';
 import { getReadonlyQueryClient } from '@/lib/database/backends/sqlite/readonly-query-client';
+import { createResearchDocumentsView } from '@/lib/research/sql-view';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { getRawLLMLogsDatabase } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
@@ -254,6 +255,76 @@ function resolveDatabase(
   }
 }
 
+const DATABASES = ['main', 'llm-logs', 'mount-index'] as const;
+type SqlDatabase = (typeof DATABASES)[number];
+
+/** Table and view names in a database (temp views included), sorted. */
+function tableNames(db: DatabaseType): string[] {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%'
+         UNION SELECT name FROM sqlite_temp_master WHERE type = 'view'`
+      )
+      .all() as Array<{ name: string }>;
+    return rows.map((r) => r.name).filter((n) => !/_fts(_|$)|_fts_map$/.test(n)).sort();
+  } catch {
+    return [];
+  }
+}
+
+/** A table's real column names, or null when it does not exist. */
+function columnNames(db: DatabaseType, table: string): string[] | null {
+  if (!/^\w+$/.test(table)) return null;
+  try {
+    const rows = db.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>;
+    return rows.length > 0 ? rows.map((r) => r.name) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The tables a statement names after FROM or JOIN. */
+function referencedTables(sql: string): string[] {
+  const out = new Set<string>();
+  const re = /\b(?:from|join)\s+(?:main\.|temp\.)?["`\[]?([A-Za-z_]\w*)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(sql)) !== null) out.add(m[1]);
+  return [...out];
+}
+
+/**
+ * Make a schema error self-correcting (research kit §5.8): a wrong column is
+ * answered with the referenced tables' real columns, a wrong table with this
+ * database's tables — and, where the table lives in another database, which
+ * one. This retires the inspect-then-retry round trip.
+ */
+function explainSqlError(message: string, sql: string, db: DatabaseType, database: SqlDatabase): string {
+  if (/no such column/i.test(message)) {
+    const parts: string[] = [];
+    for (const table of referencedTables(sql)) {
+      const columns = columnNames(db, table);
+      if (columns) parts.push(`${table}: ${columns.join(', ')}`);
+    }
+    return parts.length > 0 ? ` Real columns — ${parts.join('; ')}.` : '';
+  }
+  const missingTable = /no such table:\s*(?:main\.)?["`\[]?(\w+)/i.exec(message)?.[1];
+  if (missingTable) {
+    const elsewhere: string[] = [];
+    for (const other of DATABASES) {
+      if (other === database) continue;
+      const handle = resolveDatabase(other);
+      if (handle && tableNames(handle).includes(missingTable)) elsewhere.push(other);
+    }
+    const here = tableNames(db);
+    const hint = elsewhere.length > 0
+      ? ` \`${missingTable}\` is in the ${elsewhere.join(' / ')} database; pass database: "${elsewhere[0]}".`
+      : '';
+    return `${hint} Tables in ${database}: ${here.join(', ')}.`;
+  }
+  return '';
+}
+
 /**
  * Replace BLOB values (Node Buffer / Uint8Array) with a compact placeholder so
  * embeddings and binary blobs are never inlined into the model's context. Also
@@ -381,7 +452,12 @@ export async function executeRunSqlTool(
   // Run on a dedicated read-only connection to the same file, so nothing a
   // statement does at prepare time can write. In-memory handles (no file to
   // reopen) keep the shared handle; the allowlist and readonly checks still apply.
-  const db = getReadonlyQueryClient(sharedDb) ?? sharedDb;
+  // The mount-index connection carries the `qt_documents` view (made on open,
+  // before the connection turns query-only).
+  const db = getReadonlyQueryClient(
+    sharedDb,
+    database === 'mount-index' ? { prepare: createResearchDocumentsView } : {},
+  ) ?? sharedDb;
   if (db === sharedDb) {
     sqlLogger.debug('run_sql using the shared handle (no read-only connection available)', {
       userId: context.userId,
@@ -401,7 +477,7 @@ export async function executeRunSqlTool(
       sqlPreview: sql.slice(0, SQL_LOG_PREVIEW_CHARS),
       error: message,
     });
-    return { success: false, error: `SQL error: ${message}` };
+    return { success: false, error: `SQL error: ${message}.${explainSqlError(message, sql, db, database)}` };
   }
 
   // Layer 2: authoritative read-only guard — fail closed unless exactly true.
@@ -427,7 +503,7 @@ export async function executeRunSqlTool(
       sqlPreview: sql.slice(0, SQL_LOG_PREVIEW_CHARS),
       error: message,
     });
-    return { success: false, error: `SQL error: ${message}` };
+    return { success: false, error: `SQL error: ${message}.${explainSqlError(message, sql, db, database)}` };
   }
 
   const sliced = rawRows.slice(0, maxRows);

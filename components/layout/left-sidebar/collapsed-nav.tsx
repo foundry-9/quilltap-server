@@ -3,67 +3,104 @@
 /**
  * Collapsed Navigation
  *
- * Navigation links shown in the always-collapsed sidebar.
- * Each item is a direct Link to the corresponding view-all page.
+ * The top of the rail, drawn from the navigation registry
+ * (`lib/navigation/registry.ts`): the plain buttons (Home, Characters) and the
+ * four group buttons, each opening its flyout (`nav-flyout.tsx`).
  *
  * @module components/layout/left-sidebar/collapsed-nav
  */
 
+import type { KeyboardEvent, MouseEvent } from 'react'
+import { usePathname } from 'next/navigation'
 import { Icon } from '@/components/ui/icon'
-import type { IconName } from '@/components/ui/icons/icon-registry'
-import { useWorkspaceLink } from '@/components/workspace/useWorkspaceLink'
+import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
+import { parseHrefToIntent } from '@/lib/navigation/route-to-intent'
+import { NAV_GROUPS, NAV_TOP, navItemTabKinds, type NavItem, type NavItemId } from '@/lib/navigation/registry'
+import type { TabKind } from '@/lib/workspace/types'
+import { useNavRail } from './nav-rail-context'
+import { navFlyoutId } from './nav-flyout'
 
-interface NavItem {
-  id: string
-  label: string
-  tooltip: string
-  href: string
-  icon: IconName
+/**
+ * The kind of the surface on show: the focused pane's active tab inside the
+ * workspace, else the tab kind the current route maps to. Null when nothing
+ * maps.
+ */
+export function useCurrentTabKind(): TabKind | null {
+  const ws = useWorkspaceOptional()
+  const pathname = usePathname()
+  if (ws && pathname === '/workspace') {
+    const pane = ws.state.focusedPane === 'right' && ws.state.panes.right ? ws.state.panes.right : ws.state.panes.left
+    const activeId = pane.activeTabId
+    return activeId ? ws.state.tabs[activeId]?.kind ?? null : null
+  }
+  return pathname ? parseHrefToIntent(pathname)?.kind ?? null : null
 }
 
-const navItems: NavItem[] = [
-  { id: 'projects', label: 'Projects', tooltip: 'View all projects', href: '/prospero', icon: 'projects' },
-  { id: 'files', label: 'Files', tooltip: 'View all files', href: '/files', icon: 'files' },
-  { id: 'scriptorium', label: 'The Scriptorium', tooltip: 'View document stores', href: '/scriptorium', icon: 'scriptorium' },
-  { id: 'characters', label: 'Characters', tooltip: 'View all characters', href: '/aurora', icon: 'characters' },
-  { id: 'photos', label: 'My Photos', tooltip: "Your saved photo gallery", href: '/photos', icon: 'photos' },
-  { id: 'scenarios', label: 'Scenarios', tooltip: 'Manage general scenarios', href: '/scenarios', icon: 'scenarios' },
-  { id: 'custom-tools', label: "Pascal's Workbench", tooltip: 'Build and prove custom tools', href: '/custom-tools', icon: 'wrench' },
-  { id: 'chats', label: 'Chats', tooltip: 'View all chats', href: '/salon', icon: 'chat' },
-]
+/** A plain link's click: the browser keeps modifier- and middle-clicks (new tab). */
+export function isPlainClick(event: MouseEvent): boolean {
+  return !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+}
 
 export function CollapsedNav() {
-  // Inside the tabbed workspace, a rail click opens/focuses a tab in the focused
-  // pane instead of navigating (which would unmount the workspace). On the
-  // legacy shell there is no workspace store, so the plain links navigate as
-  // before. The `href` is kept for middle-click / open-in-new-tab and the
-  // legacy path.
-  const openInWorkspace = useWorkspaceLink()
+  const { activate, openMenu, toggleFlyout, openFlyout } = useNavRail()
+  // The button for the surface on show carries aria-current="page" — the
+  // rail's only active indication, for assistive tech and themes alike. A
+  // group is current when one of its rows is.
+  const currentKind = useCurrentTabKind()
+  const currentFor = (kinds: readonly TabKind[]) =>
+    currentKind && kinds.includes(currentKind) ? ('page' as const) : undefined
+
+  const onPlainClick = (item: NavItem<NavItemId>) => (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!isPlainClick(event)) return
+    event.preventDefault()
+    activate(item.id)
+  }
+
+  const onGroupKeyDown = (groupId: (typeof NAV_GROUPS)[number]['id']) => (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      event.preventDefault()
+      openFlyout(groupId, groupId, { focusFirst: true })
+    }
+  }
+
   return (
     <nav className="qt-collapsed-nav" aria-label="Quick navigation">
-      {/* Plain <a> tags — no Link/router.push to avoid startTransition stall on chat page */}
-      {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- plain <a> on purpose: next/link navigation stalls in startTransition on the chat page */}
-      <a
-        href="/"
-        onClick={(e) => openInWorkspace('/', e)}
-        className="qt-collapsed-nav-button"
-        title="Home"
-        aria-label="Home"
-      >
-        <Icon name="brand" className="w-8 h-8" />
-      </a>
-      {navItems.map((item) => (
+      {NAV_TOP.map((item) => (
         <a
           key={item.id}
-          href={item.href}
-          onClick={(e) => openInWorkspace(item.href, e)}
+          href={item.target.href}
+          onClick={onPlainClick(item)}
           className="qt-collapsed-nav-button"
-          title={item.tooltip}
-          aria-label={item.tooltip}
+          data-nav={item.id}
+          aria-current={currentFor(navItemTabKinds(item))}
+          title={item.label}
+          aria-label={item.label}
         >
-          <Icon name={item.icon} className="w-7 h-7" />
+          <Icon name={item.icon} className={item.id === 'home' ? 'w-8 h-8' : 'w-7 h-7'} />
         </a>
       ))}
+      {NAV_GROUPS.map((group) => {
+        const isOpen = openMenu?.id === group.id
+        const kinds = group.items.flatMap((item) => navItemTabKinds(item))
+        return (
+          <button
+            key={group.id}
+            type="button"
+            onClick={() => toggleFlyout(group.id, group.id)}
+            onKeyDown={onGroupKeyDown(group.id)}
+            className="qt-collapsed-nav-button"
+            data-nav={group.id}
+            aria-haspopup="menu"
+            aria-expanded={isOpen}
+            aria-controls={isOpen ? navFlyoutId(group.id) : undefined}
+            aria-current={currentFor(kinds)}
+            title={group.label}
+            aria-label={group.label}
+          >
+            <Icon name={group.icon} className="w-7 h-7" />
+          </button>
+        )
+      })}
     </nav>
   )
 }

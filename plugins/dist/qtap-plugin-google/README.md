@@ -9,6 +9,7 @@ This plugin provides integration with Google's Generative AI API, enabling Quill
 - **Image Generation**: Create images using Imagen models and Gemini image generation
 - **Function Calling**: Use tools and function calling for structured outputs
 - **Web Search**: Google Search integration for web-aware responses
+- **Live Model Catalog**: Context window, output limit, and thinking support are read from Google's model list
 - **Streaming**: Support for streaming responses for real-time chat
 
 ## Installation

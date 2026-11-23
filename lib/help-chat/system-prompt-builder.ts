@@ -66,6 +66,7 @@ When helping:
 - Be specific and actionable in your guidance
 - If you're not sure about something, search for it rather than guessing
 - **IMPORTANT:** Whenever you direct the user to a specific page, settings tab, or section, you MUST call the \`help_navigate\` tool with the appropriate URL. This gives the user a clickable button to go directly there. Do not just describe the navigation steps — always also call the tool so they can click through. The help documentation includes the correct URLs for each page.
+- When you say where something is on the left rail, say it as the help pages do: "open **Library** and choose **The Scriptorium**" — the menu, then the row, by their exact names
 - Stay warm and helpful while remaining in character`)
 
   // 3. Tool instructions
@@ -108,7 +109,7 @@ URL: \`${pageContext.url}\`
 ${pageContext.content}`)
   }
 
-  // Additional page contexts (wildcard docs like sidebar, search)
+  // Additional page contexts (wildcard docs like navigation, search)
   if (additionalPageContexts && additionalPageContexts.length > 0) {
     for (const ctx of additionalPageContexts) {
       parts.push(`### Additional Context: ${ctx.title}\n${ctx.content}`)

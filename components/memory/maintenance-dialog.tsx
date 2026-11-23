@@ -140,7 +140,7 @@ export function MaintenanceDialog({ characterId, characterName, onClose, onQueue
       className="overflow-hidden"
      
       bodyClassName="flex-1 min-h-0 flex flex-col"
-      footerClassName="qt-dialog-footer flex justify-end gap-2"
+      footerClassName="qt-dialog-footer-default flex justify-end gap-2"
       footer={
         <>
           <button type="button" onClick={onClose} className="qt-button qt-button-secondary">
@@ -160,7 +160,7 @@ export function MaintenanceDialog({ characterId, characterName, onClose, onQueue
         </>
       }
     >
-      <div className="qt-dialog-body border-b qt-border-default space-y-4">
+      <div className="qt-dialog-body qt-dialog-body-default border-b qt-border-default space-y-4">
         {!characterId && (
           <div className="space-y-1">
             <label htmlFor="maintenance-target" className="block qt-text-label">

@@ -119,12 +119,33 @@ function trackOpenTags(stack: string[], lowerTag: string): void {
   stack.push(name);
 }
 
-/** Remove the unmarked-text spans tokenizeInline emitted inside a claimed block. */
+/**
+ * Remove the unmarked-text spans tokenizeInline emitted inside a claimed block,
+ * keeping what they hold. An unmarked span may carry emphasis spans inside it,
+ * so the walk pairs each `</span>` with its own opening tag.
+ */
 function stripUnmarkedSpans(html: string, unmarkedClassName: string): string {
   const open = `<span class="${unmarkedClassName}">`;
   if (!html.includes(open)) return html;
-  // Unmarked spans hold plain text only (no nested tags), so a lazy match is exact.
-  return html.replace(new RegExp(`${escapeRegex(open)}([^<]*)</span>`, 'g'), '$1');
+  // One entry per open <span>: true when it is an unmarked span being dropped.
+  const dropped: boolean[] = [];
+  return html
+    .split(/(<[^>]*>)/g)
+    .map((part, index) => {
+      if (index % 2 === 0) return part;
+      if (part === open) {
+        dropped.push(true);
+        return '';
+      }
+      const lower = part.toLowerCase();
+      if (lower.startsWith('<span') && !lower.endsWith('/>')) {
+        dropped.push(false);
+        return part;
+      }
+      if (lower === '</span>') return dropped.pop() ? '' : part;
+      return part;
+    })
+    .join('');
 }
 
 /**

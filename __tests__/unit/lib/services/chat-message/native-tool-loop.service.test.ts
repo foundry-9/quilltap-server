@@ -516,6 +516,35 @@ describe('native-tool-loop.service', () => {
     expect(opts.streaming.fullResponse).toBe('let me try a smaller write')
   })
 
+  it('truncation guard: a Responses-API cut-off (finish_reason max_output_tokens) is NOT executed (#228)', async () => {
+    // The OpenAI and Grok plugins hand the host a chat-completion-shaped raw
+    // response whose finish_reason is the Responses API's own
+    // `incomplete_details.reason`.
+    mockDetectToolCalls
+      .mockReturnValueOnce([{ name: 'doc_write_file', arguments: { content: 'a giant partial blob…' }, callId: 'tc-1' }])
+      .mockReturnValueOnce([])
+
+    nextStreamMessageScripts = [[
+      { content: 'smaller this time' },
+      { done: true, usage: null, cacheUsage: null, rawResponse: { choices: [{ finish_reason: 'stop' }] } },
+    ]]
+    nextStreamMessageBehaviours = ['happy']
+
+    const opts = makeBaseOpts({
+      streaming: makeStreaming({
+        fullResponse: '',
+        rawResponse: { choices: [{ finish_reason: 'max_output_tokens' }] },
+      }),
+    })
+    await runNativeToolLoop(opts as any)
+
+    expect(mockProcessToolCalls).not.toHaveBeenCalled()
+    expect(opts.toolMessages).toHaveLength(1)
+    expect(opts.toolMessages[0]?.success).toBe(false)
+    expect(opts.toolMessages[0]?.content).toContain('cut off')
+    expect(streamMessageCalls).toHaveLength(1)
+  })
+
   it('truncation guard: a truncated submit_final_response does NOT terminate the agent loop or overwrite the response', async () => {
     // Without the !truncated gate, a submit_final_response cut off mid-arguments
     // would still set streaming.fullResponse to its partial `response` arg and

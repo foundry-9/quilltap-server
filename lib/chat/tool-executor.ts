@@ -86,6 +86,10 @@ import {
   type LogToolContext,
 } from '@/lib/tools/handlers/log-handler';
 import {
+  executeReadMemoryTool,
+  executeEditMemoryTool,
+} from '@/lib/tools/handlers/memory-edit-handler';
+import {
   executeReadConversationTool,
   formatReadConversationResults,
   type ReadConversationToolContext,
@@ -105,6 +109,10 @@ import {
   executeReadMessagesTool,
   type BrahmaLookupResult,
 } from '@/lib/tools/handlers/brahma-lookup-handler';
+import { RESEARCH_KIT_HANDLERS } from '@/lib/tools/handlers/research-kit-handler';
+import { researchKitResult } from '@/lib/research/result';
+import { THEME_ASSIST_HANDLERS } from '@/lib/tools/handlers/theme-assist-handler';
+import { THEME_ASSIST_TOOL_NAMES } from '@/lib/tools/theme-assist-tools';
 import {
   executeUpsertAnnotationTool,
   formatUpsertAnnotationResults,
@@ -127,6 +135,7 @@ import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 import {
   resolveToolPermit,
   type ToolEffect,
+  type ToolEffectSpec,
   type ToolOffer,
 } from '@/lib/tools/effects';
 
@@ -262,7 +271,7 @@ export interface ToolExecutionContext {
   /** Custom tool name → derived effect for the caller's roster, so `run_custom` can be ranked. */
   customToolEffects?: ReadonlyMap<string, ToolEffect>;
   /** Plugin / MCP tool name → declared effect. Missing tools count as `write`. */
-  pluginToolEffects?: ReadonlyMap<string, ToolEffect>;
+  pluginToolEffects?: ReadonlyMap<string, ToolEffectSpec>;
   /**
    * What this seat was offered this turn: `buildTools()`'s `offer` for a
    * model-driven loop, `OPERATOR_TOOL_OFFER` for a run the operator started by
@@ -286,6 +295,10 @@ const BRAHMA_LOOKUP_HANDLERS: Record<
   read_messages: executeReadMessagesTool,
 };
 const BRAHMA_LOOKUP_TOOL_NAMES = Object.keys(BRAHMA_LOOKUP_HANDLERS);
+// The research kit's new tools (find_documents, list_documents and the record
+// lookups). Documents work under the operator surface or a mount pool; records
+// need the operator surface (the permit and the handler both refuse elsewhere).
+const RESEARCH_KIT_TOOL_NAMES_LOCAL = Object.keys(RESEARCH_KIT_HANDLERS);
 
 // Built-in tool names that are handled directly by this module
 // These should NOT be routed to the plugin registry.
@@ -310,6 +323,9 @@ const BUILT_IN_TOOLS = new Set<string>([
   'log_create_entry',
   'log_grep',
   'log_read',
+  // The Commonplace Book — a character's own memories (canEditMemories)
+  'read_memory',
+  'edit_memory',
   // Scriptorium tools
   'read_conversation',
   'upsert_annotation',
@@ -318,6 +334,9 @@ const BUILT_IN_TOOLS = new Set<string>([
   // Brahma Console — read-only SQL access + lookup shortcuts (operator surface only)
   'run_sql',
   ...BRAHMA_LOOKUP_TOOL_NAMES,
+  ...RESEARCH_KIT_TOOL_NAMES_LOCAL,
+  // Calliope — the theme draft's references and proposals (her surface only)
+  ...THEME_ASSIST_TOOL_NAMES,
   // Wardrobe tools
   'wardrobe_list',
   'wardrobe_read',
@@ -908,6 +927,23 @@ export async function executeToolCallWithContext(
       };
     }
 
+    // read_memory / edit_memory: the calling character's own memories. The
+    // answer is the handler's output itself, so the model reads (and hands
+    // back) the memory object as JSON.
+    if (toolCall.name === 'read_memory' || toolCall.name === 'edit_memory') {
+      if (!characterId) {
+        return { toolName: toolCall.name, success: false, result: null, error: 'The memory tools need a character to act for.' };
+      }
+      const execute = toolCall.name === 'read_memory' ? executeReadMemoryTool : executeEditMemoryTool;
+      const { success, error, ...result } = await execute(toolCall.arguments, { userId, characterId });
+      return {
+        toolName: toolCall.name,
+        success,
+        result: success ? result : null,
+        error: success ? undefined : error,
+      };
+    }
+
     // Handle read_conversation (Scriptorium)
     if (toolCall.name === 'read_conversation') {
       const readContext: ReadConversationToolContext = {
@@ -1078,6 +1114,40 @@ export async function executeToolCallWithContext(
         toolName: toolCall.name,
         success: result.success,
         result: result.success ? result : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // The research kit's tools (lib/research/). Text results travel as text.
+    const researchKit = RESEARCH_KIT_HANDLERS[toolCall.name]
+    if (researchKit) {
+      const result = await researchKit(toolCall.arguments, {
+        userId,
+        chatId: context.chatId,
+        operatorSurface: context.operatorSurface,
+        mountPool: context.mountPool,
+      });
+
+      return {
+        toolName: toolCall.name,
+        success: result.success,
+        result: result.success ? researchKitResult(result.text) : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Calliope's theme tools. Offered only on her surface; each handler also
+    // refuses outside a Calliope conversation that names its draft.
+    const themeAssist = THEME_ASSIST_HANDLERS[toolCall.name]
+    if (themeAssist) {
+      const result = await themeAssist(toolCall.arguments, { chatId, userId });
+
+      return {
+        toolName: toolCall.name,
+        success: result.success,
+        result: result.success
+          ? { formattedText: result.formattedText, ...(result.proposal ? { proposal: result.proposal } : {}) }
+          : null,
         error: result.success ? undefined : result.error,
       };
     }

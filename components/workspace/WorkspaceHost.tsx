@@ -67,7 +67,7 @@ export function WorkspaceHost() {
       <WorkspaceBackdrop />
 
       {/* ---- Left pane chrome (strip + contextual toolbar) ---- */}
-      <div className="qt-workspace-pane-chrome" style={{ gridColumn: 1, gridRow: 1 }}>
+      <div className="qt-workspace-pane-chrome" data-pane="left" style={{ gridColumn: 1, gridRow: 1 }}>
         <TabStrip
           pane="left"
           paneState={state.panes.left}
@@ -92,7 +92,7 @@ export function WorkspaceHost() {
               onReset={onResetRatio}
             />
           </div>
-          <div className="qt-workspace-pane-chrome" style={{ gridColumn: 3, gridRow: 1 }}>
+          <div className="qt-workspace-pane-chrome" data-pane="right" style={{ gridColumn: 3, gridRow: 1 }}>
             <TabStrip
               pane="right"
               paneState={state.panes.right}
@@ -124,6 +124,8 @@ export function WorkspaceHost() {
           <div
             key={tab.id}
             className={'qt-tab-pane' + (visible ? '' : ' hidden')}
+            data-pane={pane}
+            data-tab-kind={tab.kind}
             aria-hidden={!visible}
             style={{ gridColumn: column, gridRow: 2, display: visible ? undefined : 'none' }}
             onMouseDownCapture={() => {

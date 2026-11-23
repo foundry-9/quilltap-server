@@ -11,7 +11,13 @@
  * - Model class assignment validation
  */
 
-import { autoConfigureProfile, type AutoConfigureResult } from '@/lib/services/auto-configure.service'
+import {
+  autoConfigureProfile,
+  deriveModelClass,
+  profileUpdateFromAutoConfigure,
+  type AutoConfigureResult,
+} from '@/lib/services/auto-configure.service'
+import { lookupModelFacts, type ModelFacts } from '@/lib/llm/model-catalog'
 import { executeWebSearchTool, formatWebSearchResults, isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler'
 import { createLLMProvider } from '@/lib/llm'
 import { parseLLMJson } from '@/lib/llm/llm-json'
@@ -64,6 +70,14 @@ jest.mock('@/lib/services/llm-logging.service', () => ({
   logLLMCall: jest.fn(),
 }))
 
+jest.mock('@/lib/llm/model-catalog', () => ({
+  lookupModelFacts: jest.fn(),
+}))
+
+jest.mock('@/lib/plugins/provider-registry', () => ({
+  getProviderMetadata: jest.fn((name: string) => ({ displayName: name === 'ANTHROPIC' ? 'Anthropic' : name })),
+}))
+
 const mockExecuteWebSearchTool = jest.mocked(executeWebSearchTool)
 const mockFormatWebSearchResults = jest.mocked(formatWebSearchResults)
 const mockIsWebSearchConfigured = jest.mocked(isWebSearchConfigured)
@@ -72,6 +86,7 @@ const mockParseLLMJson = jest.mocked(parseLLMJson)
 const mockGetCheapLLMProvider = jest.mocked(getCheapLLMProvider)
 const mockGetUserRepositories = jest.mocked(getUserRepositories)
 const mockLogLLMCall = jest.mocked(logLLMCall)
+const mockLookupModelFacts = jest.mocked(lookupModelFacts)
 
 // ============================================================================
 // Fixtures
@@ -80,6 +95,9 @@ const mockLogLLMCall = jest.mocked(logLLMCall)
 const TEST_USER_ID = 'user-123'
 const TEST_PROVIDER = 'ANTHROPIC'
 const TEST_MODEL = 'claude-sonnet-4-5-20250929'
+const TARGET = { provider: TEST_PROVIDER, modelName: TEST_MODEL }
+
+const CATALOG_SOURCE = { kind: 'provider-catalog' as const, label: "NanoGPT's model catalog" }
 
 function createMockDefaultProfile() {
   return {
@@ -129,7 +147,6 @@ const VALID_LLM_RESPONSE = {
   temperature: 0.85,
   topP: 0.95,
   isDangerousCompatible: false,
-  modelClass: 'Extended',
 }
 
 // ============================================================================
@@ -142,7 +159,7 @@ describe('autoConfigureProfile', () => {
   beforeEach(() => {
     jest.clearAllMocks()
 
-    mockIsWebSearchConfigured.mockReturnValue(true)
+    mockIsWebSearchConfigured.mockResolvedValue(true)
 
     const mockRepos = createMockRepos()
     mockGetUserRepositories.mockReturnValue(mockRepos)
@@ -161,6 +178,8 @@ describe('autoConfigureProfile', () => {
     mockParseLLMJson.mockReturnValue(VALID_LLM_RESPONSE)
 
     mockLogLLMCall.mockResolvedValue(undefined)
+
+    mockLookupModelFacts.mockResolvedValue({ sources: {} })
   })
 
   // --------------------------------------------------------------------------
@@ -168,7 +187,7 @@ describe('autoConfigureProfile', () => {
   // --------------------------------------------------------------------------
 
   it('should return valid auto-configure result with web search and LLM analysis', async () => {
-    const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+    const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
 
     expect(result.maxContext).toBe(200000)
     expect(result.maxTokens).toBe(8192)
@@ -179,7 +198,7 @@ describe('autoConfigureProfile', () => {
   })
 
   it('should run two parallel web searches for specs and settings', async () => {
-    await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+    await autoConfigureProfile(TARGET, TEST_USER_ID)
 
     expect(mockExecuteWebSearchTool).toHaveBeenCalledTimes(2)
 
@@ -191,7 +210,7 @@ describe('autoConfigureProfile', () => {
   })
 
   it('should send formatted search results to the default LLM for analysis', async () => {
-    await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+    await autoConfigureProfile(TARGET, TEST_USER_ID)
 
     expect(mockCreateLLMProvider).toHaveBeenCalledWith('ANTHROPIC', undefined)
     expect(mockSendMessage).toHaveBeenCalledTimes(1)
@@ -204,7 +223,7 @@ describe('autoConfigureProfile', () => {
   })
 
   it('should log the LLM call for auditing', async () => {
-    await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+    await autoConfigureProfile(TARGET, TEST_USER_ID)
 
     expect(mockLogLLMCall).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -223,49 +242,49 @@ describe('autoConfigureProfile', () => {
     it('should clamp temperature to 0-2 range', async () => {
       mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, temperature: 5.0 })
 
-      const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
       expect(result.temperature).toBe(2)
     })
 
     it('should clamp negative temperature to 0', async () => {
       mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, temperature: -1 })
 
-      const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
       expect(result.temperature).toBe(0)
     })
 
     it('should clamp topP to 0-1 range', async () => {
       mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, topP: 1.5 })
 
-      const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
       expect(result.topP).toBe(1)
     })
 
     it('should clamp negative topP to 0', async () => {
       mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, topP: -0.5 })
 
-      const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
       expect(result.topP).toBe(0)
     })
 
     it('should enforce maxContext >= 1', async () => {
       mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, maxContext: 0 })
 
-      const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
       expect(result.maxContext).toBeGreaterThanOrEqual(1)
     })
 
     it('should enforce maxTokens >= 1', async () => {
       mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, maxTokens: -100 })
 
-      const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
       expect(result.maxTokens).toBeGreaterThanOrEqual(1)
     })
 
     it('should round maxContext to an integer', async () => {
       mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, maxContext: 128000.7 })
 
-      const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
       expect(result.maxContext).toBe(128001)
       expect(Number.isInteger(result.maxContext)).toBe(true)
     })
@@ -278,7 +297,7 @@ describe('autoConfigureProfile', () => {
         topP: null,
       })
 
-      const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
       // Defaults: maxContext=4096, temperature=0.7, topP=1
       expect(result.maxContext).toBe(4096)
       expect(result.temperature).toBe(0.7)
@@ -290,27 +309,50 @@ describe('autoConfigureProfile', () => {
   // Web search not configured
   // --------------------------------------------------------------------------
 
-  it('should throw when web search is not configured', async () => {
-    mockIsWebSearchConfigured.mockReturnValue(false)
+  it('should proceed without web search, on catalog facts and model knowledge', async () => {
+    mockIsWebSearchConfigured.mockResolvedValue(false)
 
-    await expect(autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)).rejects.toThrow(
-      'Web search is not configured'
-    )
+    const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
+
+    expect(mockExecuteWebSearchTool).not.toHaveBeenCalled()
+    expect(mockSendMessage).toHaveBeenCalledTimes(1)
+    expect(result.searchSources).toEqual([])
+    expect(result.maxContext).toBe(200000)
   })
 
   // --------------------------------------------------------------------------
   // No default profile
   // --------------------------------------------------------------------------
 
-  it('should throw when no default connection profile is configured', async () => {
+  it('should throw when no LLM is available and no catalog states the limits', async () => {
     const repos = createMockRepos({
       findDefault: jest.fn().mockResolvedValue(null),
     })
     mockGetUserRepositories.mockReturnValue(repos)
 
-    await expect(autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)).rejects.toThrow(
+    await expect(autoConfigureProfile(TARGET, TEST_USER_ID)).rejects.toThrow(
       'No default connection profile configured'
     )
+  })
+
+  it('should answer from catalog facts with default sampling when no LLM is available', async () => {
+    const repos = createMockRepos({
+      findDefault: jest.fn().mockResolvedValue(null),
+    })
+    mockGetUserRepositories.mockReturnValue(repos)
+    mockLookupModelFacts.mockResolvedValue({
+      maxContext: 1_000_000,
+      maxTokens: 65_536,
+      sources: { maxContext: CATALOG_SOURCE, maxTokens: CATALOG_SOURCE },
+    })
+
+    const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
+
+    expect(result.maxContext).toBe(1_000_000)
+    expect(result.maxTokens).toBe(65_536)
+    expect(result.temperature).toBe(0.7)
+    expect(result.fieldSources.temperature.kind).toBe('default')
+    expect(result.fieldSources.maxContext).toEqual(CATALOG_SOURCE)
   })
 
   // --------------------------------------------------------------------------
@@ -345,7 +387,7 @@ describe('autoConfigureProfile', () => {
       .mockResolvedValueOnce({ sendMessage: mockSendMessage })
       .mockResolvedValueOnce({ sendMessage: cheapSendMessage })
 
-    const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+    const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
 
     expect(mockGetCheapLLMProvider).toHaveBeenCalled()
     expect(cheapSendMessage).toHaveBeenCalledWith(
@@ -379,10 +421,10 @@ describe('autoConfigureProfile', () => {
 
     // With a single candidate (the default), the wrapper summarises the one attempt
     // and surfaces the underlying parse failure.
-    await expect(autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)).rejects.toThrow(
-      'Auto-configure failed on all 1 candidate provider(s)'
+    await expect(autoConfigureProfile(TARGET, TEST_USER_ID)).rejects.toThrow(
+      'no LLM could estimate them'
     )
-    await expect(autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)).rejects.toThrow(
+    await expect(autoConfigureProfile(TARGET, TEST_USER_ID)).rejects.toThrow(
       'Failed to parse response from ANTHROPIC'
     )
   })
@@ -424,7 +466,7 @@ describe('autoConfigureProfile', () => {
       .mockResolvedValueOnce({ sendMessage: failingSend })
       .mockResolvedValueOnce({ sendMessage: succeedingSend })
 
-    const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+    const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
 
     expect(failingSend).toHaveBeenCalledTimes(1)
     expect(succeedingSend).toHaveBeenCalledTimes(1)
@@ -445,7 +487,7 @@ describe('autoConfigureProfile', () => {
       .mockResolvedValueOnce(createSuccessfulSearchResult(specsUrls))
       .mockResolvedValueOnce(createSuccessfulSearchResult(settingsUrls))
 
-    const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+    const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
 
     expect(result.searchSources).toEqual(expect.arrayContaining(specsUrls))
     expect(result.searchSources).toEqual(expect.arrayContaining(settingsUrls))
@@ -455,7 +497,7 @@ describe('autoConfigureProfile', () => {
   it('should return empty search sources when web searches fail', async () => {
     mockExecuteWebSearchTool.mockResolvedValue({ success: false, results: null })
 
-    const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+    const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
 
     expect(result.searchSources).toEqual([])
   })
@@ -465,28 +507,154 @@ describe('autoConfigureProfile', () => {
   // --------------------------------------------------------------------------
 
   describe('model class assignment', () => {
-    it('should accept valid model class names', async () => {
-      for (const validClass of ['Compact', 'Standard', 'Extended', 'Deep']) {
-        mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, modelClass: validClass })
+    it('should derive the class from the final limits, not from the LLM', async () => {
+      mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, maxContext: 32000, maxTokens: 4000, modelClass: 'Deep' })
 
-        const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
-        expect(result.modelClass).toBe(validClass)
-      }
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
+      expect(result.modelClass).toBe('Compact')
+      expect(result.fieldSources.modelClass.kind).toBe('derived')
+    })
+  })
+
+  // --------------------------------------------------------------------------
+  // Catalog facts
+  // --------------------------------------------------------------------------
+
+  describe('catalog facts', () => {
+    const facts: ModelFacts = {
+      maxContext: 1_048_576,
+      maxTokens: 65_536,
+      supportsTools: true,
+      supportsImages: true,
+      sources: {
+        maxContext: CATALOG_SOURCE,
+        maxTokens: CATALOG_SOURCE,
+        supportsTools: CATALOG_SOURCE,
+        supportsImages: CATALOG_SOURCE,
+      },
+    }
+
+    it('should look facts up on the target route, key and base URL included', async () => {
+      await autoConfigureProfile(
+        { provider: 'NANOGPT', modelName: 'google/gemini-2.5-pro', baseUrl: 'https://example.test/v1', apiKeyId: 'key-1' },
+        TEST_USER_ID
+      )
+
+      expect(mockLookupModelFacts).toHaveBeenCalledWith({
+        provider: 'NANOGPT',
+        modelName: 'google/gemini-2.5-pro',
+        apiKey: 'sk-test-key',
+        baseUrl: 'https://example.test/v1',
+      })
     })
 
-    it('should default to Standard for invalid model class names', async () => {
-      mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, modelClass: 'SuperUltraMegaMax' })
+    it('should let facts outrank the LLM estimate and report their source', async () => {
+      mockLookupModelFacts.mockResolvedValue(facts)
 
-      const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
-      expect(result.modelClass).toBe('Standard')
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
+
+      expect(result.maxContext).toBe(1_048_576)
+      expect(result.maxTokens).toBe(65_536)
+      expect(result.fieldSources.maxContext).toEqual(CATALOG_SOURCE)
+      expect(result.temperature).toBe(0.85)
+      expect(result.fieldSources.temperature.kind).toBe('estimated')
+      expect(result.supportsTools).toBe(true)
+      expect(result.supportsImages).toBe(true)
+      expect(result.pseudoToolMode).toBeNull()
+      expect(result.modelClass).toBe('Deep')
     })
 
-    it('should default to Standard when modelClass is missing', async () => {
-      const { modelClass: _, ...withoutModelClass } = VALID_LLM_RESPONSE
-      mockParseLLMJson.mockReturnValue(withoutModelClass)
+    it('should skip the specifications search when the limits are known', async () => {
+      mockLookupModelFacts.mockResolvedValue(facts)
 
-      const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
-      expect(result.modelClass).toBe('Standard')
+      await autoConfigureProfile(TARGET, TEST_USER_ID)
+
+      expect(mockExecuteWebSearchTool).toHaveBeenCalledTimes(1)
+      expect((mockExecuteWebSearchTool.mock.calls[0][0] as { query: string }).query).toContain('temperature')
+      const userPrompt = (mockSendMessage.mock.calls[0][0] as { messages: Array<{ content: string }> }).messages[1].content
+      expect(userPrompt).toContain('maxContext: 1048576')
     })
+
+    it('should search an aggregator model by its upstream name, not the router', async () => {
+      await autoConfigureProfile({ provider: 'NANOGPT', modelName: 'google/gemini-2.5-pro' }, TEST_USER_ID)
+
+      const query = (mockExecuteWebSearchTool.mock.calls[0][0] as { query: string }).query
+      expect(query).toContain('google gemini-2.5-pro')
+      expect(query).not.toContain('NANOGPT')
+    })
+
+    it('should recommend Simple JSON when the route has no native tool calling', async () => {
+      mockLookupModelFacts.mockResolvedValue({ ...facts, supportsTools: false })
+
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
+      expect(result.pseudoToolMode).toBe('simple-json')
+    })
+
+    it('should report tool and image support as unknown when no catalog states them', async () => {
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
+
+      expect(result.supportsTools).toBeNull()
+      expect(result.supportsImages).toBeNull()
+      expect(result.pseudoToolMode).toBeNull()
+    })
+
+    it('should never let the output limit exceed the context window', async () => {
+      mockParseLLMJson.mockReturnValue({ ...VALID_LLM_RESPONSE, maxContext: 8000, maxTokens: 32000 })
+
+      const result = await autoConfigureProfile(TARGET, TEST_USER_ID)
+      expect(result.maxTokens).toBe(8000)
+    })
+  })
+})
+
+describe('deriveModelClass', () => {
+  it('should pick the smallest class that holds both limits', () => {
+    expect(deriveModelClass(32000, 4000)).toBe('Compact')
+    expect(deriveModelClass(32000, 8000)).toBe('Standard')
+    expect(deriveModelClass(200000, 8192)).toBe('Extended')
+  })
+
+  it('should fall back to the largest class when nothing holds the limits', () => {
+    expect(deriveModelClass(50_000_000, 1_000_000)).toBe('Deep')
+  })
+})
+
+describe('profileUpdateFromAutoConfigure', () => {
+  const base: AutoConfigureResult = {
+    maxContext: 200000,
+    maxTokens: 8192,
+    temperature: 0.8,
+    topP: 0.9,
+    isDangerousCompatible: false,
+    modelClass: 'Extended',
+    supportsTools: null,
+    supportsImages: null,
+    pseudoToolMode: null,
+    fieldSources: {} as AutoConfigureResult['fieldSources'],
+    searchSources: [],
+  }
+
+  it('should merge sampling into existing parameters', () => {
+    const update = profileUpdateFromAutoConfigure({ parameters: { seed: 7 }, pseudoToolMode: 'auto' }, base)
+    expect(update.parameters).toEqual({ seed: 7, temperature: 0.8, max_tokens: 8192, top_p: 0.9 })
+    expect(update).not.toHaveProperty('supportsImageUpload')
+    expect(update).not.toHaveProperty('pseudoToolMode')
+  })
+
+  it('should write image support only when a catalog states it', () => {
+    const update = profileUpdateFromAutoConfigure({ parameters: {}, pseudoToolMode: 'auto' }, { ...base, supportsImages: false })
+    expect(update.supportsImageUpload).toBe(false)
+  })
+
+  it('should move tool mode to Simple JSON from auto or native only', () => {
+    const noTools = { ...base, supportsTools: false, pseudoToolMode: 'simple-json' as const }
+    expect(profileUpdateFromAutoConfigure({ parameters: {}, pseudoToolMode: 'auto' }, noTools).pseudoToolMode).toBe('simple-json')
+    expect(profileUpdateFromAutoConfigure({ parameters: {}, pseudoToolMode: 'native' }, noTools).pseudoToolMode).toBe('simple-json')
+    expect(profileUpdateFromAutoConfigure({ parameters: {}, pseudoToolMode: 'text-block' }, noTools)).not.toHaveProperty('pseudoToolMode')
+  })
+
+  it('should leave a hand-picked Simple JSON alone when the catalog claims native tools', () => {
+    const withTools = { ...base, supportsTools: true }
+    expect(profileUpdateFromAutoConfigure({ parameters: {}, pseudoToolMode: 'simple-json' }, withTools)).not.toHaveProperty('pseudoToolMode')
   })
 })

@@ -10,7 +10,9 @@ import type {
   ConciergePreScreenSettings,
   ImpersonationVoiceMode,
   WardrobeImageSettings as WardrobeImageSettingsType,
+  DynamicBackgroundsSettings as DynamicBackgroundsSettingsType,
 } from '@/lib/schemas/settings.types'
+import { DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS as SERVER_DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS } from '@/lib/schemas/settings.types'
 import { DEFAULT_CONCIERGE_SETTINGS as SERVER_DEFAULT_CONCIERGE_SETTINGS } from '@/lib/services/dangerous-content/resolver.service'
 
 export type { ImpersonationVoiceMode }
@@ -83,6 +85,12 @@ export interface StoryBackgroundsSettings {
  */
 export type WardrobeImageSettings = WardrobeImageSettingsType
 
+/**
+ * Dynamic Backgrounds
+ * The collage behind the home, project and character pages. Re-exported from schema types.
+ */
+export type DynamicBackgroundsSettings = DynamicBackgroundsSettingsType
+
 export interface AutoLockSettings {
   enabled: boolean
   idleMinutes: number
@@ -130,6 +138,8 @@ export interface ChatSettings {
   storyBackgroundsSettings?: StoryBackgroundsSettings
   /** The image profile that draws wardrobe item pictures */
   wardrobeImageSettings?: WardrobeImageSettings
+  /** The changing collage behind the home, project and character pages */
+  dynamicBackgrounds?: DynamicBackgroundsSettings
   /** The Concierge: failover, the uncensored desk, display, and the optional pre-screen */
   conciergeSettings?: ConciergeSettings
   /** Default IANA timezone for timestamp formatting */
@@ -589,6 +599,9 @@ export const DEFAULT_WARDROBE_IMAGE_SETTINGS: WardrobeImageSettings = {
   imageProfileId: null,
   generateFromTools: false,
 }
+
+/** Default dynamic-backgrounds settings — off, uncensored pictures kept out, a new collage every three minutes. */
+export const DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS: DynamicBackgroundsSettings = SERVER_DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS
 
 /**
  * The Concierge's settings.

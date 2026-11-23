@@ -9,7 +9,8 @@
  *   request body is settled.
  * - **Knowledge** (`retrieveTurnKnowledge`) — the character's vault, its
  *   groups' stores, the project's stores and Quilltap General. First-class
- *   canon: never fed to the memory compressor.
+ *   canon: never fed to the memory compressor. The same search recalls lore
+ *   from those tiers' `Atlas/` folders, out of the same budget.
  */
 
 import { assembleRecall, emptyRecallBundle, type PreRecall, type RecallBundle } from '@/lib/memory/recall/assemble'
@@ -23,6 +24,7 @@ import { findActiveUserParticipant } from '@/lib/chat/turn-manager'
 import type { ChatMessage } from '@/lib/memory/cheap-llm-tasks/types'
 import { isInWhisperScope } from '@/lib/schemas/chat.types'
 import { retrieveKnowledgeForTurn, type KnowledgeDebugEntry } from './knowledge-injector'
+import type { AtlasRecallSource } from '@/lib/atlas/prompt-section'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool'
 import type {
@@ -226,10 +228,13 @@ export async function assembleTurnRecall(input: TurnRecallInput): Promise<Recall
 export interface TurnKnowledge {
   content: string
   tokens: number
+  /** Lore recalled without being named (`lib/atlas/prompt-section.ts`); '' when none. */
+  lore: string
+  loreTokens: number
   debug: KnowledgeDebugEntry[]
 }
 
-const NO_KNOWLEDGE: TurnKnowledge = { content: '', tokens: 0, debug: [] }
+const NO_KNOWLEDGE: TurnKnowledge = { content: '', tokens: 0, lore: '', loreTokens: 0, debug: [] }
 
 /**
  * Knowledge from every tier the responding character can reach. Each tier
@@ -245,6 +250,8 @@ export async function retrieveTurnKnowledge(input: {
   budgetTokens: number
   skip: boolean
   mountPool: () => Promise<TieredMountPool>
+  /** Resolves `Atlas/` hits for this character; null when they reach no entry. */
+  atlas?: AtlasRecallSource | null
   warnings: string[]
 }): Promise<TurnKnowledge> {
   const { character } = input
@@ -266,8 +273,15 @@ export async function retrieveTurnKnowledge(input: {
       globalMountPointId,
       budgetTokens: input.budgetTokens,
       provider: input.provider,
+      atlas: input.atlas ?? null,
     })
-    return { content: result.content, tokens: result.tokenCount, debug: result.debug }
+    return {
+      content: result.content,
+      tokens: result.tokenCount,
+      lore: result.lore,
+      loreTokens: result.loreTokenCount,
+      debug: result.debug,
+    }
   } catch (error) {
     input.warnings.push(`Failed to retrieve knowledge: ${getErrorMessage(error)}`)
     return NO_KNOWLEDGE

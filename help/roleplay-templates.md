@@ -65,21 +65,33 @@ The default template provides:
 
 ### Available Built-in Templates
 
-- **Standard** — `*actions*` in asterisks, `"dialogue"` in quotes, `((asides))` in double parentheses
-- **Quilltap RP** — bare dialogue, `[actions]`, `{thoughts}`, and `// ` before an aside
+- **Standard** — `*actions*` in asterisks, `"dialogue"` in quotes, `_emphasis_` in underscores, `((asides))` in double parentheses
+- **Quilltap RP** — bare dialogue, `[actions]`, `{thoughts}`, `*emphasis*` in single asterisks, and `// ` before an aside
 - **Novel** — see below
+
+### Emphasis, Which Is Neither Narration Nor Bold
+
+Every built-in template keeps three things apart that lesser arrangements are forever muddling:
+
+- **Who is speaking** — narration, dialogue, a thought, an aside — is shown by ink and livery
+- **Emphasis** — a stressed word, the name of a ship, a phrase of French — is shown by *slant*, which is to say italics, and by nothing else
+- **Force** — a shout, when a shout is truly called for — is shown by **weight**, which is to say bold, in the templates that keep it
+
+Emphasis has no colour of its own. It takes the ink of whatever it sits in, so a stressed word in narration is still plainly narration and one in dialogue still plainly speech. And where the surrounding passage is already italic — an inner monologue, say, or narration in a theme that slants it — the stressed word stands *upright* instead, exactly as a printer would set it, so that it is never lost among its neighbours.
+
+The mark differs by template, since each has already spent some punctuation elsewhere: underscores under Standard, single asterisks under Quilltap RP and Novel. Ordinary Markdown emphasis is the same creature and is dressed the same way.
 
 ### Novel
 
 For those who would rather read a novel than a chat log. Under Novel:
 
-- **Narration is plain prose** — no marks at all — and is displayed in italics
-- **Dialogue** sits in double quotation marks, straight `"…"` or curly `“…”` as the mood takes it, and is displayed upright. Speech that runs across several paragraphs may leave each paragraph unclosed but the last, as printed fiction does
-- **Emphasis** is a word between single asterisks, `*like so*`, displayed **bold and italic**; the asterisks themselves are tidied away
+- **Narration is plain prose** — no marks at all — and is displayed upright, in a slightly quieter ink than the speech around it
+- **Dialogue** sits in double quotation marks, straight `"…"` or curly `“…”` as the mood takes it, and is displayed at full strength. Speech that runs across several paragraphs may leave each paragraph unclosed but the last, as printed fiction does
+- **Emphasis** is a word between single asterisks, `*like so*`, displayed in *italics* — the one use Novel has for them; the asterisks themselves are tidied away
 - **Double asterisks mean nothing** — `**this**` is shown as plain *this*, never bold
 - **Out of character** talk goes in double parentheses, `((like this))`, in the out-of-character style
 
-While you write under Novel, the composer shows you which is which before you send: narration is tinted in a quieter colour, and an aside in double parentheses wears the same out-of-character livery it will have in the conversation. And if your draft has narration but not a single opening quotation mark anywhere, every narrated line is tinted and underlined with dots — a gentle cough to ask whether *Of course I came, Theo said* was meant to be said aloud. Open one quote and the cough subsides. The same applies to any template of your own that leaves narration unmarked and puts dialogue in double quotes. See [The Composer and Your Typing](chat-settings-composer.md) for the particulars.
+While you write under Novel, the composer shows you which is which before you send: narration is set in a distinct cooler hue upon a faint band, and an aside in double parentheses wears the same out-of-character livery it will have in the conversation. And if your draft has narration but not a single opening quotation mark anywhere, every narrated line is tinted and underlined with dots — a gentle cough to ask whether *Of course I came, Theo said* was meant to be said aloud. Open one quote and the cough subsides. The same applies to any template of your own that leaves narration unmarked and puts dialogue in double quotes. See [The Composer and Your Typing](chat-settings-composer.md) for the particulars.
 
 Novel's instructions to the model end on a short, correctly formatted passage, because models copy an example far more faithfully than they obey a list of rules. It is built only from parts the template editor offers, so a copy of it may be rearranged to taste.
 

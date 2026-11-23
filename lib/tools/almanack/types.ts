@@ -154,7 +154,7 @@ export interface ThemeListItem {
 export interface ThemeReportInfo {
   activeThemeId: string | null;
   colorMode: string;
-  stats: { total: number; withDarkMode: number; withCssOverrides: number; errors: number };
+  stats: { total: number; withDarkMode: number; refused: number; errors: number };
   themes: ThemeListItem[];
   themesWithIcons: number;
   totalIconOverrides: number;
@@ -237,6 +237,7 @@ export interface CharacterBreakdownInfo {
   canDressThemselves: number;
   canCreateOutfits: number;
   canManageInventory: number;
+  canEditMemories: number;
   coreWhisperOverrides: number;
 }
 
@@ -270,6 +271,7 @@ export interface FeatureConfigInfo {
   agentMode: { maxTurns: number; defaultEnabled: boolean };
   storyBackgrounds: { enabled: boolean; hasDefaultImageProfile: boolean };
   wardrobeImages: { hasDesignatedImageProfile: boolean };
+  dynamicBackgrounds: { enabled: boolean; allowUncensored: boolean; refreshMinutes: number };
   timestamps: { mode: string; format: string };
   autoLock: { enabled: boolean; idleMinutes: number };
   memoryCascade: { onMessageDelete: string; onSwipeRegenerate: string };

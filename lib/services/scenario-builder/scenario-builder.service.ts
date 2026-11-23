@@ -17,7 +17,7 @@
  * @module services/scenario-builder/scenario-builder.service
  */
 
-import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
+import { buildScenarioBrief } from '@/lib/research/brief'
 import { randomUUID } from 'crypto'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -34,7 +34,7 @@ import {
   runOneShotToolLoop,
 } from '@/lib/services/agent-loop/one-shot-loop'
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler'
-import { toolRegistry } from '@/lib/plugins/tool-registry'
+import { resolveWebCapabilities, type WebCapabilities } from '@/lib/tools/web-capabilities'
 import { resolveScenarioBuilderMountPool } from '@/lib/scenario-builder/mount-pool'
 import {
   buildScenarioBuilderSystemPrompt,
@@ -42,14 +42,12 @@ import {
   type ScenarioBuilderMode,
 } from '@/lib/scenario-builder/system-prompt'
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
+import { researchOnlyTextBlockToolOptions } from '@/lib/services/chat-message/text-block-tool-options'
 
 const logger = createServiceLogger('ScenarioBuilder')
 
 /** Turn budget for one builder run. A constant in v1 (see the spec's Deferred list). */
 export const SCENARIO_BUILDER_MAX_AGENT_TURNS = 25
-
-/** The curl plugin's config row name. */
-const CURL_PLUGIN_NAME = 'qtap-plugin-curl'
 
 export interface ScenarioBuilderInput {
   mode: ScenarioBuilderMode
@@ -75,41 +73,19 @@ export interface RunScenarioBuilderOptions {
   input: ScenarioBuilderInput
 }
 
-export interface ScenarioBuilderCapabilities {
-  webSearchConfigured: boolean
-  curlConfigured: boolean
-}
+/** What the builder could reach on the web: `resolveWebCapabilities` (`lib/tools/web-capabilities.ts`). */
+export type ScenarioBuilderCapabilities = WebCapabilities
 
-/**
- * What the builder could reach on the web for this user, independent of any
- * profile: a configured search provider, and a curl plugin with at least one
- * allowed URL pattern.
- */
-export async function resolveScenarioBuilderCapabilities(
-  repos: ReturnType<typeof getRepositories>,
+/** The Scenario Builder's name for {@link resolveWebCapabilities}. */
+export const resolveScenarioBuilderCapabilities = resolveWebCapabilities
+
+/** Web search reaches this run only in real mode, on a profile that allows it, with a provider that has its key. */
+export async function isScenarioWebAvailable(
+  mode: ScenarioBuilderMode,
+  profile: ConnectionProfile,
   userId: string,
-): Promise<ScenarioBuilderCapabilities> {
-  const webSearchConfigured = isWebSearchConfigured()
-  let curlConfigured = false
-  try {
-    if (toolRegistry.hasPlugin('curl')) {
-      const config = await repos.pluginConfigs.findByUserAndPlugin(userId, CURL_PLUGIN_NAME)
-      const patterns = (config?.config as { allowedUrlPatterns?: unknown } | undefined)?.allowedUrlPatterns
-      curlConfigured = Array.isArray(patterns) && patterns.length > 0
-    }
-  } catch (error) {
-    logger.warn('Curl capability lookup failed; treating curl as unavailable', {
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-  logger.debug('Resolved Scenario Builder capabilities', { webSearchConfigured, curlConfigured })
-  return { webSearchConfigured, curlConfigured }
-}
-
-/** Web search reaches this run only in real mode, on a profile that allows it, with a provider configured. */
-export function isScenarioWebAvailable(mode: ScenarioBuilderMode, profile: ConnectionProfile): boolean {
-  return mode === 'real' && !!profile.allowWebSearch && isWebSearchConfigured()
+): Promise<boolean> {
+  return mode === 'real' && !!profile.allowWebSearch && (await isWebSearchConfigured(userId))
 }
 
 /**
@@ -129,7 +105,7 @@ export async function runScenarioBuilder(
   // Tools need a chat id only for scoping; nothing reads or writes a chat row
   // with a synthetic one (the read-only slate posts no Librarian notices).
   const chatId = input.chat?.id ?? randomUUID()
-  const webAvailable = isScenarioWebAvailable(input.mode, connectionProfile)
+  const webAvailable = await isScenarioWebAvailable(input.mode, connectionProfile, userId)
 
   try {
     const mountPool = await resolveScenarioBuilderMountPool({
@@ -168,6 +144,7 @@ export async function runScenarioBuilder(
       canCreateOutfits: false,
       canManageInventory: false, // no inventory_* tools here
       docToolsMode: 'read', // reads only
+      researchKit: 'documents', // find_documents / list_documents inside the pool
       askCarinaEnabled: false,
       includeWorkspaceTools: false,
       excludeMemorySearch: true, // narrowed further by documentsOnlySearch
@@ -179,30 +156,13 @@ export async function runScenarioBuilder(
     const toolInstructions = buildOneShotToolInstructions({
       connectionProfile,
       built,
+      agentKind: 'drafting',
       maxAgentTurns: SCENARIO_BUILDER_MAX_AGENT_TURNS,
-      textBlockOptions: {
-        imageGeneration: false,
+      textBlockOptions: researchOnlyTextBlockToolOptions({
         search: true,
         webSearch: webAvailable,
-        whisper: false,
-        state: false,
-        rng: false,
-        projectInfo: false,
-        helpSearch: false,
-        helpSettings: false,
-        helpNavigate: false,
-        createNote: false,
-        wardrobeList: false,
-        wardrobeRead: false,
-        wardrobeWear: false,
-        wardrobeTakeOff: false,
-        wardrobeRollback: false,
-        wardrobeHistory: false,
-        wardrobeCreate: false,
-        wardrobeUpdate: false,
-        wardrobeArchive: false,
-        ...inventoryToolFlags(false),
-      },
+        researchKit: 'documents',
+      }),
     })
 
     const systemPrompt = buildScenarioBuilderSystemPrompt({
@@ -211,7 +171,10 @@ export async function runScenarioBuilder(
       toolInstructions,
       now: new Date(),
     })
+    // What a first search of the pool already found, so the loop starts from it.
+    const brief = await buildScenarioBrief({ kind: 'pool', pool: mountPool }, input.location, { userId })
     const userMessage = buildScenarioBuilderUserMessage({
+      brief,
       mode: input.mode,
       location: input.location,
       time: input.time,
@@ -235,6 +198,7 @@ export async function runScenarioBuilder(
 
     const result = await runOneShotToolLoop({
       repos,
+      agentKind: 'drafting',
       userId,
       chatId,
       connectionProfile,

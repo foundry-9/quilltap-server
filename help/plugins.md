@@ -27,7 +27,7 @@ Plugins can be:
 
 ## Accessing Plugins
 
-1. Click **Settings** (gear icon) in the left sidebar
+1. Click **Settings** (gear icon) on the rail
 2. Click the **Plugins** tab
 3. You'll see three sub-tabs: **Installed**, **Upgrades**, **Browse**
 

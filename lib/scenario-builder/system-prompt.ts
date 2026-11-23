@@ -10,6 +10,8 @@
  * @module scenario-builder/system-prompt
  */
 
+import { researchDiscipline } from '@/lib/research/discipline'
+
 export type ScenarioBuilderMode = 'real' | 'in-world'
 
 /** Target length stated to the model. The builder never truncates. */
@@ -41,7 +43,7 @@ Aim for ${SCENARIO_TARGET_TOKENS.toLocaleString('en-US')} tokens or fewer — a 
     const lines = [
       '## Research: a real place',
       '',
-      'The location is a real place. Use `search_web` and `curl` to establish what it is actually like: its geography, its period details for the given time, and anything the details ask for. The document stores are open to you too (`search` and the `doc_*` read tools) — check them for anything the user has already written about this place. Cite nothing; write the scene.',
+      'The location is a real place. Use `search_web` and `curl` to establish what it is actually like: its geography, its period details for the given time, and anything the details ask for. The document stores are open to you too (`find_documents`, `list_documents` and `doc_read_file`) — check them for anything the user has already written about this place. Cite nothing; write the scene.',
     ]
     if (!webAvailable) {
       lines.push(
@@ -53,8 +55,12 @@ Aim for ${SCENARIO_TARGET_TOKENS.toLocaleString('en-US')} tokens or fewer — a 
   } else {
     sections.push(`## Research: the user's world
 
-The location is fictional and belongs to the user's world. Everything you need is in the document stores: use \`search\` (documents and knowledge) and the \`doc_*\` read tools to find the place, its history, its customs, and what the time means there. Do not invent lore that contradicts what you find; where the stores are silent, stay consistent with their tone. You have no access to the web.`)
+The location is fictional and belongs to the user's world. Everything you need is in the document stores: use \`find_documents\` (and \`list_documents\`, \`doc_read_file\`) to find the place, its history, its customs, and what the time means there. Do not invent lore that contradicts what you find; where the stores are silent, stay consistent with their tone. You have no access to the web.`)
   }
+
+  // The research kit's shared discipline, documents kit: routes, budgets and
+  // when to stop. The rule for gaps is the section above.
+  sections.push(researchDiscipline('drafting', 'documents'))
 
   sections.push(`## Now
 
@@ -80,6 +86,11 @@ export interface ScenarioBuilderUserMessageInput {
   priorDraft?: string | null
   /** Revise: the instruction. Travels with `priorDraft`. */
   revision?: string | null
+  /**
+   * What a first search of the pool's stores found (`buildScenarioBrief`,
+   * `lib/research/brief.ts`); '' or absent adds nothing.
+   */
+  brief?: string | null
 }
 
 export function buildScenarioBuilderUserMessage(input: ScenarioBuilderUserMessageInput): string {
@@ -101,6 +112,10 @@ export function buildScenarioBuilderUserMessage(input: ScenarioBuilderUserMessag
     blocks.push(
       `Where the conversation stands:\n${contextSummary}\n\n(This summary may name people. The new scene must not.)`,
     )
+  }
+
+  if (input.brief && input.brief.trim()) {
+    blocks.push(input.brief.trim())
   }
 
   if (input.priorDraft != null && input.revision != null) {

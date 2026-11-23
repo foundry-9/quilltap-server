@@ -61,6 +61,9 @@ import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notificat
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
 import { postCarinaResponse } from './writer';
 import { BRAHMA_CARINA_ANSWERER_ID, isBrahmaName } from './brahma-answerer';
+import { buildReferenceQueryBlock } from './reference-query';
+import { buildStoryCharacterSection } from '@/lib/chat/context/story-character-section';
+import { characterKindPolicy } from '@/lib/characters/kind';
 import type { CarinaResult } from './carina.types';
 import type { Character, ChatParticipantBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types';
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section';
@@ -315,6 +318,35 @@ async function askerOpensCarinaLine(
   }
 }
 
+/** What `{{user}}` reads as in a Carina prompt when the chat has no operator persona. */
+const OPERATOR_FALLBACK_NAME = 'the operator';
+
+/**
+ * The name of the operator's own persona in this chat — the seat the column
+ * says the user controls — for `{{user}}` in the story-character section.
+ * Falls back to "the operator" when the chat has no such seat or the
+ * character cannot be read; never throws.
+ */
+async function resolveOperatorPersonaName(
+  repos: ReturnType<typeof getRepositories>,
+  participants: ChatParticipantBase[],
+  chatId: string,
+): Promise<string> {
+  const seat = participants.find((p) => p.controlledBy === 'user' && p.characterId);
+  if (!seat?.characterId) return OPERATOR_FALLBACK_NAME;
+  try {
+    const persona = await repos.characters.findById(seat.characterId);
+    return persona?.name?.trim() || OPERATOR_FALLBACK_NAME;
+  } catch (error) {
+    logger.warn('[Carina] Failed to resolve the operator persona name; using the fallback', {
+      context: 'carina',
+      chatId,
+      error: getErrorMessage(error),
+    });
+    return OPERATOR_FALLBACK_NAME;
+  }
+}
+
 /**
  * Whether the asker may reach the Brahma Console pseudocharacter.
  *
@@ -563,6 +595,26 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
     if (scenarioText) {
       systemPrompt += `\n\n## Scenario\n${scenarioText}`;
     }
+    // The story-character section — a roleplay answerer has the same latitude
+    // consulted as in conversation (invent within what is established, be who
+    // they are, carry their own troubles); an assistant-kind answerer gets ''
+    // and its prompt is unchanged. Same text and same relative position as the
+    // Salon's (`buildSystemPrompt`): after the character's own prompt, before
+    // the standing instructions. `{{user}}` is the operator's persona in this
+    // chat, or "the operator" when there is none.
+    const answererKind = characterKindPolicy(answerer);
+    const storySection = buildStoryCharacterSection(answerer);
+    if (storySection) {
+      const operatorName = await resolveOperatorPersonaName(repos, chat.participants ?? [], chatId);
+      systemPrompt += `\n\n${processTemplate(storySection, { char: answerer.name, user: operatorName })}`;
+    }
+    logger.debug('[Carina] Answerer kind resolved for the reference query', {
+      context: 'carina',
+      chatId,
+      answererId: answerer.id,
+      kind: answererKind.kind,
+      storySection: storySection.length > 0,
+    });
     // Standing instructions — the chat's project `instructions` plus the
     // `instructions` of every group the answerer belongs to. Mirrors the
     // Salon insertion (identity → world → who's asking → what you remember);
@@ -581,19 +633,7 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
     // aliases/identity), never their private personality. Falls back to the
     // anonymous framing when the asker can't be resolved.
     const askerCard = await loadAskerIdentity(repos, chat.participants ?? [], askerParticipantId, chatId);
-    if (askerCard) {
-      systemPrompt +=
-        '\n\n## Reference Query\nYou are being consulted for a quick, standalone question by the ' +
-        'individual described below. Use this to know who is addressing you, then answer them ' +
-        'directly and concisely from your own knowledge and the tools available to you. You do not ' +
-        'have the surrounding conversation in view.' +
-        `\n\n### Who Is Asking\n${askerCard}`;
-    } else {
-      systemPrompt +=
-        '\n\n## Reference Query\nYou are being consulted for a quick, standalone question. ' +
-        'Answer it directly and concisely from your own knowledge and the tools available to you. ' +
-        'You do not have the surrounding conversation in view.';
-    }
+    systemPrompt += `\n\n${buildReferenceQueryBlock(askerCard, answererKind.toolRules)}`;
 
     // The Commonplace Book whispers the answerer's own relevant memories into
     // the call (recall only — still no live conversation context).

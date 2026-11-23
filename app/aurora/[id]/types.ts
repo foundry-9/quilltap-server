@@ -93,6 +93,7 @@ export interface Character {
   canDressThemselves?: boolean | null
   canCreateOutfits?: boolean | null
   canManageInventory?: boolean | null
+  canEditMemories?: boolean | null
   canChooseOutfit?: boolean
   canDrawDiagrams?: boolean
   diagramStyle?: DiagramStyle

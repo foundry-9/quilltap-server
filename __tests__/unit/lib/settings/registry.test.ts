@@ -194,7 +194,10 @@ describe('searchSettingsCards', () => {
 
   it('finds dice and the censor', () => {
     expect(searchSettingsCards('dice').map((c) => c.id)).toContain('automation')
-    expect(searchSettingsCards('censor').every((c) => c.group === 'moderation')).toBe(true)
+    // Dynamic Backgrounds carries an "uncensored" keyword for its uncensored-pictures toggle.
+    const censor = searchSettingsCards('censor')
+    expect(censor.some((c) => c.group === 'moderation')).toBe(true)
+    expect(censor.every((c) => c.group === 'moderation' || c.id === 'dynamic-backgrounds')).toBe(true)
   })
 
   it('matches a persona by name, and only that persona', () => {

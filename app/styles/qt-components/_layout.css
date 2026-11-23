@@ -79,7 +79,7 @@
     @apply inline-flex items-center justify-center gap-2;
     @apply text-sm font-medium;
     @apply transition-all duration-200;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
     cursor: pointer;
     padding: var(--qt-navbar-link-padding-y) var(--qt-navbar-link-padding-x);
@@ -539,6 +539,11 @@
     padding: var(--qt-sidebar-item-padding-y) var(--qt-sidebar-item-padding-x);
   }
 
+  .qt-left-sidebar-item:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
   .qt-left-sidebar-item:hover {
     background: var(--qt-sidebar-item-hover-bg);
   }
@@ -587,8 +592,90 @@
     color: var(--color-foreground);
   }
 
-  .qt-collapsed-nav-button:hover {
+  .qt-collapsed-nav-button:hover,
+  .qt-collapsed-nav-button[aria-expanded="true"] {
     background: var(--qt-sidebar-item-hover-bg);
+  }
+
+  /**
+   * Rail flyout - a group menu, the profile menu or a panel (theme,
+   * quick-hide). Portalled to <body>; placed beside its button by the rail.
+   */
+  .qt-left-sidebar-popout {
+    width: 15rem;
+    background-color: var(--qt-popover-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg, 0.5rem);
+    box-shadow: var(--qt-dialog-shadow, 0 10px 25px hsl(225 18% 10% / 0.15), 0 4px 10px hsl(225 18% 10% / 0.08));
+    z-index: var(--qt-floating-layer-z);
+    max-height: calc(100vh - 1rem);
+    overflow-y: auto;
+    outline: none;
+  }
+
+  /* Phone width: a sheet along the bottom of the screen. */
+  .qt-left-sidebar-popout-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 70vh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .qt-left-sidebar-menu-heading {
+    @apply px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-left-sidebar-menu {
+    @apply flex flex-col gap-0.5 p-1.5 pt-0;
+  }
+
+  .qt-left-sidebar-menu-item {
+    @apply flex items-center gap-3 w-full px-3 py-2 rounded-md text-left text-sm;
+    @apply transition-colors duration-150;
+    color: var(--color-foreground);
+    cursor: pointer;
+  }
+
+  .qt-left-sidebar-menu-item:hover,
+  .qt-left-sidebar-menu-item:focus-visible {
+    background: var(--qt-sidebar-item-hover-bg);
+    outline: none;
+  }
+
+  .qt-left-sidebar-menu-item:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--color-ring);
+  }
+
+  .qt-left-sidebar-menu-item[aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  .qt-left-sidebar-menu-item[aria-disabled="true"] .qt-left-sidebar-menu-item-icon,
+  .qt-left-sidebar-menu-item[aria-disabled="true"] .qt-left-sidebar-menu-item-label {
+    opacity: 0.5;
+  }
+
+  .qt-left-sidebar-menu-item-icon {
+    @apply flex-shrink-0;
+  }
+
+  .qt-left-sidebar-menu-item-text {
+    @apply flex flex-col min-w-0;
+  }
+
+  .qt-left-sidebar-menu-item-label {
+    @apply truncate;
+  }
+
+  .qt-left-sidebar-menu-item-reason {
+    @apply text-xs;
+    color: var(--color-muted-foreground);
   }
 
   /**
@@ -1160,66 +1247,82 @@
   }
 
   /* ==========================================================================
-     HOMEPAGE GRID LAYOUT
+     HOME PAGE
+     A header line, then bands stacked one under another, each as tall as what
+     it holds. Nothing is clipped to the viewport; the page scrolls.
      ========================================================================== */
 
   /**
-   * Homepage container - fills available viewport height
-   * Used instead of qt-page-container for homepage to enable full-height cards
+   * Home page container. At least as tall as the pane, so a theme's backdrop
+   * behind it reaches the bottom on a short page.
    */
   .qt-homepage-container {
-    @apply flex flex-col h-full w-full mx-auto px-4 py-6;
+    @apply flex flex-col w-full mx-auto px-4 py-6;
+    min-height: 100%;
     max-width: var(--qt-page-max-width);
   }
 
   /**
-   * Homepage 3-column grid - responsive layout for dashboard sections
-   * Uses minmax(0, 1fr) to prevent content from expanding columns
-   * flex-1 makes it fill remaining space after welcome/actions
-   * Desktop (1100px+): 3 columns (equal thirds by default)
-   * Full-width mode: 30% / 30% / 40% columns (via data-full-width attribute)
-   * Tablet (700-1100px): 2 columns
-   * Mobile (<700px): 1 column stacked with auto height
+   * Header line - the greeting on the left, quick actions on the right.
+   * Wraps to two lines when the pane is narrow.
    */
-  .qt-homepage-grid {
-    @apply grid gap-6 flex-1 min-h-0;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .qt-homepage-header {
+    @apply flex flex-wrap items-center justify-between gap-x-6 gap-y-3 mb-5;
   }
 
-  @media (max-width: 1100px) {
-    .qt-homepage-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  @media (max-width: 700px) {
-    .qt-homepage-grid {
-      grid-template-columns: minmax(0, 1fr);
-      /* On mobile, cards stack and don't fill height */
-      @apply flex-none h-auto;
-    }
+  .qt-homepage-welcome {
+    @apply min-w-0;
   }
 
   /**
-   * Homepage section card - container for each dashboard section
-   * Fills its grid cell height on desktop/tablet
+   * Quick actions - the row of action buttons in the header
+   */
+  .qt-quick-actions {
+    @apply flex flex-wrap gap-2;
+  }
+
+  /**
+   * The band stack. It is the query container for everything inside it, so
+   * the bands answer to the width of the pane (a split workspace halves it),
+   * not the window. The container sits here rather than on
+   * .qt-homepage-container because containment would capture a theme's
+   * position:fixed backdrop on that element.
+   */
+  .qt-homepage-grid {
+    @apply flex flex-col gap-4;
+    container-type: inline-size;
+    container-name: qt-homepage;
+  }
+
+  /**
+   * First band - the resume card beside the recent list, equal in height.
+   * data-solo: there is only the one conversation, so the card takes the row.
+   */
+  .qt-homepage-chats {
+    @apply grid gap-4;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  }
+
+  .qt-homepage-chats[data-solo="true"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /**
+   * Home page band - the card each section sits on
    */
   .qt-homepage-section {
-    @apply flex flex-col overflow-hidden;
-    @apply p-4 rounded-lg;
+    @apply flex flex-col p-4 rounded-lg;
     min-width: 0; /* Prevent flex/grid item from expanding */
-    min-height: 0; /* Allow shrinking in flex/grid context */
     background: var(--qt-card-bg, var(--color-card));
     border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
     box-shadow: var(--qt-card-shadow);
   }
 
   /**
-   * Homepage section header - title with optional action link
-   * Flex-shrink-0 to prevent header from shrinking
+   * Band header - title with an optional link or note on the right
    */
   .qt-homepage-section-header {
-    @apply flex items-center justify-between mb-4 flex-shrink-0;
+    @apply flex items-baseline justify-between gap-3 mb-3;
   }
 
   .qt-homepage-section-title {
@@ -1228,45 +1331,192 @@
   }
 
   .qt-homepage-section-link {
-    @apply text-sm font-normal;
+    @apply text-sm font-normal shrink-0;
     @apply text-muted-foreground hover:text-foreground;
     @apply transition-colors;
   }
 
   /**
-   * Homepage section content - fills remaining card space, hides overflow
-   * Items that don't fit are hidden (no scrolling)
-   * Small padding ensures borders aren't clipped by overflow:hidden
+   * Band body. A column of rows by default; the projects band lays its rows
+   * out as tiles instead.
    */
   .qt-homepage-section-content {
-    @apply flex-1 min-h-0 overflow-hidden space-y-2 p-1 -m-1;
+    @apply flex flex-col gap-1;
+    min-width: 0;
+  }
+
+  .qt-homepage-section[data-section="projects"] .qt-homepage-section-content {
+    @apply grid gap-2;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   }
 
   /**
-   * Quick actions row - row of action buttons
+   * Row - one conversation in the recent list, or one project tile
    */
-  .qt-quick-actions {
-    @apply flex flex-wrap gap-3 justify-center;
+  .qt-homepage-row {
+    @apply flex items-center gap-3 p-2 rounded-lg;
+    min-width: 0;
+    transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .qt-homepage-row:hover {
+    background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+  }
+
+  .qt-homepage-section[data-section="projects"] .qt-homepage-row {
+    border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  }
+
+  /* A row's picture: the chat's story background, or its cast */
+  .qt-homepage-row-picture {
+    @apply flex items-center justify-center shrink-0 overflow-hidden rounded-md;
+    width: 5rem;
+    height: 3.25rem;
+    background: var(--color-muted);
+  }
+
+  .qt-homepage-row-picture[data-kind="avatars"] {
+    background: transparent;
+  }
+
+  .qt-homepage-row-picture img {
+    @apply w-full h-full object-cover;
+  }
+
+  /* A row's title is never cut to one line: two, then an ellipsis */
+  .qt-homepage-row-title {
+    @apply line-clamp-2 leading-snug;
+    overflow-wrap: anywhere;
   }
 
   /**
-   * Characters grid for homepage
-   * Standard mode: 2 columns with fixed card widths
-   * Full-width mode: auto-fill to show 3-4 cards per row
+   * Empty state - a band with nothing in it yet
+   */
+  .qt-homepage-empty {
+    @apply flex flex-col items-center gap-2 py-6 text-center;
+  }
+
+  /* --------------------------------------------------------------------------
+     The resume card: the conversation last touched
+     -------------------------------------------------------------------------- */
+
+  .qt-homepage-section[data-section="resume"] {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  /**
+   * The story picture. It takes whatever height the recent list beside it
+   * leaves, so the two cards end level; the image fills it, cropped.
+   */
+  .qt-homepage-resume-picture {
+    @apply relative flex items-center justify-center;
+    flex: 1 1 auto;
+    min-height: 12rem;
+    background: var(--color-muted);
+  }
+
+  .qt-homepage-resume-picture img {
+    @apply absolute inset-0 w-full h-full object-cover;
+    object-position: center 35%;
+  }
+
+  .qt-homepage-resume-body {
+    @apply flex flex-col p-4;
+    flex: none;
+    min-width: 0;
+  }
+
+  .qt-homepage-resume-body .qt-homepage-section-header {
+    @apply mb-1;
+  }
+
+  .qt-homepage-resume-body .qt-homepage-section-title {
+    @apply text-sm;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-homepage-resume-title {
+    @apply text-xl font-semibold leading-snug;
+    font-family: var(--qt-heading-font);
+    color: var(--qt-heading-color, var(--color-foreground));
+    overflow-wrap: anywhere;
+  }
+
+  .qt-homepage-resume-title a:hover {
+    text-decoration: underline;
+  }
+
+  .qt-homepage-resume-excerpt {
+    @apply text-sm line-clamp-3 mt-1;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-homepage-resume-actions {
+    @apply flex items-center gap-3 mt-3;
+  }
+
+  /* The only conversation: picture and words side by side */
+  .qt-homepage-chats[data-solo="true"] .qt-homepage-section[data-section="resume"] {
+    flex-direction: row;
+  }
+
+  .qt-homepage-chats[data-solo="true"] .qt-homepage-resume-picture {
+    flex: 0 0 45%;
+  }
+
+  .qt-homepage-chats[data-solo="true"] .qt-homepage-resume-body {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  /* --------------------------------------------------------------------------
+     The company: a wall of portraits
+     -------------------------------------------------------------------------- */
+
+  /**
+   * As many columns as the width allows. CharactersSection reads the resolved
+   * tracks to know how many that is, and shows two rows' worth.
    */
   .qt-characters-grid {
-    @apply grid gap-3 justify-center;
-    grid-template-columns: repeat(2, minmax(0, 140px));
-  }
-}
-
-/* Full-width mode overrides - outside @layer for higher specificity */
-@media (min-width: 1101px) {
-  :root[data-full-width="true"] .qt-homepage-grid {
-    grid-template-columns: 3fr 3fr 4fr;
+    @apply grid;
+    gap: 0.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
   }
 
-  :root[data-full-width="true"] .qt-characters-grid {
-    grid-template-columns: repeat(auto-fill, minmax(130px, 150px));
+  /* --------------------------------------------------------------------------
+     A narrow pane: the first band stacks, and its picture keeps a shape of
+     its own since there is no list beside it to match
+     -------------------------------------------------------------------------- */
+
+  @container qt-homepage (max-width: 52rem) {
+    .qt-homepage-chats {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .qt-homepage-chats .qt-homepage-section[data-section="resume"],
+    .qt-homepage-chats[data-solo="true"] .qt-homepage-section[data-section="resume"] {
+      flex-direction: column;
+    }
+
+    .qt-homepage-chats .qt-homepage-resume-picture,
+    .qt-homepage-chats[data-solo="true"] .qt-homepage-resume-picture {
+      flex: none;
+      min-height: 0;
+      aspect-ratio: 16 / 9;
+    }
+  }
+
+  /* A phone: portraits shoulder to shoulder, so three stand abreast */
+  @container qt-homepage (max-width: 26rem) {
+    .qt-characters-grid {
+      gap: 0.25rem;
+      grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
+    }
+
+    .qt-characters-grid .qt-character-card-button,
+    .qt-characters-grid .qt-character-card[data-kind="all"] {
+      padding-inline: 0;
+    }
   }
 }

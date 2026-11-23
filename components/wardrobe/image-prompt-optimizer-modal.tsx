@@ -174,8 +174,8 @@ export function ImagePromptOptimizerModal({
       busy={busy}
       maxWidth="wide"
       className="overflow-hidden"
-      bodyClassName="qt-dialog-body space-y-4 flex-1 min-h-0 overflow-y-auto"
-      footerClassName="qt-dialog-footer flex-shrink-0"
+      bodyClassName="qt-dialog-body-default space-y-4 flex-1 min-h-0 overflow-y-auto"
+      footerClassName="qt-dialog-footer-default flex-shrink-0"
       footer={
         <div className="flex flex-wrap justify-end gap-2">
           {(stage === 'intro' || stage === 'reviewing') && (

@@ -125,6 +125,7 @@ describe('collectCharacterBreakdown — wardrobe permissions (Bug 21)', () => {
       "canDressThemselves" INTEGER DEFAULT NULL,
       "canCreateOutfits" INTEGER DEFAULT NULL,
       "canManageInventory" INTEGER DEFAULT NULL,
+      "canEditMemories" INTEGER DEFAULT NULL,
       "coreWhisperEnabled" INTEGER DEFAULT NULL
     )`);
     const insert = db.prepare(
@@ -148,6 +149,8 @@ describe('collectCharacterBreakdown — wardrobe permissions (Bug 21)', () => {
     expect(result.canCreateOutfits).toBe(3);
     // canManageInventory: all NULL here, so every row counts.
     expect(result.canManageInventory).toBe(result.total);
+    // canEditMemories: granted only by an explicit 1, and none are here.
+    expect(result.canEditMemories).toBe(0);
   });
 });
 

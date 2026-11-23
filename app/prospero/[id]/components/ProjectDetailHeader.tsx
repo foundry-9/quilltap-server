@@ -89,7 +89,7 @@ export function ProjectDetailHeader({
           <>
             <button
               onClick={onCancelEdit}
-              className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-shadow-sm hover:qt-bg-muted"
+              className="qt-button-secondary"
             >
               Cancel
             </button>
@@ -103,7 +103,7 @@ export function ProjectDetailHeader({
         ) : (
           <button
             onClick={onEditClick}
-            className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-shadow-sm hover:qt-bg-muted"
+            className="qt-button-secondary"
           >
             Edit
           </button>

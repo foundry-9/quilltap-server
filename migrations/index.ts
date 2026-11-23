@@ -15,9 +15,16 @@ import {
   closeDatabase,
   waitForDatabaseReady,
   detectDatabaseBackend,
+  isMainDatabaseEmpty,
 } from './lib/database-utils';
+import { baselineReason, bornVersionOf } from './lib/baseline';
 import { beginMigration, endMigration } from './lib/progress';
-import { loadMigrationState, isMigrationCompleted, recordCompletedMigration } from './state';
+import {
+  loadMigrationState,
+  isMigrationCompleted,
+  recordCompletedMigration,
+  recordBaselinedMigrations,
+} from './state';
 import type { Migration, MigrationResult, MigrationState, MigrationRunResult } from './types';
 
 // Import all migrations
@@ -138,6 +145,31 @@ export class MigrationRunner {
     // Load current state
     let state = await loadMigrationState();
 
+    // What the baseline needs to know, read before anything runs: a database
+    // with an empty ledger and no tables is being created by this boot.
+    let freshDatabase = false;
+    if (state.completedMigrations.length === 0) {
+      try {
+        freshDatabase = isMainDatabaseEmpty();
+      } catch (error) {
+        logger.warn('Could not tell whether the database is new; baselining only by birth release', {
+          context: 'migrations.runMigrations',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    const bornVersion = bornVersionOf(state);
+    logger.debug('Migration baseline context', {
+      context: 'migrations.runMigrations',
+      freshDatabase,
+      bornVersion,
+    });
+    const knownIds = new Set(this.migrations.map(m => m.id));
+    const baselines: Array<{ id: string; reason: string }> = [];
+    const baselinedIds = new Set<string>();
+    const isSettled = (id: string): boolean =>
+      !knownIds.has(id) || isMigrationCompleted(state, id) || baselinedIds.has(id);
+
     // Sort migrations by dependency
     const sortedMigrations = sortMigrationsByDependency(this.migrations);
     for (const migration of sortedMigrations) {
@@ -163,6 +195,20 @@ export class MigrationRunner {
       try {
         const shouldRun = await migration.shouldRun();
         if (!shouldRun) {
+          const reason = baselineReason(migration, {
+            freshDatabase,
+            bornVersion: freshDatabase ? null : bornVersion,
+            isSettled,
+          });
+          if (reason) {
+            baselines.push({ id: migration.id, reason });
+            baselinedIds.add(migration.id);
+            logger.debug('Migration baselined: nothing it converts can exist here', {
+              context: 'migrations.runMigrations',
+              migrationId: migration.id,
+              reason,
+            });
+          }
           migrationsSkipped++;
           continue;
         }
@@ -245,6 +291,29 @@ export class MigrationRunner {
       endMigration();
     }
 
+    // Settle the skipped migrations that can never have work here, so a later
+    // boot cannot mistake current rows for their legacy data. A failure to
+    // write them only means they are asked again next boot.
+    let baselined: string[] = [];
+    if (baselines.length > 0) {
+      try {
+        state = await recordBaselinedMigrations(state, baselines);
+        baselined = baselines.map(b => b.id);
+        logger.info('Baselined migrations with nothing to convert', {
+          context: 'migrations.runMigrations',
+          count: baselined.length,
+          freshDatabase,
+          bornVersion,
+        });
+      } catch (error) {
+        logger.error('Could not record baselined migrations; they will be asked again next boot', {
+          context: 'migrations.runMigrations',
+          count: baselines.length,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     const totalDurationMs = Date.now() - startTime;
     const allSucceeded = failed.length === 0;
 
@@ -253,6 +322,7 @@ export class MigrationRunner {
       success: allSucceeded,
       migrationsRun,
       migrationsSkipped,
+      baselined: baselined.length,
       failed: failed.length > 0 ? failed : undefined,
       deferred: deferred.length > 0 ? deferred : undefined,
       totalDurationMs,
@@ -266,6 +336,7 @@ export class MigrationRunner {
       totalDurationMs,
       failed: failed.length > 0 ? failed : undefined,
       deferred: deferred.length > 0 ? deferred : undefined,
+      baselined: baselined.length > 0 ? baselined : undefined,
     };
   }
 

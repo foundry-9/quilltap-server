@@ -99,6 +99,7 @@ export function TabStrip({
             key={id}
             ref={isActive ? activeTabRef : undefined}
             role="presentation"
+            data-tab-kind={tab.kind}
             draggable
             className={
               'qt-tab' +
@@ -149,6 +150,7 @@ export function TabStrip({
               className="qt-tab-close"
               tabIndex={-1}
               aria-hidden="true"
+              title={`Close ${tab.title}`}
               onClick={(e) => {
                 e.stopPropagation()
                 onClose(id)

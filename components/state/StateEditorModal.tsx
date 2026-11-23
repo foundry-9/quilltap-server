@@ -225,7 +225,7 @@ export default function StateEditorModal({
           <button
             onClick={() => setShowResetConfirm(true)}
             disabled={isLoading}
-            className="qt-button qt-button-danger-outline"
+            className="qt-button qt-button-secondary qt-text-destructive"
           >
             Reset State
           </button>
@@ -235,7 +235,7 @@ export default function StateEditorModal({
             <button
               onClick={handleReset}
               disabled={isLoading}
-              className="qt-button qt-button-danger"
+              className="qt-button qt-button-destructive"
             >
               {resetting ? 'Resetting...' : 'Confirm Reset'}
             </button>

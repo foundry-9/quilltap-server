@@ -36,6 +36,8 @@ function genFile(id: string, sha256: string) {
 let files: { findByLinkedTo: jest.Mock };
 let characters: { findByDefaultImageId: jest.Mock; findByAvatarOverrideImageId: jest.Mock };
 let chats: { findAll: jest.Mock; getLastPlayedMessageAt: jest.Mock };
+let docMountBlobs: { findById: jest.Mock };
+let docMountFileLinks: { findByFileId: jest.Mock };
 
 const staleChat = {
   id: 'chat-stale',
@@ -96,7 +98,11 @@ beforeEach(() => {
     ),
   };
 
-  mockGetRepositories.mockReturnValue({ files, characters, chats } as any);
+  // No file in the base fixture has a mount-blob key, so these see no links.
+  docMountBlobs = { findById: jest.fn(async () => null) };
+  docMountFileLinks = { findByFileId: jest.fn(async () => []) };
+
+  mockGetRepositories.mockReturnValue({ files, characters, chats, docMountBlobs, docMountFileLinks } as any);
 
   // Keep-set ids resolve to their content hashes (legacy files.id shape here).
   const shaById: Record<string, string> = { 'bg-current': 'sha-current', 'av-current': 'sha-avc' };
@@ -205,6 +211,70 @@ describe('collapseStaleChatAssets', () => {
     const summary = await collapseStaleChatAssets(NOW);
     expect(summary.staleChats).toBe(1);
     expect(summary.chatsCollapsed).toBe(1);
+  });
+
+  describe('judging the vault links a delete would take', () => {
+    // A generated avatar whose bytes live in a character vault. Its files.sha256
+    // disagrees with the vault's hash, so the sha-based album check sees nothing
+    // — the shape that let Friday's Laura lose her default avatar.
+    const vaultAvatar = {
+      ...genFile('vault-av', 'sha-stale-row'),
+      storageKey: 'mount-blob:vault-mp:blob-1',
+    };
+
+    function withVaultLinks(links: Array<{ id: string; relativePath: string }>) {
+      files.findByLinkedTo.mockImplementation(async (id: string) =>
+        id === 'chat-stale' ? [vaultAvatar] : [],
+      );
+      docMountBlobs.findById.mockImplementation(async (id: string) =>
+        id === 'blob-1' ? { id: 'blob-1', fileId: 'mount-file-1' } : null,
+      );
+      docMountFileLinks.findByFileId.mockImplementation(async (id: string) =>
+        id === 'mount-file-1' ? links : [],
+      );
+    }
+
+    it('keeps an image whose vault link is a character default (link id, not files.id)', async () => {
+      withVaultLinks([
+        { id: 'link-history', relativePath: 'images/history/avatar_Laura_1.webp' },
+        { id: 'link-photo', relativePath: 'photos/avatar_Laura_1.webp' },
+      ]);
+      characters.findByDefaultImageId.mockImplementation(async (id: string) =>
+        id === 'link-photo' ? [{ id: 'laura' }] : [],
+      );
+
+      await collapseStaleChatAssets(NOW);
+
+      expect(mockDeleteFile).not.toHaveBeenCalled();
+    });
+
+    it('keeps an image with a photos/ link even when no character points at it', async () => {
+      withVaultLinks([{ id: 'link-photo', relativePath: 'photos/kept.webp' }]);
+      await collapseStaleChatAssets(NOW);
+      expect(mockDeleteFile).not.toHaveBeenCalled();
+    });
+
+    it('keeps an image whose vault link id is the chat\'s current avatar', async () => {
+      withVaultLinks([{ id: 'av-current', relativePath: 'images/history/current.webp' }]);
+      await collapseStaleChatAssets(NOW);
+      expect(mockDeleteFile).not.toHaveBeenCalled();
+    });
+
+    it('still reaps a superseded avatar whose only link is its history copy', async () => {
+      withVaultLinks([{ id: 'link-history', relativePath: 'images/history/old.webp' }]);
+      await collapseStaleChatAssets(NOW);
+      expect(mockDeleteFile).toHaveBeenCalledWith('vault-av');
+    });
+
+    it('skips the chat (deletes nothing) when the blob lookup fails', async () => {
+      withVaultLinks([]);
+      docMountBlobs.findById.mockRejectedValue(new Error('mount index not initialized'));
+
+      const summary = await collapseStaleChatAssets(NOW);
+
+      expect(mockDeleteFile).not.toHaveBeenCalled();
+      expect(summary.chatsCollapsed).toBe(0);
+    });
   });
 
   it('is idempotent — a chat with only its current assets is a no-op', async () => {

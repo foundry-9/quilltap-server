@@ -10,7 +10,7 @@ The Settings page --- whose door bears the grander name **The Foundry** --- is t
 
 ## Accessing Settings
 
-1. Click the **Settings** icon (wrench) in the left sidebar footer
+1. Click **Settings** (the gear) on the rail
 2. You will arrive in **Connections** --- unless something in the house needs your attention, in which case you arrive wherever it is (see *The Attention Strip*, below)
 3. Choose a group from the rail on the left (on a narrow screen, from the **Section** menu at the top) and open whichever card you require
 

@@ -12,6 +12,7 @@
 
 import type { TextProviderPlugin, ImageGenerationModelInfo, ImageOrientationSupport } from './types';
 import { GoogleProvider } from './provider';
+import { fetchGoogleModelCatalog } from './model-catalog';
 import { GoogleImagenProvider } from './image-provider';
 import {
   createPluginLogger,
@@ -144,6 +145,15 @@ export const plugin: TextProviderPlugin = {
       logger.error('Failed to fetch Google models', { context: 'plugin.getAvailableModels' }, error instanceof Error ? error : undefined);
       return [];
     }
+  },
+
+  /**
+   * Live, detailed text-model list (context window, output limit, thinking).
+   * Throws on failure so the host does not cache a partial list.
+   */
+  getModelCatalog: async (apiKey: string, baseUrl?: string) => {
+    logger.debug('Fetching Google model catalog', { context: 'plugin.getModelCatalog' });
+    return fetchGoogleModelCatalog(apiKey);
   },
 
   /**

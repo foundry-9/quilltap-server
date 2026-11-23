@@ -40,6 +40,8 @@ const TYPE_BADGE_CLASSES: Record<LLMLogType, string> = {
   VOICE_REWRITE: 'qt-bg-info/15 qt-text-info',
   SCENARIO_BUILDER: 'qt-bg-info/15 qt-text-info',
   STORYTELLER_BID: 'qt-bg-primary/15 qt-text-primary',
+  ATLAS_LORE_DRAFT: 'qt-bg-info/15 qt-text-info',
+  WARDROBE_INSTRUCTION_DESIGN: 'qt-bg-info/15 qt-text-info',
 }
 
 const TYPE_LABELS: Record<LLMLogType, string> = {
@@ -69,6 +71,8 @@ const TYPE_LABELS: Record<LLMLogType, string> = {
   VOICE_REWRITE: 'Voice',
   SCENARIO_BUILDER: 'Scenario',
   STORYTELLER_BID: 'Bid',
+  ATLAS_LORE_DRAFT: 'Atlas',
+  WARDROBE_INSTRUCTION_DESIGN: 'Wardrobe',
 }
 
 function formatTokens(log: LLMLog): string {

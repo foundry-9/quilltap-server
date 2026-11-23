@@ -39,6 +39,8 @@ export interface ModelPricing {
   supportsVision?: boolean
   /** Whether this model supports tool/function calling */
   supportsTools?: boolean
+  /** Maximum completion tokens, when the source publishes it */
+  maxCompletionTokens?: number | null
   /** When this pricing data was fetched */
   fetchedAt: string
 }

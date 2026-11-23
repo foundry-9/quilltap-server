@@ -97,7 +97,7 @@ export function parseStoredSceneState(raw: unknown): SceneState | null {
 // CHAT TYPE
 // ============================================================================
 
-export const ChatTypeEnum = z.enum(['salon', 'help', 'autonomous', 'brahma']);
+export const ChatTypeEnum = z.enum(['salon', 'help', 'autonomous', 'brahma', 'calliope']);
 export type ChatType = z.infer<typeof ChatTypeEnum>;
 
 /**
@@ -106,18 +106,21 @@ export type ChatType = z.infer<typeof ChatTypeEnum>;
  * generation, and never run the autonomous-room machinery. The Brahma Console
  * (`'brahma'`) joins the Help Chat (`'help'`) here — both are floating,
  * stripped-down chat surfaces, distinct from the Salon and from autonomous
- * rooms. (Memory extraction is governed separately: 'help' opts in, 'brahma'
- * never does. This predicate is ONLY about titling/summary routing.)
+ * rooms. Calliope's theme conversations (`'calliope'`) are the same kind of
+ * surface. (Memory extraction is governed separately: 'help' opts in, 'brahma'
+ * and 'calliope' never do. This predicate is ONLY about titling/summary
+ * routing.)
  */
 export function isHelpLikeChatType(chatType: string | null | undefined): boolean {
-  return chatType === 'help' || chatType === 'brahma';
+  return chatType === 'help' || chatType === 'brahma' || chatType === 'calliope';
 }
 
 /**
  * Chat types that are exempt from dangerous-content moderation entirely: the
  * Concierge never classifies, flags, reroutes, or announces on them. These are
- * utility surfaces rather than roleplay — the Help Chat (`'help'`) and the
- * Brahma Console (`'brahma'`). Moderation applies only to the Salon
+ * utility surfaces rather than roleplay — the Help Chat (`'help'`), the
+ * Brahma Console (`'brahma'`) and Calliope's theme conversations
+ * (`'calliope'`). Moderation applies only to the Salon
  * (`'salon'`) and autonomous rooms (`'autonomous'`).
  *
  * Deliberately separate from `isHelpLikeChatType`: that predicate governs
@@ -125,7 +128,17 @@ export function isHelpLikeChatType(chatType: string | null | undefined): boolean
  * it. The two covering the same set today is a coincidence, not a contract.
  */
 export function isModerationExemptChatType(chatType: string | null | undefined): boolean {
-  return chatType === 'help' || chatType === 'brahma';
+  return chatType === 'help' || chatType === 'brahma' || chatType === 'calliope';
+}
+
+/**
+ * Whether global search lists a chat of this type (by title, and its
+ * messages). Calliope's theme conversations belong to a draft and are found
+ * from the theme editor, never as chats: false for `'calliope'` only. The
+ * other types are listed as they always were.
+ */
+export function isListedInGlobalSearch(chatType: string | null | undefined): boolean {
+  return chatType !== 'calliope';
 }
 
 /**
@@ -1183,7 +1196,7 @@ export const ChatMetadataSchema = z.object({
   /** Whether to auto-generate character avatars when outfits change (null = disabled) */
   avatarGenerationEnabled: z.boolean().nullable().optional(),
 
-  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms, 'brahma' for Brahma Console (character-less generic-LLM) chats */
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms, 'brahma' for Brahma Console (character-less generic-LLM) chats, 'calliope' for Calliope's theme-editor conversations (one draft each) */
   chatType: ChatTypeEnum.default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
@@ -1207,6 +1220,14 @@ export const ChatMetadataSchema = z.object({
    * NULL or empty means none.
    */
   consoleContext: z.array(ConsoleContextRefSchema).nullable().optional(),
+  /**
+   * For Calliope's conversations (`chatType === 'calliope'`): the theme draft
+   * the conversation belongs to (a draft id, the folder name under `Themes/`
+   * in Quilltap General — not a UUID). Set at creation and never changed; the
+   * conversation is deleted with the draft (`deleteDraft`). NULL on every
+   * other chat type.
+   */
+  themeDraftId: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64).nullable().optional(),
 
   /**
    * Phase H: precompiled per-participant identity stack — the character-static
@@ -1594,7 +1615,7 @@ export const ChatMetadataBaseSchema = z.object({
   /** Whether to auto-generate character avatars when outfits change (null = disabled) */
   avatarGenerationEnabled: z.boolean().nullable().optional(),
 
-  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms, 'brahma' for Brahma Console (character-less generic-LLM) chats */
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms, 'brahma' for Brahma Console (character-less generic-LLM) chats, 'calliope' for Calliope's theme-editor conversations (one draft each) */
   chatType: ChatTypeEnum.default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
@@ -1618,6 +1639,14 @@ export const ChatMetadataBaseSchema = z.object({
    * NULL or empty means none.
    */
   consoleContext: z.array(ConsoleContextRefSchema).nullable().optional(),
+  /**
+   * For Calliope's conversations (`chatType === 'calliope'`): the theme draft
+   * the conversation belongs to (a draft id, the folder name under `Themes/`
+   * in Quilltap General — not a UUID). Set at creation and never changed; the
+   * conversation is deleted with the draft (`deleteDraft`). NULL on every
+   * other chat type.
+   */
+  themeDraftId: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64).nullable().optional(),
 
   /**
    * Phase H: precompiled per-participant identity stack — the character-static

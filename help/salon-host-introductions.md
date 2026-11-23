@@ -46,7 +46,7 @@ This one *does* stay in the conversation, where the characters read it. The carr
 
 ## Things, Too
 
-Places, vehicles, houses and contraptions kept in [the Atlas](atlas.md) are treated in much the same way. A thing's first mention in the chat — very often in the Host's scenario card — wears a chip of its own, told from a person's by its dashed rule; its card shows the thing's picture, its other names, its appearance, what is known of it and the shelf it is kept on. The characters who can reach it are told its particulars in a note of their own, placed just after the note about who is being spoken of. Where a word could mean a person or a thing, the person wins: the chip is theirs, and the thing is not called up.
+Places, vehicles, houses and contraptions kept in [the Atlas](atlas.md) are treated in much the same way. A thing's first mention in the chat — very often in the Host's scenario card — wears a chip of its own, told from a person's by its dashed rule; its card shows the thing's picture, its other names, its appearance, what is known of it and the shelf it is kept on. The characters who can reach it are told its particulars by the Commonplace Book, in the private whisper that precedes their turn. Where a word could mean a person or a thing, the person wins: the chip is theirs, and the thing is not called up.
 
 ## Older Conversations
 

@@ -3,6 +3,8 @@
  *
  * Checks whether a chat has avatar generation enabled, resolves the
  * appropriate image profile, and enqueues a character avatar generation job.
+ * Automatic refreshes wait for the chat's next turn; the manual regenerate
+ * button runs at once.
  * Failures are caught and logged — they must never affect the caller's result.
  */
 
@@ -36,6 +38,11 @@ interface AvatarGenerationParams {
    * Set by the manual regenerate button; automatic triggers leave it unset.
    */
   force?: boolean;
+  /**
+   * Hold the job until the chat's next turn is triggered (automatic refreshes
+   * only): several changes between turns cost one avatar per character.
+   */
+  awaitingTurn?: boolean;
 }
 
 export type AvatarGenerationResult =
@@ -61,6 +68,7 @@ export async function triggerAvatarGeneration(
     imageProfileIdOverride,
     equippedSlotsOverride,
     force,
+    awaitingTurn,
   } = params;
 
   try {
@@ -98,6 +106,7 @@ export async function triggerAvatarGeneration(
       imageProfileId,
       ...(equippedSlotsOverride ? { equippedSlotsOverride } : {}),
       ...(force ? { force: true } : {}),
+      ...(awaitingTurn ? { awaitingTurn: true } : {}),
     });
 
     return { queued: true };
@@ -121,6 +130,10 @@ export async function triggerAvatarGeneration(
  * Used by automatic triggers (wardrobe changes etc.) where the user has
  * opted in to auto-regeneration. Failures are swallowed — automatic paths
  * must never affect the caller's result.
+ *
+ * The job is held until the chat's next turn (`awaitingTurn`): every change
+ * before then collapses into one held job per character, and the turn's start
+ * releases them all at once (`releaseHeldAvatarRefreshes`).
  */
 export async function triggerAvatarGenerationIfEnabled(
   repos: ReturnType<typeof getRepositories>,
@@ -137,7 +150,7 @@ export async function triggerAvatarGenerationIfEnabled(
     if (chat.chatType === 'autonomous') {
       return;
     }
-    await triggerAvatarGeneration(repos, params);
+    await triggerAvatarGeneration(repos, { ...params, awaitingTurn: true });
   } catch (error) {
     logger.warn('Failed to enqueue avatar generation after outfit change', {
       context: params.callerContext,

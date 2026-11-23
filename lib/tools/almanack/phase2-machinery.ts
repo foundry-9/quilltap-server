@@ -496,7 +496,7 @@ export function emptyThemeInfo(): ThemeReportInfo {
   return {
     activeThemeId: null,
     colorMode: 'system',
-    stats: { total: 0, withDarkMode: 0, withCssOverrides: 0, errors: 0 },
+    stats: { total: 0, withDarkMode: 0, refused: 0, errors: 0 },
     themes: [],
     themesWithIcons: 0,
     totalIconOverrides: 0,
@@ -522,7 +522,7 @@ export async function collectThemeInfo(userId: string): Promise<ThemeReportInfo>
     stats = {
       total: rawStats.total,
       withDarkMode: rawStats.withDarkMode,
-      withCssOverrides: rawStats.withCssOverrides,
+      refused: rawStats.refused,
       errors: rawStats.errors,
     };
   } catch (error) {

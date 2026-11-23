@@ -14,6 +14,8 @@
  * aggregation logic.
  */
 
+import { UncensoredBadge } from '@/components/images/UncensoredBadge';
+import type { GenerationModeration } from '@/lib/schemas/file.types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -63,6 +65,8 @@ interface GalleryEntry {
   generationPromptExcerpt: string;
   relevanceScore?: number;
   linkSummary: PhotoLinkSummary;
+  /** Set when an uncensored profile drew it; drives the Uncensored badge. */
+  generationModeration?: GenerationModeration | null;
 }
 
 interface ListResponse {
@@ -448,6 +452,7 @@ function PhotoCard({ entry, onClick }: { entry: GalleryEntry; onClick: () => voi
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
           />
+          <UncensoredBadge moderation={entry.generationModeration} className="absolute left-2 top-2" />
           {entry.linkSummary.count > 1 && (
             <span
               className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full qt-bg-card/90 px-2.5 py-1 text-xs font-medium qt-text-primary backdrop-blur-sm qt-shadow-sm"
@@ -537,12 +542,13 @@ function PhotoDetailModal({
         </button>
       </header>
       <div className="grid max-h-[calc(90vh-9rem)] gap-6 overflow-y-auto px-6 py-5 md:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="flex items-start justify-center">
+        <div className="relative flex items-start justify-center">
           <img
             src={entry.blobUrl}
             alt={primaryCaption}
             className="max-h-[70vh] w-full rounded-xl object-contain qt-shadow-sm"
           />
+          <UncensoredBadge moderation={entry.generationModeration} className="absolute left-2 top-2" />
         </div>
         <div className="space-y-5">
           {entry.generationPromptExcerpt && (
@@ -555,7 +561,7 @@ function PhotoDetailModal({
             <Section title="Tags">
               <div className="flex flex-wrap gap-1.5">
                 {entry.tags.map((t) => (
-                  <span key={t} className="qt-badge qt-badge-muted">{t}</span>
+                  <span key={t} className="qt-badge qt-badge-secondary">{t}</span>
                 ))}
               </div>
             </Section>
@@ -574,7 +580,7 @@ function PhotoDetailModal({
                     <span className="truncate font-medium qt-text">
                       {linker.linkedBy ?? linker.mountPointName}
                     </span>
-                    <span className="qt-badge qt-badge-muted whitespace-nowrap text-[10px] uppercase">
+                    <span className="qt-badge qt-badge-secondary whitespace-nowrap text-[10px] uppercase">
                       {linker.mountStoreType === 'character' ? 'Vault' : 'Album'}
                     </span>
                   </div>

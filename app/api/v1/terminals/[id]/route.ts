@@ -217,4 +217,5 @@ export const POST = createContextParamsHandler<RouteParams>(
   ),
 );
 
-export const DELETE = createContextParamsHandler<RouteParams>(handleDelete);
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
+export const DELETE = createContextParamsHandler<RouteParams>(withActionDispatch<RouteParams>({}, handleDelete));

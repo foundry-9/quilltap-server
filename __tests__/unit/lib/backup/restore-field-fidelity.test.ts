@@ -19,7 +19,8 @@
  */
 
 import { restore } from '@/lib/backup/restore/restore';
-import { parseBackupZip } from '@/lib/backup/restore/archive';
+import { parseBackupZip, getFileFromExtractedBackup } from '@/lib/backup/restore/archive';
+import { writeLibraryFileBytes } from '@/lib/file-storage/library-file-writer';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { rawQuery } from '@/lib/database/manager';
@@ -54,6 +55,10 @@ jest.mock('@/lib/file-storage/manager', () => ({
 
 jest.mock('@/lib/file-storage/user-uploads-bridge', () => ({
   writeUserUploadToMountStore: jest.fn(),
+}))
+
+jest.mock('@/lib/file-storage/library-file-writer', () => ({
+  writeLibraryFileBytes: jest.fn(),
 }))
 
 jest.mock('@/lib/paths', () => ({
@@ -230,6 +235,9 @@ function buildRepoMocks() {
   const connectionsCreate = jest.fn().mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-profile-id' })
   )
+  const filesCreate = jest.fn().mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
+    Promise.resolve({ ...data, id: opts?.id ?? 'generated-file-id' })
+  )
   const imageProfilesCreate = jest.fn().mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-image-profile-id' })
   )
@@ -240,6 +248,7 @@ function buildRepoMocks() {
         return repoStub({ create: chatsCreate, addMessage, getLastPlayedMessageAt, update: chatsUpdate })
       if (prop === 'connections') return repoStub({ create: connectionsCreate, findAll: jest.fn().mockResolvedValue([]) })
       if (prop === 'imageProfiles') return repoStub({ create: imageProfilesCreate })
+      if (prop === 'files') return repoStub({ create: filesCreate })
       return repoStub()
     },
   })
@@ -273,6 +282,7 @@ function buildRepoMocks() {
     tfidfCreate,
     connectionsCreate,
     imageProfilesCreate,
+    filesCreate,
   }
 }
 
@@ -922,6 +932,8 @@ describe('restore field fidelity — 4.10 data-model additions', () => {
   const NEW_410_CHAT_SETTINGS_FIELDS = {
     impersonationVoiceMode: 'ask',
     wardrobeImageSettings: { imageProfileId: 'img-1', toolImagesEnabled: true },
+    // 4.14: dynamic backgrounds ride with the rest of the row (no ids, no ID_FIELDS entry)
+    dynamicBackgrounds: { enabled: true, allowUncensored: true, refreshMinutes: 7 },
   }
 
   it('carries every new 4.10 chats and chat_messages column through restore', async () => {
@@ -1311,5 +1323,76 @@ describe('restore field fidelity — 4.13 data-model additions', () => {
     await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
 
     expect(connectionsCreate.mock.calls[0][0]).toHaveProperty('toolResultVerbatimTurns', 3)
+  })
+})
+
+describe('restore field fidelity — 4.14 data-model additions', () => {
+  const mockedGetFile = getFileFromExtractedBackup as jest.MockedFunction<typeof getFileFromExtractedBackup>
+  const mockedWriteBytes = writeLibraryFileBytes as jest.MockedFunction<typeof writeLibraryFileBytes>
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it("carries a Calliope conversation's chatType and themeDraftId through restore", async () => {
+    const { chatsCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chats: [
+          {
+            id: 'chat-calliope',
+            userId: 'old-user',
+            title: 'On the Rains palette',
+            participants: [],
+            tags: [],
+            chatType: 'calliope',
+            themeDraftId: 'rains-variant',
+            messages: [],
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(chatsCreate).toHaveBeenCalledTimes(1)
+    expect(chatsCreate.mock.calls[0][0]).toMatchObject({ chatType: 'calliope', themeDraftId: 'rains-variant' })
+  })
+
+  it("carries a generated picture's generationModeration through restore", async () => {
+    const { filesCreate } = buildRepoMocks()
+    mockedGetFile.mockResolvedValue(Buffer.from('picture-bytes'))
+    mockedWriteBytes.mockResolvedValue({
+      storageKey: 'mount-blob:store-1:blob-1',
+      storedMimeType: 'image/webp',
+      sizeBytes: 13,
+      sha256: 'b'.repeat(64),
+    } as never)
+    primeArchive(
+      makeBackupData({
+        files: [
+          {
+            id: 'file-1',
+            userId: 'old-user',
+            originalFilename: 'avatar.webp',
+            mimeType: 'image/webp',
+            size: 13,
+            sha256: 'b'.repeat(64),
+            source: 'GENERATED',
+            category: 'IMAGE',
+            linkedTo: [],
+            tags: [],
+            storageKey: 'files/file-1.webp',
+            generationModeration: 'uncensored-failover',
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(filesCreate).toHaveBeenCalledTimes(1)
+    expect(filesCreate.mock.calls[0][0]).toHaveProperty('generationModeration', 'uncensored-failover')
+    expect(filesCreate.mock.calls[0][1]).toEqual({ id: 'file-1' })
   })
 })

@@ -230,7 +230,7 @@ export function DescriptionSourceStep({
                 accept="image/jpeg,image/png,image/gif,image/webp"
                 onChange={handleFileUpload}
                 disabled={uploading}
-                className="hidden"
+                className="sr-only"
                 id="wizard-image-upload"
               />
               <label
@@ -365,7 +365,7 @@ export function DescriptionSourceStep({
                 accept=".txt,.md,.markdown,.pdf,text/plain,text/markdown,application/pdf"
                 onChange={handleDocumentFileUpload}
                 disabled={uploadingDocument}
-                className="hidden"
+                className="sr-only"
                 id="wizard-document-upload"
               />
               <label

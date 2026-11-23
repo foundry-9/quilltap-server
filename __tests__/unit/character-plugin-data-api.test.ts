@@ -38,6 +38,7 @@ function createMockRequest(
 
   return {
     url,
+    nextUrl: new URL(url, 'http://localhost'),
     method: options.method ?? 'GET',
     headers: new Headers({ 'Content-Type': 'application/json' }),
     json: options.jsonError

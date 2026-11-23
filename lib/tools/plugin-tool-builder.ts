@@ -56,6 +56,12 @@ import { lookupCharacterToolDefinition } from '@/lib/tools/lookup-character-tool
 import { lookupMemoriesToolDefinition } from '@/lib/tools/lookup-memories-tool';
 import { lookupMessagesToolDefinition } from '@/lib/tools/lookup-messages-tool';
 import { readMessagesToolDefinition } from '@/lib/tools/read-messages-tool';
+import { findDocumentsToolDefinition } from '@/lib/tools/find-documents-tool';
+import { listDocumentsToolDefinition } from '@/lib/tools/list-documents-tool';
+import { lookupConversationsToolDefinition } from '@/lib/tools/lookup-conversations-tool';
+import { lookupGroupToolDefinition, lookupProjectToolDefinition } from '@/lib/tools/lookup-group-tool';
+import { lookupAtlasToolDefinition, lookupWardrobeToolDefinition } from '@/lib/tools/lookup-wardrobe-tool';
+import { lookupChatStateToolDefinition } from '@/lib/tools/lookup-chat-state-tool';
 import {
   wardrobeListToolDefinition,
 } from '@/lib/tools/wardrobe-list-tool';
@@ -114,6 +120,8 @@ import { sendMailToolDefinition } from '@/lib/tools/send-mail-tool';
 import { listMailToolDefinition } from '@/lib/tools/list-mail-tool';
 import { readMailToolDefinition } from '@/lib/tools/read-mail-tool';
 import { discardMailToolDefinition } from '@/lib/tools/discard-mail-tool';
+import { readMemoryToolDefinition } from '@/lib/tools/read-memory-tool';
+import { editMemoryToolDefinition } from '@/lib/tools/edit-memory-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 import { enabledInventoryToolDefinitions, pickInventoryToolFlags, type InventoryToolFlags } from '@/lib/tools/inventory-tool-flags';
 
@@ -194,6 +202,9 @@ function applyImageConstraintsToTool(
 
 /** Which `doc_*` tools a surface is offered. See `BuildToolsOptions.docToolsMode`. */
 export type DocToolsMode = 'off' | 'read' | 'full';
+
+/** Which research-kit tools a surface is offered. See `BuildToolsOptions.researchKit`. */
+export type ResearchKitMode = 'off' | 'documents' | 'full';
 
 /**
  * Options for building tools for a provider ({@link buildToolsForProvider}). The nine `inventory_*` flags
@@ -313,6 +324,9 @@ export interface BuildToolsOptions extends InventoryToolFlags {
   /** Whether to enable the ask_carina tool (inline Carina answerer) */
   askCarina?: boolean;
 
+  /** Whether to enable read_memory and edit_memory (the character's `canEditMemories`) */
+  memoryEdit?: boolean;
+
   /**
    * Whether to include the always-on "workspace" tool set: self-inventory,
    * Post Office mail (send_mail/list_mail), conversation reading, annotations,
@@ -339,12 +353,40 @@ export interface BuildToolsOptions extends InventoryToolFlags {
   documentsOnlySearch?: boolean;
 
   /**
+   * `false` withholds the `search` tool altogether — for a surface that may
+   * look at the web but has been told to leave the stores alone (the
+   * wardrobe's Import from Instructions with store searching off). Defaults
+   * to `true`: `search` is otherwise on every surface.
+   */
+  storeSearch?: boolean;
+
+  /**
    * When true, include the `run_sql` tool — read-only SQL access to the three
-   * Quilltap databases. Offered on the **Brahma Console** surface only;
-   * execution is additionally gated on `operatorSurface` in the tool executor.
-   * Defaults to `false`.
+   * Quilltap databases — and nothing else. Offered on the operator's surfaces
+   * only; execution is additionally gated on `operatorSurface` in the tool
+   * executor. Defaults to `false`.
    */
   sqlAccess?: boolean;
+
+  /**
+   * The research kit (docs/developer/features/research-kit.md §5.2):
+   * `'documents'` offers `find_documents` and `list_documents`; `'full'` adds
+   * the record lookups (`lookup_character`, `lookup_memories`,
+   * `lookup_messages`, `read_messages`, `lookup_conversations`,
+   * `lookup_group`, `lookup_project`, `lookup_wardrobe`, `lookup_atlas`).
+   * When the kit is on, `doc_grep` and `doc_list_files` are withheld — a weak
+   * model gets one way to do each thing. Defaults to `'off'`.
+   */
+  researchKit?: ResearchKitMode;
+
+  /**
+   * A surface's whole slate: exactly these definitions (plus
+   * `submit_final_response` when `agentMode` is on) and nothing else — every
+   * other flag here is ignored, plugin tools included. For a surface whose
+   * tools are its own (Calliope's `theme_*` tools), so nothing the flags
+   * default on can leak into it.
+   */
+  onlyTools?: readonly UniversalTool[];
 }
 
 /**
@@ -408,9 +450,18 @@ export async function buildToolsForProvider(
       documentsOnlySearch: options.documentsOnlySearch,
       includePluginTools: options.includePluginTools,
       askCarina: options.askCarina,
+      memoryEdit: options.memoryEdit,
       sqlAccess: options.sqlAccess,
+      researchKit: options.researchKit ?? 'off',
     },
   });
+
+  if (options.onlyTools) {
+    const slate: UniversalTool[] = [...options.onlyTools];
+    if (options.agentMode) slate.push(submitFinalResponseToolDefinition as UniversalTool);
+    logger_.debug('Building a surface-only tool slate', { tools: slate.map((t) => t.function.name) });
+    return formatUniversalTools(providerName, slate, options, logger_);
+  }
 
   // Step 1: Build array of universal tools based on enabled options
   const universalTools: UniversalTool[] = [];
@@ -515,29 +566,45 @@ export async function buildToolsForProvider(
     universalTools.push(logReadToolDefinition as UniversalTool);
   }
 
-  // Unified search — available on every surface. The Brahma variant drops the
+  // Unified search — available on every surface that has not withheld it
+  // (`storeSearch: false`). The Brahma variant drops the
   // `memories` source so the console can never search memories.
   // The Scenario Builder variant narrows further to documents/knowledge.
-  universalTools.push(
-    (options.documentsOnlySearch
-      ? searchScriptoriumScenarioToolDefinition
-      : options.excludeMemorySearch
-        ? searchScriptoriumBrahmaToolDefinition
-        : searchScriptoriumToolDefinition) as UniversalTool
-  );
+  if (options.storeSearch !== false) {
+    universalTools.push(
+      (options.documentsOnlySearch
+        ? searchScriptoriumScenarioToolDefinition
+        : options.excludeMemorySearch
+          ? searchScriptoriumBrahmaToolDefinition
+          : searchScriptoriumToolDefinition) as UniversalTool
+    );
+  }
 
-  // Read-only SQL access — Brahma Console only. Execution is additionally gated
-  // on `operatorSurface` in the tool executor, so a leaked tool name can never
-  // run from a character surface.
-  if (options.sqlAccess) {
-    // The lookup shortcuts ride on the same switch: they are the operator's
-    // inspection tools, answering the common questions (who is X, what does X
-    // remember, where was Y said) in one call each before the console falls
-    // back to hand-written SQL. Executor-gated on `operatorSurface` likewise.
+  // The research kit. The document tools work under the operator surface or a
+  // mount pool; the record lookups are the operator's inspection tools and are
+  // executor-gated on `operatorSurface` (OPERATOR_SURFACE_ONLY_TOOLS).
+  const researchKit: ResearchKitMode = options.researchKit ?? 'off';
+  if (researchKit === 'documents' || researchKit === 'full') {
+    universalTools.push(findDocumentsToolDefinition as UniversalTool);
+    universalTools.push(listDocumentsToolDefinition as UniversalTool);
+  }
+  if (researchKit === 'full') {
     universalTools.push(lookupCharacterToolDefinition as UniversalTool);
     universalTools.push(lookupMemoriesToolDefinition as UniversalTool);
     universalTools.push(lookupMessagesToolDefinition as UniversalTool);
     universalTools.push(readMessagesToolDefinition as UniversalTool);
+    universalTools.push(lookupConversationsToolDefinition as UniversalTool);
+    universalTools.push(lookupGroupToolDefinition as UniversalTool);
+    universalTools.push(lookupProjectToolDefinition as UniversalTool);
+    universalTools.push(lookupWardrobeToolDefinition as UniversalTool);
+    universalTools.push(lookupAtlasToolDefinition as UniversalTool);
+    universalTools.push(lookupChatStateToolDefinition as UniversalTool);
+  }
+
+  // Read-only SQL access — the operator's surfaces only. Execution is
+  // additionally gated on `operatorSurface` in the tool executor, so a leaked
+  // tool name can never run from a character surface.
+  if (options.sqlAccess) {
     universalTools.push(runSqlToolDefinition as UniversalTool);
   }
 
@@ -555,6 +622,12 @@ export async function buildToolsForProvider(
   // Add ask_carina tool if enabled (inline Carina answerer)
   if (options.askCarina) {
     universalTools.push(askCarinaToolDefinition as UniversalTool);
+  }
+
+  // Reading and rewriting the character's own memories (gated by canEditMemories)
+  if (options.memoryEdit) {
+    universalTools.push(readMemoryToolDefinition as UniversalTool);
+    universalTools.push(editMemoryToolDefinition as UniversalTool);
   }
 
   // Add wardrobe tools if enabled (gated by character wardrobe flags)
@@ -600,10 +673,14 @@ export async function buildToolsForProvider(
   // and nothing else — no writes, no document-UI tools (they need a real chat
   // row), no photo tools.
   const docToolsMode: DocToolsMode = options.docToolsMode ?? 'off';
+  // With the research kit on, find_documents / list_documents replace these two.
+  const kitReplacesDocSearch = researchKit !== 'off';
   if (docToolsMode === 'read') {
     universalTools.push(docReadFileTool as UniversalTool);
-    universalTools.push(docGrepTool as UniversalTool);
-    universalTools.push(docListFilesTool as UniversalTool);
+    if (!kitReplacesDocSearch) {
+      universalTools.push(docGrepTool as UniversalTool);
+      universalTools.push(docListFilesTool as UniversalTool);
+    }
     universalTools.push(docReadFrontmatterTool as UniversalTool);
     universalTools.push(docReadHeadingTool as UniversalTool);
   } else if (docToolsMode === 'full') {
@@ -611,8 +688,10 @@ export async function buildToolsForProvider(
     universalTools.push(docWriteFileTool as UniversalTool);
     universalTools.push(docStrReplaceTool as UniversalTool);
     universalTools.push(docInsertTextTool as UniversalTool);
-    universalTools.push(docGrepTool as UniversalTool);
-    universalTools.push(docListFilesTool as UniversalTool);
+    if (!kitReplacesDocSearch) {
+      universalTools.push(docGrepTool as UniversalTool);
+      universalTools.push(docListFilesTool as UniversalTool);
+    }
     universalTools.push(docReadFrontmatterTool as UniversalTool);
     universalTools.push(docUpdateFrontmatterTool as UniversalTool);
     universalTools.push(docReadHeadingTool as UniversalTool);
@@ -648,6 +727,19 @@ export async function buildToolsForProvider(
     }
   }
 
+  return formatUniversalTools(providerName, universalTools, options, logger_);
+}
+
+/**
+ * Canonicalize the slate and hand it to the provider plugin's `formatTools`
+ * (OpenAI format when the provider is unknown or has none).
+ */
+function formatUniversalTools(
+  providerName: string,
+  universalTools: UniversalTool[],
+  options: Pick<BuildToolsOptions, 'imageProviderType'>,
+  logger_: ReturnType<typeof logger.child>,
+): unknown[] {
   // If no tools are enabled, return empty array
   if (universalTools.length === 0) {
     return [];

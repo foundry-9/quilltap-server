@@ -69,6 +69,7 @@ export function ChatDefaultsSection() {
     <div className="space-y-6">
       <SectionCard
         title="Connection profile"
+        anchor="connection-profile"
         description="The AI provider and model a new chat with them starts on. A chat may choose another."
       >
         <select
@@ -99,6 +100,7 @@ export function ChatDefaultsSection() {
 
       <SectionCard
         title="Conversation partner"
+        anchor="conversation-partner"
         description={
           isUserControlled
             ? 'Not applicable: you play this character, so there is no partner to stand in for you.'
@@ -134,7 +136,7 @@ export function ChatDefaultsSection() {
         )}
       </SectionCard>
 
-      <SectionCard title="Image generation profile" description="The image profile chats with them use. Optional.">
+      <SectionCard title="Image generation profile" anchor="image-profile" description="The image profile chats with them use. Optional.">
         <ImageProfilePicker
           value={character.defaultImageProfileId || null}
           onChange={(profileId) =>
@@ -150,6 +152,7 @@ export function ChatDefaultsSection() {
 
       <SectionCard
         title="Timestamps"
+        anchor="timestamps"
         description="Timestamp injection for a new chat in which they are the only character."
       >
         <TimestampConfigCard
@@ -166,7 +169,7 @@ export function ChatDefaultsSection() {
         />
       </SectionCard>
 
-      <SectionCard title="Tools in a new chat">
+      <SectionCard title="Tools in a new chat" anchor="chat-tools">
         <TriStateSelect
           label="Agent mode"
           description="Lets the model use tools in several passes, checking and correcting itself, before it answers."

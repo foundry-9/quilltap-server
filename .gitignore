@@ -170,3 +170,6 @@ help/help-index.json
 
 .nvmrc
 .claude/commands/local-information.md
+
+# Theme probe results (scripts/theme-probe), never tracked
+/.theme-probe/

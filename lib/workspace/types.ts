@@ -43,6 +43,8 @@ export type TabKind =
   | 'character' // payload: CharacterTabPayload — the one character page (`/aurora/[id]`)
   | 'settings-wizard' // the provider setup wizard, re-entered from Settings
   | 'custom-tools' // Pascal's Workbench — payload: CustomToolsTabPayload (absent = library view)
+  | 'theme-editor' // Calliope's theme editor — payload: ThemeEditorTabPayload (absent = the draft list)
+  | 'theme-specimens' // Calliope's specimen gallery — no payload; wears whatever theme is shown
 
 /**
  * Every `TabKind`, as a runtime list. The one source for the persistence
@@ -77,6 +79,8 @@ export const TAB_KINDS = [
   'character',
   'settings-wizard',
   'custom-tools',
+  'theme-editor',
+  'theme-specimens',
 ] as const satisfies readonly TabKind[]
 
 // Compile-time exhaustiveness: errors if any `TabKind` is missing above.
@@ -200,6 +204,14 @@ export interface CustomToolsTabPayload {
   mountPointId?: string
   path?: string
   create?: boolean
+}
+
+/**
+ * Calliope's theme editor. One tab (it owns the app-wide theme preview); a
+ * `draftId` opens that draft, absent = the list of drafts.
+ */
+export interface ThemeEditorTabPayload {
+  draftId?: string
 }
 
 export interface WorkspaceTab {

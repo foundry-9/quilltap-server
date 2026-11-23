@@ -86,16 +86,12 @@ export function getMutedTextColor(bgColor: string): string {
 }
 
 /**
- * Get source badge label for a theme's source/deprecation state.
+ * Get source badge label for a theme's source.
  * Returns null for the default (built-in) theme, which has no badge here.
  */
-export function getSourceBadge(
-  source?: string,
-  deprecated?: boolean
-): { label: string; deprecated: boolean } | null {
+export function getSourceBadge(source?: string): { label: string } | null {
   switch (source) {
-    case 'bundle': return { label: 'Bundle', deprecated: false };
-    case 'plugin': return { label: 'Plugin', deprecated: deprecated ?? true };
+    case 'bundle': return { label: 'Bundle' };
     default: return null;
   }
 }

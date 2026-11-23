@@ -3,11 +3,12 @@
  * handler.
  *
  * The invariant under test (the same "hash the bytes you actually store" rule
- * the mount-store content-hash chokepoint enforces): the handler must hash the
- * *post-WebP-conversion* buffer — the bytes it persists — not the raw provider
- * bytes, and must pass that exact digest to repos.files.create. If someone hashes
- * rawBuffer instead of the converted buffer, the file record's sha256 would no
- * longer match the stored bytes and dedup/integrity would silently rot.
+ * the mount-store content-hash chokepoint enforces): the row must carry the
+ * hash the vault bridge reports for the bytes it kept — not the raw provider
+ * bytes, and not the handler's own WebP conversion, which the bridge may
+ * re-encode again. A row hashing bytes that exist nowhere matches no vault copy;
+ * the stale-chat sweep deleted a default avatar that way.
+ * `createGeneratedFileRow` reads the hash from `StoredImageBytes`.
  *
  * Several collaborators are already mocked in jest.setup.ts (file storage
  * manager, character-vault bridge, lantern-store bridge, LLM logging,
@@ -70,6 +71,9 @@ const CHARACTER_ID = 'char-1'
 // converted (stored) bytes, not the raw provider bytes.
 const RAW_PROVIDER_BYTES = Buffer.from('raw png bytes from provider')
 const CONVERTED_WEBP_BYTES = Buffer.from('converted webp bytes — different from raw')
+// What the bridge reports having kept: it may re-encode after the handler's
+// own conversion, so this differs from either buffer's hash.
+const STORED_SHA = 'b'.repeat(64)
 
 const filesCreate = jest.fn()
 
@@ -180,12 +184,12 @@ beforeEach(() => {
     relativePath: 'images/avatar.webp',
     storedMimeType: 'image/webp',
     sizeBytes: CONVERTED_WEBP_BYTES.length,
-    sha256: 'unused-bridge-sha',
+    sha256: STORED_SHA,
   } as any)
 })
 
 describe('character-avatar handler — sha256 of stored bytes', () => {
-  it('records the sha256 of the converted (stored) buffer, not the raw provider bytes', async () => {
+  it('records the sha256 the vault reported, not the raw or handler-converted bytes', async () => {
     await handleCharacterAvatarGeneration(makeJob())
 
     expect(filesCreate).toHaveBeenCalledTimes(1)
@@ -194,13 +198,14 @@ describe('character-avatar handler — sha256 of stored bytes', () => {
     const expectedConverted = createHash('sha256').update(new Uint8Array(CONVERTED_WEBP_BYTES)).digest('hex')
     const rawHash = createHash('sha256').update(new Uint8Array(RAW_PROVIDER_BYTES)).digest('hex')
 
-    expect(arg.sha256).toBe(expectedConverted)
+    expect(arg.sha256).toBe(STORED_SHA)
+    expect(arg.sha256).not.toBe(expectedConverted)
     expect(arg.sha256).not.toBe(rawHash)
     expect(arg.source).toBe('GENERATED')
     expect(arg.category).toBe('IMAGE')
   })
 
-  it('hands the converted bytes (matching the recorded hash) to the vault writer', async () => {
+  it('hands the converted bytes to the vault writer', async () => {
     await handleCharacterAvatarGeneration(makeJob())
 
     expect(mockWriteVault).toHaveBeenCalledTimes(1)
@@ -284,5 +289,36 @@ describe('character-avatar handler — Salon avatar timeline', () => {
       source: 'generated',
       priorImageId: null,
     })
+  })
+})
+
+describe('character-avatar handler — refresh held for the next turn', () => {
+  function heldJob() {
+    const job = makeJob()
+    job.payload.awaitingTurn = true
+    return job
+  }
+
+  it('skips a held refresh when the chat stopped auto-updating avatars while it waited', async () => {
+    await handleCharacterAvatarGeneration(heldJob())
+
+    expect(mockCreateImageProvider).not.toHaveBeenCalled()
+    expect(avatarTimelineRecord).not.toHaveBeenCalled()
+  })
+
+  it('draws a held refresh when the chat still auto-updates avatars', async () => {
+    const repos = mockGetRepositories() as any
+    repos.chats.findById.mockResolvedValue({
+      id: CHAT_ID,
+      projectId: null,
+      characterAvatars: {},
+      messageCount: 0,
+      title: 'A Chat',
+      avatarGenerationEnabled: true,
+    })
+
+    await handleCharacterAvatarGeneration(heldJob())
+
+    expect(avatarTimelineRecord).toHaveBeenCalledTimes(1)
   })
 })

@@ -3,7 +3,9 @@
 /**
  * QuickActionsRow
  *
- * Client component with quick action buttons: Start Chat, Continue Last, New Project, Generate Image.
+ * The home page's quick actions: Start a Chat, Start Autonomous Room, New
+ * Project, Generate Image. Picking up the last conversation is the resume
+ * card's work (`ResumeCard`), which honours quick-hide.
  */
 
 import { useState } from 'react'
@@ -11,9 +13,8 @@ import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
 import { CreateProjectDialog } from '@/app/prospero/components'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import type { QuickActionsRowProps } from './types'
 
-export function QuickActionsRow({ lastChatId }: QuickActionsRowProps) {
+export function QuickActionsRow() {
   const [projectDialogOpen, setProjectDialogOpen] = useState(false)
 
   const handleProjectCreate = async (name: string, description: string | null) => {
@@ -37,7 +38,7 @@ export function QuickActionsRow({ lastChatId }: QuickActionsRowProps) {
 
   return (
     <>
-      <div className="qt-quick-actions mb-8">
+      <div className="qt-quick-actions">
         {/* Start a Chat */}
         <Link
           href="/salon/new"
@@ -58,28 +59,6 @@ export function QuickActionsRow({ lastChatId }: QuickActionsRowProps) {
           <span className="hidden sm:inline">Start Autonomous Room</span>
           <span className="sm:hidden">Auto Room</span>
         </Link>
-
-        {/* Continue Last Chat */}
-        {lastChatId ? (
-          <Link
-            href={`/salon/${lastChatId}`}
-            className="qt-button qt-button-secondary gap-2"
-          >
-            <Icon name="play" className="w-4 h-4" />
-            <span className="hidden sm:inline">Continue Last</span>
-            <span className="sm:hidden">Continue</span>
-          </Link>
-        ) : (
-          <button
-            disabled
-            className="qt-button qt-button-secondary gap-2 opacity-50 cursor-not-allowed"
-            title="No recent chats"
-          >
-            <Icon name="play" className="w-4 h-4" />
-            <span className="hidden sm:inline">Continue Last</span>
-            <span className="sm:hidden">Continue</span>
-          </button>
-        )}
 
         {/* New Project */}
         <button

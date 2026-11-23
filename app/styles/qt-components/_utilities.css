@@ -141,7 +141,7 @@
    * that want the form-field surface without the rest of qt-input.
    */
   .qt-bg-input {
-    background-color: var(--color-input);
+    background-color: var(--qt-input-bg, var(--color-background));
   }
 
   /* ==========================================================================
@@ -748,6 +748,19 @@
     color: var(--color-accent-foreground);
   }
 
+  /**
+   * A small icon set inside a line of note text (a warning or check before a
+   * sentence). inline-block, not inline: a mask-drawn <Icon> is an empty span,
+   * and an inline span ignores its width and height, so it would not show.
+   */
+  .qt-icon-inline-note {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-right: 0.25rem;
+    vertical-align: -2px;
+  }
+
   /* ==========================================================================
      SHADOW UTILITIES
      ========================================================================== */
@@ -771,6 +784,20 @@
    */
   .qt-shadow-lg {
     box-shadow: var(--qt-dialog-shadow, 0 10px 25px hsl(225 18% 10% / 0.15), 0 4px 10px hsl(225 18% 10% / 0.08));
+  }
+
+  /**
+   * A focus ring drawn with `ring-*` is a box-shadow too, so a shadow utility
+   * on a focusable element (`qt-button-destructive qt-shadow-sm`) would erase
+   * it. While focused, the element gives up its decorative shadow and wears the
+   * ring instead (WCAG 2.4.7). The list is Tailwind's own ring composite.
+   */
+  .qt-shadow-sm:focus-visible,
+  .qt-shadow-md:focus-visible,
+  .qt-shadow-lg:focus-visible {
+    box-shadow:
+      var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow, 0 0 #0000);
   }
 
   /* ==========================================================================
@@ -1390,6 +1417,17 @@
   }
 
   /**
+   * An option card that is a <label> around (or just after) a visually hidden
+   * radio, checkbox or file input shows the control's keyboard focus on the card itself — the
+   * input is invisible, so nothing else would (WCAG 2.4.7).
+   */
+  label:has(> input.sr-only:focus-visible),
+  input.sr-only:focus-visible + label {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  /**
    * Unselected option — transparent with subtle hover feedback
    * Usage: <button class="qt-option-unselected rounded-lg p-3">
    */
@@ -1439,5 +1477,15 @@
    */
   .qt-dot-info {
     background-color: var(--qt-status-info-fg, var(--color-info));
+  }
+
+  /**
+   * A scroll area whose height descendants may measure with `cqh`.
+   * Use on a full-height scroller (the Atelier, the specimen gallery) so a
+   * sticky panel inside it can size to the visible area, not the window.
+   * Usage: <div class="h-full overflow-y-auto qt-scroll-container" />
+   */
+  .qt-scroll-container {
+    container-type: size;
   }
 }

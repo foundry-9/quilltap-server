@@ -380,7 +380,7 @@ export function CharacterOptimizerModal({
                     <span className="qt-helper">
                       In lieu of applying amendments directly, the proceedings shall be inscribed as a
                       markdown dossier in the character&rsquo;s vault &mdash; at
-                      <code className="qt-code text-[11px] mx-1">Suggestions/refinement-&lt;timestamp&gt;.md</code>
+                      <code className="qt-code-inline text-[11px] mx-1">Suggestions/refinement-&lt;timestamp&gt;.md</code>
                       &mdash; so that author and character may review and debate the proposals at leisure before any are commissioned.
                     </span>
                   </span>
@@ -585,7 +585,7 @@ export function CharacterOptimizerModal({
 
       {/* Footer */}
       {optimizer.phase === 'preflight' && (
-        <div className="qt-dialog-footer flex justify-between flex-shrink-0">
+        <div className="qt-dialog-footer qt-dialog-footer-default flex justify-between flex-shrink-0">
           <button
             type="button"
             onClick={handleClose}
@@ -606,7 +606,7 @@ export function CharacterOptimizerModal({
       )}
 
       {optimizer.phase === 'review' && (
-        <div className="qt-dialog-footer flex flex-col gap-2 flex-shrink-0">
+        <div className="qt-dialog-footer qt-dialog-footer-default flex flex-col gap-2 flex-shrink-0">
           <div className="flex items-center gap-2">
             <button
               type="button"

@@ -1,49 +1,46 @@
 /**
+ * @jest-environment node
+ *
  * Theme Bundle Loader Tests
  *
- * Tests for .qtap-theme bundle validation, installation, and loading.
+ * .qtap-theme validation, installation, uninstall and loading for version 2
+ * bundles; the refusal of a version 1 bundle at install and at load; symbolic
+ * links in an archive; and a malformed themes-index.json.
  */
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
-// Create a unique temp dir for each test run
-const mockThemesDir = path.join(os.tmpdir(), 'qtap-test-themes-' + Date.now());
+const mockThemesDir = path.join(os.tmpdir(), `qtap-test-themes-${process.pid}-${Date.now()}`);
 
 jest.mock('@/lib/paths', () => ({
+  ...jest.requireActual('@/lib/paths'),
   getThemesDir: () => mockThemesDir,
 }));
 
-jest.mock('@/lib/logger', () => ({
-  logger: {
-    child: () => ({
-      debug: jest.fn(),
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    }),
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}));
+jest.mock('@/lib/logger', () => {
+  const log = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+  return { logger: { ...log, child: () => log } };
+});
 
-// Import after mocks are set up
 import {
   validateThemeBundle,
   installThemeBundle,
   uninstallThemeBundle,
   loadInstalledBundles,
+  readIndex,
 } from '@/lib/themes/bundle-loader';
 import { safeValidateQtapThemeManifest } from '@/lib/themes/types';
+import { earlierThemeMessage } from '@/lib/themes/refused';
 
-// Sample theme manifest
+const REPO_ROOT = path.resolve(__dirname, '../../../..');
+const V1_FIXTURE = path.join(REPO_ROOT, '__tests__/fixtures/themes/v1-sample');
+
 const VALID_MANIFEST = {
   format: 'qtap-theme' as const,
-  formatVersion: 1 as const,
+  formatVersion: 2 as const,
   id: 'test-theme',
   name: 'Test Theme',
   description: 'A test theme',
@@ -51,82 +48,48 @@ const VALID_MANIFEST = {
   author: 'Test Author',
   supportsDarkMode: true,
   tags: ['test'],
-  tokens: {
-    colors: {
-      light: {
-        background: '#ffffff',
-        foreground: '#000000',
-        primary: '#3b82f6',
-        primaryForeground: '#ffffff',
-        secondary: '#f1f5f9',
-        secondaryForeground: '#0f172a',
-        muted: '#f1f5f9',
-        mutedForeground: '#64748b',
-        accent: '#f1f5f9',
-        accentForeground: '#0f172a',
-        destructive: '#ef4444',
-        destructiveForeground: '#ffffff',
-        card: '#ffffff',
-        cardForeground: '#000000',
-        popover: '#ffffff',
-        popoverForeground: '#000000',
-        border: '#e2e8f0',
-        input: '#e2e8f0',
-        ring: '#3b82f6',
-      },
-      dark: {
-        background: '#0f172a',
-        foreground: '#f8fafc',
-        primary: '#3b82f6',
-        primaryForeground: '#ffffff',
-        secondary: '#1e293b',
-        secondaryForeground: '#f8fafc',
-        muted: '#1e293b',
-        mutedForeground: '#94a3b8',
-        accent: '#1e293b',
-        accentForeground: '#f8fafc',
-        destructive: '#ef4444',
-        destructiveForeground: '#ffffff',
-        card: '#0f172a',
-        cardForeground: '#f8fafc',
-        popover: '#0f172a',
-        popoverForeground: '#f8fafc',
-        border: '#1e293b',
-        input: '#1e293b',
-        ring: '#3b82f6',
-      },
-    },
-  },
+  tokensPath: 'tokens.json',
 };
 
-async function createTestBundle(
+const VALID_TOKENS = {
+  primitives: {},
+  tokens: { '--theme-primary': { value: '#3b82f6', dark: '#60a5fa' } },
+  choices: {},
+};
+
+function zip(dir: string, out: string, args: string[] = ['-r', '-q']) {
+  execFileSync('zip', [...args, out, '.'], { cwd: dir, stdio: 'pipe' });
+}
+
+async function writeBundleDir(
   dir: string,
+  manifest: Record<string, unknown> = VALID_MANIFEST,
+  extraFiles: Record<string, string> = {}
+): Promise<string> {
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, 'theme.json'), JSON.stringify(manifest, null, 2));
+  await fs.writeFile(path.join(dir, 'tokens.json'), JSON.stringify(VALID_TOKENS, null, 2));
+  for (const [name, content] of Object.entries(extraFiles)) {
+    const filePath = path.join(dir, name);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, content);
+  }
+  return dir;
+}
+
+async function createTestBundle(
+  tempDir: string,
   manifest: Record<string, unknown> = VALID_MANIFEST,
   extraFiles?: Record<string, string>
 ): Promise<string> {
-  const bundleDir = path.join(dir, 'bundle-source');
-  await fs.mkdir(bundleDir, { recursive: true });
-
-  // Write manifest
-  await fs.writeFile(
-    path.join(bundleDir, 'theme.json'),
-    JSON.stringify(manifest, null, 2)
-  );
-
-  // Write extra files
-  if (extraFiles) {
-    for (const [name, content] of Object.entries(extraFiles)) {
-      const filePath = path.join(bundleDir, name);
-      await fs.mkdir(path.dirname(filePath), { recursive: true });
-      await fs.writeFile(filePath, content);
-    }
-  }
-
-  // Create zip
-  const zipPath = path.join(dir, 'test.qtap-theme');
-  execSync(`cd "${bundleDir}" && zip -r "${zipPath}" .`, { stdio: 'pipe' });
-
+  const bundleDir = await writeBundleDir(path.join(tempDir, 'bundle-source'), manifest, extraFiles);
+  const zipPath = path.join(tempDir, 'test.qtap-theme');
+  zip(bundleDir, zipPath);
   return zipPath;
+}
+
+async function exists(p: string): Promise<boolean> {
+  return fs.access(p).then(() => true, () => false);
 }
 
 describe('Theme Bundle Loader', () => {
@@ -134,7 +97,6 @@ describe('Theme Bundle Loader', () => {
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-bundle-test-'));
-    // Clean and recreate the mock themes dir for each test
     await fs.rm(mockThemesDir, { recursive: true, force: true });
     await fs.mkdir(mockThemesDir, { recursive: true });
   });
@@ -146,22 +108,19 @@ describe('Theme Bundle Loader', () => {
 
   describe('validateThemeBundle', () => {
     test('validates a valid bundle', async () => {
-      const zipPath = await createTestBundle(tempDir);
-
-      const result = await validateThemeBundle(zipPath);
+      const result = await validateThemeBundle(await createTestBundle(tempDir));
+      expect(result.errors).toEqual([]);
       expect(result.valid).toBe(true);
-      expect(result.manifest).toBeDefined();
       expect(result.manifest?.id).toBe('test-theme');
-      expect(result.errors).toHaveLength(0);
+      expect(result.refused).toBeUndefined();
     });
 
     test('rejects bundle without theme.json', async () => {
       const bundleDir = path.join(tempDir, 'no-manifest');
       await fs.mkdir(bundleDir, { recursive: true });
       await fs.writeFile(path.join(bundleDir, 'styles.css'), 'body {}');
-
       const zipPath = path.join(tempDir, 'bad.qtap-theme');
-      execSync(`cd "${bundleDir}" && zip -r "${zipPath}" .`, { stdio: 'pipe' });
+      zip(bundleDir, zipPath);
 
       const result = await validateThemeBundle(zipPath);
       expect(result.valid).toBe(false);
@@ -169,55 +128,95 @@ describe('Theme Bundle Loader', () => {
     });
 
     test('rejects bundle with blocked file types', async () => {
-      const zipPath = await createTestBundle(tempDir, VALID_MANIFEST, {
-        'malicious.js': 'alert("xss")',
-      });
-
+      const zipPath = await createTestBundle(tempDir, VALID_MANIFEST, { 'malicious.js': 'alert("xss")' });
       const result = await validateThemeBundle(zipPath);
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.includes('.js'))).toBe(true);
     });
 
     test('rejects invalid manifest', async () => {
-      const invalidManifest = { ...VALID_MANIFEST, format: 'wrong' };
-      const zipPath = await createTestBundle(tempDir, invalidManifest);
-
-      const result = await validateThemeBundle(zipPath);
+      const result = await validateThemeBundle(await createTestBundle(tempDir, { ...VALID_MANIFEST, format: 'wrong' }));
       expect(result.valid).toBe(false);
     });
 
     test('rejects non-zip file', async () => {
       const fakePath = path.join(tempDir, 'not-a-zip.qtap-theme');
       await fs.writeFile(fakePath, 'this is not a zip file');
-
       const result = await validateThemeBundle(fakePath);
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.includes('Invalid zip'))).toBe(true);
+    });
+
+    test('refuses a symbolic link inside the archive', async () => {
+      const bundleDir = await writeBundleDir(path.join(tempDir, 'linked'));
+      await fs.symlink('/etc/hosts', path.join(bundleDir, 'hosts.txt'));
+      const zipPath = path.join(tempDir, 'linked.qtap-theme');
+      // --symlinks stores the link itself rather than the file it points at.
+      zip(bundleDir, zipPath, ['-r', '-q', '--symlinks']);
+
+      const result = await validateThemeBundle(zipPath);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Symbolic links are not allowed in theme bundles: hosts.txt');
+
+      const install = await installThemeBundle(zipPath);
+      expect(install.success).toBe(false);
+      expect(await exists(path.join(mockThemesDir, 'test-theme'))).toBe(false);
+    });
+  });
+
+  describe('a version 1 bundle', () => {
+    test('is refused at validation with the earlier-theme message', async () => {
+      const zipPath = path.join(tempDir, 'v1-sample.qtap-theme');
+      zip(V1_FIXTURE, zipPath);
+      const result = await validateThemeBundle(zipPath);
+      expect(result.valid).toBe(false);
+      expect(result.refused).toMatchObject({
+        id: 'v1-sample',
+        name: 'Version 1 Sample',
+        reason: 'earlier-format',
+        source: 'bundle',
+      });
+      expect(result.errors).toEqual([earlierThemeMessage('Version 1 Sample')]);
+    });
+
+    test('is refused at install before anything is written', async () => {
+      const zipPath = path.join(tempDir, 'v1-sample.qtap-theme');
+      zip(V1_FIXTURE, zipPath);
+      const result = await installThemeBundle(zipPath);
+      expect(result.success).toBe(false);
+      expect(result.refused?.id).toBe('v1-sample');
+      expect(result.error).toBe(earlierThemeMessage('Version 1 Sample'));
+      expect(await exists(path.join(mockThemesDir, 'v1-sample'))).toBe(false);
+      expect(await exists(path.join(mockThemesDir, 'themes-index.json'))).toBe(false);
+    });
+
+    test('found among the installed themes is recorded as refused, never loaded, and left on disk', async () => {
+      await fs.cp(V1_FIXTURE, path.join(mockThemesDir, 'v1-sample'), { recursive: true });
+      await installThemeBundle(await createTestBundle(tempDir));
+
+      const set = await loadInstalledBundles();
+      expect(set.loaded.map(b => b.manifest.id)).toEqual(['test-theme']);
+      expect(set.refused).toEqual([
+        expect.objectContaining({ id: 'v1-sample', reason: 'earlier-format', source: 'bundle' }),
+      ]);
+      expect(await exists(path.join(mockThemesDir, 'v1-sample', 'theme.json'))).toBe(true);
+    });
+
+    test('is refused by the manifest schema', () => {
+      const result = safeValidateQtapThemeManifest({ ...VALID_MANIFEST, formatVersion: 1 });
+      expect(result.success).toBe(false);
     });
   });
 
   describe('installThemeBundle', () => {
     test('installs a valid bundle', async () => {
-      const zipPath = await createTestBundle(tempDir);
+      const result = await installThemeBundle(await createTestBundle(tempDir));
+      expect(result).toMatchObject({ success: true, themeId: 'test-theme', version: '1.0.0' });
 
-      const result = await installThemeBundle(zipPath);
-      expect(result.success).toBe(true);
-      expect(result.themeId).toBe('test-theme');
-      expect(result.version).toBe('1.0.0');
-
-      // Verify files were extracted
-      const themeJson = await fs.readFile(
-        path.join(mockThemesDir, 'test-theme', 'theme.json'),
-        'utf-8'
-      );
+      const themeJson = await fs.readFile(path.join(mockThemesDir, 'test-theme', 'theme.json'), 'utf-8');
       expect(JSON.parse(themeJson).id).toBe('test-theme');
 
-      // Verify index was updated
-      const indexData = await fs.readFile(
-        path.join(mockThemesDir, 'themes-index.json'),
-        'utf-8'
-      );
-      const index = JSON.parse(indexData);
+      const index = JSON.parse(await fs.readFile(path.join(mockThemesDir, 'themes-index.json'), 'utf-8'));
       expect(index.themes).toHaveLength(1);
       expect(index.themes[0].id).toBe('test-theme');
     });
@@ -225,25 +224,21 @@ describe('Theme Bundle Loader', () => {
 
   describe('uninstallThemeBundle', () => {
     test('uninstalls an installed bundle', async () => {
-      const zipPath = await createTestBundle(tempDir);
-
-      await installThemeBundle(zipPath);
+      await installThemeBundle(await createTestBundle(tempDir));
       const result = await uninstallThemeBundle('test-theme');
-
+      expect(result).toEqual({ success: true, themeId: "test-theme" });
       expect(result.success).toBe(true);
+      expect(await exists(path.join(mockThemesDir, 'test-theme'))).toBe(false);
 
-      // Verify directory was removed
-      await expect(
-        fs.access(path.join(mockThemesDir, 'test-theme'))
-      ).rejects.toThrow();
-
-      // Verify index was updated
-      const indexData = await fs.readFile(
-        path.join(mockThemesDir, 'themes-index.json'),
-        'utf-8'
-      );
-      const index = JSON.parse(indexData);
+      const index = JSON.parse(await fs.readFile(path.join(mockThemesDir, 'themes-index.json'), 'utf-8'));
       expect(index.themes).toHaveLength(0);
+    });
+
+    test('uninstalls a refused version 1 bundle', async () => {
+      await fs.cp(V1_FIXTURE, path.join(mockThemesDir, 'v1-sample'), { recursive: true });
+      const result = await uninstallThemeBundle('v1-sample');
+      expect(result.success).toBe(true);
+      expect(await exists(path.join(mockThemesDir, 'v1-sample'))).toBe(false);
     });
 
     test('returns error for non-existent theme', async () => {
@@ -254,50 +249,42 @@ describe('Theme Bundle Loader', () => {
   });
 
   describe('loadInstalledBundles', () => {
-    test('loads installed bundles', async () => {
-      const zipPath = await createTestBundle(tempDir);
-
-      await installThemeBundle(zipPath);
-      const bundles = await loadInstalledBundles();
-
-      expect(bundles).toHaveLength(1);
-      expect(bundles[0].manifest.id).toBe('test-theme');
-      expect(bundles[0].tokens).toBeDefined();
-      expect(bundles[0].tokens.colors.light.primary).toBe('#3b82f6');
+    test('loads and compiles installed bundles', async () => {
+      await installThemeBundle(await createTestBundle(tempDir));
+      const { loaded, refused } = await loadInstalledBundles();
+      expect(refused).toEqual([]);
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].manifest.id).toBe('test-theme');
+      expect(loaded[0].compiled.css.tokens).toContain('--theme-primary: #3b82f6');
     });
 
-    test('returns empty array when no themes installed', async () => {
-      const bundles = await loadInstalledBundles();
-      expect(bundles).toHaveLength(0);
+    test('returns nothing when no themes are installed', async () => {
+      expect(await loadInstalledBundles()).toEqual({ loaded: [], refused: [] });
+    });
+  });
+
+  describe('themes-index.json', () => {
+    test.each([
+      ['not JSON', '{ this is not json'],
+      ['not an index', JSON.stringify({ version: 1, themes: [{ id: 42 }] })],
+    ])('is rebuilt from the installed bundles when it is %s', async (_label, content) => {
+      await installThemeBundle(await createTestBundle(tempDir));
+      await fs.writeFile(path.join(mockThemesDir, 'themes-index.json'), content);
+
+      const index = await readIndex();
+      expect(index.themes.map(t => t.id)).toEqual(['test-theme']);
+      const written = JSON.parse(await fs.readFile(path.join(mockThemesDir, 'themes-index.json'), 'utf-8'));
+      expect(written.themes.map((t: { id: string }) => t.id)).toEqual(['test-theme']);
     });
   });
 
   describe('Zod schema validation', () => {
     test('validates QtapThemeManifest schema', () => {
-      const result = safeValidateQtapThemeManifest(VALID_MANIFEST);
-      expect(result.success).toBe(true);
-    });
-
-    test('rejects manifest without tokens or tokensPath', () => {
-      const noTokens = { ...VALID_MANIFEST };
-      delete (noTokens as Record<string, unknown>).tokens;
-
-      const result = safeValidateQtapThemeManifest(noTokens);
-      expect(result.success).toBe(false);
-    });
-
-    test('accepts manifest with tokensPath instead of inline tokens', () => {
-      const withPath = { ...VALID_MANIFEST, tokensPath: 'tokens.json' };
-      delete (withPath as Record<string, unknown>).tokens;
-
-      const result = safeValidateQtapThemeManifest(withPath);
-      expect(result.success).toBe(true);
+      expect(safeValidateQtapThemeManifest(VALID_MANIFEST).success).toBe(true);
     });
 
     test('rejects invalid theme ID format', () => {
-      const badId = { ...VALID_MANIFEST, id: 'Invalid ID!' };
-      const result = safeValidateQtapThemeManifest(badId);
-      expect(result.success).toBe(false);
+      expect(safeValidateQtapThemeManifest({ ...VALID_MANIFEST, id: 'Invalid ID!' }).success).toBe(false);
     });
   });
 });

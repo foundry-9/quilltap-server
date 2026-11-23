@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { triggerDownload } from '@/lib/download-utils'
+import type { GenerationModeration } from '@/lib/schemas/file.types'
 import type { GalleryImage, EntityType } from '../types'
 
 interface CharacterGalleryEntry {
@@ -20,6 +21,7 @@ interface CharacterGalleryEntry {
   keptAt: string
   caption: string | null
   tags: string[]
+  generationModeration?: GenerationModeration | null
 }
 
 interface CharacterGalleryListResponse {
@@ -38,6 +40,7 @@ function toGalleryImage(entry: CharacterGalleryEntry): GalleryImage {
     createdAt: entry.keptAt,
     caption: entry.caption,
     tags: entry.tags,
+    generationModeration: entry.generationModeration ?? null,
   }
 }
 

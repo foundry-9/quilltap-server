@@ -74,6 +74,7 @@ describe('triggerAvatarGenerationIfEnabled', () => {
       chatId: 'chat-1',
       characterId: 'char-1',
       imageProfileId: 'profile-chat',
+      awaitingTurn: true,
     })
     expect(repos.imageProfiles.findDefault).not.toHaveBeenCalled()
   })
@@ -98,6 +99,7 @@ describe('triggerAvatarGenerationIfEnabled', () => {
       chatId: 'chat-1',
       characterId: 'char-1',
       imageProfileId: 'profile-default',
+      awaitingTurn: true,
     })
   })
 

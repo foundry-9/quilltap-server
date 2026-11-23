@@ -6,7 +6,7 @@ tags: [help, chat, console, llm, model, tools, brahma, writing assistant, attach
 
 # The Brahma Console
 
-> **The Brahma Console is summoned by the bright round button at the bottom-left of every page, just to the right of the sidebar — or, in the workspace, opened as a tab from the console mark in the sidebar.**
+> The Brahma Console is summoned by the bright round button at the bottom-left of every page, just to the right of the rail — or, in the workspace, opened as a tab: open **Conversations** and choose **Brahma Console**.
 
 Where the Help Chat sends you a well-mannered concierge — a *character*, with a personality and a fondness for the house documentation — the Brahma Console dispenses with all such ceremony. It is, quite simply, a direct line to a large language model: no persona, no costume, no scene to play. You choose an engine, and you speak to it plainly. Think of it as the telegraph key in the corner of the workshop, ready at any hour for a frank word with the machine.
 
@@ -16,7 +16,7 @@ The Console keeps two doors.
 
 ### The ever-present button
 
-At the very foot of every page, just to the right of the sidebar, there sits a round, brightly lacquered button bearing the **tetra-radial console mark** — a ring of four nodes wired to a central hub. It is never dimmed and never out of reach. A single press and the Console floats into view: a draggable, resizable window you may haul about by its title bar and stretch by its lower corner. Press the button again (it wears an inverted, *pressed-in* look while the Console is showing) and the window tucks itself away.
+At the very foot of every page, just to the right of the rail, there sits a round, brightly lacquered button bearing the **tetra-radial console mark** — a ring of four nodes wired to a central hub. It is never dimmed and never out of reach. A single press and the Console floats into view: a draggable, resizable window you may haul about by its title bar and stretch by its lower corner. Press the button again (it wears an inverted, *pressed-in* look while the Console is showing) and the window tucks itself away.
 
 This floating Console rides **above everything else in the house** — above any form, picker or confirmation box you happen to have open. Halfway through filling out a new connection profile and uncertain what a setting means? Press the button, put your question to the engine, and carry on with the form; working in the Console never dismisses the dialog beneath it. Pressing **Escape** while you are typing in the Console hides only the Console; pressing it in the form beneath closes only the form.
 
@@ -24,7 +24,7 @@ Hiding the window does not hang up the line. Should a reply still be on the wire
 
 ### The workspace tab
 
-Inside the workspace, the **console mark in the sidebar** (just beneath the Help question-mark) opens the Console as a tab of its own, for longer sittings. The tab and the floating window keep their own places: each remembers its own conversation, so the tab may hold one line of inquiry while the floating window is busy with another.
+Inside the workspace, open **Conversations** and choose **Brahma Console**, and the Console arrives as a tab of its own, for longer sittings. The tab and the floating window keep their own places: each remembers its own conversation, so the tab may hold one line of inquiry while the floating window is busy with another.
 
 ### Past conversations
 
@@ -38,17 +38,17 @@ Every Console conversation talks to exactly one **connection profile** (your con
 
 Switching the engine **continues the same conversation**. The transcript carries on uninterrupted; only the machine answering from that point forward has changed. Should you wish to put the same question to two different engines, simply ask, switch, and ask again.
 
-> A connection profile is the one prerequisite. With none established, the sidebar's console mark sits dimmed and the floating Console opens only to say it wants for an engine; visit the Foundry's system settings to add one, then return.
+> A connection profile is the one prerequisite. With none established, the **Brahma Console** menu entry sits dimmed and the floating Console opens only to say it wants for an engine; visit the Foundry's system settings to add one, then return.
 
 ## What the Console can do
 
-The Console is a capable, concise, neutral assistant. Beyond plain conversation, it carries a deliberately small kit of tools:
+The Console is a capable, concise, neutral assistant, and a scrupulous one: it **never makes up a fact**. Facts about your world come from what it reads; where its tools, your documents and the ledgers hold no answer, it says so and tells you where it looked. Reasoning from those facts is another matter, and the Console does it freely — ask what a character would do, or what a project lacks, and it will tell you, for an inference drawn from the record is not an invention. The characters of your stories may embroider; the Console may not, unless you ask it to invent something (a name, a draft, an example), in which case it invents precisely that and no more. Beyond plain conversation, it carries a deliberately small kit of tools:
 
 - **Search** — It can search across your past conversations and every one of your document stores, including the knowledge folders within them.
-- **Documents** — It has full reach into your document stores: it can read files, list and grep their contents, and **write** to them as well (except in a Writing Assistant conversation, where it reads only).
-- **The clerk's shortcuts** — Four ready-made enquiries that answer the commonest questions in a single stroke each. See *The clerk's shortcuts*, below.
+- **Documents** — It has full reach into your document stores. It can **find documents** across every store at once — by the words inside them, by name, or both, with a few lines of each hit and its address — and **list documents**, from the roster of stores down to any one folder, large folders and picture folders folded into a single line apiece. It reads files in full, and may **write** to them as well (except in a Writing Assistant conversation, where it reads only).
+- **The clerk's shortcuts** — Nine ready-made enquiries that answer the commonest questions in a single stroke each. See *The clerk's shortcuts*, below.
 - **The ledgers themselves** — It can put **read-only questions** straight to the databases that keep your establishment running. See *Consulting the ledgers*, below.
-- **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly. (The `curl` plugin counts as a *writing* tool — it can send as well as fetch — so a Writing Assistant conversation, which reads only, does without it.)
+- **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly. (The `curl` plugin can send as well as fetch, and the house judges each errand on its own merits: a plain fetch is *reading*, anything that posts, puts or deletes is *writing*. A Writing Assistant conversation, which reads only, may therefore fetch a page but will be politely refused should it attempt to send one.)
 
 ## Sending papers along with the question
 
@@ -106,10 +106,15 @@ This musing is shown to you and to you alone. Like everything in the thinking pa
 
 Most of what one asks the Console about one's own world falls into a handful of shapes — *who is she?*, *what does he remember?*, *where was that said, and when?* — and for each the Console keeps a ready-made enquiry rather than drafting fresh queries from first principles:
 
-- **Look up a character** — name, aliases, pronouns, the core of the character file (identity, description, personality, manifesto), the physical description, how many memories they hold, and the conversations they have taken part in, first and most recent. One call, where it once took half a dozen.
-- **Look up memories** — searches the characters' commonplace books by meaning: one character's, or everyone's at once; narrowed to memories *about* a particular person, or to a span of dates. Each memory comes back with its holder, its subject, when it happened, and the conversation it came from (by id, title and date).
-- **Look up messages** — searches every conversation's text through the same swift index as the search bar, returning the conversation's id, title and date, the speaker, and the passage in question. It may be narrowed to the conversations a character attended, or to the lines a character spoke.
-- **Read messages** — fetches the few lines around a found passage, each labelled with its speaker and its hour, so the Console can confirm what was said before it reports it.
+- **Look up a character** — name, aliases, pronouns, the core of the character file (identity, description, personality, manifesto), the physical description, their vault and an outline of what it holds, the groups and projects they belong to, the size of their wardrobe, how many memories they hold, and the conversations they have taken part in, first and most recent. It may ask for only some of these when that is all it needs. One call, where it once took half a dozen.
+- **Look up memories** — searches the characters' commonplace books by meaning: one character's, or everyone's at once; narrowed to memories *about* a particular person, or to a span of dates. Each memory comes back with its holder, its subject, when it happened, and the conversation it came from (by id, title and date) — the first few hundred characters of it, unless the Console asks for the whole.
+- **Look up messages** — searches every conversation's text through the same swift index as the search bar, returning the conversation's id, title and date, the speaker, and the passage in question. It may be narrowed to one conversation, to the conversations a character attended, or to the lines a character spoke — or it may tally the hits **by conversation**, which is the quickest answer to *"where did they talk about the airship?"*
+- **Read messages** — fetches the few lines around a found passage, each labelled with its speaker and its hour, so the Console can confirm what was said before it reports it. A very long line is shortened unless the Console asks for it in full.
+- **Look up conversations** — lists conversations by title, by who attended, or by date; or, given one conversation, returns its summary and an outline of how it ran.
+- **Look up a group** and **look up a project** — the description and instructions, the members (a project's roster), the store or stores with an outline of each, and, for a project, the conversations held there.
+- **Look up a wardrobe** — a character's pieces (or a project's, a group's, or the general rack), each with its kind and a line of description, and the whole description when only a few match.
+- **Look up the Atlas** — the named places, objects and things of your world, by name or alias, with what each entry knows.
+- **Look up a conversation's present state** — who is seated in it (and who has left), what each of them is carrying and wearing *in that conversation*, where the scene stands and what each is said to be doing, and the Concierge's posture. This is the shortcut for *"what is Riya holding right now?"*: an object's own file in the Inventory never tells whether it is in anyone's hand at a given moment — only the conversation's own ledger does.
 
 So a question such as *"how old is Laura?"* runs: look her up, search her memories for her age, then search the conversations if the memories leave room for doubt — and when the sources disagree, the Console lays out every answer with the place it found it. Looking at memories this way is **inspection, not remembrance**: it marks nothing as recalled and leaves every character's recollection exactly as it was.
 
@@ -123,6 +128,8 @@ Three points of etiquette govern the arrangement:
 - **Only the introspection PRAGMAs are admitted.** `run_sql` accepts `table_info`, `table_xinfo`, `table_list`, `index_list`, `index_info`, `index_xinfo` and `foreign_key_list` (or the `SELECT * FROM pragma_table_info('x')` forms), and runs on a read-only connection.
 
 - **The three ledgers are kept in separate rooms.** There is the **main** ledger (characters, chats, messages, memories, profiles, projects), the **engine log** (every model call, its tokens, its cost, its duration), and the **document index** (the document stores, and the full text of every character, project, and group vault). A single question reaches into one room at a time; for a question that spans rooms, the Console carries the answer from one to the next.
+- **A wrong name is answered with the right ones.** Should the Console ask for a column or a table that does not exist, the ledger replies with the real column names, or the tables it does hold — and, where the table lives in another room, which one — so the next query is right the first time.
+- **The documents have a reading-room view.** In the document index the Console may read `qt_documents` — one row per file, giving the store, the path and the text — without assembling it from three tables. The view is made afresh on the read-only connection and stored nowhere.
 - **Inspection is not remembrance.** That the Console may now *read* the memory ledger — to summarise it, to count it, to chart how importance is distributed — is a different thing entirely from *recalling* a memory. Reading the table changes nothing and is filed nowhere; the Console still forms no memories of its own, and its search still cannot draw upon them as a source.
 
 ### Seeing the Console's working
@@ -135,7 +142,7 @@ Should a query go awry — a misremembered column, a table that isn't there — 
 
 The Console need not be summoned from the sidebar to be of use. From inside any Salon conversation it answers to the name **Brahma**, reached through the same reference-desk machinery as any [Carina](carina.md) answerer — type `@Brahma:` for a public reply or `@Brahma?` for a whispered one, or let a tool-using character consult it via `ask_carina`. The answer drops straight into the conversation as a tidy reference card.
 
-Consulted this way, the Console keeps all of its console powers — the read-only ledger inspection and document-store access described above — but loses every scrap of continuity: each Salon query is wholly standalone, with no memory of the surrounding scene or of any earlier Brahma consultation, and it forms no memories afterward. Because those powers are not to be handed about lightly, the Salon line opens only for you (the proprietor), for your own user-controlled persona, and for characters you have granted **system transparency**; to anyone else, Brahma simply does not answer. See [Carina](carina.md) for the full etiquette.
+Consulted this way, the Console keeps all of its console powers — the read-only ledger inspection and document-store access described above — but loses every scrap of continuity: each Salon query is wholly standalone, with no memory of the surrounding scene or of any earlier Brahma consultation, and it forms no memories afterward. It is, however, told *which* conversation rang the bell — its title, nothing of what was said — so that "here" and "right now" mean something, and a question such as *"what does Riya have equipped?"* is answered from that conversation's present state. Because those powers are not to be handed about lightly, the Salon line opens only for you (the proprietor), for your own user-controlled persona, and for characters you have granted **system transparency**; to anyone else, Brahma simply does not answer. See [Carina](carina.md) for the full etiquette.
 
 ### Choosing the engine for `@Brahma`
 
@@ -143,13 +150,21 @@ The floating Console has its own model picker; the Salon line does not, so it is
 
 A project may overrule that choice for its own conversations: open the project, find the **Model Behavior** card, and set **Inline Brahma Engine** (see [Project Settings](project-settings.md)). The order of precedence is plain — the project's choice, then the global setting, then your default profile — and should a chosen profile since have been deleted, Brahma quietly moves down the list rather than falling silent.
 
+The same engine (by the same order, the project being the one whose Atlas you are browsing) is offered first when Brahma drafts an entry for [the Atlas](atlas.md#asking-brahma-to-write-one-up).
+
 Enquiries of this sort reward a capable engine. A model that handles tools deftly will find Laura's age in three or four steps; a small or "flash" model may wander the ledgers until its turns run out.
+
+## How the Console researches
+
+The Console goes about a question the way a good reference librarian would: it first decides what *kind* of question it has — a fact, a when-or-where, a judgment, a draft — and gives itself a budget of steps to suit. It begins with the shortcut that answers that kind of question in one stroke, reads what it finds, and stops as soon as it can answer. It does not search for a thing twice under small changes of spelling; what is not found once is reported as not there.
+
+Four quiet reminders keep it to that. After its sixth step, and again when it has used most of its turns, it is asked whether it can answer now and, if not, to name the one thing it still lacks. Should it say twice that it has enough, it is told to stop searching and answer. Should a search come back empty twice for the same thing, it is told to treat it as absent. And should a tool fail twice with the same complaint, it is told to try another way or answer from what it has. None of these ends the turn; each is a polite cough from the doorway.
 
 ## Setting the Console's patience
 
 A thorny question — *"where in all these ledgers is the airship first mentioned?"* — is rarely answered in a single stroke. The Console works such a problem the way any diligent clerk would: one step at a time, a query here, a document read there, each step a **turn** at the telegraph key. It takes as many turns as the question demands, up to a ceiling you set — and only you set it — at which point it must lay down its tools and report whatever it has gathered so far.
 
-That ceiling lives in **Settings → Games & Tools → Brahma Console**, as **"Let the Console take up to N turns"** (any whole number from 1 upward, with no upper limit; the default is 10). Raise it when you find the Console repeatedly running out of rope in the middle of a deep search of the ledgers; lower it if you would rather it answer briskly from what lies near to hand. The same figure governs the Console summoned from the sidebar and the `@Brahma` line called from the Salon floor alike.
+That ceiling lives in **Settings → Games & Tools → Brahma Console**, as **"Let the Console take up to N turns"** (any whole number from 1 upward, with no upper limit; the default is 10). For a large household — many characters, many stores, months of conversation — a ceiling of **20 to 25** serves well: the Console rarely needs it, but a question that spans the whole archive has room to finish. Raise it when you find the Console repeatedly running out of rope in the middle of a deep search of the ledgers; lower it if you would rather it answer briskly from what lies near to hand. The same figure governs the Console summoned from the sidebar and the `@Brahma` line called from the Salon floor alike.
 
 A generous ceiling costs nothing on questions the Console dispatches quickly, and it carries no risk of a runaway search: should the engine fall to asking the very same question twice, Quilltap recognises it chasing its own tail and calls a halt at once — no matter how high the ceiling stands. The dial buys patience for genuine progress, never licence to spin.
 
@@ -164,7 +179,7 @@ The Console is, by design, an amnesiac of impeccable discretion:
 
 ## In-Chat Navigation
 
-To direct the user to the home page (the floating Console button sits at the bottom-left of every page, and the sidebar's console mark opens it as a workspace tab):
+To direct the user to the home page (the floating Console button sits at the bottom-left of every page, and open **Conversations** and choose **Brahma Console** to have it as a workspace tab):
 ```
 help_navigate(url: "/")
 ```
@@ -177,7 +192,7 @@ help_navigate(url: "/settings?section=brahma-console")
 ## Related Pages
 
 - [Help Chat](help-chat.md) --- The in-character assistant, by contrast
-- [Left Sidebar](sidebar.md) --- Where the Console mark lives
+- [The Rail and Its Menus](navigation.md) --- Where the Console menu entry lives
 - [Connection Profiles](connection-profiles.md) --- Establish the engines the Console can call upon
 - [The Scriptorium](scriptorium.md) --- The document stores the Console can read and write
 - [Carina](carina.md) --- Reaching the Console by name (`@Brahma`) from inside a Salon

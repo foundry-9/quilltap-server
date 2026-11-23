@@ -4,19 +4,24 @@
  * Theme Selector Component
  *
  * Displays available themes as selectable cards with previews.
- * Includes default theme, plugin-provided themes, and bundle themes.
- * The Preview button on a card opens a single full-page ThemePreviewModal.
- * Supports installing .qtap-theme bundles via file upload and uninstalling bundle themes.
+ * Includes the default theme and the installed bundle themes, then lists any
+ * theme that was found but refused (made for an earlier Quilltap, or declared
+ * by a plugin). The Preview button on a card opens a single full-page
+ * ThemePreviewModal. Supports installing .qtap-theme bundles via file upload
+ * and uninstalling bundle themes, refused ones included.
  *
  * @module components/settings/appearance/ThemeSelector
  */
 
 import { useState, useCallback, useRef } from 'react'
-import type { ThemeSummary } from '@/components/providers/theme-provider'
+import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
 import { BrandName } from '@/components/ui/brand-name'
 import { ThemeCard } from './components/ThemeCard'
 import { ThemePreviewModal } from './components/ThemePreviewModal'
+import { RefusedThemes } from './components/RefusedThemes'
 import { Icon } from '@/components/ui/icon'
+import { useRouter } from 'next/navigation'
+import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 
 interface ThemeSelectorProps {
   activeThemeId: string | null
@@ -41,6 +46,15 @@ export function ThemeSelector({
   const [installStatus, setInstallStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [isInstalling, setIsInstalling] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { refusedThemes } = useTheme()
+  const workspace = useWorkspaceOptional()
+  const router = useRouter()
+
+  /** Open Calliope's Atelier — a tab inside the workspace, a route outside. */
+  const openAtelier = () => {
+    if (workspace) workspace.openTab('theme-editor')
+    else router.push('/calliope')
+  }
 
   // Open the full-page preview modal for a theme (null = the default theme)
   const handleOpenPreview = useCallback((themeId: string | null) => {
@@ -174,6 +188,15 @@ export function ThemeSelector({
     <section className="border-t qt-border-default pt-8">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-xl font-semibold qt-text">Theme</h2>
+        <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={openAtelier}
+          className="qt-button-secondary qt-button-sm flex items-center gap-1.5"
+        >
+          <Icon name="themes" className="w-4 h-4" />
+          Design a theme
+        </button>
         <button
           type="button"
           onClick={handleInstallClick}
@@ -192,6 +215,7 @@ export function ThemeSelector({
             </>
           )}
         </button>
+        </div>
         <input
           ref={fileInputRef}
           type="file"
@@ -205,7 +229,7 @@ export function ThemeSelector({
         Select a theme to customize the colors and appearance of <BrandName />.
         {availableThemes.length === 0 && (
           <span className="block mt-1 qt-text-small">
-            Install theme plugins or upload .qtap-theme bundles to see more options here.
+            Upload .qtap-theme bundles, or browse a registry below, to see more options here.
           </span>
         )}
       </p>
@@ -242,7 +266,7 @@ export function ThemeSelector({
           onExport={() => handleExport('default')}
         />
 
-        {/* Plugin and Bundle Theme Cards */}
+        {/* Bundle Theme Cards */}
         {availableThemes.map((theme) => (
           <ThemeCard
             key={theme.id}
@@ -257,16 +281,17 @@ export function ThemeSelector({
         ))}
       </div>
 
-      {/* Hint about theme plugins */}
+      <RefusedThemes refused={refusedThemes} onUninstall={handleUninstall} disabled={isLoading} />
+
+      {/* Hint about adding themes */}
       {availableThemes.length === 0 && (
         <div className="mt-4 border qt-border-default rounded-lg p-4 qt-bg-muted">
           <div className="flex items-start gap-3">
             <Icon name="info" className="w-5 h-5 qt-text-secondary flex-shrink-0 mt-0.5" />
             <div>
               <p className="qt-text-small">
-                Additional themes can be added by installing theme plugins from the{' '}
-                <span className="font-medium">Plugins</span> tab, or by uploading{' '}
-                <code className="qt-code">.qtap-theme</code> bundle files.
+                Additional themes can be added by uploading{' '}
+                <code className="qt-code-inline">.qtap-theme</code> bundle files, or from a theme registry below.
               </p>
             </div>
           </div>

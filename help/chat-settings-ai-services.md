@@ -274,8 +274,8 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 
 1. When enabled on chat creation, avatars are generated for all LLM-controlled characters as soon as the chat begins
 2. When toggled on during an active chat, generation is queued for all LLM characters
-3. Avatars update automatically when outfit changes occur (if enabled)
-4. A character who joins mid-conversation — freshly invited or returning after an absence — sits for a portrait on arrival, dressed in whatever they walked in wearing, rather than loitering in their everyday likeness until their next change of clothes
+3. Avatars update automatically when a character's outfit or what they carry changes (if enabled) — but the painter is a patient soul. Every change is noted at once, yet the sitting itself waits until the conversation next stirs: the moment you send a message, or a character takes up the thread of their own accord. A lady who tries on four hats between remarks sits once, in the hat she settled upon, not four times in succession. When the next turn begins, every portrait so deferred is commissioned together, and each one makes its entrance in the conversation as it comes off the easel. (The **Regenerate Avatar** button and switching the setting on are not so restrained; they summon the painter forthwith.)
+4. A character who joins mid-conversation — freshly invited or returning after an absence — sits for a portrait dressed in whatever they walked in wearing, at the conversation's next turn, rather than loitering in their everyday likeness until their next change of clothes
 5. Each portrait is filed against the exact ensemble that occasioned it. Should the character wear that same costume again — five minutes later or five weeks — the picture already taken is brought out of the cabinet rather than a fresh plate exposed, which costs you no time and not a farthing of your image budget. Alter so much as a scarf and that is a new ensemble, deserving of a new sitting
 6. Generated avatars appear in the Chat Sidebar's **Participants** drawer and are specific to that conversation
 

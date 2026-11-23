@@ -8,9 +8,15 @@ import {
   describeCeilingRefusal,
   resolveToolPermit,
   offeredTools,
+  toolEffectSpecFor,
   OPERATOR_TOOL_OFFER,
 } from '../effects'
-import { lowerToolEffect, isWithinCeiling } from '../effect-types'
+import {
+  lowerToolEffect,
+  isWithinCeiling,
+  isComputedToolEffect,
+  toolEffectSpecFromDeclaration,
+} from '../effect-types'
 import { customToolEffect } from '@/lib/pascal/tool-effect'
 
 describe('effect resolution', () => {
@@ -31,6 +37,63 @@ describe('effect resolution', () => {
     expect(lowerToolEffect('read', 'write')).toBe('read')
     expect(isWithinCeiling('destroy', 'write')).toBe(false)
     expect(describeCeilingRefusal('x', 'write', 'none')).toMatch(/no effect/)
+  })
+})
+
+describe('plugin tool effects', () => {
+  const callEffect = toolEffectSpecFromDeclaration({
+    max: 'write',
+    of: (input: Record<string, unknown>) => (input.request === 'POST' ? 'write' : 'read'),
+    notes: { read: 'Only GET requests are allowed this turn.' },
+  })!
+  const ctx = { pluginToolEffects: new Map([['fetcher', callEffect]]) }
+
+  it('keeps a plain effect and refuses anything unreadable', () => {
+    expect(toolEffectSpecFromDeclaration('read')).toBe('read')
+    expect(toolEffectSpecFromDeclaration('sometimes')).toBeUndefined()
+    expect(toolEffectSpecFromDeclaration({ max: 'write' })).toBeUndefined()
+    expect(toolEffectSpecFromDeclaration({ max: 'huge', of: () => 'read' })).toBeUndefined()
+    expect(toolEffectSpecFromDeclaration(null)).toBeUndefined()
+  })
+
+  it('judges each call by its input and the tool by its maximum', () => {
+    expect(effectOfToolCall('fetcher', { url: 'https://example.com' }, ctx)).toBe('read')
+    expect(effectOfToolCall('fetcher', { request: 'POST' }, ctx)).toBe('write')
+    expect(maxEffectOfTool('fetcher', ctx)).toBe('write')
+    expect(isComputedToolEffect(toolEffectSpecFor('fetcher', ctx))).toBe(true)
+  })
+
+  it('counts a misbehaving declaration as write for that call', () => {
+    const throws = toolEffectSpecFromDeclaration({ max: 'write', of: () => { throw new Error('no') } })!
+    const lies = toolEffectSpecFromDeclaration({ max: 'write', of: () => 'harmless' as never })!
+    const map = { pluginToolEffects: new Map([['a', throws], ['b', lies]]) }
+    expect(effectOfToolCall('a', {}, map)).toBe('write')
+    expect(effectOfToolCall('b', {}, map)).toBe('write')
+    expect(effectOfToolCall('fetcher', 'not an object', ctx)).toBe('write')
+    expect(effectOfToolCall('fetcher', undefined, ctx)).toBe('write')
+  })
+
+  it('lets an answer above the declared maximum stand', () => {
+    const spec = toolEffectSpecFromDeclaration({ max: 'read', of: () => 'destroy' })!
+    expect(effectOfToolCall('x', {}, { pluginToolEffects: new Map([['x', spec]]) })).toBe('destroy')
+  })
+
+  it('offers its note only under a ceiling below the maximum', () => {
+    if (!isComputedToolEffect(callEffect)) throw new Error('expected a computed effect')
+    expect(callEffect.usesAllowedUnder('read')).toBe('Only GET requests are allowed this turn.')
+    expect(callEffect.usesAllowedUnder('none')).toBeNull()
+    expect(callEffect.usesAllowedUnder('write')).toBeNull()
+  })
+
+  it('never lets a plugin restate a built-in tool', () => {
+    const spec = toolEffectSpecFromDeclaration('none')!
+    expect(effectOfToolCall('doc_delete_file', {}, { pluginToolEffects: new Map([['doc_delete_file', spec]]) })).toBe('destroy')
+  })
+
+  it('refuses a write call under a read ceiling and permits a read one', () => {
+    const permitCtx = { offer: offeredTools(['fetcher']), effectCeiling: 'read' as const, ...ctx }
+    expect(resolveToolPermit('fetcher', { url: 'https://example.com' }, permitCtx)).toMatchObject({ permitted: true })
+    expect(resolveToolPermit('fetcher', { request: 'POST' }, permitCtx)).toMatchObject({ permitted: false })
   })
 })
 

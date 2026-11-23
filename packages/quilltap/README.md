@@ -488,10 +488,10 @@ The CLI includes theme management commands:
 ```bash
 quilltap themes list                    # List all installed themes
 quilltap themes install my.qtap-theme   # Install a .qtap-theme bundle
-quilltap themes validate my.qtap-theme  # Validate a bundle
+quilltap themes validate my.qtap-theme  # Validate a bundle (or a bundle directory)
 quilltap themes uninstall my-theme      # Uninstall a bundle theme
 quilltap themes export earl-grey        # Export any theme as a bundle
-quilltap themes create sunset           # Scaffold a new theme
+quilltap themes create sunset           # Write a blank theme bundle to ./sunset/
 quilltap themes search "dark"           # Search registries
 quilltap themes update                  # Check for theme updates
 quilltap themes registry list           # List configured registries
@@ -503,6 +503,10 @@ quilltap themes registry refresh        # Refresh all registry indexes
 quilltap themes registry keygen [--output <dir>]     # Generate an Ed25519 keypair
 quilltap themes registry sign <dir> --key <private>  # Sign a registry directory
 ```
+
+Bundles are checked by the same theme engine the app uses, so `validate` reports exactly what an install would: schema errors in `theme.json` and `tokens.json`, and warnings from the hook lint with the file and line. Only version 2 bundles are accepted — `validate`, `install`, `update` and `export` all refuse one made for an earlier Quilltap. Archives containing symbolic links or paths that leave the bundle are refused.
+
+`create <name>` writes a blank version 2 bundle — `theme.json` and an empty `tokens.json`, both naming their published schema — to `./<id>/`, the id derived from the name as the Atelier derives one (`"Brass Parlour"` → `brass-parlour`). It is the same pair of files a new draft in the Atelier starts from, and it refuses a directory that already exists. From there, pack the folder as a `.qtap-theme` and open it in the Atelier with **Open a theme file**; the Atelier is where a theme is made.
 
 ## Shell Completion
 

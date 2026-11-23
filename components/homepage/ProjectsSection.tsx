@@ -1,7 +1,9 @@
 /**
  * ProjectsSection
  *
- * Server component displaying active projects on the homepage.
+ * The projects shelf: one tile per project, as many rows as it takes. A
+ * household with no projects gets no shelf at all rather than an empty one —
+ * New Project lives among the quick actions.
  */
 
 import Link from 'next/link'
@@ -9,26 +11,21 @@ import { ProjectItem } from './ProjectItem'
 import type { ProjectsSectionProps } from './types'
 
 export function ProjectsSection({ projects }: ProjectsSectionProps) {
+  if (projects.length === 0) return null
+
   return (
-    <div className="qt-homepage-section">
+    <section className="qt-homepage-section" data-section="projects">
       <div className="qt-homepage-section-header">
-        <h2 className="qt-homepage-section-title">Active Projects</h2>
+        <h2 className="qt-homepage-section-title">Projects</h2>
         <Link href="/prospero" className="qt-homepage-section-link">
           View all &rarr;
         </Link>
       </div>
       <div className="qt-homepage-section-content">
-        {projects.length === 0 ? (
-          <div className="text-center py-6 qt-text-secondary">
-            <p className="text-sm">No projects yet</p>
-            <p className="text-xs">Create a project to organize your chats</p>
-          </div>
-        ) : (
-          projects.map(project => (
-            <ProjectItem key={project.id} project={project} />
-          ))
-        )}
+        {projects.map(project => (
+          <ProjectItem key={project.id} project={project} />
+        ))}
       </div>
-    </div>
+    </section>
   )
 }

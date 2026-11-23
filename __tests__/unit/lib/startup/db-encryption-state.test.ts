@@ -224,7 +224,7 @@ describe('getDatabaseEncryptionState()', () => {
     // 5 attempts is the retry budget — every attempt re-opens the fd, so
     // closeSync should have been invoked at least that many times.
     expect(mockCloseSync.mock.calls.length).toBeGreaterThanOrEqual(5);
-  }, 15_000);
+  });
 
   it('recovers and returns the right state when an EAGAIN clears on retry', () => {
     const FAKE_FD = 12;
@@ -246,7 +246,7 @@ describe('getDatabaseEncryptionState()', () => {
 
     expect(state).toBe('plaintext');
     expect(calls).toBe(3);
-  }, 5_000);
+  });
 
   it('rethrows a non-transient error path through to "unknown"', () => {
     const FAKE_FD = 13;

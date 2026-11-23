@@ -8,10 +8,11 @@
  * string.
  */
 
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 
 jest.mock('@/lib/toast', () => ({
   showErrorToast: jest.fn(),
@@ -52,7 +53,7 @@ describe('TagEditor entity paths (Bug 74)', () => {
     ['chat', '/api/v1/chats/entity-1'],
   ] as const)('reads %s tags from %s', async (entityType, base) => {
     const fetchMock = mockFetch()
-    render(<TagEditor entityType={entityType} entityId="entity-1" />)
+    renderWithQuery(<TagEditor entityType={entityType} entityId="entity-1" />)
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
     expect(urls(fetchMock)).toContain(`${base}?action=get-tags`)
@@ -63,7 +64,7 @@ describe('TagEditor entity paths (Bug 74)', () => {
   it('attaches a new tag to the connection-profiles route', async () => {
     const user = userEvent.setup()
     const fetchMock = mockFetch()
-    render(<TagEditor entityType="profile" entityId="entity-1" />)
+    renderWithQuery(<TagEditor entityType="profile" entityId="entity-1" />)
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
     await user.click(screen.getByRole('button', { name: '+ Add Tag' }))
@@ -78,7 +79,7 @@ describe('TagEditor entity paths (Bug 74)', () => {
   it('detaches a tag through the connection-profiles route', async () => {
     const user = userEvent.setup()
     const fetchMock = mockFetch()
-    render(<TagEditor entityType="profile" entityId="entity-1" />)
+    renderWithQuery(<TagEditor entityType="profile" entityId="entity-1" />)
 
     await waitFor(() => expect(screen.getByText('fast-and-cheap')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Remove fast-and-cheap tag' }))

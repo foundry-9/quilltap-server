@@ -141,6 +141,25 @@ export async function readDatabaseBlobAsDocument(
 }
 
 /**
+ * An uploaded blob's own bytes, whatever kind of file it is (a font, an
+ * image), with its stored type. Null when no blob is at the path. Reached
+ * only through the document core's `readDocumentBytes`.
+ */
+export async function readDatabaseBlobBytes(
+  mountPointId: string,
+  relativePath: string
+): Promise<{ data: Buffer; mtime: number; size: number; storedMimeType: string } | null> {
+  const rel = normaliseRelativePath(relativePath);
+  const repos = getRepositories();
+  const blob = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, rel);
+  if (!blob) return null;
+  const data = await repos.docMountBlobs.readData(blob.id);
+  if (!data) return null;
+  logger.debug('readDatabaseBlobBytes: read a blob as bytes', { mountPointId, relativePath: rel, size: data.length });
+  return { data, mtime: new Date(blob.lastModified).getTime(), size: data.length, storedMimeType: blob.storedMimeType };
+}
+
+/**
  * The one way to read an uploaded blob where a document was expected (#134):
  * a native-text upload (.md, .txt, .json, .jsonl) is read as its own bytes —
  * what the editor saves back — and any other kind falls back to its converted

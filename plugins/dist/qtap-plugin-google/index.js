@@ -11148,12 +11148,12 @@ var require_logging_utils = __commonJS({
             this.setFilters();
             this.filtersSet = true;
           }
-          let logger4 = this.cached.get(namespace);
-          if (!logger4) {
-            logger4 = this.makeLogger(namespace);
-            this.cached.set(namespace, logger4);
+          let logger5 = this.cached.get(namespace);
+          if (!logger5) {
+            logger5 = this.makeLogger(namespace);
+            this.cached.set(namespace, logger5);
           }
-          logger4(fields, ...args);
+          logger5(fields, ...args);
         } catch (e2) {
           console.error(e2);
         }
@@ -11298,7 +11298,7 @@ var require_logging_utils = __commonJS({
       } else if (cachedBackend === void 0) {
         cachedBackend = getNodeBackend();
       }
-      const logger4 = (() => {
+      const logger5 = (() => {
         let previousBackend = void 0;
         const newLogger = new AdhocDebugLogger(namespace, (fields, ...args) => {
           if (previousBackend !== cachedBackend) {
@@ -11313,8 +11313,8 @@ var require_logging_utils = __commonJS({
         });
         return newLogger;
       })();
-      loggerCache.set(namespace, logger4);
-      return logger4.func;
+      loggerCache.set(namespace, logger5);
+      return logger5.func;
     }
   }
 });
@@ -11402,14 +11402,14 @@ var require_src4 = __commonJS({
     var gaxios_1 = require_src2();
     var jsonBigint = require_json_bigint();
     var gcp_residency_1 = require_gcp_residency();
-    var logger4 = __importStar(require_src3());
+    var logger5 = __importStar(require_src3());
     exports2.BASE_PATH = "/computeMetadata/v1";
     exports2.HOST_ADDRESS = "http://169.254.169.254";
     exports2.SECONDARY_HOST_ADDRESS = "http://metadata.google.internal.";
     exports2.HEADER_NAME = "Metadata-Flavor";
     exports2.HEADER_VALUE = "Google";
     exports2.HEADERS = Object.freeze({ [exports2.HEADER_NAME]: exports2.HEADER_VALUE });
-    var log = logger4.log("gcp-metadata");
+    var log = logger5.log("gcp-metadata");
     exports2.METADATA_SERVER_DETECTION = Object.freeze({
       "assume-present": "don't try to ping the metadata server, but assume it's present",
       none: "don't try to ping the metadata server, but don't try to use it either",
@@ -21165,12 +21165,17 @@ var require_websocket = __commonJS({
               protocols = [protocols];
             }
           }
-          initAsClient(this, address, protocols, options);
+          options = initAsClient(this, address, protocols, options);
         } else {
-          this._autoPong = options.autoPong;
-          this._closeTimeout = options.closeTimeout;
           this._isServer = true;
         }
+        if (options.autoPong) {
+          this._autoPong = true;
+          this._autoPongComplete = () => autoPongComplete(this);
+          this._pendingAutoPongs = 0;
+          this._maxPendingAutoPongs = options.maxPendingAutoPongs | 0;
+        }
+        this._closeTimeout = options.closeTimeout;
       }
       /**
        * For historical reasons, the custom "nodebuffer" type is used by the default
@@ -21581,6 +21586,7 @@ var require_websocket = __commonJS({
         maxBufferedChunks: 256 * 1024,
         maxFragments: 16 * 1024,
         maxPayload: 100 * 1024 * 1024,
+        maxPendingAutoPongs: 60,
         skipUTF8Validation: false,
         perMessageDeflate: true,
         followRedirects: false,
@@ -21596,8 +21602,6 @@ var require_websocket = __commonJS({
         path: void 0,
         port: void 0
       };
-      websocket._autoPong = opts.autoPong;
-      websocket._closeTimeout = opts.closeTimeout;
       if (!protocolVersions.includes(opts.protocolVersion)) {
         throw new RangeError(
           `Unsupported protocol version: ${opts.protocolVersion} (supported versions: ${protocolVersions.join(", ")})`
@@ -21840,6 +21844,7 @@ var require_websocket = __commonJS({
       } else {
         req.end();
       }
+      return opts;
     }
     function emitErrorAndClose(websocket, err) {
       websocket._readyState = WebSocket2.CLOSING;
@@ -21928,8 +21933,18 @@ var require_websocket = __commonJS({
     }
     function receiverOnPing(data) {
       const websocket = this[kWebSocket];
-      if (websocket._autoPong) websocket.pong(data, !this._isServer, NOOP);
+      if (websocket._autoPong && websocket.readyState === WebSocket2.OPEN) {
+        if (websocket._maxPendingAutoPongs > 0 && websocket._pendingAutoPongs >= websocket._maxPendingAutoPongs) {
+          websocket.terminate();
+        } else {
+          websocket._pendingAutoPongs++;
+          websocket.pong(data, !this._isServer, websocket._autoPongComplete);
+        }
+      }
       websocket.emit("ping", data);
+    }
+    function autoPongComplete(websocket) {
+      websocket._pendingAutoPongs--;
     }
     function receiverOnPong(data) {
       this[kWebSocket].emit("pong", data);
@@ -22184,6 +22199,8 @@ var require_websocket_server = __commonJS({
        *     fragments
        * @param {Number} [options.maxPayload=104857600] The maximum allowed message
        *     size
+       * @param {Number} [options.maxPendingAutoPongs=60] The maximum number of
+       *     pending automatic pongs
        * @param {Boolean} [options.noServer=false] Enable no server mode
        * @param {String} [options.path] Accept only connections matching this path
        * @param {(Boolean|Object)} [options.perMessageDeflate=false] Enable/disable
@@ -22206,6 +22223,7 @@ var require_websocket_server = __commonJS({
           maxBufferedChunks: 256 * 1024,
           maxFragments: 16 * 1024,
           maxPayload: 100 * 1024 * 1024,
+          maxPendingAutoPongs: 60,
           skipUTF8Validation: false,
           perMessageDeflate: false,
           handleProtocols: null,
@@ -40568,80 +40586,80 @@ var ClientSDK = class {
 };
 var jsonLikeContentTypeRE = /^(application|text)\/([^+]+\+)*json.*/;
 var jsonlLikeContentTypeRE = /^(application|text)\/([^+]+\+)*(jsonl|x-ndjson)\b.*/;
-async function logRequest(logger4, req) {
-  if (!logger4) {
+async function logRequest(logger5, req) {
+  if (!logger5) {
     return;
   }
   const contentType = req.headers.get("content-type");
   const ct = (contentType === null || contentType === void 0 ? void 0 : contentType.split(";")[0]) || "";
-  logger4.group(`> Request: ${req.method} ${req.url}`);
-  logger4.group("Headers:");
+  logger5.group(`> Request: ${req.method} ${req.url}`);
+  logger5.group("Headers:");
   for (const [k, v] of req.headers.entries()) {
-    logger4.log(`${k}: ${v}`);
+    logger5.log(`${k}: ${v}`);
   }
-  logger4.groupEnd();
-  logger4.group("Body:");
+  logger5.groupEnd();
+  logger5.group("Body:");
   switch (true) {
     case jsonLikeContentTypeRE.test(ct):
-      logger4.log(await req.clone().json());
+      logger5.log(await req.clone().json());
       break;
     case ct.startsWith("text/"):
-      logger4.log(await req.clone().text());
+      logger5.log(await req.clone().text());
       break;
     case ct === "multipart/form-data": {
       const body = await req.clone().formData();
       for (const [k, v] of body) {
         const vlabel = v instanceof Blob ? "<Blob>" : v;
-        logger4.log(`${k}: ${vlabel}`);
+        logger5.log(`${k}: ${vlabel}`);
       }
       break;
     }
     default:
-      logger4.log(`<${contentType}>`);
+      logger5.log(`<${contentType}>`);
       break;
   }
-  logger4.groupEnd();
-  logger4.groupEnd();
+  logger5.groupEnd();
+  logger5.groupEnd();
 }
-async function logResponse(logger4, res, req) {
-  if (!logger4) {
+async function logResponse(logger5, res, req) {
+  if (!logger5) {
     return;
   }
   const contentType = res.headers.get("content-type");
   const ct = (contentType === null || contentType === void 0 ? void 0 : contentType.split(";")[0]) || "";
-  logger4.group(`< Response: ${req.method} ${req.url}`);
-  logger4.log("Status Code:", res.status, res.statusText);
-  logger4.group("Headers:");
+  logger5.group(`< Response: ${req.method} ${req.url}`);
+  logger5.log("Status Code:", res.status, res.statusText);
+  logger5.group("Headers:");
   for (const [k, v] of res.headers.entries()) {
-    logger4.log(`${k}: ${v}`);
+    logger5.log(`${k}: ${v}`);
   }
-  logger4.groupEnd();
-  logger4.group("Body:");
+  logger5.groupEnd();
+  logger5.group("Body:");
   switch (true) {
     case (matchContentType(res, "application/json") || jsonLikeContentTypeRE.test(ct) && !jsonlLikeContentTypeRE.test(ct)):
-      logger4.log(await res.clone().json());
+      logger5.log(await res.clone().json());
       break;
     case (matchContentType(res, "application/jsonl") || jsonlLikeContentTypeRE.test(ct)):
     case matchContentType(res, "text/event-stream"):
-      logger4.log(`<${contentType}>`);
+      logger5.log(`<${contentType}>`);
       break;
     case matchContentType(res, "text/*"):
-      logger4.log(await res.clone().text());
+      logger5.log(await res.clone().text());
       break;
     case matchContentType(res, "multipart/form-data"): {
       const body = await res.clone().formData();
       for (const [k, v] of body) {
         const vlabel = v instanceof Blob ? "<Blob>" : v;
-        logger4.log(`${k}: ${vlabel}`);
+        logger5.log(`${k}: ${vlabel}`);
       }
       break;
     }
     default:
-      logger4.log(`<${contentType}>`);
+      logger5.log(`<${contentType}>`);
       break;
   }
-  logger4.groupEnd();
-  logger4.groupEnd();
+  logger5.groupEnd();
+  logger5.groupEnd();
 }
 var GoogleGenAiDefaultError = class extends GoogleGenAiError {
   constructor(message, httpMeta) {
@@ -48130,11 +48148,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop2() {
 }
-function makeLogFn(fnLevel, logger4, logLevel) {
-  if (!logger4 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger5, logLevel) {
+  if (!logger5 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop2;
   } else {
-    return logger4[fnLevel].bind(logger4);
+    return logger5[fnLevel].bind(logger5);
   }
 }
 var noopLogger = {
@@ -48145,22 +48163,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger4 = client.logger;
+  const logger5 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger4) {
+  if (!logger5) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger4);
+  const cachedLogger = cachedLoggers.get(logger5);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger4, logLevel),
-    warn: makeLogFn("warn", logger4, logLevel),
-    info: makeLogFn("info", logger4, logLevel),
-    debug: makeLogFn("debug", logger4, logLevel)
+    error: makeLogFn("error", logger5, logLevel),
+    warn: makeLogFn("warn", logger5, logLevel),
+    info: makeLogFn("info", logger5, logLevel),
+    debug: makeLogFn("debug", logger5, logLevel)
   };
-  cachedLoggers.set(logger4, [logLevel, levelLogger]);
+  cachedLoggers.set(logger5, [logLevel, levelLogger]);
   return levelLogger;
 }
 var sensitiveQueryNames = /* @__PURE__ */ new Set([
@@ -48316,7 +48334,7 @@ var Stream4 = class _Stream {
    */
   static fromSSEResponse(response, controller, client, synthesizeEventData, streamMode = "legacy") {
     let consumed = false;
-    const logger4 = client ? loggerFor(client) : console;
+    const logger5 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -48342,8 +48360,8 @@ var Stream4 = class _Stream {
           try {
             data = JSON.parse(sse2.data);
           } catch {
-            logger4.error(`Could not parse message into JSON:`);
-            logger4.error(`From chunk:`);
+            logger5.error(`Could not parse message into JSON:`);
+            logger5.error(`From chunk:`);
             throw new SyntaxError("Error reading response: malformed server-sent event JSON.");
           }
           if (streamMode === "legacy") {
@@ -48906,7 +48924,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "7.54.0";
+var VERSION = "7.62.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -60956,14 +60974,11 @@ var Events = class extends APIResource {
    *       {
    *         request_id: 'request_id',
    *         response: {
-   *           action: 'submit',
-   *           fields: [
-   *             { field_id: 'field_id', value: 'value' },
-   *           ],
-   *           type: 'browser_authentication',
+   *           decision: 'approve',
+   *           type: 'mcp_tool_call',
    *         },
    *         type:
-   *           'agent.session.input.computer_use_approval_request_result',
+   *           'agent.session.input.mcp_approval_request_result',
    *       },
    *     ],
    *   },
@@ -60986,20 +61001,14 @@ var Events = class extends APIResource {
       __security: { bearerAuth: true }
     })));
   }
-  /**
-   * Streams live events for an agent session. See
-   * [session events](https://developers.openai.com/api/docs/guides/agents-api/sessions/events).
-   *
-   * @example
-   * ```ts
-   * const agentSessionEvent =
-   *   await client.beta.agents.sessions.events.stream(
-   *     'session_id',
-   *   );
-   * ```
-   */
-  stream(sessionID, options) {
+  stream(sessionID, query = {}, options) {
+    if (arguments.length < 3) {
+      options = query;
+      query = {};
+    }
+    query = query;
     return this._client.get(path2`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions51(options, (options2) => ({
+      query,
       ...options2,
       headers: buildHeaders([
         { "OpenAI-Beta": "agents=v1", Accept: "text/event-stream" },
@@ -61506,8 +61515,9 @@ var TurnState = class {
     return true;
   }
   /** Checks session termination after updating the selected turn state. */
-  terminal(event) {
-    return event.type === "agent.session.failed" || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _TurnState_turnEnded, "f");
+  terminal(event, sessionID) {
+    const type = event.type;
+    return event.type === "agent.session.failed" || type === "agent.session.budget_reached" && "session" in event && event.session?.id === sessionID && (__classPrivateFieldGet(this, _TurnState_turnID, "f") === void 0 || __classPrivateFieldGet(this, _TurnState_turnEnded, "f")) || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _TurnState_turnEnded, "f");
   }
   /** Returns each tool call once for the full invocation, including subagent turns. */
   call(event) {
@@ -61896,12 +61906,13 @@ var AgentTurnResultCollector = class {
     if (this.ready) {
       return;
     }
-    if ("session" in event) {
+    if ("session" in event && event.session) {
       __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionID, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionID, "f") ?? event.session.id, "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_requiredActions, structuredClone(event.session.required_actions ?? []), "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_checkedActionsFor, void 0, "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionFailed, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionFailed, "f") || event.type === "agent.session.failed", "f");
-      __classPrivateFieldSet(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f") || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f"), "f");
+      const type = event.type;
+      __classPrivateFieldSet(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f") || (event.type === "agent.session.idle" && __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") || type === "agent.session.budget_reached" && event.session.id === __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionID, "f") && (!__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f") || __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f"))), "f");
     }
     if (event.type === "agent.session.turn.created" && event.turn.subagent_id === null && !__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f")) {
       __classPrivateFieldSet(this, _AgentTurnResultCollector_turn, structuredClone(event.turn), "f");
@@ -61935,7 +61946,7 @@ var AgentTurnResultCollector = class {
     __classPrivateFieldSet(this, _AgentTurnResultCollector_checkedActionsFor, canHandle, "f");
   }
   get ready() {
-    return __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") && __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f");
+    return __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f");
   }
   release() {
     __classPrivateFieldGet(this, _AgentTurnResultCollector_messages, "f").clear();
@@ -62172,7 +62183,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
     if (session.status !== "idle") {
       throw new OpenAIError("sessions.stream requires an idle session; use sessions.events.stream for active sessions");
     }
-    const subscription = await __classPrivateFieldGet(this, _AgentSessionStream_sessions, "f").events.stream(__classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"), options).withResponse();
+    const subscription = await __classPrivateFieldGet(this, _AgentSessionStream_sessions, "f").events.stream(__classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"), {}, options).withResponse();
     __classPrivateFieldSet(this, _AgentSessionStream_stream, subscription.data, "f");
     __classPrivateFieldSet(this, _AgentSessionStream_response, subscription.response, "f");
     __classPrivateFieldGet(this, _AgentSessionStream_instances, "m", _AgentSessionStream_checkAbort).call(this);
@@ -62191,7 +62202,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
       if (!state2.accept(event)) {
         continue;
       }
-      const terminal = state2.terminal(event);
+      const terminal = state2.terminal(event, __classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"));
       const dispatch = __classPrivateFieldGet(this, _AgentSessionStream_dispatcher, "f").prepare(state2.call(event), __classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"));
       if (terminal) {
         __classPrivateFieldGet(this, _AgentSessionStream_stream, "f").controller.abort();
@@ -62393,8 +62404,9 @@ var Sessions = class extends APIResource {
     })));
   }
   /**
-   * Updates session tools, metadata, model, reasoning effort, or service tier. Model
-   * settings apply to subsequent turns. Omitted fields are unchanged. See
+   * Updates session tools, metadata, model, reasoning effort, service tier, or the
+   * default prompt cache lifetime. Model settings apply to subsequent turns. Omitted
+   * fields are unchanged. See
    * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
    *
    * @example
@@ -66257,13 +66269,30 @@ var Images = class extends APIResource {
     return this._client.post("/images/variations", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   edit(body, options) {
-    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions(withBodyFinalization9(((requestOptions) => ({
-      ...requestOptions,
-      body: Object.fromEntries(Object.entries(requestOptions.body ?? {}).map(([key, value]) => [
-        key,
-        key === "safety_identifier" && value === null ? void 0 : value
-      ]))
-    }))({
+    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions(withBodyFinalization9(((requestOptions) => {
+      const omitNulls = (value, paths) => {
+        if (value === null || typeof value !== "object" || Array.isArray(value))
+          return value;
+        return Object.fromEntries(Object.entries(value).map(([key, field]) => {
+          const selected = paths.filter((path3) => path3[0] === key);
+          if (field === null && selected.some((path3) => path3.length === 1))
+            return [key, void 0];
+          const children = selected.filter((path3) => path3.length > 1).map((path3) => path3.slice(1));
+          return [key, children.length === 0 ? field : omitNulls(field, children)];
+        }));
+      };
+      return {
+        ...requestOptions,
+        body: omitNulls(requestOptions.body ?? {}, [
+          ["safety_identifier"],
+          ["complexity"],
+          ["frame_count"],
+          ["frame_duration_ms"],
+          ["svg"],
+          ["svg", "reasoning"]
+        ])
+      };
+    })({
       body,
       ...options2,
       stream: body.stream ?? false,
@@ -66291,7 +66320,7 @@ var Sessions4 = class extends APIResource {
    * @example
    * ```ts
    * await client.live.sessions.accept('session_id', {
-   *   session: { model: 'gpt-live-1', type: 'live' },
+   *   session: { model: 'gpt-live-1.1', type: 'live' },
    * });
    * ```
    */
@@ -66422,7 +66451,7 @@ var Live2 = class extends APIResource {
    * @example
    * ```ts
    * const live = await client.live.create({
-   *   session: { model: 'gpt-live-1' },
+   *   session: { model: 'gpt-live-1.1' },
    *   transport: { sdp: 'x', type: 'webrtc' },
    * });
    * ```
@@ -71592,23 +71621,23 @@ _a4 = OpenAI, _OpenAI_encoder = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Authe
       map.set(key, entry);
   }
   return sanitizedValue;
-}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger4) {
-  if (__classPrivateFieldGet(_a4, _a4, "f", _OpenAI_sanitizedLoggers).has(logger4))
-    return logger4;
+}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger5) {
+  if (__classPrivateFieldGet(_a4, _a4, "f", _OpenAI_sanitizedLoggers).has(logger5))
+    return logger5;
   const sanitized = new globalThis.Proxy(/* @__PURE__ */ Object.create(null), {
     get: (_facade, property) => {
-      const value = globalThis.Reflect.get(logger4, property, logger4);
+      const value = globalThis.Reflect.get(logger5, property, logger5);
       if (typeof value !== "function")
         return value;
       if (typeof property !== "string" || !["debug", "info", "warn", "error", "trace", "log"].includes(property)) {
-        return value.bind(logger4);
+        return value.bind(logger5);
       }
       return (...args) => {
         const seen = /* @__PURE__ */ new WeakMap();
-        return globalThis.Reflect.apply(value, logger4, args.map((entry) => __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
+        return globalThis.Reflect.apply(value, logger5, args.map((entry) => __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
       };
     },
-    set: (_facade, property, value) => globalThis.Reflect.set(logger4, property, value, logger4)
+    set: (_facade, property, value) => globalThis.Reflect.set(logger5, property, value, logger5)
   });
   __classPrivateFieldGet(_a4, _a4, "f", _OpenAI_sanitizedLoggers).add(sanitized);
   return sanitized;
@@ -71754,7 +71783,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger4 = {
+  const logger5 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -71786,7 +71815,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger4;
+  return logger5;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -72648,8 +72677,60 @@ var GoogleProvider = class {
   }
 };
 
-// image-provider.ts
+// model-catalog.ts
 var logger2 = createPluginLogger("qtap-plugin-google");
+var MODELS_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+var PAGE_SIZE = 1e3;
+var MAX_PAGES = 20;
+function positiveInt(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
+async function fetchGoogleModelCatalog(apiKey) {
+  const catalog = [];
+  let pageToken;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params = new URLSearchParams({ pageSize: String(PAGE_SIZE) });
+    if (pageToken) params.set("pageToken", pageToken);
+    const response = await fetch(`${MODELS_ENDPOINT}?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        // Key goes in a header so it never lands in a URL or a log line
+        "x-goog-api-key": apiKey,
+        "User-Agent": getQuilltapUserAgent()
+      }
+    });
+    if (!response.ok) {
+      logger2.error("Google model catalog request failed", {
+        context: "getModelCatalog",
+        status: response.status,
+        page
+      });
+      throw new Error(`Google models.list failed: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+    for (const model of data.models ?? []) {
+      if (!model.name || !model.supportedGenerationMethods?.includes("generateContent")) continue;
+      const id = model.name.replace(/^models\//, "");
+      const info = {
+        id,
+        name: model.displayName || id,
+        contextWindow: positiveInt(model.inputTokenLimit),
+        maxOutputTokens: positiveInt(model.outputTokenLimit)
+      };
+      if (typeof model.thinking === "boolean") {
+        info.supportsThinking = model.thinking;
+      }
+      catalog.push(info);
+    }
+    pageToken = data.nextPageToken || void 0;
+    if (!pageToken) break;
+  }
+  logger2.debug("Fetched Google model catalog", { context: "getModelCatalog", count: catalog.length });
+  return catalog;
+}
+
+// image-provider.ts
+var logger3 = createPluginLogger("qtap-plugin-google");
 var GEMINI_IMAGE_SAFETY_FINISH_REASONS = /* @__PURE__ */ new Set(["IMAGE_SAFETY", "SAFETY", "PROHIBITED_CONTENT"]);
 function isGoogleSafetyMessage(message) {
   const lowered = message.toLowerCase();
@@ -72726,7 +72807,7 @@ var GoogleImagenProvider = class {
     });
     if (!response.ok) {
       const error = await response.json();
-      logger2.error("Gemini API error", {
+      logger3.error("Gemini API error", {
         context: "GoogleImagenProvider.generateWithGemini",
         status: response.status,
         errorMessage: error.error?.message
@@ -72758,7 +72839,7 @@ var GoogleImagenProvider = class {
       const blockReason = data.promptFeedback?.blockReason;
       if (finishReason && GEMINI_IMAGE_SAFETY_FINISH_REASONS.has(finishReason) || blockReason) {
         const reason = blockReason || finishReason;
-        logger2.warn("Gemini withheld the image on safety grounds", {
+        logger3.warn("Gemini withheld the image on safety grounds", {
           context: "GoogleImagenProvider.generateWithGemini",
           finishReason,
           blockReason
@@ -72814,7 +72895,7 @@ var GoogleImagenProvider = class {
     });
     if (!response.ok) {
       const error = await response.json();
-      logger2.error("Google Imagen API error", {
+      logger3.error("Google Imagen API error", {
         context: "GoogleImagenProvider.generateWithImagen",
         status: response.status,
         errorMessage: error.error?.message
@@ -72832,7 +72913,7 @@ var GoogleImagenProvider = class {
     );
     if (usable.length === 0) {
       const filterReason = predictions.find((p) => typeof p.raiFilteredReason === "string")?.raiFilteredReason ?? data.raiFilteredReason ?? data.filteredReason ?? null;
-      logger2.warn("Google Imagen returned no usable images (likely safety filter)", {
+      logger3.warn("Google Imagen returned no usable images (likely safety filter)", {
         context: "GoogleImagenProvider.generateWithImagen",
         predictionCount: predictions.length,
         filterReason
@@ -72863,7 +72944,7 @@ var GoogleImagenProvider = class {
       const isValid = response.ok;
       return isValid;
     } catch (error) {
-      logger2.error("Google API key validation failed for image generation", {
+      logger3.error("Google API key validation failed for image generation", {
         context: "GoogleImagenProvider.validateApiKey"
       }, error instanceof Error ? error : void 0);
       return false;
@@ -72917,7 +72998,7 @@ var GoogleImagenProvider = class {
       throw new Error("Google models list contained no image-generation models for this API key");
     }
     imageModels.sort();
-    logger2.debug("Discovered Google image-generation models", {
+    logger3.debug("Discovered Google image-generation models", {
       context: "GoogleImagenProvider.getAvailableModels",
       count: imageModels.length
     });
@@ -73077,7 +73158,7 @@ function stripToolUseMarkers(response) {
 }
 
 // index.ts
-var logger3 = createPluginLogger("qtap-plugin-google");
+var logger4 = createPluginLogger("qtap-plugin-google");
 var metadata = {
   providerName: "GOOGLE",
   displayName: "Google Gemini",
@@ -73159,9 +73240,17 @@ var plugin = {
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
-      logger3.error("Failed to fetch Google models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
+      logger4.error("Failed to fetch Google models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
       return [];
     }
+  },
+  /**
+   * Live, detailed text-model list (context window, output limit, thinking).
+   * Throws on failure so the host does not cache a partial list.
+   */
+  getModelCatalog: async (apiKey, baseUrl) => {
+    logger4.debug("Fetching Google model catalog", { context: "plugin.getModelCatalog" });
+    return fetchGoogleModelCatalog(apiKey);
   },
   /**
    * Validate a Google API key
@@ -73172,7 +73261,7 @@ var plugin = {
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {
-      logger3.error("Error validating Google API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
+      logger4.error("Error validating Google API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
       return false;
     }
   },
@@ -73342,7 +73431,7 @@ var plugin = {
       const formattedTools = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger3.warn("Skipping tool with invalid format", {
+          logger4.warn("Skipping tool with invalid format", {
             context: "plugin.formatTools"
           });
           continue;
@@ -73353,7 +73442,7 @@ var plugin = {
       }
       return formattedTools;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error formatting tools for Google",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -73379,7 +73468,7 @@ var plugin = {
       const toolCalls = parseGoogleToolCalls(response);
       return toolCalls;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing tool calls from Google response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0
@@ -73401,7 +73490,7 @@ var plugin = {
       const parsed = parseToolUseFormat(text);
       return parsed.map(convertToToolCallRequest);
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing text tool calls",
         { context: "google.parseTextToolCalls" },
         error instanceof Error ? error : void 0

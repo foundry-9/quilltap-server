@@ -9,6 +9,10 @@ import { logger } from '@/lib/logger';
 import { FileEntry, FileEntrySchema, FileCategory, FileSource } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import { TypedQueryFilter } from '../interfaces';
+import { UNCENSORED_GENERATION_MODERATIONS } from '@/lib/schemas/file.types';
+
+/** Hashes per `IN (...)` read. */
+const SHA_CHUNK = 400;
 
 /**
  * Files Repository
@@ -54,6 +58,33 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   }
 
   /**
+   * Generated files among these content hashes whose `generationModeration`
+   * says an uncensored profile drew them. Backs `findUncensoredImages`
+   * (`lib/photos/uncensored-images.ts`), which owns the question; this is
+   * only the read. Chunked to stay under SQLite's bound-parameter limit.
+   */
+  async findUncensoredBySha256s(sha256s: readonly string[]): Promise<FileEntry[]> {
+    const unique = Array.from(new Set(sha256s.filter(Boolean)));
+    if (unique.length === 0) return [];
+    return this.safeQuery(
+      async () => {
+        const out: FileEntry[] = [];
+        for (let i = 0; i < unique.length; i += SHA_CHUNK) {
+          const chunk = unique.slice(i, i + SHA_CHUNK);
+          const rows = await this.findByFilter({
+            sha256: { $in: chunk },
+            generationModeration: { $in: [...UNCENSORED_GENERATION_MODERATIONS] },
+          } as TypedQueryFilter<FileEntry>);
+          out.push(...rows);
+        }
+        return out;
+      },
+      'Error finding uncensored files by SHA256',
+      { count: unique.length }
+    );
+  }
+
+  /**
    * Find files by avatar configuration cache key.
    *
    * Backs `lookupCachedAvatar` (`lib/image-gen/avatar-cache.ts`), which owns the
@@ -67,6 +98,27 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       },
       'Error finding files by generation key',
       { generationKey }
+    );
+  }
+
+  /**
+   * Every generated picture that is not an avatar-cache roll: `source =
+   * 'GENERATED'`, `category = 'IMAGE'`, no `generationKey`. Story backdrops,
+   * image-tool pictures and dialog pictures; the caller classifies them
+   * (`isStoryBackgroundFile`). Backs the dynamic backgrounds' home pool.
+   */
+  async findGeneratedImages(): Promise<FileEntry[]> {
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({
+          source: 'GENERATED',
+          category: 'IMAGE',
+          generationKey: null,
+        } as TypedQueryFilter<FileEntry>);
+        return files;
+      },
+      'Error finding generated images',
+      {}
     );
   }
 
@@ -183,10 +235,8 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async update(id: string, data: Partial<FileEntry>): Promise<FileEntry | null> {
     return this.safeQuery(
       async () => {
-        // Remove id and createdAt to prevent accidental overwrites
-        const { id: _id, createdAt: _createdAt, ...updateData } = data as any;
-
-        const file = await this._update(id, updateData);
+        // `_update` keeps the stored id and createdAt whatever the patch carries
+        const file = await this._update(id, data);
 
         if (file) {
           logger.info('File updated', { fileId: id });

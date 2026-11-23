@@ -349,7 +349,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         maxWidth="xl"
        
         bodyClassName="flex-1 overflow-y-auto p-6"
-        footerClassName="qt-dialog-footer flex justify-end"
+        footerClassName="qt-dialog-footer-default flex justify-end"
         footer={
           <button type="button" className="qt-button qt-button-secondary" onClick={closeDigest}>
             Close

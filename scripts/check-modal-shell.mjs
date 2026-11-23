@@ -37,6 +37,7 @@ export const MODAL_SHELL_ALLOWLIST = new Map([
   ['components/images/FullScreenImageViewer.tsx', 'lightbox, a different shell'],
   ['components/chat/ImageModal.tsx', 'lightbox, to fold into FullScreenImageViewer'],
   ['components/images/image-detail/ImageDetailModal.tsx', 'lightbox, to fold into FullScreenImageViewer'],
+  ['components/theme-specimens/specimens/pages.tsx', 'specimen gallery: draws the dialog hooks inside a contained stage, never opens one'],
 ])
 
 const OVERLAY = /qt-dialog-overlay|fixed inset-0/

@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { logger } from '@/lib/logger';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 
 const cryptoLogger = logger.child({ module: 'theme-crypto' });
 
@@ -136,15 +137,7 @@ export function verifyRegistryIndex(
  */
 export async function hashFile(filePath: string): Promise<string> {
   const data = await fs.readFile(filePath);
-  return crypto.createHash('sha256').update(data).digest('hex');
-}
-
-/**
- * Compute SHA-256 hash of a buffer.
- * @returns Hex-encoded SHA-256 hash
- */
-export function hashBuffer(data: Buffer): string {
-  return crypto.createHash('sha256').update(data).digest('hex');
+  return sha256OfBuffer(data);
 }
 
 // ============================================================================

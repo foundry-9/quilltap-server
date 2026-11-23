@@ -71,7 +71,12 @@ export default function ConnectionProfilesTab() {
       if (!result.ok) {
         showErrorToast(result.error || 'Auto-configure failed')
       } else {
-        showSuccessToast('Profile auto-configured successfully')
+        const applied = result.data?.autoConfigureResult
+        showSuccessToast(
+          applied?.pseudoToolMode === 'simple-json'
+            ? 'Profile auto-configured; this route has no native tool calling, so tools now use Simple JSON'
+            : 'Profile auto-configured successfully'
+        )
         void refreshProfiles()
       }
     } catch (err) {

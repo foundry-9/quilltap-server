@@ -151,7 +151,6 @@ export interface MockLLMLogsRepository {
   countByScope: jest.Mock;
   findByUserId: jest.Mock;
   countByUserId: jest.Mock;
-  countByMessageId: jest.Mock;
   getTotalTokenUsage: jest.Mock;
   cleanupOldLogs: jest.Mock;
 }
@@ -414,7 +413,6 @@ export function createMockLLMLogsRepository(): MockLLMLogsRepository {
     countByScope: jest.fn().mockResolvedValue(0),
     findByUserId: jest.fn().mockResolvedValue([]),
     countByUserId: jest.fn().mockResolvedValue(0),
-    countByMessageId: jest.fn().mockResolvedValue(0),
     getTotalTokenUsage: jest.fn().mockResolvedValue({ promptTokens: 0, completionTokens: 0, totalTokens: 0 }),
     cleanupOldLogs: jest.fn().mockResolvedValue(0),
   };

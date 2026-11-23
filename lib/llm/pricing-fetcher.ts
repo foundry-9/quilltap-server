@@ -93,6 +93,7 @@ async function fetchOpenRouterPublicPricing(): Promise<ModelPricing[]> {
         promptCostPer1M,
         completionCostPer1M,
         contextLength: model.context_length ?? null,
+        maxCompletionTokens: model.top_provider?.max_completion_tokens ?? null,
         supportsVision: model.architecture?.modality?.includes('image') || false,
         supportsTools: Array.isArray(model.supported_parameters) &&
           model.supported_parameters.some((p: string) => p === 'tools' || p === 'tool_choice'),
@@ -194,6 +195,63 @@ export async function getOpenRouterPricingForModel(
   }
 
   return null
+}
+
+/**
+ * Find a model in OpenRouter's public catalog by the id a profile uses.
+ *
+ * Unlike `getOpenRouterPricingForModel`, this also answers for providers with
+ * no OpenRouter slug (aggregators such as NanoGPT, OpenAI-compatible
+ * endpoints), whose model ids are often already `vendor/model`, and it never
+ * matches by substring: an exact id first, then a unique match on the
+ * normalised bare name (`normalizeModelKey`). The entry
+ * describes the upstream model as OpenRouter serves it, so a caller must not
+ * read its tool support as true of another provider's route.
+ *
+ * Returns null when nothing matches or the catalog is unreachable.
+ */
+export async function findOpenRouterPublicModel(
+  provider: Provider | string,
+  modelId: string
+): Promise<ModelPricing | null> {
+  // Not getOpenRouterPricingForModel: its substring match is fine for a price
+  // estimate but would hand "claude-sonnet-4-6" the limits of "claude-sonnet-4".
+  const slug = PROVIDER_TO_OPENROUTER_SLUG[provider as Provider]
+  const models = await getOpenRouterPublicPricing()
+  if (models.length === 0) return null
+
+  const wanted = modelId.trim().toLowerCase()
+  const exact = models.find(m => {
+    const id = m.modelId.toLowerCase()
+    return id === wanted || (!!slug && id === `${slug}/${wanted}`)
+  })
+  if (exact) return exact
+
+  // Then by normalised bare name ("claude-sonnet-4-6" ~ "anthropic/claude-sonnet-4.6"),
+  // within the provider's own vendor prefix when it has one.
+  const wantedKey = normalizeModelKey(wanted)
+  const pool = slug ? models.filter(m => m.modelId.startsWith(`${slug}/`)) : models
+  const byKey = pool.filter(m => normalizeModelKey(m.modelId) === wantedKey)
+  if (byKey.length === 1) return byKey[0]
+  if (byKey.length > 1) {
+    logger.debug('[OpenRouterPublic] Ambiguous model name; not guessing', {
+      modelId,
+      candidates: byKey.map(m => m.modelId),
+    })
+  }
+  return null
+}
+
+/**
+ * A model id reduced for loose comparison: the part after any `vendor/`,
+ * lower-cased, with `.`, `_` and `:` read as `-` and a trailing date stamp
+ * (`-20250929`, `-2024-11-20`) dropped.
+ */
+export function normalizeModelKey(modelId: string): string {
+  const bare = modelId.toLowerCase().slice(modelId.lastIndexOf('/') + 1)
+  return bare
+    .replace(/[._:]/g, '-')
+    .replace(/-(\d{8}|\d{4}-\d{2}-\d{2})$/, '')
 }
 
 /**

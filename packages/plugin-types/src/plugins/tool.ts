@@ -44,6 +44,41 @@ export interface ToolMetadata {
 export type ToolEffect = 'none' | 'read' | 'write' | 'destroy';
 
 /**
+ * An effect that depends on the call's input
+ *
+ * For a tool whose calls differ in what they do — an HTTP tool whose GET reads
+ * and whose POST writes. Return it from `getToolEffects` in place of a plain
+ * {@link ToolEffect}. Requires Quilltap 4.14 or later; an older host does not
+ * recognise it and counts the tool as `write`.
+ */
+export interface ToolCallEffect {
+  /**
+   * The highest effect any call of the tool can have. Used wherever the host
+   * needs one answer for the whole tool (a storyteller bid's tier, an
+   * autonomous room's destructive-tool policy).
+   */
+  max: ToolEffect;
+
+  /**
+   * The effect of one call, from the input the model supplied.
+   *
+   * Must be synchronous and pure, and must judge the input as it is: the host
+   * calls it before validation, so treat anything unexpected as the tool's
+   * highest effect. A throw, or an answer that is not a {@link ToolEffect},
+   * counts as `write`.
+   */
+  of: (input: Record<string, unknown>) => ToolEffect;
+
+  /**
+   * One line per allowance, appended to the tool's description on a turn
+   * whose allowance is below `max`, saying which uses that turn permits
+   * (`{ read: 'Only GET requests are allowed this turn.' }`). Without a line
+   * for a given allowance the tool is not offered on such a turn at all.
+   */
+  notes?: Partial<Record<ToolEffect, string>>;
+}
+
+/**
  * Hierarchy information for a tool
  *
  * Used by plugins that provide multiple tools from different sources
@@ -274,7 +309,8 @@ export interface ToolPlugin {
    * Declare each tool's effect on the world (optional)
    *
    * Maps tool name (as returned by `getToolDefinitions`) to its
-   * {@link ToolEffect}. A tool missing from the map — or every tool of a plugin
+   * {@link ToolEffect}, or to a {@link ToolCallEffect} when the effect depends
+   * on the call's input. A tool missing from the map — or every tool of a plugin
    * without this method — counts as `write`, so an older plugin keeps working,
    * restricted to turns that may change things.
    *
@@ -287,7 +323,9 @@ export interface ToolPlugin {
    */
   getToolEffects?: (
     config: Record<string, unknown>
-  ) => Record<string, ToolEffect> | Promise<Record<string, ToolEffect>>;
+  ) =>
+    | Record<string, ToolEffect | ToolCallEffect>
+    | Promise<Record<string, ToolEffect | ToolCallEffect>>;
 
   // ============================================================================
   // Deprecated Methods (for backwards compatibility)

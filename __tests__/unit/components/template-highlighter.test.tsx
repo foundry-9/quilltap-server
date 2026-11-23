@@ -1,6 +1,4 @@
-import { render, screen } from '@testing-library/react'
 import {
-  TemplateDisplay,
   collectTemplateFields,
   applyTemplateTransform,
   replaceTemplateWithName,
@@ -229,52 +227,5 @@ describe('count/transform parity (anti-drift guarantee)', () => {
     expect(changedScenarios).toHaveLength(1)
     expect(mainUpdates).toHaveProperty('physicalDescription')
     expect(changedSystemPrompts).toHaveLength(1)
-  })
-})
-
-describe('TemplateDisplay', () => {
-  it('replaces template variables with character and persona names', () => {
-    render(
-      <TemplateDisplay
-        content="Greetings {{char}}, please help {{user}} today."
-        characterName="Alice"
-        userCharacterName="Bob"
-      />
-    )
-
-    const charSpan = screen.getByTitle('Character name (from {{char}})')
-    expect(charSpan).toHaveTextContent('Alice')
-
-    const userSpan = screen.getByTitle('User character name (from {{user}})')
-    expect(userSpan).toHaveTextContent('Bob')
-  })
-
-  it('falls back to USER label when no persona is provided', () => {
-    render(
-      <TemplateDisplay
-        content="Reminder: {{user}} should stay in character."
-        characterName="Alice"
-        userCharacterName={null}
-      />
-    )
-
-    const fallbackSpan = screen.getByTitle('User (no default user character set)')
-    expect(fallbackSpan).toHaveTextContent('USER')
-  })
-
-  it('warns about hard-coded names that should be converted to templates', () => {
-    render(
-      <TemplateDisplay
-        content="Alice talks to Bob without templates."
-        characterName="Alice"
-        userCharacterName="Bob"
-      />
-    )
-
-    const charWarning = screen.getByTitle('Hard-coded character name - consider replacing with {{char}}')
-    expect(charWarning).toHaveTextContent('Alice')
-
-    const userWarning = screen.getByTitle('Hard-coded user character name - consider replacing with {{user}}')
-    expect(userWarning).toHaveTextContent('Bob')
   })
 })

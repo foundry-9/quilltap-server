@@ -1,9 +1,11 @@
-Copyright 2023 The Rethink Sans Project Authors (https://github.com/nicholsonnn/rethink-sans)
+The fonts in this theme (Rethink Sans) are licensed under the SIL Open Font License, Version 1.1.
+Copyright notices, as each font file states them:
+
+Copyright 2022 The Rethink Sans Project Authors (https://github.com/hans-thiessen/Rethink-Sans)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
-http://scripts.sil.org/OFL
-
+https://openfontlicense.org
 
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007

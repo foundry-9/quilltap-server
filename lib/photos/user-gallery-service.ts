@@ -43,6 +43,8 @@ import {
 import { chunkAndInsertExtractedText } from './chunk-extracted-text';
 import { buildPhotosRelativePath, PHOTOS_FOLDER, isPhotosRelativePath } from './photos-paths';
 import { getPhotoLinkSummaryBySha256, type PhotoLinkSummary } from './photo-link-summary';
+import type { GenerationModeration } from '@/lib/schemas/file.types';
+import { findUncensoredImages, withGenerationModeration } from './uncensored-images';
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 
 const USER_LINKED_BY_NAME = 'You';
@@ -105,6 +107,11 @@ export interface UserGalleryEntry {
   relevanceScore?: number;
   /** Reverse-index summary: every hard link to these bytes. */
   linkSummary: PhotoLinkSummary;
+  /**
+   * Set when an uncensored profile drew these bytes (`findUncensoredImages`,
+   * by sha256); null otherwise. Drives the gallery's Uncensored badge.
+   */
+  generationModeration?: GenerationModeration | null;
 }
 
 export interface ListUserGalleryInput {
@@ -441,7 +448,11 @@ export async function listUserGallery(
     });
   }
 
-  return { entries, total, hasMore: effectiveOffset + page.length < total };
+  return {
+    entries: await withGenerationModeration(repos, entries),
+    total,
+    hasMore: effectiveOffset + page.length < total,
+  };
 }
 
 /**
@@ -516,7 +527,9 @@ export async function getUserGalleryEntry(
   if (!(await isUserGalleryLink(link, repos))) return null;
   const meta = parseKeptImageFrontmatter(link.extractedText ?? null);
   const linkSummary = await getPhotoLinkSummaryBySha256(link.sha256, repos);
+  const uncensored = await findUncensoredImages(repos, [link.sha256]);
   return {
+    generationModeration: uncensored.get(link.sha256) ?? null,
     linkId: link.id,
     mountPointId: link.mountPointId,
     relativePath: link.relativePath,

@@ -34,11 +34,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  createContextHandler,
-  dispatchAction,
-  type RequestContext,
-} from '@/lib/api/middleware';
+import { createContextHandler, dispatchAction, type RequestContext } from '@/lib/api/middleware';
+import { withCollectionActionDispatch } from '@/lib/api/middleware/actions';
 import { searchMemories } from '@/lib/memory/recall/search';
 import { generateMissingEmbeddings, rebuildVectorIndex, enqueueMissingEmbeddings } from '@/lib/memory/index-store/backfill';
 import { admitCandidate, admissionInserted, updateMemory } from '@/lib/memory/admission';
@@ -287,7 +284,8 @@ export const PUT = createContextHandler(async (req, { user, repos }) =>
 // DELETE /api/v1/memories - Delete memories by filter
 // =============================================================================
 
-export const DELETE = createContextHandler(async (req, { user, repos }) => {
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
+export const DELETE = createContextHandler(withCollectionActionDispatch({}, async (req, { user, repos }) => {
   const chatId = req.nextUrl.searchParams.get('chatId');
 
   if (!chatId) {
@@ -295,7 +293,7 @@ export const DELETE = createContextHandler(async (req, { user, repos }) => {
   }
 
   return handleDeleteByChatId(req, { user, repos }, chatId);
-});
+}));
 
 // =============================================================================
 // Handler Implementations

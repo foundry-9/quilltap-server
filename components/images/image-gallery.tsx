@@ -15,6 +15,8 @@ import { showErrorToast } from '@/lib/toast';
 import { downloadFetchedFile } from '@/lib/download-utils';
 import DeletedImagePlaceholder from './DeletedImagePlaceholder';
 import { activateOnKey } from '@/components/ui/activate-on-key';
+import { UncensoredBadge } from './UncensoredBadge';
+import type { GenerationModeration } from '@/lib/schemas/file.types';
 
 export interface ImageData {
   id: string;
@@ -31,6 +33,8 @@ export interface ImageData {
     tagType: string;
     tagId: string;
   }>;
+  /** Set when an uncensored profile drew it; drives the Uncensored badge. */
+  generationModeration?: GenerationModeration | null;
 }
 
 interface ImageGalleryProps {
@@ -171,6 +175,9 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
                   }
                 }}
               />
+            )}
+            {!missingImages.has(image.id) && (
+              <UncensoredBadge moderation={image.generationModeration} className="absolute top-2 left-2" />
             )}
           </div>
 

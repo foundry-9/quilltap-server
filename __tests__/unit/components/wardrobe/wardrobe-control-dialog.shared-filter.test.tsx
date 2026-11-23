@@ -35,6 +35,9 @@ jest.mock('@/components/wardrobe/wardrobe-item-editor', () => ({
 jest.mock('@/components/wardrobe/import-from-image-modal', () => ({
   ImportFromImageModal: () => null,
 }))
+jest.mock('@/components/wardrobe/ImportFromInstructionsModal', () => ({
+  ImportFromInstructionsModal: () => null,
+}))
 jest.mock('@/components/wardrobe/WardrobeTransferDialog', () => ({
   WardrobeTransferDialog: () => null,
 }))

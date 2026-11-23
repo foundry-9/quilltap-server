@@ -42,6 +42,8 @@ import {
   DEFAULT_AGENT_MODE_SETTINGS,
   DEFAULT_STORY_BACKGROUNDS_SETTINGS,
   DEFAULT_WARDROBE_IMAGE_SETTINGS,
+  DynamicBackgroundsSettings,
+  DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS,
   ConciergeSettings,
   ConciergeSettingsUpdate,
   DEFAULT_CONCIERGE_SETTINGS,
@@ -91,6 +93,7 @@ interface UseChatSettingsReturn {
   handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
   handleWardrobeImageProfileChange: (profileId: string | null) => Promise<void>
   handleWardrobeImageGenerateFromToolsChange: (enabled: boolean) => Promise<void>
+  handleDynamicBackgroundsChange: (updates: Partial<DynamicBackgroundsSettings>) => Promise<void>
   handleConciergeUpdate: (updates: ConciergeSettingsUpdate) => Promise<void>
   handleTimezoneChange: (timezone: string | null) => Promise<void>
   handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
@@ -190,6 +193,7 @@ export function useChatSettings(): UseChatSettingsReturn {
       handleStoryBackgroundsProfileChange: (profileId: string | null) => storyBackgrounds({ defaultImageProfileId: profileId }),
       handleWardrobeImageProfileChange: (profileId: string | null) => wardrobeImages({ imageProfileId: profileId }),
       handleWardrobeImageGenerateFromToolsChange: (enabled: boolean) => wardrobeImages({ generateFromTools: enabled }),
+      handleDynamicBackgroundsChange: merge('dynamicBackgrounds', 'Failed to update dynamic backgrounds settings', DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS),
       // Two nested objects inside; each is merged with its defaults.
       handleConciergeUpdate: async (updates: ConciergeSettingsUpdate): Promise<void> => {
         const current = readChatSettings(queryClient)?.conciergeSettings ?? DEFAULT_CONCIERGE_SETTINGS

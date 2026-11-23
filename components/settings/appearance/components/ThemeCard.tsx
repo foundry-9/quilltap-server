@@ -10,31 +10,12 @@
  * @module components/settings/appearance/components/ThemeCard
  */
 
-import { useEffect, useMemo } from 'react'
-import type { ThemeSummary } from '@/components/providers/theme-provider'
+import { useTheme } from '@/components/providers/theme-provider'
+import { useThemeHeadingFonts } from '@/components/providers/theme/use-theme-heading-fonts'
 import { BrandName } from '@/components/ui/brand-name'
-import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
-import { generateFontFacesCSS } from '@/lib/themes/utils'
-import type { ThemeCardProps, PreviewColors } from '../types'
-import { useThemePreview } from '../hooks/useThemePreview'
+import type { ThemeCardProps } from '../types'
 import { Icon } from '@/components/ui/icon'
 import { getContrastingTextColor, getMutedTextColor, getSourceBadge } from '../utils/contrast'
-
-// Default theme preview colors
-const DEFAULT_PREVIEW_COLORS: PreviewColors = {
-  light: {
-    background: DEFAULT_THEME_TOKENS.colors.light.background,
-    primary: DEFAULT_THEME_TOKENS.colors.light.primary,
-    secondary: DEFAULT_THEME_TOKENS.colors.light.secondary,
-    accent: DEFAULT_THEME_TOKENS.colors.light.accent,
-  },
-  dark: {
-    background: DEFAULT_THEME_TOKENS.colors.dark.background,
-    primary: DEFAULT_THEME_TOKENS.colors.dark.primary,
-    secondary: DEFAULT_THEME_TOKENS.colors.dark.secondary,
-    accent: DEFAULT_THEME_TOKENS.colors.dark.accent,
-  },
-}
 
 /**
  * Individual theme card with preview and selection state
@@ -56,42 +37,20 @@ export function ThemeCard({
     : theme.description
   const supportsDarkMode = isDefault ? true : theme.supportsDarkMode
 
-  // Use the preview hook to lazy load tokens (for fonts + preview colors)
-  const { tokens, fonts, fetchTokens } = useThemePreview(
-    isDefault ? null : themeId
-  )
+  // Swatches and heading font come with the theme list; the default's are the
+  // registry defaults, which the server resolves for its list entry.
+  const { defaultTheme } = useTheme()
+  const summary = isDefault ? defaultTheme : theme
+  useThemeHeadingFonts([summary])
 
-  // Fetch tokens on mount (for fonts) and when expanded
-  useEffect(() => {
-    if (!isDefault) {
-      fetchTokens()
-    }
-  }, [isDefault, fetchTokens])
-
-  // Get tokens to use for preview (default theme uses DEFAULT_THEME_TOKENS)
-  const previewTokens = isDefault ? DEFAULT_THEME_TOKENS : tokens
-
-  // Get preview colors for card styling (use dark mode for more visual distinction)
-  const previewColors = isDefault ? DEFAULT_PREVIEW_COLORS : theme?.previewColors
+  // Preview colors for card styling (dark mode for more visual distinction)
+  const previewColors = summary?.previewColors
   const cardBgColor = previewColors?.dark?.background || '#1a1a1a'
   const cardTextColor = getContrastingTextColor(cardBgColor)
   const cardMutedColor = getMutedTextColor(cardBgColor)
 
-  // Get font family from tokens if available
-  const fontFamily = previewTokens?.typography?.fontSans || undefined
-
-  // Generate font-face CSS for theme fonts
-  const fontFaceCSS = useMemo(() => {
-    if (!fonts || fonts.length === 0) return ''
-    const fontDefinitions = fonts.map((font) => ({
-      family: font.family,
-      src: font.src,
-      weight: font.weight,
-      style: font.style,
-      display: font.display,
-    }))
-    return generateFontFacesCSS(fontDefinitions)
-  }, [fonts])
+  // The card is set in the theme's heading font
+  const fontFamily = summary?.headingFont?.family || undefined
 
   // Handle preview button click
   const handlePreviewClick = (e: React.MouseEvent) => {
@@ -102,9 +61,6 @@ export function ThemeCard({
   // Collapsed view (default card)
   return (
     <>
-      {/* Load theme fonts */}
-      {fontFaceCSS && <style dangerouslySetInnerHTML={{ __html: fontFaceCSS }} />}
-
       <div
         className={`
           relative flex flex-col items-start p-4 rounded-lg border-2 transition-all
@@ -148,17 +104,13 @@ export function ThemeCard({
         <div className="flex flex-wrap items-center gap-1">
           {/* Source badge */}
           {(() => {
-            const badge = isDefault ? { label: 'Built-in', deprecated: false } : getSourceBadge(theme?.source, theme?.deprecated)
+            const badge = isDefault ? { label: 'Built-in' } : getSourceBadge(theme?.source)
             return badge ? (
               <span
                 className="inline-flex items-center px-2 py-0.5 rounded qt-text-label-xs"
-                style={{
-                  backgroundColor: badge.deprecated ? 'rgba(234, 179, 8, 0.15)' : `${cardTextColor}15`,
-                  color: badge.deprecated ? '#eab308' : cardTextColor,
-                }}
+                style={{ backgroundColor: `${cardTextColor}15`, color: cardTextColor }}
               >
                 {badge.label}
-                {badge.deprecated && ' (deprecated)'}
               </span>
             ) : null
           })()}

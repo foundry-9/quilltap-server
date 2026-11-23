@@ -388,6 +388,24 @@ export interface DocMountLinkTextMatch {
   updatedAt: string;
 }
 
+/**
+ * One link as the research kit's document scan sees it (`scanForResearch`):
+ * its location, its content identity, and its text — the database document's
+ * content, else the link's extracted text (an upload), else null (a
+ * filesystem-backed file, read through the document core by the caller).
+ */
+export interface DocMountResearchRow {
+  linkId: string;
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  fileId: string;
+  fileType: string;
+  fileSizeBytes: number;
+  lastModified: string;
+  text: string | null;
+}
+
 export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<DocMountFileLink> {
   constructor() {
     super('doc_mount_file_links', DocMountFileLinkSchema, { dbTarget: 'mountIndex', acquireDb: requireMountIndexDb });
@@ -627,6 +645,47 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
       },
       'Error searching file links by name or path',
       { mountPointIdCount: mountPointIds.length, queryLength: query.length }
+    );
+  }
+
+  /**
+   * The research kit's document scan (`lib/research/documents.ts`): every link
+   * in `mountPointIds` with its text, in one query. Text comes from the
+   * database document (`doc_mount_documents.content`) or, for an upload, the
+   * link's `extractedText`; a filesystem-backed file comes back with `text:
+   * null`. `modifiedSince` (ISO) bounds `lastModified`. Matching, ranking and
+   * snippets happen in JavaScript on these rows — a whole year-old instance's
+   * text is a few megabytes and scans in milliseconds. When that stops being
+   * true (research kit §5.3: 200 MB of text, or a p95 over 300 ms) the scan is
+   * replaced by an FTS index with the same contract.
+   */
+  async scanForResearch(
+    mountPointIds: string[],
+    opts: { modifiedSince?: string; withText: boolean }
+  ): Promise<DocMountResearchRow[]> {
+    if (mountPointIds.length === 0) return [];
+    return this.withRawDb(
+      [],
+      async (db) => {
+        const placeholders = mountPointIds.map(() => '?').join(',');
+        const textColumn = opts.withText ? 'COALESCE(d.content, l.extractedText)' : 'NULL';
+        const params: unknown[] = [...mountPointIds];
+        let since = '';
+        if (opts.modifiedSince) {
+          since = ' AND l.lastModified >= ?';
+          params.push(opts.modifiedSince);
+        }
+        return db.prepare(
+          `SELECT l.id AS linkId, l.mountPointId, l.relativePath, l.fileName, l.fileId,
+                  f.fileType, f.fileSizeBytes, l.lastModified, ${textColumn} AS text
+             FROM doc_mount_file_links l
+             JOIN doc_mount_files f ON f.id = l.fileId
+             LEFT JOIN doc_mount_documents d ON d.fileId = l.fileId
+            WHERE l.mountPointId IN (${placeholders})${since}`
+        ).all(...params) as DocMountResearchRow[];
+      },
+      'Error scanning file links for research',
+      { mountPointIdCount: mountPointIds.length, withText: opts.withText }
     );
   }
 

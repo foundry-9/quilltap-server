@@ -23,6 +23,8 @@ import { reseedAvatarsForCharacters } from '@/lib/startup/seed-initial-data';
 import { writeCharacterAvatarToVault } from '@/lib/file-storage/character-vault-bridge';
 import type { RequestContext } from '@/lib/api/middleware';
 import { createCharacterSchema } from '@/lib/characters/api-schemas';
+import { BUILTIN_CHARACTER_NAMES, planBuiltinReset } from '@/lib/characters/builtin-reset';
+import { getRepositories } from '@/lib/repositories/factory';
 
 // ============================================================================
 // Schemas
@@ -88,61 +90,6 @@ const wizardRequestSchema = z.object({
 // Helper Functions
 // ============================================================================
 
-const BUILTIN_CHARACTER_NAMES = ['Lorian', 'Riya'] as const;
-
-function findBuiltinCharacterIds(seedImportData: unknown): Record<string, string> {
-  if (!seedImportData || typeof seedImportData !== 'object') {
-    return {};
-  }
-
-  const dataContainer = (seedImportData as { data?: unknown }).data;
-  if (!dataContainer || typeof dataContainer !== 'object') {
-    return {};
-  }
-
-  const seedCharacters = (dataContainer as { characters?: unknown }).characters;
-  if (!Array.isArray(seedCharacters)) {
-    return {};
-  }
-
-  const seedIdByName: Record<string, string> = {};
-
-  for (const entry of seedCharacters) {
-    if (!entry || typeof entry !== 'object') {
-      continue;
-    }
-
-    const name = (entry as { name?: unknown }).name;
-    const id = (entry as { id?: unknown }).id;
-
-    if (typeof name === 'string' && typeof id === 'string') {
-      seedIdByName[name] = id;
-    }
-  }
-
-  return seedIdByName;
-}
-
-function replaceMappedIdsRecursively(value: unknown, idMapping: Map<string, string>): unknown {
-  if (typeof value === 'string') {
-    return idMapping.get(value) ?? value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => replaceMappedIdsRecursively(item, idMapping));
-  }
-
-  if (value && typeof value === 'object') {
-    const next: Record<string, unknown> = {};
-    for (const [key, nestedValue] of Object.entries(value)) {
-      next[key] = replaceMappedIdsRecursively(nestedValue, idMapping);
-    }
-    return next;
-  }
-
-  return value;
-}
-
 // ============================================================================
 // Named Handlers
 // ============================================================================
@@ -201,24 +148,36 @@ async function handleResetBuiltins(_req: NextRequest, context: RequestContext) {
       return badRequest('Built-in character seed data is unavailable');
     }
 
-    const seedIdByName = findBuiltinCharacterIds(seedImport.data);
+    // Each built-in comes back under the id it had, so the chats and links
+    // that named it keep resolving. The importer keeps a bundle's ids only
+    // under `preserveIds`, and then refuses on any id already taken — the plan
+    // rewrites every id the bundle claims so that cannot happen.
+    const plan = await planBuiltinReset(
+      seedImport.data,
+      preservedIds,
+      async (id) => Boolean(await getRepositories().characters.findByIdRaw(id))
+    );
+    logger.debug('[Characters v1] Reset built-ins id plan', {
+      context: actionContext,
+      characterIds: plan.characterIds,
+      remappedIdCount: plan.remappedIdCount,
+    });
 
-    const idMapping = new Map<string, string>();
-    for (const characterName of BUILTIN_CHARACTER_NAMES) {
-      const originalSeedId = seedIdByName[characterName];
-      const preservedId = preservedIds[characterName];
-
-      if (originalSeedId && preservedId && originalSeedId !== preservedId) {
-        idMapping.set(originalSeedId, preservedId);
-      }
-    }
-
-    const remappedImportData = replaceMappedIdsRecursively(seedImport.data, idMapping);
-    const importResult = await executeImport(user.id, remappedImportData as typeof seedImport.data, {
+    const importResult = await executeImport(user.id, plan.data, {
       conflictStrategy: 'skip',
       includeMemories: true,
       includeRelatedEntities: false,
+      preserveIds: true,
     });
+
+    if (!importResult.success) {
+      logger.error('[Characters v1] Built-in re-import failed during reset', {
+        context: actionContext,
+        deletedCharacterIds: deletedCharacters,
+        warnings: importResult.warnings,
+      });
+      return serverError('Failed to re-import the built-in characters');
+    }
 
     await reseedAvatarsForCharacters([...BUILTIN_CHARACTER_NAMES], actionContext);
 
@@ -235,7 +194,7 @@ async function handleResetBuiltins(_req: NextRequest, context: RequestContext) {
       preservedIds,
       postResetIds,
       importResult,
-      remappedIdCount: idMapping.size,
+      remappedIdCount: plan.remappedIdCount,
     });
 
     return NextResponse.json({
@@ -243,7 +202,7 @@ async function handleResetBuiltins(_req: NextRequest, context: RequestContext) {
       deletedCharacterIds: deletedCharacters,
       preservedIds,
       postResetIds,
-      remappedIdCount: idMapping.size,
+      remappedIdCount: plan.remappedIdCount,
       importResult,
     });
   } catch (error) {

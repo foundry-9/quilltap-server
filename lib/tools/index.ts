@@ -315,6 +315,7 @@ export {
   buildToolsForProvider,
   type BuildToolsOptions,
   type DocToolsMode,
+  type ResearchKitMode,
 } from './plugin-tool-builder';
 
 // Wardrobe Tools (Modular Wardrobe System)
@@ -519,10 +520,38 @@ export {
   type RunSqlResult,
 } from './handlers/run-sql-handler';
 
+// Calliope's theme tools (her surface only)
+export { THEME_ASSIST_TOOL_DEFINITIONS, THEME_ASSIST_TOOL_NAMES } from './theme-assist-tools';
+export { themeReadDraftToolDefinition, validateThemeReadDraftInput } from './theme-read-draft-tool';
+export { themeLookupTokensToolDefinition, validateThemeLookupTokensInput } from './theme-lookup-tokens-tool';
+export { themeLookupHooksToolDefinition, validateThemeLookupHooksInput } from './theme-lookup-hooks-tool';
+export { themeCheckContrastToolDefinition, validateThemeCheckContrastInput } from './theme-check-contrast-tool';
+export { themeProposeToolDefinition, validateThemeProposeInput } from './theme-propose-tool';
+
 // Brahma Console lookup shortcuts (operator surface only)
 export { lookupCharacterToolDefinition, validateLookupCharacterInput } from './lookup-character-tool';
 export { lookupMemoriesToolDefinition, validateLookupMemoriesInput } from './lookup-memories-tool';
 export { lookupMessagesToolDefinition, validateLookupMessagesInput } from './lookup-messages-tool';
+// The research kit (lib/research/): document tools and record lookups
+export { findDocumentsToolDefinition, validateFindDocumentsInput } from './find-documents-tool';
+export { listDocumentsToolDefinition, validateListDocumentsInput } from './list-documents-tool';
+export { lookupConversationsToolDefinition, validateLookupConversationsInput } from './lookup-conversations-tool';
+export {
+  lookupGroupToolDefinition,
+  validateLookupGroupInput,
+  lookupProjectToolDefinition,
+  validateLookupProjectInput,
+} from './lookup-group-tool';
+export {
+  lookupWardrobeToolDefinition,
+  validateLookupWardrobeInput,
+  lookupAtlasToolDefinition,
+  validateLookupAtlasInput,
+} from './lookup-wardrobe-tool';
+export {
+  lookupChatStateToolDefinition,
+  validateLookupChatStateInput,
+} from './lookup-chat-state-tool';
 export { readMessagesToolDefinition, validateReadMessagesInput } from './read-messages-tool';
 export {
   executeLookupCharacterTool,
@@ -662,6 +691,11 @@ export {
 } from './inventory-tool-flags';
 export { inventoryListToolDefinition, validateInventoryListInput } from './inventory-list-tool';
 export { inventoryReadToolDefinition, validateInventoryReadInput } from './inventory-read-tool';
+export { readMemoryToolDefinition, readMemoryToolInputSchema, validateReadMemoryInput } from './read-memory-tool';
+export type { ReadMemoryToolInput, ReadMemoryToolOutput, EditableMemoryObject, MemoryReadOnlyContext } from './read-memory-tool';
+export { editMemoryToolDefinition, editMemoryToolInputSchema, validateEditMemoryInput } from './edit-memory-tool';
+export type { EditMemoryToolInput, EditMemoryToolOutput } from './edit-memory-tool';
+export { executeReadMemoryTool, executeEditMemoryTool, type MemoryEditToolContext } from './handlers/memory-edit-handler';
 export { inventoryEquipToolDefinition, validateInventoryEquipInput } from './inventory-equip-tool';
 export { inventoryUnequipToolDefinition, validateInventoryUnequipInput } from './inventory-unequip-tool';
 export { inventoryPickUpToolDefinition, validateInventoryPickUpInput } from './inventory-pick-up-tool';

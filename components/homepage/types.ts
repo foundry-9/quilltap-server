@@ -25,6 +25,10 @@ export interface RecentChat {
   dangerCategories?: string[]
   /** Story background image URL - displayed instead of avatars when present */
   storyBackgroundUrl?: string | null
+  /** The project the chat is filed under, when it has one */
+  project?: { id: string; name: string; color?: string | null } | null
+  /** One plain line from the chat's context summary: where things stand */
+  summaryExcerpt?: string | null
   participants: Array<{
     id: string
     type: 'CHARACTER'
@@ -76,6 +80,20 @@ export interface HomepageCharacter {
   chatCount: number
   /** Default connection profile ID for showing provider badge */
   defaultConnectionProfileId?: string | null
+  /** The most recently active chat this character sits in, for "resume" */
+  latestChat?: HomepageCharacterLatestChat | null
+}
+
+/**
+ * A character's latest chat. Carries what quick-hide asks about a chat, so the
+ * home page can leave the link out when the chat itself is hidden.
+ */
+export interface HomepageCharacterLatestChat {
+  id: string
+  title: string
+  /** Tags of every character in the chat */
+  characterTags: string[]
+  conciergeState?: ConciergeState
 }
 
 /** Props for WelcomeSection */
@@ -85,13 +103,14 @@ export interface WelcomeSectionProps {
   firstVisit?: boolean
 }
 
-/** Props for QuickActionsRow */
-export interface QuickActionsRowProps {
-  lastChatId: string | null
+/** Props for ChatsBand: the resume card and the recent list beside it */
+export interface ChatsBandProps {
+  chats: RecentChat[]
 }
 
 /** Props for RecentChatsSection */
 export interface RecentChatsSectionProps {
+  /** Already filtered by quick-hide, newest first */
   chats: RecentChat[]
 }
 
@@ -103,4 +122,6 @@ export interface ProjectsSectionProps {
 /** Props for CharactersSection */
 export interface CharactersSectionProps {
   characters: HomepageCharacter[]
+  /** How many characters there are in all, shown ones included */
+  total: number
 }

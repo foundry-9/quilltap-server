@@ -24,6 +24,7 @@ import { refreshRelevantConversationsOnFold } from '@/lib/services/commonplace-n
 import { buildExtractionContext, runFoldPass } from '@/lib/memory/extraction'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
 import { applyAutoTitle } from '@/lib/chat/auto-title'
+import { processSingleton } from '@/lib/utils/process-singleton'
 
 /**
  * Rolling-window summarization cadence.
@@ -325,11 +326,51 @@ export function turnsToChatMessages(
 }
 
 /**
+ * Folds running in this process, keyed by chat. A fold takes tens of seconds
+ * and only advances `lastSummaryTurn` when it finishes, so in a group chat the
+ * next character's reply used to read the same un-advanced anchor, pass the
+ * gate again and start a second fold over the same turns. Each fold retitled
+ * the chat and each retitle queued a story background, so the operator got
+ * two pictures back to back and never saw the first. One fold per chat at a
+ * time; a caller that arrives mid-fold shares its result.
+ */
+const foldsInFlight = processSingleton(
+  'chat.contextSummary.foldsInFlight',
+  () => new Map<string, Promise<SummaryGenerationResult>>(),
+)
+
+/** True while a fold for this chat is running in this process. */
+export function isContextSummaryFoldInFlight(chatId: string): boolean {
+  return foldsInFlight.has(chatId)
+}
+
+/**
  * Generate or update a context summary for a chat using the rolling-window
  * fold cadence. Caller is expected to have run the gate (or to set
- * `forceRegenerate` for an unconditional T_hard rebuild).
+ * `forceRegenerate` for an unconditional T_hard rebuild). Single-flight per
+ * chat: a call made while a fold for the same chat is running joins it.
  */
-export async function generateContextSummary(
+export function generateContextSummary(
+  options: GenerateSummaryOptions
+): Promise<SummaryGenerationResult> {
+  const running = foldsInFlight.get(options.chatId)
+  if (running) {
+    logger.debug('[Context Summary] Fold already running; joining it', {
+      chatId: options.chatId,
+      forceRegenerate: options.forceRegenerate === true,
+    })
+    return running
+  }
+  const fold = runContextSummaryFold(options).finally(() => {
+    if (foldsInFlight.get(options.chatId) === fold) {
+      foldsInFlight.delete(options.chatId)
+    }
+  })
+  foldsInFlight.set(options.chatId, fold)
+  return fold
+}
+
+async function runContextSummaryFold(
   options: GenerateSummaryOptions
 ): Promise<SummaryGenerationResult> {
   const {
@@ -796,6 +837,14 @@ export async function checkAndGenerateSummaryIfNeeded(
     } catch (error) {
       logger.error(`[Title Update] Failed to enqueue title-update job for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
     }
+  }
+
+  // A fold already running for this chat has read the same anchor this check
+  // would; it will advance `lastSummaryTurn` when it lands, and the next
+  // reply's check sees that. Starting another would fold the same turns twice.
+  if (isContextSummaryFoldInFlight(chatId)) {
+    logger.debug('[Context Summary] Fold in flight; skipping gate', { chatId, currentInterchange })
+    return
   }
 
   const decision = evaluateSummarizationGate({

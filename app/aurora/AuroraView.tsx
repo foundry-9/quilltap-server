@@ -636,7 +636,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
             <button
               type="button"
               onClick={() => setImportDialogOpen(false)}
-              className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"
+              className="qt-button-secondary"
             >
               Cancel
             </button>
@@ -673,7 +673,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
             type="button"
             onClick={() => setResetBuiltinsDialogOpen(false)}
             disabled={resetBuiltinsInProgress}
-            className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            className="qt-button-secondary"
           >
             Cancel
           </button>
@@ -779,7 +779,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
               type="button"
               onClick={closeCreateGroupDialog}
               disabled={creatingGroup}
-              className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              className="qt-button-secondary"
             >
               Cancel
             </button>

@@ -134,7 +134,7 @@ bind-mounted at the same path (`quilltap docs docker-mounts` plans those binds).
 |---|---|---|---|
 | 8.1 | Default data dir | `docker exec quilltap quilltap db --lock-status` and `quilltap db --tables` | **currently looks in `/home/nextjs/.quilltap`** and says no lock / DB not found — see findings |
 | 8.2 | Explicit data dir | `docker exec quilltap quilltap db --data-dir /app/quilltap --lock-status` | ACTIVE |
-| 8.3 | Commands that need npm/npx | `quilltap themes create …` (runs `npx create-quilltap-theme`) | fails: npx removed from the image |
+| 8.3 | Theme scaffold without npm | `docker exec -w /tmp quilltap quilltap themes create Sunset`, then `quilltap themes validate /tmp/sunset` | writes `/tmp/sunset/` (`theme.json`, `tokens.json`) with no npm or npx; validates with no errors or warnings |
 
 ## 9. Timezone
 

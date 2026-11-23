@@ -340,6 +340,7 @@ CREATE TABLE "characters" (
   "canDressThemselves" INTEGER DEFAULT NULL,
   "canCreateOutfits" INTEGER DEFAULT NULL,
   "canManageInventory" INTEGER DEFAULT NULL,  -- Offered the inventory_* tools; NULL reads as on.
+  "canEditMemories" INTEGER DEFAULT NULL,     -- Offered read_memory / edit_memory on their own memories; NULL reads as off. Independent of systemTransparency.
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
   "archivedAt" TEXT DEFAULT NULL,            -- ISO timestamp when the character was archived into a tombstone.
   "archiveFileId" TEXT DEFAULT NULL,         -- File row holding the archived character bundle export.
@@ -758,11 +759,12 @@ CREATE TABLE "chats" (
   "characterAvatars" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { imageId, generatedAt, afterMessageCount } } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,
   "alertCharactersOfLanternImages" INTEGER DEFAULT NULL,
-  "chatType" TEXT DEFAULT 'salon',                  -- 'salon' | 'help' | 'autonomous' | 'brahma'
+  "chatType" TEXT DEFAULT 'salon',                  -- 'salon' | 'help' | 'autonomous' | 'brahma' | 'calliope'
   "helpPageUrl" TEXT DEFAULT NULL,
-  "consoleConnectionProfileId" TEXT DEFAULT NULL,   -- Brahma Console (chatType='brahma') active model; NULL on other chats
+  "consoleConnectionProfileId" TEXT DEFAULT NULL,   -- console chats (chatType='brahma' | 'calliope') active model; NULL on other chats
   "consoleMode" TEXT DEFAULT NULL,                  -- Brahma Console: 'writing' = Writing Assistant conversation (set at creation, never changed); NULL = ordinary Console
   "consoleContext" TEXT DEFAULT NULL,               -- Brahma Console Writing Assistant: JSON array of ConsoleContextRef ({kind:'chat'|'project'|'store', id} | {kind:'general'}); NULL/[] = none
+  "themeDraftId" TEXT DEFAULT NULL,                 -- Calliope (chatType='calliope'): the theme draft id (folder Themes/<id>/ in Quilltap General) the conversation is about; NULL on other chats. Deleted with the draft. Added by add-calliope-theme-draft-field-v1
   "scenarioText" TEXT DEFAULT NULL,
   "scenarioSource" TEXT DEFAULT NULL,                -- JSON { mountPointId, path, bodySha256 }: the scenario file the preset under scenarioText was read from, and its body hash at pick time. NULL = custom scene or pre-source chat. Written only beside scenarioText by resolveScenarioSelection's two callers. Added by add-chat-scenario-source-v1
   "scenarioNotes" TEXT DEFAULT NULL,                 -- free-text notes layered beneath the preset in scenarioText. Added by add-chat-scenario-source-v1
@@ -1230,6 +1232,7 @@ CREATE TABLE "chat_settings" (
   "customToolIntervention" INTEGER DEFAULT 1, -- added in 4.11 (add-custom-tool-intervention-field-v1): when 1 (the default), a custom tool marked intervenable is held for the operator in a dialog before Pascal announces its roll; when 0, every run goes ahead as rolled. A held roll waits indefinitely, so 0 is how a chat runs unattended. Dead while customTools is 0.
   "smartTypographySettings" TEXT DEFAULT '{"displayQuotes":false,"dashes":true,"ellipsis":true}', -- added in 4.8.2 (add-smart-typography-settings-field-v1): Layer 1.6 { displayQuotes, dashes, ellipsis }. `displayQuotes` curls quotes at RENDER time only — chat_messages.content is never rewritten, so model input, embeddings and exports are unaffected; suppressed for a template whose patterns claim a quote character. `dashes`/`ellipsis` are type-time and DO write real –/—/… into the composer text. `punctuationWarnings` (4.11, absent reads as `true` via the Zod default; the column default was not changed) tints suspect quotes/asterisks/`((`/`))` in the Salon composer and writes nothing.
   "wardrobeImageSettings" TEXT DEFAULT '{"imageProfileId":null}', -- added in 4.10 (add-wardrobe-image-settings-field-v1): { imageProfileId } — the image profile designated for drawing wardrobe items' pictures (Settings → Images → Wardrobe Images). Resolved by `resolveWardrobeImageProfile`: per-generation override → this → the user's default image profile. Never falls back to storyBackgroundsSettings. Also `generateFromTools` (boolean, absent reads as false): whether `wardrobe_create` / `wardrobe_update` may queue a `WARDROBE_ITEM_IMAGE_GENERATION` job — no migration, the Zod default fills older rows.
+  "dynamicBackgrounds" TEXT DEFAULT '{"enabled":false,"allowUncensored":false,"refreshMinutes":3}', -- added in 4.14 (add-dynamic-backgrounds-settings-field-v1): { enabled, allowUncensored, refreshMinutes (1–120) } — the collage painted behind the home, project and character pages (Settings → Appearance → Dynamic Backgrounds). Read on the server only by `resolveDynamicBackgroundSettings` (lib/dynamic-backgrounds/settings.ts). Holds no ids.
   UNIQUE("userId")
 );
 
@@ -1431,6 +1434,13 @@ CREATE TABLE "files" (
   -- picture (prompt + provider + profile + built image-gen params). Nullable
   -- because only cached-avatar rows ever carry one.
   "generationKey" TEXT,
+  -- How a generated picture's provider came to draw it, moderation-wise:
+  -- 'moderated' | 'uncensored-profile' | 'uncensored-routed' |
+  -- 'uncensored-failover' (GenerationModerationEnum, lib/schemas/file.types.ts).
+  -- Set only on generated avatars (job + wardrobe preview), story backgrounds
+  -- and image-tool / image-dialog pictures; null on every other file and on
+  -- pictures made before 4.14. Added by add-file-generation-moderation-column-v1.
+  "generationModeration" TEXT,
   "description" TEXT,
   "tags" TEXT DEFAULT '[]',
   "projectId" TEXT,
@@ -1454,6 +1464,8 @@ CREATE INDEX "idx_files_userId" ON "files" ("userId");
 `mimeType`/`size` were brought into line by `repair-files-mime-and-size-from-mount-blob-v1`, which deliberately left `sha256` alone on the grounds that it was load-bearing for dedup; that carve-out was bug 117, and `realign-file-entry-sha256-v1` closes it by reading each row's hash back out of the mount blob its `storageKey` names. `recompress-oversized-mount-blobs-v1` (4.10) originally rewrote only `sha256` after re-encoding a blob, which left rows claiming PNG/JPEG at the old size; it now writes all three, and `repair-files-mime-and-size-from-mount-blob-v2` mends instances that ran the first version.
 
 `generationKey` is the avatar configuration cache key: one image per character per configuration, looked up before the avatar job spends a Concierge classification call or an image call. It hashes the generation prompt (itself already the canonical serialization of the character's appearance, resolved outfit and art direction, since `buildCharacterAvatarPrompt` is pure) together with the provider-side shape the prompt does not carry — provider, image profile id and the full `buildImageGenParams` output. `lib/image-gen/avatar-cache.ts` is the only thing that derives or looks up a key; a call site that computes its own is a second format, and the two drift. Binding is last-write-wins, which is what makes the regenerate button a reroll for that configuration. Rows predating the cache carry a lower-fidelity `v: 0` key over `(generationModel, generationPrompt)` alone, assigned by `collapse-duplicate-avatar-rolls-v1`; the `v` discriminator inside the hashed payload keeps the two formats from ever colliding. Null on every file that is not a cached avatar. Design of record: [avatar-configuration-cache](features/complete/avatar-configuration-cache.md).
+
+`generationModeration` records whether a generated picture came from an uncensored provider, and how it got there. `moderated`: an ordinary profile drew it. `uncensored-profile`: the profile chosen was itself uncensored (marked uncensored-compatible, or the Concierge's image desk). `uncensored-routed`: the Concierge sent the call to an uncensored profile before it ran (an Unmoderated chat, a pre-screen verdict, a "retry uncensored"). `uncensored-failover`: an ordinary profile refused and the uncensored understudy drew it. It is derived only by `generationModerationOf` (`lib/services/dangerous-content/image-failover.ts`), which every `generateImageWithConciergeFailover` outcome carries as `moderation`; callers pass it to `createGeneratedFileRow`. Only avatars, story backgrounds and the image tool / dialog record it — wardrobe, Inventory and Atlas pictures leave it null. `isUncensoredGeneration` (`file.types.ts`) is the yes/no reading. Not backfilled: the route an older picture took was never recorded.
 
 ### folders
 

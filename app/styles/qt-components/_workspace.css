@@ -70,6 +70,13 @@
     opacity: var(--qt-workspace-backdrop-opacity, 0.4);
   }
 
+  /* In dark mode page text is light, so a bright patch of photograph is what
+     threatens it: at 0.35 even a white patch leaves foreground text over
+     4.5:1 against a dark page (WCAG 1.4.3). */
+  .dark .qt-workspace-backdrop-layer {
+    opacity: var(--qt-workspace-backdrop-opacity, 0.35);
+  }
+
   /* Split: each side dominates its half and crossfades across the divider
      (--qt-split = left pane %, --qt-backdrop-feather = crossfade half-width). */
   .qt-workspace-backdrop-left {
