@@ -36,7 +36,7 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
       // paint above it. Among other dialogs it is on top by DOM order anyway.
       overlayClassName="z-[100]"
     >
-      <div className="qt-dialog-body !px-0 !py-0 mb-6">
+      <div className="qt-dialog-body qt-dialog-body-default !px-0 !py-0 mb-6">
         <ModalTitle className="text-sm font-normal qt-text whitespace-pre-wrap break-words">
           {message}
         </ModalTitle>

@@ -7,6 +7,8 @@
  * (`lib/llm/vision-request.ts`) the describe-fallback uses: a profile that
  * can actually receive the image, the bytes shrunk for transport, and the
  * answer believed only once the image is known to have arrived (bug 197).
+ * The answer is read by the shared proposal parser
+ * (`lib/wardrobe/proposal/parse.ts`).
  *
  * @module wardrobe/image-analysis
  */
@@ -15,9 +17,9 @@ import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { resolveChosenVisionProfile, resolveVisionProfile, sendVisionRequest } from '@/lib/llm/vision-request'
 import { logger } from '@/lib/logger'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
-import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
-import { clampWardrobeImagePrompt, WARDROBE_IMAGE_PROMPT_MAX_LENGTH } from '@/lib/wardrobe/image-prompt-limit'
+import { WARDROBE_IMAGE_PROMPT_MAX_LENGTH } from '@/lib/wardrobe/image-prompt-limit'
+import { parseWardrobeProposal } from '@/lib/wardrobe/proposal/parse'
+import type { ProposedOutfit, ProposedWardrobeItem } from '@/lib/wardrobe/proposal/types'
 
 const moduleLogger = logger.child({ module: 'wardrobe-image-analysis' })
 
@@ -25,31 +27,7 @@ const moduleLogger = logger.child({ module: 'wardrobe-image-analysis' })
 // TYPES
 // ============================================================================
 
-/**
- * A single proposed wardrobe item from image analysis
- */
-export interface ProposedWardrobeItem {
-  title: string
-  description: string
-  /**
-   * The terse literal cue image pipelines use in place of the title. Always
-   * present: when the model omits one, the title stands in, clamped to the cap.
-   */
-  imagePrompt: string
-  types: WardrobeItemType[]
-  appropriateness: string
-}
-
-/**
- * A proposed name for the whole look — the ensemble the proposed items make
- * together. The client turns it into a composite item whose components are
- * the pieces it just created, so it carries no ids or types of its own.
- */
-export interface ProposedOutfit {
-  title: string
-  description: string
-  appropriateness: string
-}
+export type { ProposedWardrobeItem, ProposedOutfit } from '@/lib/wardrobe/proposal/types'
 
 /**
  * Result of analyzing an image for wardrobe items
@@ -135,106 +113,6 @@ function buildUserPrompt(guidance?: string): string {
   }
 
   return prompt
-}
-
-// ============================================================================
-// RESPONSE PARSING
-// ============================================================================
-
-const VALID_TYPES = new Set<string>(WardrobeItemTypeEnum.options)
-
-/**
- * Parse and validate the LLM's JSON response into proposed items plus the
- * optional ensemble name.
- */
-function parseAnalysisResponse(content: string): {
-  proposedItems: ProposedWardrobeItem[]
-  proposedOutfit: ProposedOutfit | null
-} {
-  // Strip markdown code fences if present
-  let jsonStr = content.trim()
-  if (jsonStr.startsWith('```')) {
-    jsonStr = jsonStr.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
-  }
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(jsonStr)
-  } catch {
-    moduleLogger.error('[Wardrobe Image Analysis] Failed to parse LLM response as JSON', {
-      contentPreview: content.substring(0, 200),
-    })
-    throw new Error('The AI returned an invalid response. Please try again.')
-  }
-
-  // Validate structure
-  if (!parsed || typeof parsed !== 'object' || !('items' in parsed)) {
-    throw new Error('The AI returned an unexpected response format. Please try again.')
-  }
-
-  const items = (parsed as { items: unknown[] }).items
-  if (!Array.isArray(items)) {
-    throw new Error('The AI returned an unexpected response format. Please try again.')
-  }
-
-  // Validate and normalize each item
-  const proposedItems = items
-    .filter((item): item is Record<string, unknown> => {
-      if (!item || typeof item !== 'object') return false
-      if (typeof (item as Record<string, unknown>).title !== 'string') return false
-      if (typeof (item as Record<string, unknown>).description !== 'string') return false
-      return true
-    })
-    .map((item) => {
-      // Normalize types to only valid values
-      const rawTypes = Array.isArray(item.types) ? item.types : []
-      const validatedTypes = rawTypes.filter(
-        (t): t is WardrobeItemType => typeof t === 'string' && VALID_TYPES.has(t)
-      )
-
-      const title = String(item.title).trim()
-      const imagePrompt =
-        clampWardrobeImagePrompt(typeof item.imagePrompt === 'string' ? item.imagePrompt : '') ||
-        clampWardrobeImagePrompt(title)
-      if (typeof item.imagePrompt !== 'string' || !item.imagePrompt.trim()) {
-        moduleLogger.debug('[Wardrobe Image Analysis] Model omitted an imagePrompt; the title stands in', { title })
-      }
-
-      return {
-        title,
-        description: String(item.description).trim(),
-        imagePrompt,
-        types: validatedTypes.length > 0 ? validatedTypes : ['accessories' as WardrobeItemType],
-        appropriateness: typeof item.appropriateness === 'string'
-          ? String(item.appropriateness).trim()
-          : '',
-      }
-    })
-
-  return {
-    proposedItems,
-    proposedOutfit: parseProposedOutfit((parsed as { outfit?: unknown }).outfit, proposedItems.length),
-  }
-}
-
-/**
- * The outfit is optional garnish: a missing, malformed, or untitled one is
- * dropped rather than failing the analysis, and an ensemble of fewer than two
- * pieces is no ensemble at all.
- */
-function parseProposedOutfit(raw: unknown, itemCount: number): ProposedOutfit | null {
-  if (itemCount < 2 || !raw || typeof raw !== 'object') return null
-  const outfit = raw as Record<string, unknown>
-  const title = typeof outfit.title === 'string' ? outfit.title.trim() : ''
-  if (!title) {
-    moduleLogger.debug('[Wardrobe Image Analysis] Model returned an outfit without a title; dropping it')
-    return null
-  }
-  return {
-    title,
-    description: typeof outfit.description === 'string' ? outfit.description.trim() : '',
-    appropriateness: typeof outfit.appropriateness === 'string' ? outfit.appropriateness.trim() : '',
-  }
 }
 
 // ============================================================================
@@ -359,7 +237,7 @@ async function runAnalyzeImageForWardrobeItems(
   }
 
   // 3. Parse the response
-  const { proposedItems, proposedOutfit } = parseAnalysisResponse(sent.response.content)
+  const { proposedItems, proposedOutfit } = parseWardrobeProposal(sent.response.content)
 
   moduleLogger.info('[Wardrobe Image Analysis] Analysis complete', {
     itemCount: proposedItems.length,

@@ -42,6 +42,8 @@ import {
   isCharacterAlbumRelativePath,
 } from './photos-paths';
 import { getPhotoLinkSummaryBySha256, type PhotoLinkSummary } from './photo-link-summary';
+import type { GenerationModeration } from '@/lib/schemas/file.types';
+import { withGenerationModeration } from './uncensored-images';
 import { buildMountFileUrl } from './resolve-character-avatar';
 
 export interface SaveToCharacterGalleryInput {
@@ -81,6 +83,11 @@ export interface CharacterGalleryEntry {
   tags: string[];
   /** Reverse-index summary: every hard link to these bytes. */
   linkSummary: PhotoLinkSummary;
+  /**
+   * Set when an uncensored profile drew these bytes (`findUncensoredImages`,
+   * by sha256); null otherwise. Drives the gallery's Uncensored badge.
+   */
+  generationModeration?: GenerationModeration | null;
 }
 
 export interface ListCharacterGalleryInput {
@@ -279,7 +286,7 @@ export async function listCharacterGallery(
   }
 
   return {
-    entries,
+    entries: await withGenerationModeration(repos, entries),
     total,
     hasMore: effectiveOffset + page.length < total,
   };

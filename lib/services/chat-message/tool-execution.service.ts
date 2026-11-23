@@ -5,6 +5,7 @@
  * including processing results and saving tool messages.
  */
 
+import { isResearchKitResult } from '@/lib/research/result'
 import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext, type LoadedMemoriesContext } from '@/lib/chat/tool-executor'
@@ -14,6 +15,11 @@ import { encodeStatusEvent } from './streaming.service'
 import { encodeFrame } from '@/lib/chat/stream-frames'
 
 const logger = createServiceLogger('ToolExecutionService')
+
+function hasFormattedText(value: unknown): value is { formattedText: string } {
+  return typeof value === 'object' && value !== null
+    && typeof (value as { formattedText?: unknown }).formattedText === 'string'
+}
 
 // Tools whose results are inherently per-character (memories, conversation
 // transcripts). Whispered to the calling character regardless of chat settings —
@@ -140,6 +146,17 @@ export async function processToolCalls(
       resultText = `Generated ${(toolResult.result as unknown[])?.length || 1} image(s)`
     } else if (toolResult.toolName === 'attach_image') {
       resultText = `Attached ${(toolResult.result as unknown[])?.length || 1} kept image(s)`
+    } else if (isResearchKitResult(toolResult.result)) {
+      // The research kit answers in text, already cut under its ceiling.
+      resultText = toolResult.result.kitText
+    } else if (toolResult.toolName === 'search' && hasFormattedText(toolResult.result)) {
+      // Search's rendered text already says everything the model needs (memory
+      // ids included); the raw `results` array beside it would send every hit
+      // twice. The live tool card still gets the whole object below.
+      resultText = toolResult.result.formattedText
+      logger.debug('Search result sent to the model as rendered text', {
+        chars: resultText.length,
+      })
     } else {
       resultText = JSON.stringify(toolResult.result, null, 2)
     }

@@ -365,7 +365,7 @@ export function buildSourceContext(memoryContext: string | null, instructions: s
 
 /**
  * Get analysis prompt. A roleplay character's analysis also looks for
- * flattening (`kindDriftSignalFor`); an assistant's does not. `sources` says
+ * flattening and sanitizing (`kindDriftSignalFor`); an assistant's does not. `sources` says
  * what the run is working from: memories, the author's instructions, or both.
  * With no memories, the analysis is a reading of the instructions against the
  * current configuration, and the memory-hunting checklist is left out.
@@ -397,7 +397,8 @@ Respond with JSON:
   }
 
   const flatteningLookFor = driftSignal
-    ? `\n- Flattening — the character meeting danger, threat, loss, or outrage with the same even calm as small talk. Surface it as a pattern to CORRECT, labelled as such, never as a trait.`
+    ? `\n- Flattening — the character meeting danger, threat, loss, or outrage with the same even calm as small talk. Surface it as a pattern to CORRECT, labelled as such, never as a trait.
+- Sanitizing — a character whose own definition gives them a flaw or a motive (fearful, distrustful, self-serving, hostile) behaving as uniformly brave, trusting and agreeable. Surface it as a pattern to CORRECT, measured only against the character's own definition; warmth in a character not written otherwise is never this.`
     : '';
   const instructionsTask = sources.hasInstructions
     ? `\n\nThe author has also given instructions for this refinement (shown above). List each distinct change they call for as its own entry, with the phrase of the instructions as its evidence and "Author's instruction" as its frequency. These entries come in addition to the memory patterns and do not count toward the 3-8.`

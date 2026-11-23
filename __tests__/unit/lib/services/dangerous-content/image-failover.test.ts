@@ -7,6 +7,7 @@
 
 
 jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  isUncensoredImageProfile: jest.requireActual('@/lib/services/dangerous-content/understudy').isUncensoredImageProfile,
   resolveUncensoredImageUnderstudy: jest.fn(),
   resolveUncensoredTextUnderstudy: jest.fn(),
 }))
@@ -28,6 +29,7 @@ import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusa
 import { readCurrentConciergeOnDuty, readCurrentConciergeState } from '@/lib/services/dangerous-content/current-state'
 import {
   generateImageWithConciergeFailover,
+  generationModerationOf,
   getConciergeTrail,
 } from '@/lib/services/dangerous-content/image-failover'
 import {
@@ -80,7 +82,7 @@ describe('generateImageWithConciergeFailover', () => {
   it('primary answers → no trail, no announcement, no lookup', async () => {
     const attempt = jest.fn(async () => 'picture')
     const outcome = await generateImageWithConciergeFailover({ profile: PRIMARY, apiKey: 'sk-p' }, attempt, ctx())
-    expect(outcome).toMatchObject({ result: 'picture', rerouted: false, trail: [] })
+    expect(outcome).toMatchObject({ result: 'picture', rerouted: false, trail: [], moderation: 'moderated' })
     expect(outcome.profile).toBe(PRIMARY)
     expect(mockResolve).not.toHaveBeenCalled()
     expect(mockAnnounce).not.toHaveBeenCalled()
@@ -213,6 +215,7 @@ describe('generateImageWithConciergeFailover', () => {
     })
     const outcome = await generateImageWithConciergeFailover({ profile: PRIMARY, apiKey: 'k' }, attempt, ctx())
     expect(outcome.rerouted).toBe(true)
+    expect(outcome.moderation).toBe('uncensored-failover')
     expect(outcome.result).toBe('picture by Kestrel Studio with sk-understudy')
     expect(outcome.profile).toBe(UNDERSTUDY)
     expect(outcome.trail.map((a) => [a.profileName, a.via, a.outcome])).toEqual([
@@ -355,5 +358,53 @@ describe('generateImageWithConciergeFailover', () => {
       )
       expect(mockLedger).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('generationModerationOf / outcome.moderation', () => {
+  it('a primary the Concierge sent the call to is uncensored-routed', async () => {
+    const outcome = await generateImageWithConciergeFailover(
+      { profile: UNDERSTUDY, apiKey: 'k' },
+      jest.fn(async () => 'picture'),
+      { ...ctx(), primaryVia: 'concierge' },
+    )
+    expect(outcome.moderation).toBe('uncensored-routed')
+  })
+
+  it('a primary marked uncensored-compatible is uncensored-profile', async () => {
+    const marked = { ...PRIMARY, isDangerousCompatible: true } as ImageProfile
+    const outcome = await generateImageWithConciergeFailover(
+      { profile: marked, apiKey: 'k' },
+      jest.fn(async () => 'picture'),
+      ctx(),
+    )
+    expect(outcome.moderation).toBe('uncensored-profile')
+  })
+
+  it('the configured desk profile is uncensored-profile even unmarked', () => {
+    const conciergePolicy = resolveConciergeSettings({
+      conciergeSettings: { ...DEFAULT_CONCIERGE_SETTINGS, enabled: true, uncensoredImageProfileId: PRIMARY.id },
+    })
+    expect(conciergePolicy.desk.imageProfileId).toBe(PRIMARY.id)
+    expect(generationModerationOf({ answering: PRIMARY, rerouted: false, primaryVia: 'primary', conciergePolicy }))
+      .toBe('uncensored-profile')
+  })
+
+  it('a failover wins over everything else', () => {
+    expect(generationModerationOf({
+      answering: { id: 'x', isDangerousCompatible: false },
+      rerouted: true,
+      primaryVia: 'primary',
+      conciergePolicy: policy('on-duty'),
+    })).toBe('uncensored-failover')
+  })
+
+  it('an ordinary profile with the Concierge off duty is moderated', () => {
+    expect(generationModerationOf({
+      answering: PRIMARY,
+      rerouted: false,
+      primaryVia: 'primary',
+      conciergePolicy: policy('off-duty'),
+    })).toBe('moderated')
   })
 })

@@ -16,8 +16,10 @@ import { safeFetch, SafeFetchError } from '@/lib/net/safe-fetch';
 import { getThemesDir } from '@/lib/paths';
 import { getErrorMessage } from '@/lib/error-utils';
 import { parseVersion } from '@/lib/utils/semver';
-import { installThemeBundle } from '@/lib/themes/bundle-loader';
-import { hashBuffer, OFFICIAL_REGISTRY_PUBLIC_KEY, OFFICIAL_REGISTRY_URL } from '@/lib/themes/crypto';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
+import { installThemeBundle, readIndex, writeIndex } from '@/lib/themes/bundle-loader';
+import { CURRENT_THEME_FORMAT_VERSION, type RefusedTheme } from '@/lib/themes/refused';
+import { OFFICIAL_REGISTRY_PUBLIC_KEY, OFFICIAL_REGISTRY_URL } from '@/lib/themes/crypto';
 import { assessRegistryIndex, checkBundleSignature, RegistryVerificationError } from '@/lib/themes/registry-trust';
 import {
   type RegistrySource,
@@ -25,7 +27,6 @@ import {
   type RegistryIndex,
   type RegistryTheme,
   type ThemeUpdate,
-  type ThemeBundleIndex,
   type ThemeBundleIndexEntry,
   RegistrySourcesSchema,
   RegistryIndexSchema,
@@ -42,7 +43,6 @@ const CACHE_DIR_NAME = '.cache';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_INDEX_BYTES = 10 * 1024 * 1024; // registry index
 const MAX_BUNDLE_DOWNLOAD_BYTES = 50 * 1024 * 1024; // matches the bundle loader's limit
-const INDEX_FILENAME = 'themes-index.json';
 
 // ============================================================================
 // PATH HELPERS
@@ -60,10 +60,6 @@ function getCachePath(sourceName: string): string {
   // Sanitize the source name for use as a filename
   const safeName = sourceName.replace(/[^a-zA-Z0-9_-]/g, '_');
   return path.join(getCacheDir(), `${safeName}.json`);
-}
-
-function getIndexPath(): string {
-  return path.join(getThemesDir(), INDEX_FILENAME);
 }
 
 // ============================================================================
@@ -88,20 +84,18 @@ export function isNewerVersion(versionA: string, versionB: string): boolean {
 // INDEX FILE HELPERS
 // ============================================================================
 
-async function readBundleIndex(): Promise<ThemeBundleIndex> {
-  try {
-    const data = await fs.readFile(getIndexPath(), 'utf-8');
-    return JSON.parse(data) as ThemeBundleIndex;
-  } catch {
-    return { version: 1, themes: [] };
-  }
-}
+// The installed-theme index is read and written by the bundle loader, which
+// validates it and rebuilds a malformed one from the theme directories.
+const readBundleIndex = readIndex;
+const writeBundleIndex = writeIndex;
 
-async function writeBundleIndex(index: ThemeBundleIndex): Promise<void> {
-  const indexPath = getIndexPath();
-  await fs.mkdir(path.dirname(indexPath), { recursive: true });
-  await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
-  registryLogger.debug('Bundle index updated', { themeCount: index.themes.length });
+/**
+ * Whether a registry entry is a theme this Quilltap can wear. An entry that
+ * states an earlier format version is not offered; one that states none is
+ * left to install, which refuses an earlier bundle before writing anything.
+ */
+export function isOfferableRegistryTheme(theme: RegistryTheme): boolean {
+  return theme.formatVersion === undefined || theme.formatVersion >= CURRENT_THEME_FORMAT_VERSION;
 }
 
 // ============================================================================
@@ -333,7 +327,7 @@ export async function refreshAllRegistries(): Promise<RegistryTheme[]> {
   for (const source of enabledSources) {
     try {
       const { index } = await fetchRegistryIndex(source);
-      allThemes.push(...index.themes);
+      allThemes.push(...index.themes.filter(isOfferableRegistryTheme));
       registryLogger.debug('Refreshed registry', {
         source: source.name,
         themeCount: index.themes.length,
@@ -370,6 +364,14 @@ export async function searchThemes(
       const { index, verified } = await fetchRegistryIndex(source);
 
       for (const theme of index.themes) {
+        if (!isOfferableRegistryTheme(theme)) {
+          registryLogger.debug('Not offering registry theme of an earlier format', {
+            source: source.name,
+            themeId: theme.id,
+            formatVersion: theme.formatVersion,
+          });
+          continue;
+        }
         const searchableFields = [
           theme.id,
           theme.name,
@@ -415,7 +417,7 @@ export async function searchThemes(
 export async function installFromRegistry(
   themeId: string,
   registryUrl: string
-): Promise<{ success: boolean; error?: string; themeId?: string; version?: string }> {
+): Promise<{ success: boolean; error?: string; refused?: RefusedTheme; themeId?: string; version?: string }> {
   registryLogger.info('Installing theme from registry', { themeId, registryUrl });
 
   // Find the registry source
@@ -448,6 +450,14 @@ export async function installFromRegistry(
     registryLogger.warn('Theme not found in registry', { themeId, source: source.name });
     return { success: false, error: `Theme "${themeId}" not found in registry "${source.name}"` };
   }
+  if (!isOfferableRegistryTheme(registryTheme)) {
+    registryLogger.warn('Registry theme is of an earlier format; not installing', {
+      themeId,
+      source: source.name,
+      formatVersion: registryTheme.formatVersion,
+    });
+    return { success: false, error: `Theme "${themeId}" in registry "${source.name}" was made for an earlier Quilltap` };
+  }
 
   // Download the bundle to a temp file
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-registry-install-'));
@@ -475,7 +485,7 @@ export async function installFromRegistry(
     const buffer = response.body;
 
     // Verify SHA-256 hash
-    const actualHash = hashBuffer(buffer);
+    const actualHash = sha256OfBuffer(buffer);
     if (actualHash !== registryTheme.sha256) {
       registryLogger.error('SHA-256 hash mismatch for downloaded bundle', {
         themeId,
@@ -512,7 +522,7 @@ export async function installFromRegistry(
     // Install via bundle-loader
     const installResult = await installThemeBundle(tempFile);
     if (!installResult.success) {
-      return { success: false, error: installResult.error };
+      return { success: false, error: installResult.error, refused: installResult.refused };
     }
 
     // Update the themes-index.json entry with registry metadata
@@ -578,6 +588,7 @@ export async function checkForUpdates(): Promise<ThemeUpdate[]> {
     try {
       const { index } = await fetchRegistryIndex(source);
       for (const theme of index.themes) {
+        if (!isOfferableRegistryTheme(theme)) continue;
         // Prefer the theme entry from the source it was originally installed from
         const existing = registryThemeMap.get(theme.id);
         if (!existing) {

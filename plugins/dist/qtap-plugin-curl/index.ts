@@ -8,12 +8,12 @@
 
 import type {
   ToolPlugin,
-  ToolEffect,
+  ToolCallEffect,
   ToolExecutionContext,
   ToolExecutionResult,
   UniversalTool,
 } from '@quilltap/plugin-types';
-import { curlToolDefinition, validateCurlInput } from './curl-tool';
+import { CURL_READ_ONLY_NOTE, curlToolDefinition, isReadOnlyCurlCall, validateCurlInput } from './curl-tool';
 import { executeCurlRequest } from './curl-handler';
 import type { CurlToolInput, CurlToolConfig, CurlToolOutput } from './types';
 
@@ -40,11 +40,18 @@ export const plugin: ToolPlugin = {
   },
 
   /**
-   * curl can POST, PUT and DELETE to the outside world, so it is declared a
-   * write. (A static map cannot tell a GET from a DELETE.)
+   * A GET, HEAD or OPTIONS reads; every other method can change something in
+   * the outside world and is a write. On a turn that allows only lookups the
+   * host keeps curl listed with the note and refuses the writing calls.
    */
-  getToolEffects(_config: Record<string, unknown>): Record<string, ToolEffect> {
-    return { curl: 'write' };
+  getToolEffects(_config: Record<string, unknown>): Record<string, ToolCallEffect> {
+    return {
+      curl: {
+        max: 'write',
+        of: (input) => (isReadOnlyCurlCall(input) ? 'read' : 'write'),
+        notes: { read: CURL_READ_ONLY_NOTE },
+      },
+    };
   },
 
   /**

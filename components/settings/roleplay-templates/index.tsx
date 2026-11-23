@@ -15,6 +15,8 @@ import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 /** Known CSS style options for delimiter entries */
 const STYLE_OPTIONS = [
   { value: 'qt-roleplay-plain', label: 'Plain (no chip — dress it with flourishes)' },
+  { value: 'qt-roleplay-emphasis', label: 'Emphasis (italics; upright inside an italic voice)' },
+  { value: 'qt-roleplay-quiet', label: 'Quiet (no chip — softer ink)' },
   { value: 'qt-chat-narration', label: 'Narration' },
   { value: 'qt-chat-dialogue', label: 'Dialogue' },
   { value: 'qt-chat-ooc', label: 'Out of Character' },

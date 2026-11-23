@@ -11,7 +11,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { streamMessage, type StreamOptions } from '@/lib/services/chat-message/streaming.service';
-import { maxEffectOfTool, type ToolEffect } from '@/lib/tools/effects';
+import { maxEffectOfTool, type ToolEffect, type ToolEffectSpec } from '@/lib/tools/effects';
 import type { StorytellerBidCallOutcome, StorytellerBidOffer } from './types';
 
 const logger = createServiceLogger('StorytellerBidCall');
@@ -28,7 +28,7 @@ function toolName(tool: unknown): string | undefined {
 export function buildBidOffer(params: {
   tools: unknown[];
   customToolEffects: ReadonlyMap<string, ToolEffect>;
-  pluginToolEffects: ReadonlyMap<string, ToolEffect>;
+  pluginToolEffects: ReadonlyMap<string, ToolEffectSpec>;
   silent: boolean;
 }): StorytellerBidOffer {
   const tools: Record<string, ToolEffect> = {};

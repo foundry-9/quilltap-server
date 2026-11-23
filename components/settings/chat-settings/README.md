@@ -416,4 +416,3 @@ function IndependentComponent() {
 - Snapshot tests for settings persistence
 - Performance optimization for large profile lists
 - Standalone component library documentation
-- Storybook stories for theme testing

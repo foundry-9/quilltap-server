@@ -11,8 +11,8 @@
  *
  * The output is committed and loaded as plain CSS in `<head>`; nothing
  * generates icon CSS at runtime, so there is no flash of unstyled icons.
- * Theme OVERRIDES are a separate, runtime concern handled by the theme-style
- * injector (see `generateIconOverridesCSS` in `lib/themes/utils.ts`).
+ * Theme OVERRIDES are a separate concern, compiled into each theme's CSS
+ * (see `iconOverrides` in `lib/themes/engine/compile.ts`).
  */
 
 import { writeFileSync } from 'node:fs';

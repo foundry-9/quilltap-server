@@ -3,27 +3,33 @@
 /**
  * CharactersSection
  *
- * Client component displaying a grid of characters on the homepage.
- * Uses a resize observer to only show characters that fit completely.
+ * The company: a wall of portraits, favourites first and then the most
+ * called-upon, two rows deep. The width decides how many fit; the last place
+ * goes to a tile for everyone else.
  */
 
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { Icon } from '@/components/ui/icon'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { CharacterCard } from './CharacterCard'
 import type { CharactersSectionProps } from './types'
 
-// Card dimensions for calculating grid fit
-const CARD_WIDTH_ESTIMATE = 150 // Card max width
-const CARD_HEIGHT_ESTIMATE = 185 // Card height including 2-line description
-const GRID_GAP = 12 // gap-3 = 0.75rem = 12px
-// Minimum characters to show even if they don't all fit
-const MIN_CHARACTERS = 2
+/** Narrowest a portrait tile gets, where the grid's own tracks cannot be read. */
+const PORTRAIT_MIN_WIDTH = 96
+/** Gap between tiles, likewise. */
+const PORTRAIT_GAP = 8
+/** Rows of portraits shown; a wall three or fewer abreast (a phone) gets a third. */
+const PORTRAIT_ROWS = 2
+const NARROW_WALL_COLUMNS = 3
+const NARROW_WALL_ROWS = 3
+/** Columns assumed until the wall has been measured. */
+const DEFAULT_COLUMNS = 6
 
-export function CharactersSection({ characters }: CharactersSectionProps) {
+export function CharactersSection({ characters, total }: CharactersSectionProps) {
   const { shouldHideByIds } = useQuickHide()
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [maxCards, setMaxCards] = useState<number | null>(null)
+  const wallRef = useRef<HTMLDivElement>(null)
+  const [columns, setColumns] = useState(DEFAULT_COLUMNS)
 
   // Filter out hidden characters
   const visibleCharacters = useMemo(
@@ -31,74 +37,90 @@ export function CharactersSection({ characters }: CharactersSectionProps) {
     [characters, shouldHideByIds]
   )
 
-  // Calculate how many character cards can fit based on container dimensions
-  const calculateFittingCards = useCallback(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    const availableWidth = container.clientWidth
-    const availableHeight = container.clientHeight
-
-    // Calculate columns: how many cards fit horizontally
-    // Each card needs CARD_WIDTH + GAP (except last card doesn't need trailing gap)
-    const columnsCanFit = Math.max(2, Math.floor((availableWidth + GRID_GAP) / (CARD_WIDTH_ESTIMATE + GRID_GAP)))
-
-    // Calculate rows: how many complete rows fit vertically
-    const rowsCanFit = Math.max(1, Math.floor((availableHeight + GRID_GAP) / (CARD_HEIGHT_ESTIMATE + GRID_GAP)))
-
-    const cardsCanFit = Math.max(MIN_CHARACTERS, rowsCanFit * columnsCanFit)
-    setMaxCards(cardsCanFit)
+  // How many tiles sit side by side at this width. The grid's resolved tracks
+  // are the truth (an auto-fill grid lists every column, filled or not); the
+  // arithmetic stands in where they cannot be read.
+  const measure = useCallback(() => {
+    const wall = wallRef.current
+    if (!wall) return
+    const grid = wall.querySelector('.qt-characters-grid')
+    const tracks = grid
+      ? getComputedStyle(grid).gridTemplateColumns.split(' ').filter(track => track.endsWith('px')).length
+      : 0
+    const byWidth = Math.floor((wall.clientWidth + PORTRAIT_GAP) / (PORTRAIT_MIN_WIDTH + PORTRAIT_GAP))
+    const next = Math.max(2, tracks || byWidth)
+    if (tracks === 0 && wall.clientWidth === 0) return
+    setColumns(next)
   }, [])
 
-  // Use ResizeObserver to recalculate when container size changes
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
+    const wall = wallRef.current
+    if (!wall) return
 
-    // Initial calculation
-    calculateFittingCards()
+    measure()
 
     // ResizeObserver may not be available in test environments
     if (typeof ResizeObserver === 'undefined') return
 
-    const resizeObserver = new ResizeObserver(() => {
-      calculateFittingCards()
-    })
-
-    resizeObserver.observe(container)
+    const resizeObserver = new ResizeObserver(measure)
+    resizeObserver.observe(wall)
     return () => resizeObserver.disconnect()
-  }, [calculateFittingCards])
+  }, [measure])
 
-  // Only show characters that fit
-  const displayedCharacters = useMemo(() => {
-    if (maxCards === null) return visibleCharacters.slice(0, 4) // Default to 4 until measured
-    return visibleCharacters.slice(0, maxCards)
-  }, [visibleCharacters, maxCards])
+  // With quick-hide concealing someone, a head count would give them away.
+  const nothingHidden = visibleCharacters.length === characters.length
+  const hiddenFromWall = total - characters.length
+
+  const rows = columns <= NARROW_WALL_COLUMNS ? NARROW_WALL_ROWS : PORTRAIT_ROWS
+  const capacity = columns * rows
+  const overflowing = visibleCharacters.length > capacity || hiddenFromWall > 0
+  // The last place is the "everyone" tile when there is anyone left to see.
+  const shown = overflowing
+    ? visibleCharacters.slice(0, Math.max(1, capacity - 1))
+    : visibleCharacters
+
+  // A card opens away from the wall: below the last row, above the others.
+  const lastRow = Math.floor((shown.length + (overflowing ? 1 : 0) - 1) / columns)
 
   return (
-    <div className="qt-homepage-section">
+    <section className="qt-homepage-section" data-section="characters">
       <div className="qt-homepage-section-header">
-        <h2 className="qt-homepage-section-title">Characters</h2>
+        <h2 className="qt-homepage-section-title">The Company</h2>
         <Link href="/aurora" className="qt-homepage-section-link">
           View all &rarr;
         </Link>
       </div>
-      <div ref={containerRef} className="qt-homepage-section-content">
+      <div ref={wallRef} className="qt-homepage-section-content">
         {visibleCharacters.length === 0 ? (
-          <div className="text-center py-6 qt-text-secondary">
-            <p className="text-sm">No favorite characters</p>
-            <Link href="/aurora" className="text-xs qt-text-brand hover:underline">
-              Mark some as favorites
+          <div className="qt-homepage-empty">
+            <p className="qt-card-subtitle">No one has been engaged as yet.</p>
+            <Link href="/aurora" className="text-sm qt-text-brand hover:underline">
+              Make a character&rsquo;s acquaintance
             </Link>
           </div>
         ) : (
           <div className="qt-characters-grid">
-            {displayedCharacters.map(character => (
-              <CharacterCard key={character.id} character={character} />
+            {shown.map((character, index) => (
+              <CharacterCard
+                key={character.id}
+                character={character}
+                align={index % columns >= columns / 2 ? 'end' : 'start'}
+                placement={Math.floor(index / columns) < lastRow ? 'above' : 'below'}
+              />
             ))}
+            {overflowing && (
+              <Link href="/aurora" className="qt-character-card" data-kind="all">
+                <span className="qt-character-card-more">
+                  <Icon name="characters" className="w-6 h-6" />
+                </span>
+                <span className="qt-character-card-name">
+                  {nothingHidden ? `All ${total}` : 'Everyone'}
+                </span>
+              </Link>
+            )}
           </div>
         )}
       </div>
-    </div>
+    </section>
   )
 }

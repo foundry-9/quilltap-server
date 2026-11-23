@@ -20,6 +20,7 @@ jest.mock('@/lib/services/concierge-notifications/writer', () => ({
   postConciergeDangerAnnouncement: jest.fn(async () => null),
 }))
 jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  isUncensoredImageProfile: jest.requireActual('@/lib/services/dangerous-content/understudy').isUncensoredImageProfile,
   resolveUncensoredImageUnderstudy: jest.fn(),
   resolveUncensoredTextUnderstudy: jest.fn(),
 }))

@@ -39,7 +39,11 @@ export function defaultChatSettings(userId: string): Omit<ChatSettings, 'id' | '
     themePreference: {
       activeThemeId: null,
       colorMode: 'system',
-      showNavThemeSelector: false,
+    },
+    dynamicBackgrounds: {
+      enabled: false,
+      allowUncensored: false,
+      refreshMinutes: 3,
     },
     defaultTimestampConfig: {
       mode: 'NONE',

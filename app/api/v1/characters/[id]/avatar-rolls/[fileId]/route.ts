@@ -96,8 +96,9 @@ export const POST = createContextParamsHandler<Params>(
   })
 );
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<Params>(
-  async (_req, ctx, { id, fileId }) => {
+  withActionDispatch<Params>({}, async (_req, ctx, { id, fileId }) => {
     try {
       if (!id) return badRequest('Missing character id');
       if (!fileId) return badRequest('Missing avatar roll id');
@@ -113,5 +114,5 @@ export const DELETE = createContextParamsHandler<Params>(
     } catch (error) {
       return respondToError(error, ctx, { id, fileId }, 'Failed to delete the avatar roll');
     }
-  }
+  })
 );

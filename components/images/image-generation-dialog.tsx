@@ -457,7 +457,7 @@ export function ImageGenerationDialog({
         </div>
 
         {/* Footer */}
-        <div className="qt-dialog-footer sticky bottom-0">
+        <div className="qt-dialog-footer qt-dialog-footer-default sticky bottom-0">
           <button
             type="button"
             onClick={handleClose}

@@ -168,12 +168,13 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
         pseudoToolMode: profile.pseudoToolMode ?? 'auto',
         // Null means the profile predates the field (or arrived by import);
         // show the provider default the server would resolve to, so the box
-        // reflects actual behaviour. The provider rule is all that is knowable
-        // here — the thinking half needs the plugin's rule and the model's
+        // reflects actual behaviour. The provider and model-name rules are all
+        // that is knowable here — the thinking half needs the plugin's rule and the model's
         // facts, neither of which this hook is given. ProfileModal corrects a
         // null row once the model list lands (bug 85).
         multiCharacterPrefill:
-          profile.multiCharacterPrefill ?? defaultMultiCharacterPrefill(profile.provider),
+          profile.multiCharacterPrefill ??
+          defaultMultiCharacterPrefill(profile.provider, false, profile.modelName),
         supportsImageUpload: profile.supportsImageUpload ?? false,
         maxImagesPerRequest: String(resolveMaxImagesPerRequest(profile)),
         toolResultVerbatimTurns: String(resolveToolResultVerbatimTurns(profile)),
@@ -413,6 +414,9 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
           body: JSON.stringify({
             provider: form.formData.provider,
             modelName: form.formData.modelName,
+            // The route decides what the provider's own catalog says.
+            baseUrl: outboundBaseUrl() || null,
+            apiKeyId: outboundApiKeyId() || null,
           }),
         })
 
@@ -429,7 +433,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
 
       return result
     },
-    [form.formData, autoConfigureOp]
+    [form.formData, autoConfigureOp, outboundBaseUrl, outboundApiKeyId]
   )
 
   const handleSubmit = useCallback(

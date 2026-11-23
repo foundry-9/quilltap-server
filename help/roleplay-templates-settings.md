@@ -10,7 +10,7 @@ The Roleplay Templates card (in the Characters & Prompts group of Settings) is w
 
 ## Accessing Roleplay Templates Settings
 
-1. Click **Settings** in the sidebar (gear icon)
+1. Click **Settings** (gear icon) on the rail
 2. Open the **Characters & Prompts** group and find the **Roleplay Templates** card
 3. You'll see three main sections: Default Template, Built-in Templates, and My Templates
 
@@ -75,9 +75,9 @@ Built-in templates are:
 
 Three are presently on the shelf:
 
-- **Standard** — `*actions*` in asterisks, `"dialogue"` in quotes, `((asides))` in double parentheses
-- **Quilltap RP** — bare dialogue, `[actions]` in brackets, `{thoughts}` in braces, `// ` before an aside
-- **Novel** — prose as a published novel prints it: narration wears no marks at all and is set in italics, `"dialogue"` sits upright in straight or curly quotes, a `*single asterisk*` marks emphasis (shown bold and italic), `**double asterisks**` mean nothing whatever, and `((double parentheses))` are out of character. Novel is built entirely from the editor's own parts — copy it and you may rebuild or rearrange every piece of it yourself.
+- **Standard** — `*actions*` in asterisks, `"dialogue"` in quotes, `_emphasis_` in underscores, `((asides))` in double parentheses
+- **Quilltap RP** — bare dialogue, `[actions]` in brackets, `{thoughts}` in braces, `*emphasis*` in single asterisks, `// ` before an aside
+- **Novel** — prose as a published novel prints it: narration wears no marks at all and is set upright in a quieter ink, `"dialogue"` sits at full strength in straight or curly quotes, a `*single asterisk*` marks emphasis (shown in italics), `**double asterisks**` mean nothing whatever, and `((double parentheses))` are out of character. Novel is built entirely from the editor's own parts — copy it and you may rebuild or rearrange every piece of it yourself.
 
 ### Viewing Built-in Templates
 
@@ -191,7 +191,7 @@ To create a brand new custom template:
 
 #### Unmarked Text
 
-Whatever no delimiter lays claim to — the narration of a Novel-style template, or simply the words between the marks in any other — may be given a style of its own. Tick **Style unmarked text**, choose a **Style** (the new **Plain** style wears no chip at all and is meant to be dressed with flourishes), and add any **Flourishes** you fancy. Novel uses Plain with **Italic**, which is why its narration leans gently to the right while its dialogue stands up straight.
+Whatever no delimiter lays claim to — the narration of a Novel-style template, or simply the words between the marks in any other — may be given a style of its own. Tick **Style unmarked text**, choose a **Style** (**Plain** wears no chip at all and is meant to be dressed with flourishes; **Quiet** wears none either, but softens the ink), and add any **Flourishes** you fancy. Novel uses Quiet, which is why its narration recedes a little while its dialogue steps forward — and why italics are left free for emphasis.
 
 Unmarked styling never intrudes upon a span a delimiter has claimed, nor upon a line a line-prefix or tag-prefix rule has taken for its own.
 
@@ -199,7 +199,7 @@ Unmarked styling never intrudes upon a span a delimiter has claimed, nor upon a 
 
 The **Markdown reads asterisks as bold and italic** box is ticked by default, and for most templates it should stay that way. Untick it and the asterisk is withdrawn from Markdown's service entirely:
 
-- A **single** `*` becomes an ordinary character, free for your own delimiters to claim — Novel's **Emphasis** delimiter is a concealed `*` wrap, dressed bold and italic
+- A **single** `*` becomes an ordinary character, free for your own delimiters to claim — Novel's **Emphasis** delimiter is a concealed `*` wrap in the Emphasis style
 - A **doubled** `**` means nothing at all and is quietly dropped from the display, so a stray `**word**` from an over-eager model reads simply as *word*
 - A `* * *` scene break, a `* ` list bullet and anything inside code are left exactly as they were
 
@@ -220,7 +220,9 @@ Each rule also has:
 - **Name** — the full label shown in the button's tooltip
 - **Button Label** — the short text on the composer toolbar button (max 10 characters)
 - **Style (CSS class)** — pick a built-in style or type your own theme class for a custom look. The built-in roster now runs to:
-  - **Plain** — no chip, no colour of its own; a blank canvas for the Flourishes below (Novel's emphasis and narration both wear it)
+  - **Plain** — no chip, no colour of its own; a blank canvas for the Flourishes below
+  - **Emphasis** — italics, for a stressed word, a title or a foreign phrase. It has no colour of its own and takes the ink of the passage it sits in; inside a passage that is already italic it stands upright instead, as print sets it. All three built-in templates use it, and Markdown's own emphasis is dressed identically
+  - **Quiet** — no chip, a slightly softer ink; made for prose narration that should recede beside full-strength dialogue (Novel's narration wears it)
   - The classics — **Narration**, **Dialogue**, **Out of Character**, **Inner Monologue**
   - **Style 1–4** — four boldly contrasting liveries that every theme dresses in its own four hues, so a marked passage fairly leaps off the page
   - The semantics — **Danger**, **Warning**, **Success**, **Info**, **Muted**, and **Code** (the last in a monospace hand), each drawn from the theme's standing palette
@@ -233,7 +235,7 @@ Each delimiter carries a **Conceal the marks when rendered** switch. Flip it on 
 
 Beneath each rule sits a small parade of optional **Flourishes**, layered atop the chosen Style:
 
-- **Bold** and **Italic** — the usual emphases
+- **Bold** and **Italic** — weight and slant, for a whole passage. For a stressed *word*, prefer a delimiter in the **Emphasis** style, which knows to stand upright inside an italic passage
 - **Reverse** — swaps foreground and background, turning light-on-dark into dark-on-light and vice versa
 - **Underline** — none, single, or a distinguished **double** rule
 - **Border** — none, a solid hairline, or a **dashed** one

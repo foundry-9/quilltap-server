@@ -6,11 +6,15 @@ url: /settings?group=appearance
 
 > **[Open this page in Quilltap](/settings?group=appearance)**
 
-The Appearance group of Settings is where you customize how Quilltap looks and feels. Here you can change themes, select your preferred color mode (light/dark/system), enable the theme quick-switcher, and adjust sidebar width.
+The Appearance group of Settings is where you customize how Quilltap looks and feels. Here you can change themes, select your preferred color mode (light/dark/system), reach the theme picker (open **Studio** and choose **Theme…**), and adjust sidebar width.
+
+## Dynamic Backgrounds
+
+The **Dynamic Backgrounds** card hangs a changing collage of your own generated pictures behind the home parlour, each project and each character. It is off until you switch it on, and it pays no attention to the theme. See [Dynamic Backgrounds](dynamic-backgrounds.md).
 
 ## Accessing Appearance Settings
 
-1. Click **Settings** in the sidebar (gear icon)
+1. Click **Settings** (gear icon) on the rail
 2. Open the **Appearance** group in the left rail
 3. You'll see options for themes, color modes, and layout controls
 
@@ -18,10 +22,10 @@ The Appearance group of Settings is where you customize how Quilltap looks and f
 
 ### Understanding Themes
 
-Quilltap includes a default theme and can display custom themes from installed plugins:
+Quilltap includes a default theme, a set of bundled themes, and any `.qtap-theme` bundles you install:
 
 - **Default theme** — Professional, clean design (always available)
-- **Plugin themes** — Custom designs from installed theme plugins
+- **Bundled and installed themes** — Further designs, from the ones that ship with Quilltap to bundles you have added yourself
 - **Color modes** — Each theme can be viewed in light or dark mode
 - **Icons and small animations** — A theme may re-cut the icons themselves, and even the little flourishes that move
 
@@ -41,6 +45,10 @@ In the Theme Selection section, you'll see:
 - **Description** — What makes this theme unique
 - **Dark mode badge** — Whether the theme supports dark mode
 - **Active indicator** — A checkmark on the current theme
+
+### Designing a Theme of Your Own
+
+The **Design a theme** button at the head of the Theme section opens [Calliope's Atelier](theme-editor.md), where you may begin a theme from a blank canvas or a copy of one in your wardrobe, see the whole of Quilltap wear it while you choose its colours, and install it when it suits.
 
 ### Selecting a Theme
 
@@ -64,11 +72,12 @@ Some themes may have additional details:
 
 To get more themes:
 
-1. Go to **Settings** → **Plugins**
-2. Search for theme plugins
-3. Install the ones you like
-4. New themes appear in Appearance → Theme Selection
-5. Refresh if needed to see newly installed themes
+1. Click **Install Theme** on the Appearance card and choose a `.qtap-theme` file, or browse a theme registry from the same card
+2. The new theme appears on the shelf at once
+
+### Garments Left at the Door
+
+A theme made for an earlier Quilltap — a version 1 bundle, or a theme supplied by a plugin — can no longer be worn. Rather than vanish without a word, it is listed beneath the shelf under **Garments Left at the Door**, with an explanation, a button to the Themes help page and, for a bundle, an **Uninstall** button. Nothing is removed unless you press it. Should the theme you had chosen be one of these, Quilltap returns to the Default theme and says so once. The [Themes](/settings?section=appearance) help page explains the particulars.
 
 ## Color Mode Selection
 
@@ -115,41 +124,7 @@ Choose Light or Dark mode manually if you:
 
 ## Theme Quick-Switcher
 
-### What is the Quick-Switcher?
-
-The quick-switcher is an optional button in your sidebar footer that gives you instant access to switch themes and color modes without opening Settings.
-
-### Enabling the Quick-Switcher
-
-1. Find the option **Show theme selector in navigation**
-2. Toggle it to **ON**
-3. A palette icon appears in your sidebar footer
-4. Click it anytime to switch themes or color modes
-
-### Disabling the Quick-Switcher
-
-1. Find the option **Show theme selector in navigation**
-2. Toggle it to **OFF**
-3. The palette icon disappears from the sidebar
-4. You can still change themes in Settings
-
-### When to Enable It
-
-Enable the quick-switcher if you:
-
-- Frequently switch between themes
-- Like quick access without opening Settings
-- Have space in your sidebar
-- Want instant theme previews
-
-### When to Disable It
-
-Disable it if you:
-
-- Rarely switch themes
-- Prefer the Settings interface
-- Want a minimal sidebar
-- Don't need quick access
+The theme picker is always at hand — no setting enables it. Open **Studio** and choose **Theme…** to switch themes or colour modes at any moment without opening Settings.
 
 See the [Theme Quick-Switcher help file](theme-quick-switcher.md) for detailed instructions.
 
@@ -240,6 +215,10 @@ Some installations may show debug features:
 
 These are useful for developers and are usually hidden in production.
 
+## Calliope
+
+The **Calliope** card ([open it](/settings?section=calliope)) sets two things for the muse who attends the theme editor: **Calliope's engine**, the connection profile her conversations start on (your default unless you name another, and one that permits tool use), and **Let Calliope take up to … turns**, how many steps she may take on one request. What she does, and how her proposals are tried, kept and discarded, is in [Calliope's Atelier](theme-editor.md#calliope-herself).
+
 ## Preferences Are Saved Automatically
 
 All Appearance settings are saved automatically:
@@ -271,7 +250,7 @@ For example:
 ### Quick-Switcher + Settings
 
 - **Settings** — Full control and information
-- **Quick-Switcher** — Faster switching without opening Settings
+- **Theme picker (Studio → Theme…)** — Faster switching without opening Settings
 - **Both ways work** — Changes in one are reflected in the other
 - **Choose your method** — Use whichever fits your workflow
 
@@ -289,18 +268,21 @@ Nor need you reach for the mouse to open things. The name on a character card, a
 
 The very first press of Tab on any page now offers a **Skip to content** link, so the keyboard may bypass the sidebar entirely and land in the page proper. In the Salon, a screen reader is told each time a character replies, and Document Mode murmurs "Saved" when your work is safely put away. A whisper you are merely overhearing says so in words, not just in a paler ink, and the close buttons on workspace tabs have grown large enough to hit without squinting. Should your system be set to Windows High Contrast, the icons now keep their ink rather than vanishing into the page.
 
+The ring that marks where the keyboard has got to is now a reliable companion. It no longer vanishes from buttons that wear a little shadow (the red delete buttons on character cards were the chief absentees); its inner margin takes the colour of the page rather than a stark white band in dark mode; it survives Windows High Contrast; and a choice drawn as a card around a hidden radio button, such as picking a connection profile, now shows the ring on the card itself. The places where you drop a picture or a chat file to import it may likewise be reached with Tab and opened with Enter or the space bar, and the result of testing a connection is read aloud.
+
+The edges of text boxes, menus and other fields are now drawn firmly enough to be found at a glance in every theme, light and dark (Earl Grey's fields, formerly borderless, now wear a quiet grey rule). The little badges at the top right that report background work no longer fade to a ghost when idle; they keep their lettering legible and merely pale their colour, flashing it briefly when a task has come and gone. And in dark mode the photograph behind a page is hung a shade fainter, so the headings and greeting set upon it stay readable even over its brightest corners.
+
 ## Troubleshooting Appearance Settings
 
 ### Themes Won't Load
 
-**Problem:** Theme list is empty or shows "Install theme plugins"
+**Problem:** A theme you expected is missing from the shelf
 
 **Solutions:**
 
-- Make sure theme plugins are installed in Settings → Data & Maintenance → Plugins
+- Look under **Garments Left at the Door**: a theme made for an earlier Quilltap, or supplied by a plugin, is listed there instead
 - Refresh the page
-- Restart Quilltap if plugin installation required a restart
-- Check that theme plugins are enabled
+- If you installed the bundle yourself, install it again; a failed install says why
 
 ### Color Mode Changes Don't Apply
 
@@ -324,17 +306,6 @@ The very first press of Tab on any page now offers a **Skip to content** link, s
 - Try adjusting in the opposite direction slightly first
 - Refresh the page if stuck
 
-### Quick-Switcher Doesn't Appear
-
-**Problem:** The palette icon isn't in the sidebar
-
-**Solutions:**
-
-- Check that "Show theme selector in navigation" is enabled
-- Toggle it off and on again
-- Refresh the page
-- Check if your sidebar is too narrow (try widening it)
-
 ### Changes Not Saving
 
 **Problem:** Appearance settings don't persist
@@ -352,9 +323,9 @@ The very first press of Tab on any page now offers a **Skip to content** link, s
 1. **Try System mode** — Let your OS handle light/dark switching
 2. **Match your workflow** — Choose themes that match your creative style
 3. **Experiment** — Try different themes to find your favorite
-4. **Enable quick-switcher if you switch themes** — Makes switching fast
+4. **Use the theme picker if you switch themes** — Studio → Theme… makes switching fast
 5. **Adjust sidebar width to your needs** — Find what's comfortable for you
-6. **Use both Settings and quick-switcher** — Each has advantages
+6. **Use both Settings and the Studio theme picker** — Each has advantages
 
 ## In-Chat Settings Access
 
@@ -371,8 +342,11 @@ Characters with help tools enabled can navigate directly to this page:
 For more information, see:
 
 - [Themes](themes.md) — Complete guide to themes and color modes
-- [Theme Quick-Switcher](theme-quick-switcher.md) — Sidebar quick-switcher details
-- [Sidebar](sidebar.md) — Information about the left sidebar
+- [Dynamic Backgrounds](dynamic-backgrounds.md) — A changing collage of your pictures behind the home, project and character pages
+- [Theme Quick-Switcher](theme-quick-switcher.md) — The Studio theme picker in detail
+- [Calliope's Atelier](theme-editor.md) — Designing a theme with a live preview
+- [Making a Theme](making-a-theme.md) — A guided tour from a blank draft to a finished theme
+- [The Rail and Its Menus](navigation.md) — Information about the left rail
 - [Width Toggle](width-toggle.md) — Content width toggle button
 
 Appearance settings help you make Quilltap look exactly how you want it!

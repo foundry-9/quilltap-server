@@ -46,6 +46,8 @@ export const ALL_REALTIME_PREFIXES: readonly QueryKeyPrefix[] = [
   // Held custom-tool runs (operator intervention). Also under the custom-tools
   // namespace the popup reads, which a reconnect may as well refresh too.
   queryKeys.customTools.all,
+  queryKeys.themes.all,
+  queryKeys.themeDrafts.all,
 ]
 
 /**
@@ -118,6 +120,10 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
     case 'customToolInterventions':
       // Scoped by chat id: the hold dialog for that chat re-reads its queue.
       return id ? [queryKeys.customTools.interventions(id)] : [queryKeys.customTools.all]
+
+    case 'themes':
+      // Installed themes and the drafts (an install bumps a draft's version).
+      return [queryKeys.themes.all, queryKeys.themeDrafts.all]
 
     case 'projects':
       return id

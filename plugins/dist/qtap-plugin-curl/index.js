@@ -176,6 +176,14 @@ function validateCurlInput(input) {
   }
   return true;
 }
+var READ_ONLY_METHODS = /* @__PURE__ */ new Set(["GET", "HEAD", "OPTIONS"]);
+function isReadOnlyCurlCall(input) {
+  if (!validateCurlInput(input)) {
+    return false;
+  }
+  return READ_ONLY_METHODS.has(input.request ?? "GET");
+}
+var CURL_READ_ONLY_NOTE = "Only GET, HEAD and OPTIONS requests are allowed this turn.";
 
 // node_modules/domelementtype/lib/esm/index.js
 var ElementType;
@@ -7610,7 +7618,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "7.54.0";
+var VERSION = "7.62.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -19660,14 +19668,11 @@ var Events = class extends APIResource {
    *       {
    *         request_id: 'request_id',
    *         response: {
-   *           action: 'submit',
-   *           fields: [
-   *             { field_id: 'field_id', value: 'value' },
-   *           ],
-   *           type: 'browser_authentication',
+   *           decision: 'approve',
+   *           type: 'mcp_tool_call',
    *         },
    *         type:
-   *           'agent.session.input.computer_use_approval_request_result',
+   *           'agent.session.input.mcp_approval_request_result',
    *       },
    *     ],
    *   },
@@ -19690,20 +19695,14 @@ var Events = class extends APIResource {
       __security: { bearerAuth: true }
     })));
   }
-  /**
-   * Streams live events for an agent session. See
-   * [session events](https://developers.openai.com/api/docs/guides/agents-api/sessions/events).
-   *
-   * @example
-   * ```ts
-   * const agentSessionEvent =
-   *   await client.beta.agents.sessions.events.stream(
-   *     'session_id',
-   *   );
-   * ```
-   */
-  stream(sessionID, options) {
+  stream(sessionID, query = {}, options) {
+    if (arguments.length < 3) {
+      options = query;
+      query = {};
+    }
+    query = query;
     return this._client.get(path`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions51(options, (options2) => ({
+      query,
       ...options2,
       headers: buildHeaders([
         { "OpenAI-Beta": "agents=v1", Accept: "text/event-stream" },
@@ -20210,8 +20209,9 @@ var TurnState = class {
     return true;
   }
   /** Checks session termination after updating the selected turn state. */
-  terminal(event) {
-    return event.type === "agent.session.failed" || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _TurnState_turnEnded, "f");
+  terminal(event, sessionID) {
+    const type = event.type;
+    return event.type === "agent.session.failed" || type === "agent.session.budget_reached" && "session" in event && event.session?.id === sessionID && (__classPrivateFieldGet(this, _TurnState_turnID, "f") === void 0 || __classPrivateFieldGet(this, _TurnState_turnEnded, "f")) || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _TurnState_turnEnded, "f");
   }
   /** Returns each tool call once for the full invocation, including subagent turns. */
   call(event) {
@@ -20600,12 +20600,13 @@ var AgentTurnResultCollector = class {
     if (this.ready) {
       return;
     }
-    if ("session" in event) {
+    if ("session" in event && event.session) {
       __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionID, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionID, "f") ?? event.session.id, "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_requiredActions, structuredClone(event.session.required_actions ?? []), "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_checkedActionsFor, void 0, "f");
       __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionFailed, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionFailed, "f") || event.type === "agent.session.failed", "f");
-      __classPrivateFieldSet(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f") || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f"), "f");
+      const type = event.type;
+      __classPrivateFieldSet(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f") || (event.type === "agent.session.idle" && __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") || type === "agent.session.budget_reached" && event.session.id === __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionID, "f") && (!__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f") || __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f"))), "f");
     }
     if (event.type === "agent.session.turn.created" && event.turn.subagent_id === null && !__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f")) {
       __classPrivateFieldSet(this, _AgentTurnResultCollector_turn, structuredClone(event.turn), "f");
@@ -20639,7 +20640,7 @@ var AgentTurnResultCollector = class {
     __classPrivateFieldSet(this, _AgentTurnResultCollector_checkedActionsFor, canHandle, "f");
   }
   get ready() {
-    return __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") && __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f");
+    return __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f");
   }
   release() {
     __classPrivateFieldGet(this, _AgentTurnResultCollector_messages, "f").clear();
@@ -20876,7 +20877,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
     if (session.status !== "idle") {
       throw new OpenAIError("sessions.stream requires an idle session; use sessions.events.stream for active sessions");
     }
-    const subscription = await __classPrivateFieldGet(this, _AgentSessionStream_sessions, "f").events.stream(__classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"), options).withResponse();
+    const subscription = await __classPrivateFieldGet(this, _AgentSessionStream_sessions, "f").events.stream(__classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"), {}, options).withResponse();
     __classPrivateFieldSet(this, _AgentSessionStream_stream, subscription.data, "f");
     __classPrivateFieldSet(this, _AgentSessionStream_response, subscription.response, "f");
     __classPrivateFieldGet(this, _AgentSessionStream_instances, "m", _AgentSessionStream_checkAbort).call(this);
@@ -20895,7 +20896,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
       if (!state2.accept(event)) {
         continue;
       }
-      const terminal = state2.terminal(event);
+      const terminal = state2.terminal(event, __classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"));
       const dispatch = __classPrivateFieldGet(this, _AgentSessionStream_dispatcher, "f").prepare(state2.call(event), __classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"));
       if (terminal) {
         __classPrivateFieldGet(this, _AgentSessionStream_stream, "f").controller.abort();
@@ -21097,8 +21098,9 @@ var Sessions = class extends APIResource {
     })));
   }
   /**
-   * Updates session tools, metadata, model, reasoning effort, or service tier. Model
-   * settings apply to subsequent turns. Omitted fields are unchanged. See
+   * Updates session tools, metadata, model, reasoning effort, service tier, or the
+   * default prompt cache lifetime. Model settings apply to subsequent turns. Omitted
+   * fields are unchanged. See
    * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
    *
    * @example
@@ -24961,13 +24963,30 @@ var Images = class extends APIResource {
     return this._client.post("/images/variations", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   edit(body, options) {
-    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions(withBodyFinalization9(((requestOptions) => ({
-      ...requestOptions,
-      body: Object.fromEntries(Object.entries(requestOptions.body ?? {}).map(([key, value]) => [
-        key,
-        key === "safety_identifier" && value === null ? void 0 : value
-      ]))
-    }))({
+    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions(withBodyFinalization9(((requestOptions) => {
+      const omitNulls = (value, paths) => {
+        if (value === null || typeof value !== "object" || Array.isArray(value))
+          return value;
+        return Object.fromEntries(Object.entries(value).map(([key, field]) => {
+          const selected = paths.filter((path2) => path2[0] === key);
+          if (field === null && selected.some((path2) => path2.length === 1))
+            return [key, void 0];
+          const children = selected.filter((path2) => path2.length > 1).map((path2) => path2.slice(1));
+          return [key, children.length === 0 ? field : omitNulls(field, children)];
+        }));
+      };
+      return {
+        ...requestOptions,
+        body: omitNulls(requestOptions.body ?? {}, [
+          ["safety_identifier"],
+          ["complexity"],
+          ["frame_count"],
+          ["frame_duration_ms"],
+          ["svg"],
+          ["svg", "reasoning"]
+        ])
+      };
+    })({
       body,
       ...options2,
       stream: body.stream ?? false,
@@ -24995,7 +25014,7 @@ var Sessions4 = class extends APIResource {
    * @example
    * ```ts
    * await client.live.sessions.accept('session_id', {
-   *   session: { model: 'gpt-live-1', type: 'live' },
+   *   session: { model: 'gpt-live-1.1', type: 'live' },
    * });
    * ```
    */
@@ -25126,7 +25145,7 @@ var Live = class extends APIResource {
    * @example
    * ```ts
    * const live = await client.live.create({
-   *   session: { model: 'gpt-live-1' },
+   *   session: { model: 'gpt-live-1.1' },
    *   transport: { sdp: 'x', type: 'webrtc' },
    * });
    * ```
@@ -30958,11 +30977,18 @@ var plugin = {
     return [curlToolDefinition];
   },
   /**
-   * curl can POST, PUT and DELETE to the outside world, so it is declared a
-   * write. (A static map cannot tell a GET from a DELETE.)
+   * A GET, HEAD or OPTIONS reads; every other method can change something in
+   * the outside world and is a write. On a turn that allows only lookups the
+   * host keeps curl listed with the note and refuses the writing calls.
    */
   getToolEffects(_config) {
-    return { curl: "write" };
+    return {
+      curl: {
+        max: "write",
+        of: (input) => isReadOnlyCurlCall(input) ? "read" : "write",
+        notes: { read: CURL_READ_ONLY_NOTE }
+      }
+    };
   },
   /**
    * Execute a tool by name (multi-tool pattern)

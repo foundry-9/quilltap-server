@@ -202,6 +202,7 @@ export const queryKeys = {
     taboo: ['settings', 'taboo'] as const,
     dataRetention: ['settings', 'data-retention'] as const,
     brahmaConsole: ['settings', 'brahma-console'] as const,
+    calliope: ['settings', 'calliope'] as const,
   },
   connectionProfiles: {
     all: ['connection-profiles'] as const,
@@ -355,8 +356,15 @@ export const queryKeys = {
     all: ['api-keys'] as const,
   },
   themes: {
+    all: ['themes'] as const,
     registrySources: ['themes', 'registry-sources'] as const,
     registry: ['themes', 'registry'] as const,
+  },
+  /** Theme drafts (`Themes/<id>/` in Quilltap General), the Calliope editor's work. */
+  themeDrafts: {
+    all: ['theme-drafts'] as const,
+    list: ['theme-drafts', 'list'] as const,
+    detail: (id: string) => ['theme-drafts', 'detail', id] as const,
   },
   mountPoints: {
     all: ['mount-points'] as const,
@@ -426,6 +434,8 @@ export const queryKeys = {
     folders: (tierKey: string) => ['wardrobe', 'folders', tierKey] as const,
     /** The vision profiles Import from image may read a photograph with (GET analyze-image). */
     visionProfiles: ['wardrobe', 'vision-profiles'] as const,
+    /** The usual model and the web's reach for Import from instructions (GET design-defaults). */
+    designDefaults: ['wardrobe', 'design-defaults'] as const,
     /**
      * What every character in one chat is wearing (`?action=outfit`). Under
      * `wardrobe` so `wardrobe.all` invalidation after an equip refreshes it.
@@ -497,6 +507,8 @@ export const queryKeys = {
     overlaps: (tierKey: string) => ['atlas', 'overlaps', tierKey] as const,
     /** One entry's pictures. */
     images: (entryId: string) => ['atlas', 'images', entryId] as const,
+    /** The connection profile Brahma would draft from the lore with, for a tier. */
+    loreDefaults: (tierKey: string) => ['atlas', 'lore-defaults', tierKey] as const,
   },
   mailbox: {
     all: ['mailbox'] as const,
@@ -515,6 +527,12 @@ export const queryKeys = {
     entity: (apiUrl: string) => ['brahma-console', 'entity', apiUrl] as const,
     pastChats: ['brahma-console', 'past-chats'] as const,
   },
+  /** Calliope's conversations about a theme draft (`/api/v1/calliope`). */
+  calliope: {
+    all: ['calliope'] as const,
+    byDraft: (draftId: string) => ['calliope', 'draft', draftId] as const,
+    messages: (chatId: string) => ['calliope', 'messages', chatId] as const,
+  },
   /**
    * The global search dialog (`GET /api/v1/ui/search`), paged as an infinite
    * query. The term and the type filter are the key, so a slow answer for an
@@ -527,5 +545,19 @@ export const queryKeys = {
   home: {
     /** Home dashboard payload for the workspace home tab. */
     all: ['home'] as const,
+  },
+  dynamicBackgrounds: {
+    all: ['dynamic-backgrounds'] as const,
+    /**
+     * A page's collage status. The settings that change what is drawn
+     * (uncensored allowance, interval) are part of the key, so a change draws
+     * the next collage under the new rule at once.
+     */
+    status: (
+      scope: 'home' | 'project' | 'character',
+      id: string | null,
+      orientation: 'landscape' | 'portrait',
+      rule: { allowUncensored: boolean; refreshMinutes: number },
+    ) => ['dynamic-backgrounds', scope, id ?? '', orientation, rule.allowUncensored, rule.refreshMinutes] as const,
   },
 } as const

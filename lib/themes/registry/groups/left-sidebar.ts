@@ -1,0 +1,116 @@
+/**
+ * Theme token registry — Left sidebar (app navigation).
+ *
+ * Generated into app/styles/qt-components/_variables.css by
+ * `npm run generate:theme-variables`; edit here, not there.
+ */
+
+import type { TokenDef } from '../types';
+
+export const LEFT_SIDEBAR_TOKENS: readonly TokenDef[] = [
+  {
+    name: "--qt-left-sidebar-width",
+    tier: 'component',
+    type: 'length',
+    group: 'left-sidebar',
+    label: "Left sidebar width",
+    default: "15rem",
+    byChoice: {"density":{"comfortable":"16rem"}},
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-left-sidebar-collapsed-width",
+    tier: 'component',
+    type: 'length',
+    group: 'left-sidebar',
+    label: "Left sidebar collapsed width",
+    default: "3.5rem",
+    byChoice: {"density":{"comfortable":"4rem"}},
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-left-sidebar-resize-handle-width",
+    tier: 'component',
+    type: 'length',
+    group: 'left-sidebar',
+    label: "Left sidebar resize handle width",
+    default: "3px",
+    byChoice: {"density":{"comfortable":"4px"}},
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-left-sidebar-bg",
+    tier: 'component',
+    type: 'color',
+    group: 'left-sidebar',
+    label: "Left sidebar background",
+    default: "var(--color-sidebar-background)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-left-sidebar-border",
+    tier: 'component',
+    type: 'color',
+    group: 'left-sidebar',
+    label: "Left sidebar border",
+    default: "var(--color-sidebar-border)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-left-sidebar-transition",
+    tier: 'component',
+    type: 'transition',
+    group: 'left-sidebar',
+    label: "Left sidebar transition",
+    default: "width 200ms ease, transform 300ms ease",
+    visibility: 'advanced',
+  },
+  {
+    name: "--qt-left-sidebar-section-padding",
+    tier: 'component',
+    type: 'length',
+    group: 'left-sidebar',
+    label: "Left sidebar section padding",
+    default: "0.625rem",
+    byChoice: {"density":{"comfortable":"0.75rem"}},
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-left-sidebar-section-gap",
+    tier: 'component',
+    type: 'length',
+    group: 'left-sidebar',
+    label: "Left sidebar section gap",
+    default: "0.125rem",
+    byChoice: {"density":{"comfortable":"0.25rem"}},
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-left-sidebar-section-title-fg",
+    tier: 'component',
+    type: 'color',
+    group: 'left-sidebar',
+    label: "Left sidebar section title text colour",
+    default: "var(--color-sidebar-muted)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-left-sidebar-item-icon-size",
+    tier: 'component',
+    type: 'length',
+    group: 'left-sidebar',
+    label: "Left sidebar item icon size",
+    default: "1.125rem",
+    byChoice: {"density":{"comfortable":"1.25rem"}},
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-left-sidebar-z",
+    tier: 'component',
+    type: 'z-index',
+    group: 'left-sidebar',
+    label: "Left sidebar z-index",
+    default: "50",
+    visibility: 'advanced',
+  },
+];

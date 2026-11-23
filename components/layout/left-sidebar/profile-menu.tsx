@@ -3,103 +3,55 @@
 /**
  * Profile Menu
  *
- * User profile dropdown for the sidebar footer.
+ * The profile button at the foot of the rail. Its menu (Profile, About) is
+ * the registry's `NAV_PROFILE`, drawn by the rail's flyout like any group.
  *
  * @module components/layout/left-sidebar/profile-menu
  */
 
-import { useState, useRef } from 'react'
 import { useSession } from '@/components/providers/session-provider'
-import { useClickOutside } from '@/hooks/useClickOutside'
-import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { Icon } from '@/components/ui/icon'
+import { NAV_PROFILE } from '@/lib/navigation/registry'
+import { useNavRail } from './nav-rail-context'
+import { navFlyoutId } from './nav-flyout'
 
 export function ProfileMenu() {
   const { data: session } = useSession()
-  // Keep-alive-safe: inside the workspace this opens Profile/About as tabs in
-  // place; elsewhere it falls back to a normal route push.
-  const navigate = useWorkspaceNavigate()
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  const [isOpen, setIsOpen] = useState(false)
-
+  const { openMenu, toggleFlyout, openFlyout } = useNavRail()
   const user = session?.user
+  if (!user) return null
 
-  // Close menu when clicking outside
-  useClickOutside(menuRef, () => setIsOpen(false), {
-    enabled: isOpen,
-    onEscape: () => setIsOpen(false),
-  })
-
-  const handleToggle = () => {
-    setIsOpen(!isOpen)
-  }
-
-  const handleProfileClick = () => {
-    setIsOpen(false)
-    navigate('/profile')
-  }
-
-  const handleAboutClick = () => {
-    setIsOpen(false)
-    navigate('/about')
-  }
-
-  if (!user) {
-    return null
-  }
+  const isOpen = openMenu?.id === NAV_PROFILE.id
 
   return (
-    <div className="relative" ref={menuRef}>
-      {/* Profile trigger */}
-      <button
-        type="button"
-        onClick={handleToggle}
-        className="qt-left-sidebar-profile w-full"
-        title="Profile"
-        aria-label="User menu"
-        aria-expanded={isOpen}
-        aria-haspopup="menu"
-      >
-        {user.image ? (
-          <img
-            src={user.image}
-            alt={user.name || 'User'}
-            className="qt-left-sidebar-profile-avatar object-cover"
-          />
-        ) : (
-          <div className="qt-left-sidebar-profile-avatar flex items-center justify-center">
-            <Icon name="profile" className="w-4 h-4 qt-text-secondary" />
-          </div>
-        )}
-      </button>
-
-      {/* Dropdown menu */}
-      {isOpen && (
-        <div className="absolute bottom-full mb-2 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg overflow-hidden z-50 left-0 w-48">
-          <div className="p-2 space-y-1">
-            {/* Profile link */}
-            <button
-              type="button"
-              onClick={handleProfileClick}
-              className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md hover:qt-bg-muted transition-colors"
-            >
-              <Icon name="profile" className="w-4 h-4" />
-              Profile
-            </button>
-
-            {/* About link */}
-            <button
-              type="button"
-              onClick={handleAboutClick}
-              className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md hover:qt-bg-muted transition-colors"
-            >
-              <Icon name="info" className="w-4 h-4" />
-              About
-            </button>
-          </div>
+    <button
+      type="button"
+      onClick={() => toggleFlyout(NAV_PROFILE.id, NAV_PROFILE.id)}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+          event.preventDefault()
+          openFlyout(NAV_PROFILE.id, NAV_PROFILE.id, { focusFirst: true })
+        }
+      }}
+      className="qt-left-sidebar-profile w-full"
+      data-nav={NAV_PROFILE.id}
+      title={NAV_PROFILE.label}
+      aria-label="User menu"
+      aria-expanded={isOpen}
+      aria-haspopup="menu"
+      aria-controls={isOpen ? navFlyoutId(NAV_PROFILE.id) : undefined}
+    >
+      {user.image ? (
+        <img
+          src={user.image}
+          alt=""
+          className="qt-left-sidebar-profile-avatar object-cover"
+        />
+      ) : (
+        <div className="qt-left-sidebar-profile-avatar flex items-center justify-center">
+          <Icon name="profile" className="w-4 h-4 qt-text-secondary" />
         </div>
       )}
-    </div>
+    </button>
   )
 }

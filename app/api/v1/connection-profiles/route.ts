@@ -183,16 +183,24 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     return conflict(`A connection profile named "${input.name}" already exists`);
   }
 
-  // Clients that don't send the field get the resolved default — off for
-  // Anthropic (4.6+ rejects an assistant tail) and off for a profile that
-  // will run a thinking turn (bug 85), on everywhere else.
+  // Clients that don't send the field (the setup wizard among them) get the
+  // resolved default — off for Anthropic and for Claude through any other
+  // provider (4.6+ rejects an assistant tail), off for a profile that will run
+  // a thinking turn (bug 85), on everywhere else.
   const multiCharacterPrefill =
     typeof input.multiCharacterPrefill === 'boolean'
       ? input.multiCharacterPrefill
       : defaultMultiCharacterPrefill(
           input.provider,
-          profileRunsThinkingTurn(input.provider, input.modelName, input.parameters)
+          profileRunsThinkingTurn(input.provider, input.modelName, input.parameters),
+          input.modelName
         );
+  logger.debug('Resolved multi-character prefill for new connection profile', {
+    provider: input.provider,
+    modelName: input.modelName,
+    multiCharacterPrefill,
+    sent: typeof input.multiCharacterPrefill === 'boolean',
+  });
 
   // Default supportsImageUpload from the historic per-provider capability map
   // so clients that don't send the field keep their current behavior on
@@ -520,30 +528,33 @@ async function handleResetSort(req: NextRequest, context: RequestContext) {
 }
 
 /**
+ * Body of `?action=auto-configure`: the profile being edited, unsaved. The
+ * base URL and key are the route it reaches the model by, which decides what
+ * the provider's own catalog says about it.
+ */
+const autoConfigureSchema = z.strictObject({
+  provider: z.string().trim().min(1),
+  modelName: z.string().trim().min(1),
+  baseUrl: z.string().nullish(),
+  apiKeyId: z.string().nullish(),
+});
+
+/**
  * Auto-configure profile suggestions based on provider and model
  */
 async function handleAutoConfigure(req: NextRequest, context: RequestContext) {
   const { user } = context;
 
+  // Outside the try: a ZodError becomes a 400 in the middleware.
+  const target = autoConfigureSchema.parse(await req.json());
+
   try {
-    const body = await req.json();
-    const { provider, modelName } = body;
-
-    // Validation
-    if (!provider || typeof provider !== 'string') {
-      return badRequest('Provider is required');
-    }
-
-    if (!modelName || typeof modelName !== 'string') {
-      return badRequest('Model name is required');
-    }
-
-    // Call auto-configure service
-    const result = await autoConfigureProfile(provider, modelName, user.id);
+    const result = await autoConfigureProfile(target, user.id);
 
     logger.info('[Connection Profiles v1] Auto-configure suggestions generated', {
-      provider,
-      modelName,
+      provider: target.provider,
+      modelName: target.modelName,
+      sources: Object.fromEntries(Object.entries(result.fieldSources).map(([k, v]) => [k, v.kind])),
     });
 
     return successResponse({ suggestions: result });

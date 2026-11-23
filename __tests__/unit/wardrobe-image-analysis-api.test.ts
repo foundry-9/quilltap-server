@@ -12,8 +12,8 @@ jest.mock('@/lib/wardrobe/image-analysis', () => ({
   analyzeImageForWardrobeItems: (...args: unknown[]) => mockAnalyzeImageForWardrobeItems(...args),
 }))
 
-const { POST } = require('@/app/api/v1/wardrobe/analyze-image/route') as {
-  POST: typeof import('@/app/api/v1/wardrobe/analyze-image/route').POST
+const { POST } = require('@/app/api/v1/wardrobe/route') as {
+  POST: typeof import('@/app/api/v1/wardrobe/route').POST
 }
 
 const mockGetServerSession = jest.mocked(getServerSession)
@@ -23,13 +23,14 @@ const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe)
 function createMockRequest(body: unknown): NextRequest {
   return {
     method: 'POST',
-    url: 'http://localhost/api/v1/wardrobe/analyze-image',
+    url: 'http://localhost/api/v1/wardrobe?action=analyze-image',
+    nextUrl: new URL('http://localhost/api/v1/wardrobe?action=analyze-image'),
     headers: new Headers({ 'Content-Type': 'application/json' }),
     json: jest.fn().mockResolvedValue(body),
   } as unknown as NextRequest
 }
 
-describe('POST /api/v1/wardrobe/analyze-image', () => {
+describe('POST /api/v1/wardrobe?action=analyze-image', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockGetRepositories.mockReturnValue(mockRepos)

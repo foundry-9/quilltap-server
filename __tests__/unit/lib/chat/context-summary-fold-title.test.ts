@@ -81,7 +81,7 @@ jest.mock('@/lib/chat/auto-title', () => ({
   applyAutoTitle: jest.fn(async () => 'applied'),
 }))
 
-import { generateContextSummary } from '@/lib/chat/context-summary'
+import { generateContextSummary, checkAndGenerateSummaryIfNeeded, isContextSummaryFoldInFlight } from '@/lib/chat/context-summary'
 import { getRepositories } from '@/lib/repositories/factory'
 import { foldChatSummary, generateTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
 import { applyAutoTitle } from '@/lib/chat/auto-title'
@@ -201,5 +201,65 @@ describe('generateContextSummary — one transcript read feeds both fold passes 
     expect(runFoldPass.mock.calls.map((c: unknown[]) => c[1])).toEqual(['episode-fold', 'other-fold'])
     const ctx = buildExtractionContext.mock.results[0].value
     for (const call of runFoldPass.mock.calls) expect(call[0]).toBe(await ctx)
+  })
+})
+
+describe('generateContextSummary — one fold per chat at a time', () => {
+  it('a second call made mid-fold joins the running fold: one fold, one title', async () => {
+    primeRepos()
+    let release!: () => void
+    mockFold.mockImplementationOnce(() => new Promise(resolve => {
+      release = () => resolve({
+        success: true,
+        result: 'Active threads: a truck called Nobody.',
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      })
+    }))
+
+    const first = generateContextSummary(options())
+    // Let the first fold reach its LLM call before the second reply arrives.
+    for (let i = 0; i < 20 && !release; i++) await Promise.resolve()
+    expect(isContextSummaryFoldInFlight('chat-1')).toBe(true)
+    const second = generateContextSummary(options())
+
+    release()
+    const [a, b] = await Promise.all([first, second])
+
+    expect(a).toBe(b)
+    expect(mockFold).toHaveBeenCalledTimes(1)
+    expect(mockApply).toHaveBeenCalledTimes(1)
+    expect(isContextSummaryFoldInFlight('chat-1')).toBe(false)
+  })
+
+  it('the post-reply gate stands aside while a fold is running', async () => {
+    primeRepos()
+    let release!: () => void
+    mockFold.mockImplementationOnce(() => new Promise(resolve => {
+      release = () => resolve({
+        success: true,
+        result: 'Active threads.',
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      })
+    }))
+    const running = generateContextSummary(options())
+    for (let i = 0; i < 20 && !release; i++) await Promise.resolve()
+
+    const o = options() as unknown as Record<string, unknown>
+    await checkAndGenerateSummaryIfNeeded(
+      'chat-1', 'anthropic' as never, 'model', 'user-1',
+      o.connectionProfile as never, o.cheapLLMSettings as never, o.availableProfiles as never,
+      { awaitFold: true },
+    )
+
+    release()
+    await running
+    expect(mockFold).toHaveBeenCalledTimes(1)
+  })
+
+  it('a later call after the fold lands starts a fresh fold', async () => {
+    primeRepos()
+    await generateContextSummary(options())
+    await generateContextSummary(options())
+    expect(mockFold).toHaveBeenCalledTimes(2)
   })
 })

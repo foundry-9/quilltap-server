@@ -32,8 +32,8 @@ export function CapabilitiesReportDialog({
       showCloseButton
       maxWidth="6xl"
       className="w-full h-[90vh]"
-      bodyClassName="qt-dialog-body flex-1 overflow-y-auto min-h-0"
-      footerClassName="qt-dialog-footer flex-shrink-0 flex justify-end gap-3"
+      bodyClassName="qt-dialog-body-default flex-1 overflow-y-auto min-h-0"
+      footerClassName="qt-dialog-footer-default flex-shrink-0 flex justify-end gap-3"
       footer={
         <>
           <a

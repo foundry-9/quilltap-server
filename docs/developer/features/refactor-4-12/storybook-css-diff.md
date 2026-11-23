@@ -1,5 +1,7 @@
 # Storybook CSS — generated vs. hand copy
 
+> **Retired 2026-11-16.** `@quilltap/theme-storybook` was removed by [Calliope Live, Spec K](../complete/calliope-live-spec-k-convergence.md). The compile step this report measured lives on as `scripts/lib/qt-components-css.mjs`, which compiles `app/styles/qt-components/` in memory for Calliope's styled-by table; there is no generated file to diff any more. The rest of this document is history.
+
 Phase 1 report for [Refactor 4.12 — The theme-storybook mirror is generated](../refactor-4-12-storybook-css-generated.md).
 It compares the hand-maintained `packages/theme-storybook/src/css/qt-components.css`
 as it stood at `25a20221` with the first output of `npm run generate:storybook-css`

@@ -171,6 +171,143 @@ the bar, return [].`
 }
 
 /**
+ * Which stated-particulars instruction a SELF call carries, if any:
+ *  - `story` — a roleplay character's ordinary turn. What they told others as
+ *    fact (a name, a date, a figure, what a record says) is recorded as the
+ *    telling, so they can tell it the same way in a later conversation.
+ *  - `carina` — a reference answer. The whole exchange is a stated fact:
+ *    record what was asked and what was answered.
+ *
+ * Both exist because a story character may supply detail nobody has written
+ * down (`lib/chat/context/story-character-section.ts`), and an invention that
+ * is not remembered is told differently the next time: in the V4test
+ * evaluation an archivist gave four different years for one lighthouse across
+ * two chats, because "the lighthouse was raised in 1799" is none of the six
+ * categories above and the pass returned [].
+ *
+ * The memory is the TELLING ("I told Sam that…"), never the bare fact. A
+ * character may lie, guess or be wrong; what is true of them is that they
+ * said it — which is also what a liar needs in order to keep the story
+ * straight.
+ *
+ * Design of record: docs/developer/features/roleplay-character-latitude.md §13
+ */
+export type StatedParticularsMode = 'story' | 'carina'
+
+const STATED_PARTICULARS_OUTPUT = `Write it in ONE memory that carries the particulars themselves — every
+name, date, figure and source — not one memory per detail, and mark
+that object "stated": true. It does not count toward the limit above;
+return at most one such object.
+  importance   0.35, or 0.45 when others are plainly going to act on it
+  temporal     "present"
+  context      "information"`
+
+/**
+ * The stated-particulars block for a roleplay character's ordinary turn.
+ * Appended after the body, so the body stays byte-stable for prefix caches.
+ */
+export const STATED_PARTICULARS_STORY_BLOCK = `STATED PARTICULARS — one further category, beside the six above
+The subject is a character in a story. What they tell others as fact,
+they must be able to tell the same way later. Record a stated
+particular only when ALL of these hold:
+- the subject asserted it in their own lines, as fact: what they
+  found, read, saw, were told, or know from their trade or their past;
+- it names something a person could ask about again: a proper name, a
+  date or year, a figure or price, a place, or what a document or
+  record says;
+- it is not in the ALREADY ESTABLISHED block.
+Record the telling, never the bare fact, and name who was told:
+"I told Sam that the boathouse deed is in Amos Cottrell's name, entered
+in the third volume for Carrow parish, and that Cottrell has been dead
+nine years."
+Do NOT record: jokes, exaggeration, guesses, questions, opinions,
+plans, description of the scene, anything the subject only repeated
+back from another speaker, and anything another speaker stated.
+If the subject's own lines in this exchange withdraw, correct or admit
+the falsehood of an earlier account, record that instead: "I admitted
+to Sam that I never got into the records office and made up the name
+Cottrell."
+${STATED_PARTICULARS_OUTPUT}`
+
+/** The block for a Carina reference answer (any kind of answerer). */
+export const STATED_PARTICULARS_CARINA_BLOCK = `REFERENCE ANSWER — one further category, beside the six above
+This exchange is a consultation: the subject was asked a question and
+gave a reference answer. The subject must give the same answer if
+asked again. Unless the answer was that the subject does not know or
+could not find it, record what was asked and what the subject
+answered:
+"Asked when the Carrow lighthouse was built, I answered that it was
+raised in 1799 by Isaac Coombe, master mason of Harbour Row, at a cost
+to the town of £496 17s 6d, citing the Town Works Ledger, vol. I,
+folio 112."
+Record the answer as given, never as bare fact, and do not correct,
+shorten or improve it.
+${STATED_PARTICULARS_OUTPUT}`
+
+/** Most earlier tellings shown to one call, and the length each is cut to. */
+export const PRIOR_TELLINGS_SHOWN = 6
+const PRIOR_TELLING_MAX_CHARS = 500
+
+/** Words too common to say two accounts are about the same thing. */
+const TELLING_STOPWORDS = new Set([
+  'that', 'this', 'with', 'from', 'have', 'been', 'were', 'what', 'when', 'where', 'which', 'would', 'could',
+  'there', 'their', 'them', 'they', 'then', 'than', 'told', 'asked', 'answered', 'said', 'about', 'into', 'your',
+  'will', 'shall', 'does', 'only', 'very', 'more', 'some', 'such', 'because', 'before', 'after', 'again',
+])
+
+function tellingWords(text: string): Set<string> {
+  const words = text.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? []
+  return new Set(words.filter(w => !TELLING_STOPWORDS.has(w)))
+}
+
+/**
+ * The earlier tellings worth showing for this exchange: those sharing at
+ * least two distinctive words with it, most shared first, at most
+ * {@link PRIOR_TELLINGS_SHOWN}. Pure and embedding-free — it only has to
+ * catch a retelling, which repeats its own names and figures. With nothing
+ * in common the list is empty and the prompt carries no block.
+ */
+export function selectPriorTellings(tellings: readonly string[], exchangeText: string): string[] {
+  const exchange = tellingWords(exchangeText)
+  if (exchange.size === 0) return []
+  return tellings
+    .map((telling, index) => {
+      let shared = 0
+      for (const word of tellingWords(telling)) if (exchange.has(word)) shared++
+      return { telling, index, shared }
+    })
+    .filter(t => t.shared >= 2)
+    .sort((a, b) => b.shared - a.shared || a.index - b.index)
+    .slice(0, PRIOR_TELLINGS_SHOWN)
+    .map(t => (t.telling.length > PRIOR_TELLING_MAX_CHARS ? `${t.telling.slice(0, PRIOR_TELLING_MAX_CHARS)}…` : t.telling))
+}
+
+/**
+ * The ALREADY TOLD footer: what the subject has told before that bears on
+ * this exchange. It rides at the very end of the prompt (variable text, so
+ * the cached prefix above it does not move), and is absent when empty.
+ */
+function renderAlreadyTold(tellings: readonly string[]): string {
+  if (tellings.length === 0) return ''
+  return `
+
+ALREADY TOLD by the subject (earlier accounts, already remembered)
+${tellings.map(t => `- ${t}`).join('\n')}
+If what the subject says in this exchange is the same account as one of
+these — the same names, dates and figures, however reworded or
+extended with small detail — record NOTHING under STATED PARTICULARS /
+REFERENCE ANSWER. If it differs from one of these on a name, a date, a
+figure or what a record says, record the new account and say what it
+replaces: "I told Sam the deed is in Josiah Pike's name, where I had
+earlier told him Amos Cottrell."`
+}
+
+const STATED_PARTICULARS_BLOCKS: Readonly<Record<StatedParticularsMode, string>> = {
+  story: STATED_PARTICULARS_STORY_BLOCK,
+  carina: STATED_PARTICULARS_CARINA_BLOCK,
+}
+
+/**
  * Prepended to the SELF prompt when the subject is a character a human is
  * driving directly (its turn slice was authored by the user). Human role-play
  * is frequently first person ("I told her I wouldn't go"), whereas the SELF
@@ -201,18 +338,23 @@ function getSelfMemoryExtractionPrompt(
   orienting?: OrientingContext,
   isUserControlled: boolean = false,
   clock?: ExtractionClock,
+  statedParticulars: StatedParticularsMode | null = null,
+  priorTellings: readonly string[] = [],
 ): string {
   const preamble =
     (isUserControlled ? FIRST_PERSON_USER_CLAUSE : '') +
     (inAutonomousRoom ? AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE : '')
   const orientingBlock = renderOrientingContext(orienting)
   const clockBlock = renderClockBlock(clock)
+  // After the body, so the body's bytes (and the provider's prefix cache)
+  // are the same whether or not the call asks for stated particulars.
+  const statedBlock = statedParticulars ? `${STATED_PARTICULARS_BLOCKS[statedParticulars]}\n\n` : ''
   return `${preamble}${selfBodyForCap(maxMemories)}
 
-${clockBlock}${orientingBlock}CONTEXT
+${statedBlock}${clockBlock}${orientingBlock}CONTEXT
 SUBJECT: ${observerName}
 
-${canonBlock}`
+${canonBlock}${statedParticulars ? renderAlreadyTold(priorTellings) : ''}`
 }
 
 export interface SelfTurnPromptInput {
@@ -225,6 +367,14 @@ export interface SelfTurnPromptInput {
   inAutonomousRoom: boolean
   orienting?: OrientingContext
   clock?: ExtractionClock
+  /** Ask for stated particulars, and in which form; absent or null asks for none. */
+  statedParticulars?: StatedParticularsMode | null
+  /**
+   * What the holder has already told as fact (`ExtractionContext.priorTellings`).
+   * The ones that bear on this exchange are shown, so a retelling is not
+   * recorded again. Read only when stated particulars are asked for.
+   */
+  priorTellings?: readonly string[]
 }
 
 /** The SELF call's messages, or null when the holder has no slice in the turn. */
@@ -243,6 +393,10 @@ export function buildSelfTurnMessages(input: SelfTurnPromptInput): LLMMessage[] 
         input.orienting,
         target.isUserControlled ?? false,
         input.clock,
+        input.statedParticulars ?? null,
+        input.statedParticulars
+          ? selectPriorTellings(input.priorTellings ?? [], `${input.transcript.userMessage ?? ''}\n${target.text}`)
+          : [],
       ),
     },
     { role: 'user', content: renderTurnContext(input.transcript) },

@@ -31,6 +31,16 @@ export interface SceneStateEmissionEntry {
 
 const SCENE_HASH_LENGTH = 16
 
+/**
+ * The scene tracker reads prose only, so an Action is what the story's lines
+ * *say* a person did — never proof it was done. Rendered on every block (old
+ * stored actions were written as fact) so a character who narrated a deed
+ * without the tool call is not told by her own scene state that she did it,
+ * against the carried and worn records beside it.
+ */
+export const SCENE_ACTION_NOTE =
+  "**Actions** below are what the story's lines say each person is doing or has done — a telling, not a record. What anyone carries or wears is kept by the records, not by this telling."
+
 function sceneHash(input: string): string {
   return createHash('sha256').update(input).digest('hex').slice(0, SCENE_HASH_LENGTH)
 }
@@ -84,6 +94,7 @@ export function formatCurrentSceneState(
     lines.push(`- **Time**: ${time.trim()}`)
   }
   lines.push('- **Active Now**: true')
+  if (characters.length > 0) lines.push(`- ${SCENE_ACTION_NOTE}`)
 
   const nowIso = new Date().toISOString()
   const emittedByCharacter = new Map<string, SceneStateEmissionEntry>()
@@ -109,7 +120,7 @@ export function formatCurrentSceneState(
     } else {
       lines.push(`### ${c.characterName}`)
       lines.push('')
-      lines.push('#### Action')
+      lines.push('#### Action (as told)')
       lines.push('')
       lines.push(actionText)
       lines.push('')

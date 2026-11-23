@@ -3,6 +3,7 @@
  * Sprint 5: Context Management
  */
 
+import { STORY_CHARACTER_SECTION } from '@/lib/chat/context/story-character-section'
 import {
   estimateTokens,
   countMessageTokens,
@@ -428,7 +429,11 @@ describe('Context Manager', () => {
     it('does not inline persona/user-character info into the system prompt (moved to Host whisper in Phase C)', () => {
       const persona = { name: 'John', description: 'A curious user' }
       const prompt = buildSystemPrompt({ character: character as any, userCharacter: persona })
-      expect(prompt).not.toContain('John')
+      // The story-character section names {{user}} (roleplay-character-latitude.md
+      // §5.1); that is a name in a rule, not the persona's introduction.
+      const storySection = STORY_CHARACTER_SECTION.replace(/\{\{user\}\}/g, 'John')
+      expect(prompt).toContain(storySection)
+      expect(prompt.replace(storySection, '')).not.toContain('John')
       expect(prompt).not.toContain('curious user')
     })
 

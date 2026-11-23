@@ -120,3 +120,32 @@ describe('getDelimiterTooltip', () => {
     expect(getDelimiterTooltip(tagPrefix)).toContain('TOKEN')
   })
 })
+
+describe('underscore wrap (the Emphasis mark beside asterisk narration)', () => {
+  const { generateRenderingPatterns: generate } = jest.requireActual('@/lib/chat/annotations')
+  const { compileRenderingPatterns, tokenizeInline, segmentsToHtml } = jest.requireActual('@/lib/chat/roleplay-rendering')
+  const rules = compileRenderingPatterns(
+    generate([
+      { kind: 'wrap', name: 'Narration', buttonName: 'Nar', delimiters: '*', style: 'qt-chat-narration' },
+      { kind: 'wrap', name: 'Emphasis', buttonName: 'Emph', delimiters: '_', style: 'qt-roleplay-emphasis', hideDelimiter: true },
+    ]),
+  )
+  const html = (text: string) => segmentsToHtml(tokenizeInline(text, rules))
+
+  it('claims a stressed word and conceals the underscores', () => {
+    expect(html('I would _try_.')).toBe('I would <span class="qt-roleplay-emphasis">try</span>.')
+    expect(html('_two words_')).toBe('<span class="qt-roleplay-emphasis">two words</span>')
+  })
+
+  it('nests inside narration', () => {
+    expect(html('*She _really_ meant it.*')).toBe(
+      '<span class="qt-chat-narration">*She <span class="qt-roleplay-emphasis">really</span> meant it.*</span>',
+    )
+  })
+
+  it('leaves underscores that join words, or stand alone, as they are', () => {
+    expect(html('open my_file_name.txt')).toBe('open my_file_name.txt')
+    expect(html('a _ b _ c')).toBe('a _ b _ c')
+    expect(html('snake_case and _more')).toBe('snake_case and _more')
+  })
+})

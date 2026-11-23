@@ -1,5 +1,7 @@
 # Refactor 4.12 — The theme-storybook mirror is generated, not hand-written
 
+> **Retired 2026-11-16.** `@quilltap/theme-storybook` was removed by [Calliope Live, Spec K](complete/calliope-live-spec-k-convergence.md). The compiled `qt-components.css`, `generate:storybook-css` and the `check-storybook-css` gate are gone; the compile step lives on as `scripts/lib/qt-components-css.mjs`, which compiles `app/styles/qt-components/` in memory for Calliope's styled-by table (`npm run generate:theme-styled-by`). The rest of this document is history.
+
 **Status:** Phases 1 and 2 implemented (2026-11-02); Phase 3 not started. Decisions taken: the package publishes at release (a `publish-theme-storybook` job in `release.yml`), and storybook-only rules are dropped. Report: [refactor-4-12/storybook-css-diff.md](refactor-4-12/storybook-css-diff.md). Originally proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). Touches `packages/theme-storybook`, so the publish rule in CLAUDE.md applies to the first shipping change.
 
 ## 1. The problem

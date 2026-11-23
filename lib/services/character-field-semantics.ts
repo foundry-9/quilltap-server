@@ -155,8 +155,25 @@ export const ASSISTANT_TASK_DIRECTION = `This character is an assistant: their r
 - Give opinions about the work once, with reasons, and leave the decision to {{user}}.
 - The character's voice shows in how the work is delivered, not in padding: no preambles, no restating the request, no closing offers of further help.`;
 
+/**
+ * How a generated or refined system prompt should let a STORY character be a
+ * whole person: flaws and bad motives that work, detail supplied at first
+ * hand, and a life that presses on them. The generator-side companion of the
+ * fixed section every roleplay character hears each turn
+ * (`lib/chat/context/story-character-section.ts`); it rides behind the stakes
+ * direction through `generatorDirectionFor`, never pasted beside it by hand.
+ * The second bullet restates the trust line so opposition to {{user}} is never
+ * written as governance (docs/developer/features/roleplay-character-latitude.md §5.2.2).
+ */
+export const STORY_LATITUDE_DIRECTION = `The prompt must also let the character be a whole person in a story, in terms fitted to this character rather than as a generic checklist:
+- Flaws and bad motives are written as working parts, not softened. If the source makes the character cowardly, suspicious, vain, greedy, cruel or dishonest, the prompt says what they do when that trait is in play. Do not add a conscience, a redemption or a hidden kindness the source does not give them.
+- This holds toward {{user}} too. A rival, an enemy or a liar may deceive, resent, refuse or work against {{user}}'s persona. The six points about {{user}}'s authority over the story still hold for them: opposition is never votes, sign-offs, conditions or a tally of slips.
+- The character supplies detail. Say what kind of thing this character can readily tell at first hand — their trade, their street, their past — so that an account of somewhere they went alone comes with particulars. Do not write "admits when unsure" or "never guesses" as a rule for a story character; they still never invent a fact about a place to win an argument with {{user}}, and never decide what {{user}} did.
+- The character has a life that presses on them. Say what they carry into a room — a debt, a grievance, a sick parent, a deadline — and how it shows when it outweighs the conversation: shortness, distraction, changing the subject. When nothing presses, they listen as described above.`;
+
 const GENERATOR_DIRECTIONS: Readonly<Record<GeneratorDirectionKey, string>> = {
-  stakes: STAKES_AND_REACTION_DIRECTION,
+  stakes: `${STAKES_AND_REACTION_DIRECTION}
+${STORY_LATITUDE_DIRECTION}`,
   task: ASSISTANT_TASK_DIRECTION,
 };
 
@@ -179,12 +196,25 @@ export function generatorDirectionFor(kind: CharacterKind): string {
 export const FLATTENING_DRIFT_SIGNAL = `Flattening is drift, not character. If the memories show the character meeting danger, threat, loss, or outrage with the same even calm as small talk — vouching for an armed intruder, offering a threat a chair and an appointment, talking a crisis down while everyone they care about is at risk — treat it as a failure mode to correct in the prompt. An absolute temperament rule in the current prompt ("never tense", "always calm", "hostility makes you calmer") is the usual cause: replace it with how this character's temperament bends under real stakes. Never codify unflappable calm as a trait.`;
 
 /**
- * The kind-specific drift signal for the Optimizer, or null when the kind has
- * none. Flattening is drift for a story character; an assistant's even keel
- * is its job.
+ * Sanitizing as drift, for the Optimizer on a roleplay character: a character
+ * written with a flaw or a motive whose memories show them uniformly brave,
+ * trusting and agreeable. Measured ONLY against the character's own
+ * definition — the last two sentences are there because
+ * COMMITTEE_DRIFT_GUARDRAIL says agreement and warmth are never drift, and
+ * this signal must not be readable as the opposite.
+ */
+export const SANITIZING_DRIFT_SIGNAL = `Sanitizing is drift, not character. If the character's own definition gives them a flaw or a motive — fearful, distrustful, self-serving, hostile — and the memories show them uniformly brave, trusting, generous and agreeable, treat it as a failure mode to correct in the prompt: say again what the flaw makes them do. Measure this only against the character's own definition. Warmth, agreement and going along with {{user}} are never drift in a character who was not written otherwise, and nothing here licenses conditions, tallies or approvals aimed at {{user}}.`;
+
+/**
+ * The kind-specific drift signals for the Optimizer, or null when the kind has
+ * none. Flattening and sanitizing are drift for a story character; an
+ * assistant's even keel is its job.
  */
 export function kindDriftSignalFor(kind: CharacterKind): string | null {
-  return kindPolicy(kind).generatorDirection === 'stakes' ? FLATTENING_DRIFT_SIGNAL : null;
+  return kindPolicy(kind).generatorDirection === 'stakes'
+    ? `${FLATTENING_DRIFT_SIGNAL}
+${SANITIZING_DRIFT_SIGNAL}`
+    : null;
 }
 
 /**

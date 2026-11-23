@@ -260,6 +260,8 @@ Choose how the project background is displayed:
 - **Project background** — uses a background generated specifically for this project
 - **Static image** — uses a manually uploaded background image
 
+With [Dynamic Backgrounds](dynamic-backgrounds.md) switched on (Settings → Appearance) and at least three story backgrounds painted for the project's chats, the project page shows a changing collage of them instead of any of these.
+
 ## Settings Organization
 
 Settings are typically organized in cards:

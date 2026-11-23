@@ -36,7 +36,8 @@ jest.mock('@/lib/themes/bundle-loader', () => ({
   installThemeBundle: (...args: unknown[]) => mockInstallThemeBundle(...args),
 }))
 
-import { generateKeyPair, signData, hashBuffer } from '@/lib/themes/crypto'
+import { generateKeyPair, signData } from '@/lib/themes/crypto'
+import { sha256OfBuffer } from '@/lib/utils/sha256'
 import { checkBundleSignature, RegistryVerificationError } from '@/lib/themes/registry-trust'
 import { fetchRegistryIndex, installFromRegistry, saveSources } from '@/lib/themes/registry-client'
 import type { RegistrySource } from '@/lib/themes/types'
@@ -232,7 +233,7 @@ describe('installFromRegistry', () => {
     await saveSources({ version: 1, sources: [source(publicKey)] })
     mockSafeFetch.mockImplementation(async (url: string) =>
       url === REGISTRY_URL
-        ? jsonResponse(makeIndex([themeEntry(hashBuffer(zip))], privateKey))
+        ? jsonResponse(makeIndex([themeEntry(sha256OfBuffer(zip))], privateKey))
         : { ok: true, status: 200, body: zip }
     )
 

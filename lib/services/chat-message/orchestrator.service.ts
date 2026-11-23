@@ -81,6 +81,7 @@ import { resolveMessageDangerState } from './danger-orchestrator.service'
 import { attemptEmptyResponseRecovery } from './provider-failover.service'
 import { openTurnStream, newSubmissionLedger, type SubmissionLedger } from './turn-stream'
 import { recordOperatorPost } from './operator-post.service'
+import { releaseHeldAvatarRefreshes } from '@/lib/background-jobs/queue-service'
 import {
   finishHeldPost,
   maybePauseForUserSeatTurn,
@@ -501,6 +502,13 @@ async function processMessage(
   const chat = await repos.chats.findById(chatId)
   if (!chat) {
     throw new Error('Chat not found')
+  }
+
+  // A turn is triggered — by the operator's post or a character's voice. The
+  // avatar refreshes that wardrobe and Inventory changes held since the last
+  // one start now, together. A bid is only a plan, not a turn.
+  if (!isBid) {
+    await releaseHeldAvatarRefreshes(chatId)
   }
 
   // ==========================================================================

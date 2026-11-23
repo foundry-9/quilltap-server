@@ -419,6 +419,28 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * The character's most recent live memories that carry one exact keyword,
+   * newest first. Used to find what a character has already told as fact
+   * (`STATED_PARTICULARS_KEYWORD`, `lib/memory/extraction/parse.ts`). The
+   * column is a JSON array, so the match is on the quoted keyword; rows a
+   * digest supersedes are left out.
+   */
+  async findRecentWithKeyword(characterId: string, keyword: string, limit: number = 40): Promise<Memory[]> {
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter(
+          { characterId, keywords: { $contains: JSON.stringify(keyword) } },
+          { sort: { createdAt: -1 }, limit },
+        );
+        return memories.filter((m) => !m.supersededById);
+      },
+      'Error finding recent memories by keyword',
+      { characterId, keyword, limit },
+      []
+    );
+  }
+
+  /**
    * Find the most important memories for a character — the frozen archive's
    * candidate pool.
    *
@@ -932,34 +954,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       },
       'Error bulk deleting memories for character',
       { characterId, count: memoryIds.length }
-    );
-  }
-
-  /**
-   * Update the lastAccessedAt timestamp for a memory
-   * @param characterId The character ID
-   * @param memoryId The memory ID
-   * @returns Promise<Memory | null> The updated memory if found, null otherwise
-   */
-  async updateAccessTime(characterId: string, memoryId: string): Promise<Memory | null> {
-    return this.safeQuery(
-      async () => {
-        const memory = await this.findById(memoryId);
-        if (!memory) {
-          logger.warn('Memory not found for access time update', { memoryId, characterId });
-          return null;
-        }
-
-        if (memory.characterId !== characterId) {
-          logger.warn('Memory does not belong to character', { characterId, memoryId });
-          return null;
-        }
-
-        const now = this.getCurrentTimestamp();
-        return await this.update(memoryId, { lastAccessedAt: now });
-      },
-      'Error updating memory access time',
-      { characterId, memoryId }
     );
   }
 
@@ -1892,23 +1886,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       'Error finding memories by character and source message IDs',
       { characterId, count: sourceMessageIds.length },
       []
-    );
-  }
-
-  /**
-   * Count memories associated with a specific source message
-   * @param sourceMessageId The source message ID
-   * @returns Promise<number> Number of memories for the message
-   */
-  async countBySourceMessageId(sourceMessageId: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const count = await this.count({ sourceMessageId });
-        return count;
-      },
-      'Error counting memories for source message',
-      { sourceMessageId },
-      0
     );
   }
 

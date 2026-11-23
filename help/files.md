@@ -25,7 +25,7 @@ Compare with:
 
 ## Accessing the Files Page
 
-1. Click **Files** in the left sidebar (folder icon)
+1. Open **Library** and choose **Files**
 2. Or navigate to the Files section in the main menu
 3. You'll see your general files organized in folders
 

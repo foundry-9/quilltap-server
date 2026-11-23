@@ -230,7 +230,7 @@ export default function CreateNPCDialog({
           <Icon name="close" className="w-6 h-6" />
         </button>
       }
-      footerClassName="qt-dialog-footer flex items-center justify-end gap-3"
+      footerClassName="qt-dialog-footer-default flex items-center justify-end gap-3"
       footer={
         <>
           <button

@@ -15,6 +15,7 @@ API reference for Quilltap v4.3 and later.
 > **Freshness note (v4.7-dev):** Additions since v4.3:
 >
 > - **Brahma Console** (`/api/v1/brahma-console`) — a character-less, memory-free generic-LLM surface with its own collection/item/messages endpoints (see [Brahma Console](#brahma-console)).
+> - **Calliope** (`/api/v1/calliope`, 4.14) — the theme editor's assistant: console conversations about one theme draft, whose proposals the editor tries, keeps or discards (see [Calliope](#calliope)); settings at `/api/v1/settings/calliope`.
 > - **The Post Office** — inter-character mail. Two new chat actions: `POST /api/v1/chats/[id]?action=send-mail` (post a letter as a player-character) and `GET /api/v1/chats/[id]?action=mailbox&characterId=…` (list a player-character's mailbox). New LLM tools `send_mail` and `list_email` (renamed `list_mail` in 4.10, alongside the new `read_mail` and `discard_mail`); deliveries are announced by the `suparna` Staff sender.
 > - **Carina** — inline LLM queries via `@Name:` / `@Name?` markup and the `ask_carina` tool; answers post as `systemSender: 'carina'` rendered with the answerer's own avatar. `@Brahma` reaches the Brahma Console as a Carina answerer.
 > - **New `systemSender` values** — `carina` (inline-query answers) and `suparna` (Post Office mail-delivery announcements).
@@ -72,6 +73,7 @@ API reference for Quilltap v4.3 and later.
   - [Character Photos](#character-photos)
   - [Chats](#chats)
   - [Brahma Console](#brahma-console)
+  - [Calliope](#calliope)
   - [Scenario Builder](#scenario-builder)
   - [Chat Announcements](#chat-announcements)
   - [Chat Photo Albums](#chat-photo-albums)
@@ -98,6 +100,7 @@ API reference for Quilltap v4.3 and later.
   - [LLM Logs](#llm-logs)
   - [Theme Assets & Fonts](#theme-assets--fonts)
   - [Themes (v1)](#themes-v1)
+  - [Theme Drafts](#theme-drafts)
   - [Search](#search)
   - [Search & Replace](#search--replace)
   - [Background Jobs](#background-jobs)
@@ -143,7 +146,7 @@ GET /api/v1/characters/[id]?action=export  # Export character
 ```
 
 
-**Path-segment actions moved (4.13).** Every action that used to be a path segment or a body discriminator is now `?action=` on its parent route: `wardrobe?action=analyze-image|preview-avatar|move-to-tier|copy-to-tier`, `atlas?action=move-to-tier|copy-to-tier`, `inventory?action=move-to-tier|copy-to-tier`, `groups?action=scenarios`, `system/plugins?action=state|initialize|upgrades|mark-upgrades-notified`, `system/directories` (a plain read), `chats/[id]?action=turn-*` and `system/tools?action=tasks-queue-start|stop`. The old forms answer until 4.14 through `deprecatedPath` (`lib/api/deprecated-path.ts`), which logs a warning once and sets `Deprecation: true` and `Link: <replacement>; rel="successor-version"`.
+**Path-segment actions moved (4.13).** Every action that used to be a path segment or a body discriminator is now `?action=` on its parent route: `wardrobe?action=analyze-image|preview-avatar|move-to-tier|copy-to-tier`, `atlas?action=move-to-tier|copy-to-tier`, `inventory?action=move-to-tier|copy-to-tier`, `groups?action=scenarios`, `system/plugins?action=state|initialize|upgrades|mark-upgrades-notified`, `system/directories` (a plain read), `chats/[id]?action=turn-*` and `system/tools?action=tasks-queue-start|stop`. The old forms (and `lib/api/deprecated-path.ts`, which kept them answering) were removed in 4.14; an old body-discriminator action (`chats/[id]?action=turn`, `POST system/tools?action=tasks-queue`) is now an unknown action, a 400.
 
 **Accepted exceptions.** `GET /api/v1/files/proxy/[...key]` and `GET /api/v1/chats/[id]/qtap-target` are byte routes: the page CSP is lifted from them by path in `next.config.js` (a query string cannot be matched there), and `files/proxy` URLs are written into stored content. `/api/v1/search-replace?action=preview|execute` is a feature route that already dispatches on `?action=`.
 ### Legacy Routes Removed
@@ -427,7 +430,7 @@ Returns updated profile (same format as GET).
 
 Read the user's theme preference. Chat settings are created with defaults on first read if absent.
 
-**Response**: `200 OK` — `{ activeThemeId, colorMode, showNavThemeSelector }`.
+**Response**: `200 OK` — `{ activeThemeId, colorMode, customOverrides? }`. (`showNavThemeSelector` was retired in 4.14: the theme picker is always in the rail's Studio menu. A stored preference or an old client that still carries the key parses; the key is dropped.)
 
 #### `PUT /api/v1/user/profile?action=theme-preference`
 
@@ -479,8 +482,7 @@ Get chat settings for the current user. A user with no saved settings gets the d
   "imageDescriptionProfileId": null,
   "themePreference": {
     "activeThemeId": null,
-    "colorMode": "system",
-    "showNavThemeSelector": false
+    "colorMode": "system"
   },
   "defaultRoleplayTemplateId": null,
   "sidebarWidth": 320,
@@ -529,6 +531,7 @@ Update chat settings.
   },
   "imageDescriptionProfileId": "profile-uuid" | null,
   "wardrobeImageSettings": { "imageProfileId": "image-profile-uuid" | null },
+  "dynamicBackgrounds": { "enabled": false, "allowUncensored": false, "refreshMinutes": 3 },
   "themePreference": {
     "activeThemeId": "theme-id" | null,
     "colorMode": "light" | "dark" | "system"
@@ -606,6 +609,21 @@ budget alone and vice versa.
   "inlineConnectionProfileId": "uuid-or-null"
 }
 ```
+
+#### `GET /api/v1/settings/calliope`
+
+Read Calliope's instance-wide settings (`instance_settings['calliope']`): `connectionProfileId`, the engine a new conversation starts on and a conversation falls back to when its pinned profile is gone (`null` = the default profile; a stale id falls through), and `maxAgentTurns`, her agent-turn budget (default 25, at least 1, no upper bound; the duplicate/stale-query guard still stops a self-repeating loop). Read by `CALLIOPE_PERSONA` (`lib/services/calliope/persona.ts`).
+
+```json
+{
+  "connectionProfileId": null,
+  "maxAgentTurns": 12
+}
+```
+
+#### `PUT /api/v1/settings/calliope`
+
+Update them. The body is merged over the stored value before validation, so a partial body is a partial update.
 
 #### `GET /api/v1/settings/taboo`
 
@@ -2241,9 +2259,60 @@ One route for an item's pictures in every tier; the item's container rides in th
 
 A `POST` without an action is a 400. `generate` runs synchronously inside `trackActivity('image', …)`, with the profile resolved by `resolveWardrobeImageProfile` (override → `chatSettings.wardrobeImageSettings.imageProfileId` → default image profile; no usable profile → 400). A character's own item is drawn worn by its owner; a shared item is drawn catalogue style. The provider call goes through `generateImageWithConciergeFailover` with `purpose: 'wardrobe'` and no chat; a refusal that could not be rerouted answers **422** with `details: { trail, refused: true }`; any other provider failure (auth, rate limit, timeout, no image) answers **502** with the same `details` shape. `set-current`, `delete-image` and `save-to-store` refuse a file not linked to the item (400). `save-to-store` files a copy into the store's `photos/` through `saveImageToAlbum` (the Salon's save service), attributed to the operator and captioned with the item's title by default; an archived character's vault as the target is a **409**, and a store already holding the picture is a **409** `{ code: 'ALREADY_SAVED', keptAt, relativePath }`. The item is not written, so a picture may be copied out of an archived character's wardrobe.
 
+#### `POST /api/v1/wardrobe?action=design-from-instructions`
+
+Import from Instructions: Aurora designs wardrobe pieces and an outfit from a written brief. Server-Sent Events; the run writes nothing. On the General collection only (the target tier travels in the body).
+
+**Request body** (`wardrobeDesignRequestSchema`, strict):
+
+```json
+{
+  "instructions": "A Pan Am stewardess's uniform, 1968",
+  "searchStores": true,
+  "searchWeb": true,
+  "connectionProfileId": "<uuid>",
+  "target": { "scope": "character", "id": "<uuid>" },
+  "priorProposal": { "items": [], "outfit": null, "reuseItemIds": [] },
+  "revision": "make the skirt longer"
+}
+```
+
+- `instructions` (1 to 4,000 characters), `connectionProfileId` and `target` are required. `target` is `{ scope: "general" }` or a scope (`character` / `group` / `project`) with its `id`.
+- `searchStores` (default `true`): the operator surface, read-only — `search` without memories, the `doc_*` reads, the `lookup_*` shortcuts and `run_sql`.
+- `searchWeb` (default `true`): `search_web` when the profile has `allowWebSearch` and a search provider is configured; `curl` when the plugin has URL patterns. Asking for a web that is unreachable is not an error; the model is told it is unavailable.
+- `priorProposal` and `revision` travel together (a revision of the design as edited). `reuseItemIds` are existing items of the target wardrobe.
+- Everything runs under `effectCeiling: 'read'`, so a `curl` call other than GET / HEAD / OPTIONS is refused.
+
+**Refusals before the stream opens:** 400 validation; 404 for a missing, foreign or archived character, a target that does not resolve (nothing is provisioned), or a profile that is not the user's; 400 for a profile with `allowToolUse: false` when the run would build any tool; 400 for a profile with no usable API key.
+
+**Stream:** the one-shot agent events (`status`, tool detection and results, cumulative `reasoning`), then one terminal event:
+
+```json
+{
+  "done": true,
+  "proposal": {
+    "items": [{ "title": "", "description": "", "imagePrompt": "", "types": ["top"], "appropriateness": "" }],
+    "outfit": { "title": "", "description": "", "appropriateness": "" },
+    "reuse": [{ "id": "<uuid>", "title": "Navy Blazer", "types": ["top"] }],
+    "notes": "What the design rests on."
+  },
+  "provider": "ANTHROPIC",
+  "modelName": "…",
+  "usage": { "promptTokens": 0, "completionTokens": 0, "totalTokens": 0 },
+  "toolsExecuted": 3,
+  "reach": { "stores": true, "webSearch": true, "webFetch": false, "webWantedButUnavailable": false }
+}
+```
+
+or `{ "error": "…", "errorType": "wardrobe_design_failed" | "wardrobe_design_unreadable" | "wardrobe_design_empty" }`. Closing the request aborts the run. LLM log type `WARDROBE_INSTRUCTION_DESIGN`. The client creates the pieces through the ordinary wardrobe `POST`.
+
+#### `GET /api/v1/wardrobe?action=design-defaults`
+
+`{ "defaultProfileId": "<uuid> | null", "webSearchConfigured": true, "curlConfigured": false }` — the user's default connection profile, and what of the web is reachable independent of any profile.
+
 #### `POST /api/v1/wardrobe?action=analyze-image`
 
-(`GET ?action=analyze-image` lists the vision profiles the dialog may offer.) Formerly `/api/v1/wardrobe/analyze-image`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+(`GET ?action=analyze-image` lists the vision profiles the dialog may offer.) Formerly `/api/v1/wardrobe/analyze-image`. The old path was removed in 4.14.
 
 Analyze an image using a vision LLM to suggest wardrobe items.
 
@@ -2270,7 +2339,7 @@ Analyze an image using a vision LLM to suggest wardrobe items.
 
 #### `POST /api/v1/wardrobe?action=preview-avatar`
 
-Formerly `/api/v1/wardrobe/preview-avatar`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `/api/v1/wardrobe/preview-avatar`. The old path was removed in 4.14.
 
 Generate a one-off character avatar against an arbitrary equipped-slot snapshot (the state a wardrobe dialog is currently showing). The result is saved as a regular generated image (downloadable from the dialog) but is **not** persisted onto the character's `avatarOverrides` or any chat's `characterAvatars` — out-of-chat avatars never overwrite the canonical character avatar.
 
@@ -2280,7 +2349,7 @@ Generate a one-off character avatar against an arbitrary equipped-slot snapshot 
 
 #### `POST /api/v1/wardrobe?action=move-to-tier` / `?action=copy-to-tier`
 
-Formerly `POST /api/v1/wardrobe/transfers` with `action: 'move' | 'copy'` in the body; the action is now the query and the body carries the rest. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `POST /api/v1/wardrobe/transfers` with `action: 'move' | 'copy'` in the body; the action is now the query and the body carries the rest. The old path was removed in 4.14.
 
 Move or copy one wardrobe item between wardrobe tiers. The rules live in `transferWardrobeItem` (`lib/wardrobe/transfers.ts`); the route only parses and maps refusals (404 when the item is in none of the tiers probed, 400 for an invalid destination, the same source and destination, or an id already taken there, 409 for an archived character). The former `GET` (destination options) was removed in 4.12; clients read the characters, projects and groups lists instead. The source is given one of two ways: `sourceCharacterId` (character-view probing — the item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General), or an explicit `source: { scope: 'character'|'project'|'group'|'general', id? }` naming the container directly (used when the wardrobe dialog is browsing a shared container). Destinations are named explicitly by `{scope, id}`.
 
@@ -2438,7 +2507,7 @@ One `.json` file per object under a tier's `Inventory/` folder; four tiers, one 
 
 #### `POST /api/v1/inventory?action=move-to-tier` / `?action=copy-to-tier`
 
-Formerly `POST /api/v1/inventory/transfers` with `action` in the body. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `POST /api/v1/inventory/transfers` with `action` in the body. The old path was removed in 4.14.
 
 `{ itemId, from: { scope, id }, to: { scope, id } }`. A move keeps the id (equipped sets and kits still name it); a copy mints one and is refused when the object's resolved `canCopy` is false. Folder path kept; pictures travel. Answers `{ item }`.
 
@@ -2477,9 +2546,16 @@ One `.md` file per entry under a tier's `Atlas/` folder (frontmatter: `id`, `nam
 
 #### `POST /api/v1/atlas?action=move-to-tier` / `?action=copy-to-tier`
 
-Formerly `POST /api/v1/atlas/transfers` with `action` in the body. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `POST /api/v1/atlas/transfers` with `action` in the body. The old path was removed in 4.14.
 
 `{ entryId, from: { scope, id }, to: { scope, id } }`. A move keeps the id, a copy mints one; folder path kept; pictures travel. A live entry of the same name at the destination is `NAME_TAKEN`. Answers `{ entry }`.
+
+#### `POST /api/v1/atlas?action=draft-from-lore` / `GET /api/v1/atlas?action=lore-defaults`
+
+Brahma drafts one entry from the operator's lore (`lib/atlas/routes/lore-draft.ts`, service `lib/services/atlas-lore/atlas-lore.service.ts`). Files nothing: the client hands the draft to the entry editor, which creates through the ordinary collection `POST`.
+
+- `POST …?action=draft-from-lore` — body (`atlasLoreDraftRequestSchema`, strict): `{ subject, details?, searchStores? (default true), connectionProfileId?, target: { scope, id? }, priorDraft?, revision? }` (`priorDraft` and `revision` together or not at all; a `general` target has no id, every other one needs one). Absent `connectionProfileId` → Brahma's profile for the target (`resolveBrahmaConnectionProfileForProject`: the target project's `brahmaConnectionProfileId`, the global inline profile, the default). `404` for a profile not the user's; `400` for a tool-less profile with `searchStores`, or a profile whose key will not resolve. Answers an SSE stream (untagged legacy frames): tool-call and reasoning events, then `{ done: true, draft: { name, aliases, graphicPrompt, knowledge }, structured, provider, modelName, usage, toolsExecuted }` or `{ error, errorType: 'atlas_lore_draft_failed', details }`. With the stores open the run is the operator surface under an effect ceiling of `read` (search without memories, the read-only `doc_*` tools, the lookup shortcuts, `run_sql`); closed, only `submit_final_response`. Logged as `ATLAS_LORE_DRAFT`.
+- `GET …?action=lore-defaults&scope=&id=` — `{ brahmaProfileId }` (null when the user has no profiles).
 
 #### `/api/v1/atlas/[entryId]/images?scope=<scope>&id=<containerId>`
 
@@ -3938,6 +4014,62 @@ Send a message; returns an SSE stream (legacy frame shape; the `done` frame carr
 #### `GET /api/v1/brahma-console/[id]/messages`
 
 Load the chat's messages. Each message's `attachments` is resolved to `{ id, filename, mimeType, isImage, path, mountPointId, missing }`.
+
+---
+
+### Calliope
+
+The theme editor's assistant (`chatType: 'calliope'`, Calliope Live Spec J): a console conversation, run by the same engine as the Brahma Console (`lib/services/console-engine/`, persona `CALLIOPE_PERSONA`), about one theme draft named by `chats.themeDraftId`. Help-like (no memory, no Concierge, kept out of global search); deleted with its draft. Her tools are the five `theme_*` tools under `effectCeiling: 'read'`; she **proposes** with `theme_propose` and never writes the draft. A proposal is the stored `theme_propose` TOOL row; its decision (`kept` / `discarded`) is recorded on that row, and *stale* is derived on every read by re-judging it against the draft as it now is (`lib/calliope/proposals.ts`, `lib/themes/assist/`). Reference pictures are documents at `Calliope/<name>` in Quilltap General (`lib/console-engine/attachments.ts`).
+
+`ProposalView` is `{ id, createdAt, title, reason, state: 'offered' | 'kept' | 'discarded' | 'stale', draftChanged, review, staleReason, operations }`, where `review` (null when stale) carries the operations in words, the warnings it brings in, the issues it clears, and the contrast pairs it breaks and mends.
+
+#### `GET /api/v1/calliope?draftId=<id>`
+
+List the conversations about a draft (most recent first). Each row: `id`, `title`, `themeDraftId`, `createdAt`, `updatedAt`, `lastMessageAt`, `messageCount`, `consoleConnectionProfileId`, `attachmentCount`.
+
+#### `POST /api/v1/calliope`
+
+Open a conversation. Body (strict): `{ draftId, connectionProfileId? }`. The draft must exist (404); the profile defaults to her setting, then the user's default. **Response**: `201 Created` with `{ chat }`.
+
+#### `POST /api/v1/calliope?action=upload`
+
+Store a reference picture, as the Console's upload does but under `Calliope/` in Quilltap General. Not bound to a conversation. **Response**: `201 Created` with `{ id, filename, mimeType, size, path, isImage }`.
+
+#### `POST /api/v1/calliope?action=discard-upload`
+
+Body `{ fileId }`. Removes an upload dropped before sending, only while it is still directly under `Calliope/`. **Response**: `{ outcome: 'deleted' | 'kept-moved' | 'missing' }`.
+
+#### `GET /api/v1/calliope/[id]`
+
+Conversation details.
+
+#### `PATCH /api/v1/calliope/[id]`
+
+Rename: `{ title }`. With `?action=set-model`, `{ connectionProfileId }` switches the model and the same conversation continues. **Response**: `{ chat }`.
+
+#### `POST /api/v1/calliope/[id]?action=keep`
+
+Body `{ proposalId }`. Re-judges the proposal against the draft as it now is and records it kept; **does not write the draft**. The editor applies the returned operations through its own edit path (one undo step; CSS through the stylesheet's save). **Response**: `{ proposalId, operations, review, draftChanged, revision, stylesRevision }`. `409` when it was already decided or no longer applies.
+
+#### `POST /api/v1/calliope/[id]?action=try`
+
+Body `{ proposalId }`. The proposal's result for the live preview: `{ proposalId, tokens, custom }`, where `custom` is the result's custom CSS validated and scoped by the theme engine exactly as an install would (`previewProposal`). Records nothing. `409` when it no longer applies.
+
+#### `POST /api/v1/calliope/[id]?action=discard`
+
+Body `{ proposalId }`. Records it discarded. **Response**: `{ proposalId, state: 'discarded' }`; `409` if already decided.
+
+#### `DELETE /api/v1/calliope/[id]`
+
+Delete the conversation, with its attachments still directly under `Calliope/`. **Response**: `{ deleted, attachmentsDeleted, attachmentsKept }`.
+
+#### `POST /api/v1/calliope/[id]/messages`
+
+Send a message; returns the console engine's SSE stream (legacy frame shape). Body: `{ content, fileIds? }`; each `fileId` must be a link under `Calliope/` in General. `content` may be empty when `fileIds` is not.
+
+#### `GET /api/v1/calliope/[id]/messages`
+
+Load the messages, with attachments resolved, and `proposals: ProposalView[]` judged against the draft as it now is. `draftMissing` is true when the draft is gone.
 
 ---
 
@@ -6443,6 +6575,39 @@ Marks migration warnings as acknowledged. Call after displaying notifications to
 
 ---
 
+### System Navigation
+
+The navigation registry (`lib/navigation/registry.ts`) as the Electron shell reads it, to build a native menu bar. Unauthenticated, like startup-status: the listing is static and carries no user data. Design of record: [navigation-menus.md](features/complete/navigation-menus.md); what the shell must implement: [navigation-menus-shell-contract.md](features/complete/navigation-menus-shell-contract.md).
+
+#### `GET /api/v1/system/navigation`
+
+**Response**: `200 OK`
+
+```json
+{
+  "version": 1,
+  "top": [
+    { "id": "home", "label": "Home", "type": "destination", "href": "/" },
+    { "id": "characters", "label": "Characters", "type": "destination", "href": "/aurora" }
+  ],
+  "groups": [
+    { "id": "objects", "label": "Objects", "items": [
+      { "id": "atlas", "label": "The Atlas", "type": "destination", "href": "/workspace?open=atlas" }
+    ] }
+  ],
+  "pinned": [
+    { "id": "help", "label": "Help", "type": "action" },
+    { "id": "about", "label": "About", "type": "destination", "href": "/about" }
+  ]
+}
+```
+
+`groups` is the four menus in rail order (Conversations, Objects, Library, Studio); `pinned` is Help, Quick-hide, Settings, then the profile menu's Profile and About. No icon, tab kind or activator detail is included. `version` rises only when an existing field changes meaning or goes away.
+
+**Activation.** A menu click sends the item **id** to the page through `window.quilltap.onNavigate(handler)` (declared in `types/quilltap-bridge.d.ts`; the shell's preload supplies it). The page runs the same activator a rail click runs. When the page has registered no handler (starting up, the unlock screen), the shell loads a destination's `href` and does nothing for an action.
+
+---
+
 ### LLM Logs
 
 #### `GET /api/v1/llm-logs`
@@ -6538,11 +6703,11 @@ Delete a log entry by ID.
 
 ### Theme Assets & Fonts
 
-Static asset routes used by both plugin and bundle themes. These sit outside `/api/v1/` because they are unauthenticated asset endpoints.
+Static asset routes for installed theme bundles. These sit outside `/api/v1/` because they are unauthenticated asset endpoints. Both take `bundle:<themeId>/<path>` and serve from a registered bundle first; failing that, from a [theme draft](#theme-drafts) with that id when the request's `?v=` equals the draft's manifest version, sent `Cache-Control: no-cache` (`lib/themes/drafts/serve.ts`). Anything else is a 404.
 
 #### `GET /api/themes/assets/[...path]`
 
-Serve theme assets (CSS overrides, images, etc.).
+Serve a theme's images and its font licence file. Only the files the theme's manifest references are served (icons, preview images, subsystem images, font licences); any other path in the bundle is a 404. Images and plain text only.
 
 #### `GET /api/themes/fonts/[...path]`
 
@@ -6556,7 +6721,7 @@ Modern theme management API with bundle support and registry integration.
 
 #### `GET /api/v1/themes`
 
-List all installed themes with statistics.
+List all installed themes, the themes found but refused, and statistics.
 
 **Authentication**: Not required (runs before auth is available)
 
@@ -6565,13 +6730,25 @@ List all installed themes with statistics.
 ```json
 {
   "themes": [...],
+  "refused": [
+    {
+      "id": "old-theme",
+      "name": "Old Theme",
+      "version": "1.0.0",
+      "reason": "earlier-format",
+      "source": "bundle",
+      "message": "..."
+    }
+  ],
   "stats": {
-    "total": 6,
-    "withDarkMode": 4,
-    "withCssOverrides": 5
+    "total": 7,
+    "withDarkMode": 7,
+    "refused": 1
   }
 }
 ```
+
+`themes` includes the default theme. A refused theme is one made for an earlier Quilltap: a version 1 bundle among the installed themes (`reason: "earlier-format"`, `source: "bundle"`, uninstallable with `DELETE`) or a theme declared by a plugin (`reason: "plugin-theme"`, `source: "plugin"`, `pluginName` set; the plugin still loads). Refused themes are never registered and never applied.
 
 #### `GET /api/v1/themes?action=registry`
 
@@ -6614,7 +6791,7 @@ Check for available theme updates across installed bundle themes.
 
 #### `POST /api/v1/themes?action=install`
 
-Install a `.qtap-theme` bundle via multipart upload.
+Install a `.qtap-theme` bundle via multipart upload. A bundle whose `formatVersion` is earlier than 2 is refused with a `400` before anything is written.
 
 **Request**: `multipart/form-data`
 - `theme` (required) - The `.qtap-theme` file
@@ -6736,15 +6913,87 @@ Get metadata for a single theme.
 
 #### `GET /api/v1/themes/[themeId]?action=tokens`
 
-Get the resolved design tokens for the theme.
+What the client needs to apply the theme: `{ css, choices, features, fonts, icons, subsystems, images }`. `css` is everything the injector writes, compiled and validated server-side in order (font faces, tokens, icon overrides, scoped custom CSS); `choices` (e.g. `{ density: "comfortable" }`) and `features` (`pageBackground`, `focusRing`, `scrollbar`) become `data-qt-*` attributes on `<html>` (`applyThemeToDom`). The default theme's `css` is empty: the app's own stylesheet is the default.
 
 #### `GET /api/v1/themes/[themeId]?action=export`
 
-Export the theme as a downloadable `.qtap-theme` bundle.
+Export the theme as a downloadable `.qtap-theme` bundle, as installed (`formatVersion: 2`). The default theme has no bundle and returns `400`.
 
 #### `DELETE /api/v1/themes/[themeId]`
 
-Uninstall a bundle theme.
+Uninstall a bundle theme, or a refused version 1 bundle. A plugin's refused theme cannot be uninstalled here (`400`); disable or remove the plugin instead.
+
+---
+
+### Theme Drafts
+
+Calliope's Atelier (the theme editor, Calliope Live Spec D). A draft is the folder `Themes/<id>/` in Quilltap General holding an unpacked version 2 bundle — no database row; dates come from the store. `lib/themes/drafts/` is the only code that knows the location. Any document edit may change a draft's files, so a file that does not parse is an issue on the draft, not an error from the route. Validation is the installed-bundle loader's (`loadThemeFromSource`). An install publishes the `themes` realtime topic (which also refreshes draft queries); draft saves publish nothing — two editors of one draft are reconciled by the revision check.
+
+Errors: `400` a malformed upload or an operation refused for a reason the caller can act on (an unknown icon, a missing image); `404` unknown draft; `409` stale `revision` (`{ currentRevision }`), stale `manifestRevision` (`{ currentManifestRevision }`), a file still in use (`{ path, usedBy: string[] }`) or an unreadable `theme.json` on a manifest write; `413` an upload over a bundle limit; `422` an upload refused (wrong type, contents that do not match the extension), a manifest edit that would leave `theme.json` invalid, or an install refused (`{ errors: string[] }`); `503` Quilltap General unavailable.
+
+#### `GET /api/v1/theme-drafts`
+
+`{ drafts: DraftSummary[] }` — `{ id, name, updatedAt, errorCount, warningCount }` each.
+
+#### `POST /api/v1/theme-drafts`
+
+Create a draft. Body (strict): `{ name: string (1–100), from?: string }`. Without `from`, an empty tokens document (the default theme); with it, a copy of every file of the registered theme `from` under a new id (derived from `name`, de-duplicated) at version `0.1.0`. An unknown `from` is `400`. Returns `201` `{ draft: DraftDetail }`.
+
+#### `POST /api/v1/theme-drafts?action=import`
+
+Calliope Live Spec G. Open a `.qtap-theme` as a new draft. `multipart/form-data` with exactly one file in `file` and no other field. The upload must state its `Content-Length` (`411` otherwise), and one past the bundle limit (`MAX_BUNDLE_SIZE`) is refused with `413` before the body is read. The archive is validated and extracted by `lib/themes/bundle-archive.ts`, under every check an install runs, into a temporary directory that is always removed. Refusals carry `{ errors: string[], reason }`: `reason: 'refused'` (`422`) for a version 1 bundle, with the earlier-theme message; `'invalid'` (`422`) for one that would not install; `'limit'` (`413`). The draft keeps the bundle's name and version and takes the bundle's id, or the next free one (`rains-2`); nothing existing is replaced. Returns `201` `{ draft: DraftDetail, bundleId, idChanged }`.
+
+#### `GET /api/v1/theme-drafts/[id]`
+
+`{ draft: DraftDetail }`: `id`, `manifest` (parsed, or `null`), `tokens` (or `null` when missing or unparseable), `revision` (content hash of `tokens.json`, or `missing`), `uri` (the folder's `qtap://` address), `compiled` (`{ fontFaces, icons, custom }` — the parts the editor cannot change yet, compiled server-side; empty when invalid), `subsystems` (manifest overrides with image paths turned into draft asset URLs), `issues` (`{ severity, message, file?, line? }[]` — `file` is the bundle path and `line` the 1-based line where the engine knows them, Spec G), `updatedAt`, `version`, `mountPointId` (Quilltap General, for a Scriptorium link), `styles` (`{ path, text, revision }` — the custom stylesheet named by `stylesPath`, `revision` its content hash — or `null` when the manifest names none), `images` (`{ path, type, url }[]` — every image file), `manifestRevision` (content hash of `theme.json`, sent back with every manifest or file operation), `files` (`{ path, size, kind, users, usedBy, unused, font? }[]` — `kind` is `manifest` / `tokens` / `styles` / `font` / `licence` / `image` / `other`; `users` are `BundleFileUse` entries from `bundleFileUsage` (`lib/themes/engine/usage.ts`) and `usedBy` the same in words; `unused` marks a font or image nothing refers to; `font` is what a font file says it is — family, weight, style, variable, embedding, licence, licence URL — or `null` when unreadable) and `totals` (`{ files, bytes, limits: { files, bytes, fileBytes } }`, the limits from `bundle-archive`).
+
+#### `GET /api/v1/theme-drafts/[id]?action=export&form=theme|draft`
+
+Download the draft as a `.qtap-theme` archive (`application/zip`, `Content-Disposition: attachment`). `form` (strict query; default `draft`, anything else `400`):
+
+- `theme` — the installable build, made by the same step as `?action=install` (`writeBuiltDraft`): unused fonts and images left out, raster images as WebP, TrueType / OpenType fonts as WOFF2, references rewritten. Named `<id>-<version>.qtap-theme`.
+- `draft` — every file as stored: originals kept, nothing converted, unused files included. Named `<id>-<version>-draft.qtap-theme`; opening it with `?action=import` gives back the same draft.
+
+Neither installs anything or bumps the draft's version. `422 { errors }` while the draft has validation errors or a file will not convert; the packed archive is also run through `validateThemeBundle`, so an exported file always installs and imports. Writes nothing. `exportDraft(id, form)` (`lib/themes/drafts/service.ts`).
+
+#### `PUT /api/v1/theme-drafts/[id]`
+
+Save the tokens or the custom stylesheet. Body (strict), one of:
+
+- `{ revision: string, tokens: ThemeTokensDocument }` — `tokens.json`;
+- `{ stylesRevision: string, css: string }` — the stylesheet named by `stylesPath` (Spec G; `400` when the manifest names none, `413` past the per-file limit). The text is written exactly as sent; CSS the scoper refuses is still saved, and its errors come back as draft issues with `file` and `line`.
+
+Written only when the revision matches the stored file, else `409 { currentRevision }`. The name, description and every other manifest field are changed through `?action=set-manifest`. Returns `{ draft: DraftDetail }`.
+
+#### `DELETE /api/v1/theme-drafts/[id]`
+
+Delete the draft folder. A theme installed from it stays installed.
+
+#### Manifest and file operations — `POST /api/v1/theme-drafts/[id]?action=…`
+
+Calliope Live Spec F. The client never writes `theme.json` or a draft file directly: each change is a named operation (`lib/themes/drafts/operations.ts`, uploads checked by `uploads.ts`). Every operation except `read-font` takes the `manifestRevision` it read and is refused with `409 { currentManifestRevision }` when `theme.json` has moved on; each returns `{ draft: DraftDetail }`, plus `path` (the stored file) for an upload and `deleted` (paths) where a file went with it.
+
+Uploads are `multipart/form-data` with exactly one file in `file` and every other field once, as text, held to a strict schema. The stored name is built by the server from the browser's (diacritics folded, unsafe characters turned into `-`, `-2`, `-3`… on a collision compared without case) in a fixed folder: `fonts/` (fonts, and `.txt` / `.md` licence files), `images/`, `icons/`. A font's or raster image's extension must agree with its leading bytes. Limits are the bundle's (`MAX_FILE_SIZE`, `MAX_FILE_COUNT`, `MAX_BUNDLE_SIZE`): `413` past one.
+
+| Action | Body | Effect |
+|---|---|---|
+| `read-font` | multipart: `file` | Reads a font's tables and writes nothing. `{ font: { read: true, info } }` or `{ font: { read: false, reason, guess, format } }` (a guess from the file name). |
+| `add-font` | multipart: `file`, `manifestRevision`, `license`, optional `family`, `weight`, `style`, `display`, `licenseFile` | Stores a `.woff2` / `.woff` / `.ttf` / `.otf` and adds a `fonts[]` entry; omitted family/weight/style come from the font's own tables. |
+| `update-font` | `{ manifestRevision, index, fields: { family?, weight?, style?, display?, license?, licenseFile? } }` | Changes one `fonts[]` entry; `null` clears an optional field. |
+| `remove-font` | `{ manifestRevision, index }` | Drops the entry, and its file when nothing else uses it. |
+| `add-licence-file` | multipart: `file` (`.txt` / `.md`), `manifestRevision` | Stores a licence text under `fonts/`; name it from a font with `update-font`. |
+| `add-image` | multipart: `file`, `manifestRevision` | Stores a PNG, JPEG, GIF, WebP, AVIF or SVG under `images/`. |
+| `remove-file` | `{ manifestRevision, path }` | Deletes a draft file; `409 { path, usedBy }` while anything uses it (`bundleFileUsage`). Only image, font and licence files may be removed (`400` otherwise). |
+| `set-icon` | multipart: `file` (`.svg` / `.webp`), `manifestRevision`, `name` | Stores the file under `icons/` and points `iconOverrides[name]` at it; an unknown icon name is `400`. The file it replaces goes when nothing else uses it. |
+| `clear-icon` | `{ manifestRevision, name }` | Removes the override, and its file when nothing else uses it. |
+| `set-subsystem` | `{ manifestRevision, subsystem, fields: { name?, description?, thumbnail?, backgroundImage? } }` | Sets one subsystem override; an empty field clears it, `'none'` means no picture, an image must be an image file in the draft, and an unknown subsystem is `400`. |
+| `set-styles-file` | `{ manifestRevision }` | Names `styles.css` as the stylesheet (`stylesPath`), creating it empty when absent (Spec G). |
+| `clear-styles-file` | `{ manifestRevision, deleteFile? }` | Removes `stylesPath` from the manifest first, then deletes the file only when `deleteFile` is `true`. |
+| `set-manifest` | `{ manifestRevision, fields: { name?, description?, author?, license?, tags?, supportsDarkMode?, previewImage? } }` | Sets the named manifest fields. `author` is a string or `{ name, email?, url? }` and optional only (not nullable); `description`, `license` and `previewImage` take `null` to clear. A result the manifest schema refuses is `422 { errors }`. |
+
+#### `POST /api/v1/theme-drafts/[id]?action=install`
+
+Install the draft: `422` while it has validation errors, or when its id belongs to a bundled theme. Otherwise its files are copied to a temporary directory, raster images converted to WebP there (`lib/themes/convert-images.ts`; the draft keeps its originals), packed, and installed through the ordinary bundle install, replacing an earlier install; the theme is registered without a restart (`lib/themes/hot-load.ts`). Then the draft's patch version is bumped, so draft and install never share asset URLs. Font and image files nothing uses (`unused` in the detail) are left out of the copy; TrueType and OpenType fonts are converted to WOFF2 there (`lib/themes/convert-fonts.ts`; WOFF and WOFF2 are packed as is), and a font that will not convert refuses the install (`422`). Returns `{ result: { themeId, version, draftVersion, conversion: { converted, reencoded, skippedAnimated }, fontConversion: { [original]: newPath }, leftOut: string[] } }`.
 
 ---
 
@@ -7177,6 +7426,7 @@ The full list lives in `lib/tools/*-tool.ts`. Highlights:
 | `wardrobe_create` / `wardrobe_update` / `wardrobe_archive` | Author/edit/retire wardrobe items (own items only for edit/archive) | `canCreateOutfits` |
 | `inventory_list` / `inventory_read` / `inventory_equip` / `inventory_unequip` / `inventory_pick_up` / `inventory_create` / `inventory_update` / `inventory_archive` / `inventory_give` | The objects a character carries (category `inventory`): list with states, read one, equip / unequip, pick up an instance of a reachable archetype, make / amend / archive their own, give one of their own to another participant | `canManageInventory` (null = on); never on the Brahma Console or the Scenario Builder |
 | `log_create_entry` / `log_grep` / `log_read` | The Log (category `log`, group "The Log"): write a line stamped with the current chat and character; JavaScript-regex search over every entry; read by chat, character (name or id) and ISO-8601 date range. grep/read answer `{ entries: [{ id, message, conversationId, characterId, characterName, createdAt }], count, limit }` over the whole instance. Store: `log_entries` in the LLM logs database | On by default in the Salon; per-chat/project tool settings can switch each off; never on the Brahma Console |
+| `read_memory` / `edit_memory` | The calling character's own memories (category `memory`, group "The Commonplace Book"): read one by id as `{ memory, context }`; edit takes the whole `memory` object back and writes the changed fields through `updateMemory`. Keystones refused | `canEditMemories` (default off) |
 | `submit_final_response` | Agent-mode wrap-up | Agent mode only |
 | `request_full_context` | Request full context expansion | Context compression enabled |
 
@@ -7666,7 +7916,7 @@ For the single-scenario endpoints, `[scenarioPath]` is the URL-encoded filename 
 
 #### `GET /api/v1/groups?action=scenarios&characterIds=<id,id,...>[&includeArchived=true]`
 
-Formerly `/api/v1/groups/scenarios`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `/api/v1/groups/scenarios`. The old path was removed in 4.14.
 
 The New Chat dialog's participant-union aggregation: for every group that **any** of the supplied prospective participants belongs to, returns that group's `Scenarios/` entries grouped under the group's name. This is the one sanctioned exception to a group's otherwise strict per-responding-character isolation — scenarios are a chat-creation-time menu, not a per-turn access grant, so this route must never feed the per-turn tier resolver.
 
@@ -7903,9 +8153,57 @@ Returns deployment information. This endpoint is unauthenticated as it is needed
 
 #### `GET /api/v1/system/home`
 
-Returns the home dashboard payload for the client-rendered workspace home tab: greeting name, the "continue last" chat id, recent chats, active projects, and characters. The server-rendered `/` route computes the same payload directly through the shared `home-data` service, so this endpoint exists for the workspace tab to fetch it client-side. See `docs/developer/features/complete/tabbed-workspace.md`.
+Returns the home dashboard payload for the workspace home tab, built by the shared `home-data` service (`lib/services/home-data.service.ts`). See `docs/developer/features/complete/tabbed-workspace.md`.
+
+```jsonc
+{
+  "displayName": "Charlie",
+  // Newest first, up to 12 (more than the page shows, so quick-hide has spares). Salon chats only.
+  "recentChats": [{
+    "id": "…", "title": "…", "lastMessageAt": "…",
+    "storyBackgroundUrl": "…",                        // the picture's path, or null
+    "project": { "id": "…", "name": "The Estate", "color": null },   // or null
+    "summaryExcerpt": "One plain line cut from the context summary.", // or null
+    "conciergeState": "moderated",
+    "participants": [ /* id, isActive, displayOrder, character { id, name, defaultImage, tags } */ ],
+    "_count": { "messages": 93 }
+  }],
+  // Most recently active first, up to 12.
+  "projects": [{ "id": "…", "name": "…", "description": null, "color": null, "chatCount": 5, "lastActivity": "…" }],
+  // Favourites, then most used; up to 48. NPCs and user-controlled characters are left out.
+  "characters": [{
+    "id": "…", "name": "…", "title": null, "isFavorite": true, "chatCount": 12, "tags": [],
+    "defaultImage": { "id": "…", "filepath": "…" }, "defaultConnectionProfileId": null,
+    // The newest salon chat the character sits in, with what quick-hide asks about that chat. Or null.
+    "latestChat": { "id": "…", "title": "…", "characterTags": [], "conciergeState": "moderated" }
+  }],
+  // Every character the page could show, the ones in `characters` included.
+  "characterTotal": 43
+}
+```
+
+There is no "continue last" chat id: the resume card is the newest chat quick-hide allows, which only the client can decide. `summaryExcerpt` is `summaryExcerpt()` (`lib/chat/summary-excerpt.ts`) over `contextSummary`; the summary itself is not sent.
 
 **Response**: `200 OK` — the home dashboard data object.
+
+---
+
+### System Dynamic Backgrounds
+
+The collage painted behind the home, project and character pages when `chatSettings.dynamicBackgrounds.enabled` is on. Everything about pools, eligibility, layout and composition is `lib/dynamic-backgrounds/`; the route parses and serves. The query is a strict schema: `scope` is `home` | `project` | `character`; `id` (UUID) is required for `project` / `character` and refused for `home`; `orientation` is `landscape` (default, 1920×1080) or `portrait` (1080×1920). Any other parameter — including any attempt to pass the uncensored rule — is a `400`, as is an unknown `?action=`. See `docs/developer/features/complete/dynamic-backgrounds.md`.
+
+#### `GET /api/v1/system/dynamic-backgrounds?scope=…&id=…&orientation=…`
+
+```jsonc
+{ "enabled": true, "available": true, "count": 41, "refreshMinutes": 3,
+  "url": "/api/v1/system/dynamic-backgrounds?action=image&scope=home&orientation=landscape&seed=9f3a1c…" }
+```
+
+`url` is `null` when the setting is off or fewer than 3 distinct fit pictures remain after filtering (`available: false`). Every call mints a fresh random `seed`, which is what makes each refresh a new collage. An unknown project is a `404`; a missing or archived character simply has no pool.
+
+#### `GET /api/v1/system/dynamic-backgrounds?action=image&scope=…&id=…&orientation=…&seed=…`
+
+`image/webp`, served inline through `serveStoredBytes` (`nosniff`, sandbox CSP; the path is left out of the page CSP in `next.config.js`). Settings, pool and the uncensored filter are re-resolved on the request. Deterministic for (scope, id, orientation, seed, pool); the last 8 composed collages are cached in process. `404` when the setting is off, the pool is below the floor, the project is unknown, or fewer than 3 pictures could be read. Nothing is stored.
 
 ---
 
@@ -7921,7 +8219,7 @@ List every autonomous room owned by the authenticated user, with enough context 
 
 #### `GET /api/v1/system/directories?path=/some/path`
 
-Formerly `/api/v1/system/browse-directory` (a verb in the path). The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `/api/v1/system/browse-directory` (a verb in the path). The old path was removed in 4.14.
 
 List the immediate subdirectories of the given path for the directory-picker UI. Returns the resolved path and its subdirectories. With no `path`, lists the user's home directory.
 
@@ -8011,7 +8309,7 @@ latency problem rather than a correctness one.
 
 #### `GET /api/v1/system/plugins?action=state`
 
-Formerly `GET /api/v1/system/plugins/initialize`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `GET /api/v1/system/plugins/initialize`. The old path was removed in 4.14.
 
 Returns the current plugin initialization status without triggering initialization.
 
@@ -8028,7 +8326,7 @@ Returns the current plugin initialization status without triggering initializati
 
 #### `POST /api/v1/system/plugins?action=initialize`
 
-Formerly `POST /api/v1/system/plugins/initialize`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `POST /api/v1/system/plugins/initialize`. The old path was removed in 4.14.
 
 Triggers plugin system initialization. Scans and loads all plugins. This endpoint is idempotent.
 
@@ -8055,7 +8353,7 @@ Plugin upgrade notification management. Unauthenticated as it runs during startu
 
 #### `GET /api/v1/system/plugins?action=upgrades`
 
-Formerly `GET /api/v1/system/plugins/upgrades`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `GET /api/v1/system/plugins/upgrades`. The old path was removed in 4.14.
 
 Returns pending upgrade notifications from server startup. Returns null results if already notified or no upgrades occurred.
 
@@ -8087,7 +8385,7 @@ Returns pending upgrade notifications from server startup. Returns null results 
 
 #### `POST /api/v1/system/plugins?action=mark-upgrades-notified`
 
-Formerly `POST /api/v1/system/plugins/upgrades`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+Formerly `POST /api/v1/system/plugins/upgrades`. The old path was removed in 4.14.
 
 Mark upgrade notifications as acknowledged. Call this after showing toast notifications to prevent re-notification.
 

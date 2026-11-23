@@ -93,7 +93,7 @@ function stubTiers(source: ScenarioSourceInfo = NO_SOURCE) {
       if (isScenarioSave(url)) return { message: 'Scenario updated' }
       if (url.startsWith('/api/v1/scenarios')) return { scenarios: GENERAL }
       if (url.includes('/projects/')) return { scenarios: PROJECT }
-      if (url.includes('/groups/scenarios')) return { groupScenarios: GROUP }
+      if (url.includes('/groups?action=scenarios')) return { groupScenarios: GROUP }
       if (url.includes('/scenarios') && url.includes('/characters/')) return { scenarios: CHARACTER }
       return {}
     })()

@@ -190,7 +190,7 @@ export default function StandaloneGenerateImageDialog({
       maxWidth="3xl"
       busy={isGenerating}
       closeOnClickOutside={false}
-      footerClassName="qt-dialog-footer flex items-center justify-between"
+      footerClassName="qt-dialog-footer-default flex items-center justify-between"
       headerActions={
         <button
           aria-label="Close"

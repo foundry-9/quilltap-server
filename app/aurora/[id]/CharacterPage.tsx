@@ -35,6 +35,8 @@ import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialo
 import { useInventoryDialogOptional } from '@/components/providers/inventory-dialog-provider'
 import { revealAnchor } from '@/hooks/useAnchorReveal'
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
+import { useReportWorkspaceBackdrop } from '@/components/workspace/workspace-backdrop'
+import { useDynamicBackground } from '@/hooks/useDynamicBackground'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
@@ -112,6 +114,10 @@ function LoadedCharacterPage({
   const autosave = useCharacterAutosave(characterId)
   const { stats, groups, vault, refetch: refetchStats } = useCharacterStats(characterId)
   const { profiles, userControlledCharacters } = useCharacterPageSupport()
+  // A collage of this character's avatar sittings, when dynamic backgrounds
+  // are on. With none, the page reports nothing — what it showed before.
+  const dynamicUrl = useDynamicBackground('character', characterId)
+  useReportWorkspaceBackdrop(dynamicUrl, false)
 
   const [section, setSection] = useState<CharacterPageSection>(initialSection ?? DEFAULT_CHARACTER_PAGE_SECTION)
   const [externalToken, setExternalToken] = useState(0)
@@ -407,7 +413,10 @@ function LoadedCharacterPage({
 
   return (
     <CharacterPageContext.Provider value={context}>
-      <div className="character-page qt-page-container min-h-screen qt-text">
+      <div
+        className="character-page qt-character-page qt-page-container min-h-screen qt-text"
+        style={dynamicUrl ? { '--story-background-url': `url('${dynamicUrl}')` } as React.CSSProperties : undefined}
+      >
         <CharacterHeader
           avatarStyle={avatarStyle}
           rehydrating={rehydrating}
@@ -439,7 +448,7 @@ function LoadedCharacterPage({
         />
 
         {readOnly && (
-          <div className="mb-6 flex items-start gap-3 rounded-2xl border qt-border-default qt-bg-muted/60 p-4">
+          <div className="qt-character-archived-banner mb-6 flex items-start gap-3 rounded-2xl border qt-border-default qt-bg-muted/60 p-4">
             <span className="text-2xl" aria-hidden>
               🗄️
             </span>

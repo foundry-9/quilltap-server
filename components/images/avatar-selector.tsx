@@ -77,7 +77,7 @@ export function AvatarSelector({
             Import Image
           </button>
         }
-        footerClassName="qt-dialog-footer flex justify-between items-center"
+        footerClassName="qt-dialog-footer-default flex justify-between items-center"
         footer={
           <>
             <button

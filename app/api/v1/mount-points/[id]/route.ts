@@ -31,11 +31,10 @@ import {
   validateDeconvertTarget,
 } from '@/lib/mount-index/conversion';
 import { scaffoldCharacterMount } from '@/lib/characters/vault/scaffold';
-import { copyFile, moveFile, writeFile, deleteFile, linkFile, FileOpError } from '@/lib/mount-index/file-ops';
+import { copyFile, moveFile, writeFile, deleteFile, linkFile } from '@/lib/mount-index/file-ops';
 import { copyFolder, deleteFolder, moveFolder } from '@/lib/mount-index/folder-ops';
 import { publishMountChange } from '@/lib/mount-index/realtime';
-import { DatabaseStoreError } from '@/lib/mount-index/database-store';
-import { fileOpStatus } from '@/lib/mount-index/file-op-status';
+import { fileOpFailure } from '@/lib/api/file-op-failure';
 import { deriveMountCapabilities } from '@/lib/mount-index/capabilities';
 import { deleteStoreCascade } from '@/lib/mount-index/delete-store-cascade';
 import { syncMountPoint, SyncRefusedError } from '@/lib/mount-index/sync';
@@ -196,8 +195,9 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
 // DELETE Handler
 // ============================================================================
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
 
       const existing = await repos.docMountPoints.findById(id);
@@ -238,7 +238,7 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       logger.error('[Mount Points v1] Error deleting mount point', { mountPointId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete mount point');
     }
-  }
+  })
 );
 
 // ============================================================================
@@ -575,15 +575,6 @@ const unlinkFileSchema = z.object({
   path: z.string().min(1),
 });
 
-/** A file op's refusal as its HTTP answer, or a logged 500. */
-function fileOpFailure(err: unknown, label: string, mountPointId: string): NextResponse {
-  if (err instanceof FileOpError || err instanceof DatabaseStoreError) {
-    return NextResponse.json({ error: err.message, code: err.code }, { status: fileOpStatus(err) });
-  }
-  logger.error(`[Mount Points v1] Error trying to ${label}`, { mountPointId }, err instanceof Error ? err : undefined);
-  return serverError(`Failed to ${label}`);
-}
-
 async function handleMoveFile(
   req: NextRequest,
   { user }: RequestContext,
@@ -607,18 +598,7 @@ async function handleMoveFile(
     });
     return successResponse(result);
   } catch (err) {
-    if (err instanceof FileOpError) {
-      return NextResponse.json(
-        { error: err.message, code: err.code },
-        { status: fileOpStatus(err) }
-      );
-    }
-    logger.error(
-      '[Mount Points v1] Error moving file',
-      { mountPointId: id },
-      err instanceof Error ? err : undefined
-    );
-    return serverError('Failed to move file');
+    return fileOpFailure(err, 'move file', { mountPointId: id });
   }
 }
 
@@ -646,18 +626,7 @@ async function handleCopyFile(
     });
     return successResponse(result);
   } catch (err) {
-    if (err instanceof FileOpError) {
-      return NextResponse.json(
-        { error: err.message, code: err.code },
-        { status: fileOpStatus(err) }
-      );
-    }
-    logger.error(
-      '[Mount Points v1] Error copying file',
-      { mountPointId: id },
-      err instanceof Error ? err : undefined
-    );
-    return serverError('Failed to copy file');
+    return fileOpFailure(err, 'copy file', { mountPointId: id });
   }
 }
 
@@ -681,11 +650,7 @@ async function handleLinkFile(
     logger.info('[Mount Points v1] Linked file', { ...result, userId: user.id });
     return successResponse(result);
   } catch (err) {
-    if (err instanceof FileOpError) {
-      return NextResponse.json({ error: err.message, code: err.code }, { status: fileOpStatus(err) });
-    }
-    logger.error('[Mount Points v1] Error linking file', { mountPointId: id }, err instanceof Error ? err : undefined);
-    return serverError('Failed to link file');
+    return fileOpFailure(err, 'link file', { mountPointId: id });
   }
 }
 
@@ -708,11 +673,7 @@ async function handleDeleteFolder(
     logger.info('[Mount Points v1] Deleted folder', { ...result, userId: user.id });
     return successResponse(result);
   } catch (err) {
-    if (err instanceof FileOpError || err instanceof DatabaseStoreError) {
-      return NextResponse.json({ error: err.message, code: err.code }, { status: fileOpStatus(err) });
-    }
-    logger.error('[Mount Points v1] Error deleting folder', { mountPointId: id }, err instanceof Error ? err : undefined);
-    return serverError('Failed to delete folder');
+    return fileOpFailure(err, 'delete folder', { mountPointId: id });
   }
 }
 
@@ -736,11 +697,7 @@ async function handleMoveFolder(
     logger.info('[Mount Points v1] Moved folder', { ...result, userId: user.id });
     return successResponse(result);
   } catch (err) {
-    if (err instanceof FileOpError || err instanceof DatabaseStoreError) {
-      return NextResponse.json({ error: err.message, code: err.code }, { status: fileOpStatus(err) });
-    }
-    logger.error('[Mount Points v1] Error moving folder', { mountPointId: id }, err instanceof Error ? err : undefined);
-    return serverError('Failed to move folder');
+    return fileOpFailure(err, 'move folder', { mountPointId: id });
   }
 }
 
@@ -764,7 +721,7 @@ async function handleCopyFolder(
     logger.info('[Mount Points v1] Copied folder', { ...result, userId: user.id });
     return successResponse(result);
   } catch (err) {
-    return fileOpFailure(err, 'copy folder', id);
+    return fileOpFailure(err, 'copy folder', { mountPointId: id });
   }
 }
 
@@ -833,18 +790,7 @@ async function handleWriteFile(
     });
     return successResponse(result);
   } catch (err) {
-    if (err instanceof FileOpError) {
-      return NextResponse.json(
-        { error: err.message, code: err.code },
-        { status: fileOpStatus(err) }
-      );
-    }
-    logger.error(
-      '[Mount Points v1] Error writing file',
-      { mountPointId: id },
-      err instanceof Error ? err : undefined
-    );
-    return serverError('Failed to write file');
+    return fileOpFailure(err, 'write file', { mountPointId: id });
   }
 }
 
@@ -868,18 +814,7 @@ async function handleDeleteFile(
     });
     return successResponse(result);
   } catch (err) {
-    if (err instanceof FileOpError) {
-      return NextResponse.json(
-        { error: err.message, code: err.code },
-        { status: fileOpStatus(err) }
-      );
-    }
-    logger.error(
-      '[Mount Points v1] Error deleting file',
-      { mountPointId: id },
-      err instanceof Error ? err : undefined
-    );
-    return serverError('Failed to delete file');
+    return fileOpFailure(err, 'delete file', { mountPointId: id });
   }
 }
 

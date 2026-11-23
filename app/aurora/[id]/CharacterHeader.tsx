@@ -213,7 +213,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
   const { columnRef, edge } = useAvatarEdge()
 
   return (
-    <div className="sticky top-0 z-20 mb-4 border-b qt-border-default qt-bg-card/90 px-1 pb-3 pt-3 backdrop-blur">
+    <div className="qt-character-header sticky top-0 z-20 mb-4 border-b qt-border-default qt-bg-card/90 px-1 pb-3 pt-3 backdrop-blur">
       <button
         type="button"
         onClick={props.onBack}
@@ -225,7 +225,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
         {/* Avatar — a menu, not a pencil. As tall as the text beside it and
             square: the largest the avatar is shown anywhere short of a
             picture viewer. */}
-        <div className="flex-shrink-0" style={{ width: edge, maxWidth: '100%', aspectRatio: '1 / 1' }}>
+        <div className="qt-character-avatar flex-shrink-0" style={{ width: edge, maxWidth: '100%', aspectRatio: '1 / 1' }}>
           <ItemActionMenu
             label={`Change ${character.name}'s avatar`}
             disabled={readOnly}
@@ -251,7 +251,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
           />
         </div>
 
-        <div ref={columnRef} className="min-w-0 flex-1 space-y-1">
+        <div ref={columnRef} className="qt-character-identity min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className="qt-heading-1 min-w-0 break-words">{character.name}</h1>
             {!archived && (
@@ -304,7 +304,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
           </div>
 
           {((character.aliases?.length ?? 0) > 0 || groups.length > 0) && (
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <div className="qt-character-tags flex flex-wrap items-center gap-1.5 pt-1">
               {character.aliases?.map((alias, i) => (
                 <Badge key={`${alias}-${i}`}>{alias}</Badge>
               ))}
@@ -329,7 +329,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
           )}
 
           {statItems.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 qt-text-small qt-text-secondary">
+            <div className="qt-character-stats flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 qt-text-small qt-text-secondary">
               {statItems.map((s, i) => (
                 <Fragment key={s.key}>
                   {i > 0 && (
@@ -356,7 +356,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
           )}
         </div>
 
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="qt-character-actions flex min-w-0 flex-wrap items-center gap-2">
           {archived ? (
             <button
               type="button"

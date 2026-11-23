@@ -33,7 +33,7 @@ Beneath these sits the **Model** drop-down, which chooses the connection profile
 
 ## Where He Looks
 
-**In-world** places are researched entirely from your own document stores — and only those this company could see in the chat you are about to begin: the character vaults of everyone you have cast (your own persona's included), the stores of every group any of them belongs to, the stores of the chosen project, and the household shelf, **Quilltap General**. He searches them (documents and `Knowledge/` folders alike) and reads what he finds. He never consults the wider world for an in-world place, and he never reads anyone's memories or past conversations.
+**In-world** places are researched entirely from your own document stores — and only those this company could see in the chat you are about to begin: the character vaults of everyone you have cast (your own persona's included), the stores of every group any of them belongs to, the stores of the chosen project, and the household shelf, **Quilltap General**. He is handed, before he sets out, the files in those stores that already mention the place, with a few lines of each; then he searches them further (documents and `Knowledge/` folders alike) and reads what he finds, stopping once he has enough for the scene. He never consults the wider world for an in-world place, and he never reads anyone's memories or past conversations.
 
 Called from a shelf, there is no cast yet, so the Host reads the stores that shelf belongs to: from the General Scenarios page, **Quilltap General** alone; from a project's card, that project's stores and Quilltap General; from a group's card, that group's own store, the stores linked to it, and Quilltap General. From a project or a group he assumes an in-world place unless you say otherwise; from the General page, a real one.
 
@@ -101,3 +101,4 @@ Characters with help tools enabled can navigate directly to this page:
 - [Groups](groups.md) — Groups, and the stores and scenarios they keep.
 - [Chats Overview](chats.md) — Starting a chat and changing its scene.
 - [The Brahma Console](brahma-console.md) — Another tool-using assistant, for the operator's own questions.
+- [The Wardrobe](wardrobe.md#import-from-instructions) — Aurora designs an outfit from a written brief, in much the same manner.

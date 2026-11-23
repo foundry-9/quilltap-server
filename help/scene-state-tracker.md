@@ -16,6 +16,8 @@ After every chat turn (or after a complete chain of responses in multi-character
   - Their current physical appearance
   - What they are currently wearing
 
+The clerk only ever hears the story's prose, never the ledgers. When a character announces that she has tucked the candle into a drawer, the clerk cannot know whether she truly did — so he writes down what was *said*: "Riya says she has put the candle away in the drawer," never "Riya has put the candle away." The characters see these notes under **Action (as told)**, with a reminder that what anyone carries or wears is kept by the proper records (the Inventory and the Wardrobe), not by the clerk's account. A character who has only narrated setting something down is therefore not misled into believing it done; to actually set it down, she must use her tool.
+
 This snapshot is stored on the chat and updated incrementally — each update carries forward unchanged details from the previous state, so characters don't mysteriously lose their clothing between turns (unless the narrative demands it).
 
 ## What It Powers

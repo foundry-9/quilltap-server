@@ -61,7 +61,7 @@ Quilltap supports different character configurations:
 
 ### Characters Page
 
-1. Click **Characters** in the left sidebar
+1. Click **Characters** on the rail
 2. See list of all your characters
 3. Click a character to open their page
 4. Options to create new, search, filter, and manage

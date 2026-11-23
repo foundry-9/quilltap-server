@@ -2,7 +2,9 @@ import { describe, expect, it } from '@jest/globals'
 
 import {
   defaultMultiCharacterPrefill,
+  isClaudeModelName,
   profileUsesNamePrefill,
+  refusesAssistantPrefill,
 } from '@/lib/llm/multi-character-prefill'
 
 describe('defaultMultiCharacterPrefill', () => {
@@ -91,5 +93,58 @@ describe('profileUsesNamePrefill', () => {
     // non-Anthropic profile turned OFF must not be read back as ON.
     expect(profileUsesNamePrefill({ provider: 'OPENAI', multiCharacterPrefill: false })).toBe(false)
     expect(profileUsesNamePrefill({ provider: 'ANTHROPIC', multiCharacterPrefill: true })).toBe(true)
+  })
+})
+
+describe('Claude through a gateway', () => {
+  // The setup wizard, given OpenRouter and anthropic/claude-sonnet-5, created
+  // a profile with the prefill on, and every multi-character turn — the
+  // opening greeting included — failed with "This model does not support
+  // assistant message prefill". The refusal travels with the model.
+  it('recognises Claude model ids as each gateway spells them', () => {
+    for (const model of [
+      'anthropic/claude-sonnet-5',
+      '~anthropic/claude-sonnet-latest',
+      'anthropic/claude-sonnet-4.6:batch',
+      'claude-sonnet-4-6',
+      'us.anthropic.claude-opus-4-7',
+      'Claude-3-Haiku',
+    ]) {
+      expect(isClaudeModelName(model)).toBe(true)
+    }
+  })
+
+  it('does not mistake other models for Claude', () => {
+    for (const model of ['openai/gpt-5-mini', 'claudette:7b', 'anthropic-ish-llama', '', null, undefined]) {
+      expect(isClaudeModelName(model)).toBe(false)
+    }
+  })
+
+  it('defaults the prefill off for Claude on any provider', () => {
+    expect(defaultMultiCharacterPrefill('OPENROUTER', false, 'anthropic/claude-sonnet-5')).toBe(false)
+    expect(defaultMultiCharacterPrefill('NANOGPT', false, 'claude-sonnet-4-6')).toBe(false)
+    expect(defaultMultiCharacterPrefill('OPENAI_COMPATIBLE', false, 'claude-opus-4-7')).toBe(false)
+  })
+
+  it('keeps the prefill on for a gateway serving anything else', () => {
+    expect(defaultMultiCharacterPrefill('OPENROUTER', false, 'openai/gpt-5-mini')).toBe(true)
+    // No model chosen yet: only the provider rule can speak.
+    expect(defaultMultiCharacterPrefill('OPENROUTER')).toBe(true)
+  })
+
+  it('reports the refusal for the editor warning', () => {
+    expect(refusesAssistantPrefill('ANTHROPIC')).toBe(true)
+    expect(refusesAssistantPrefill('OPENROUTER', 'anthropic/claude-sonnet-5')).toBe(true)
+    expect(refusesAssistantPrefill('OPENROUTER', 'openai/gpt-5-mini')).toBe(false)
+  })
+
+  it('resolves an unset gateway Claude profile to no prefill', () => {
+    expect(
+      profileUsesNamePrefill({ provider: 'OPENROUTER', modelName: 'anthropic/claude-sonnet-5', multiCharacterPrefill: null })
+    ).toBe(false)
+    // A stored choice still wins.
+    expect(
+      profileUsesNamePrefill({ provider: 'OPENROUTER', modelName: 'anthropic/claude-sonnet-5', multiCharacterPrefill: true })
+    ).toBe(true)
   })
 })

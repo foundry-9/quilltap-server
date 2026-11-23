@@ -48,7 +48,7 @@ import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notificat
 import type { MailAlertsOwed } from '@/lib/post-office/mailbox'
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section'
 import { buildInventorySection } from '@/lib/inventory/prompt-section'
-import { buildAtlasSection } from '@/lib/atlas/prompt-section'
+import { buildNamedAtlasLore, joinAtlasLore } from '@/lib/atlas/prompt-section'
 import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/timestamp-utils'
 import { lazyAsync } from '@/lib/utils/lazy-async'
 import { logger } from '@/lib/logger'
@@ -123,9 +123,11 @@ export interface ContextBudget {
   /** Tokens allocated for memories */
   memoryBudget: number
   /**
-   * Tokens allocated for per-turn knowledge recall (responding character's
-   * vault Knowledge/ folder). Independent of memoryBudget — knowledge is
-   * first-class character canon and is not fed to the memory compressor.
+   * Tokens allocated for per-turn knowledge recall (the `Knowledge/` folders
+   * the responding character reaches) and for lore (the `Atlas/` entries
+   * named or recalled; named entries are served first). Independent of
+   * memoryBudget — both are first-class canon, never fed to the memory
+   * compressor.
    */
   knowledgeBudget: number
   /** Tokens allocated for recent messages */
@@ -159,7 +161,7 @@ export interface BuiltContext {
     /** System blocks 1–3: persona prompt, identity reinforcement, compressed history. */
     systemPrompt: number
     memories: number
-    /** Tokens spent on per-turn knowledge recall (responding character's vault Knowledge/ folder). */
+    /** Tokens spent on per-turn knowledge recall and lore (`Knowledge/` and `Atlas/`). */
     knowledge: number
     /** The history packed, plus the new user message. */
     recentMessages: number
@@ -593,6 +595,33 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // continue mode too), then memory compression.
   const recentWindow = buildRecentWindowQuery(existingMessages, newUserMessage)
   const tRecallStart = performance.now()
+  // The recent spoken window and the workspace's characters are read once
+  // and shared: the referent ledger names the people, the lore the things,
+  // and both must agree on the window (and on which terms are people's).
+  const recentLines = recentSpokenLines({ transcript, newUserMessage })
+  // An async thunk, so even a synchronous throw reaches the readers as a rejection they fail soft on.
+  const workspaceCharacters = (async () => getRepositories().characters.findByUserId(userId))()
+  // Each reader awaits these inside its own try and fails soft; mark them
+  // handled so a rejection that lands before a reader awaits is not reported.
+  recentLines.catch(() => {})
+  workspaceCharacters.catch(() => {})
+  // The things named in the recent window (or, on this seat's first turn
+  // under the scenario, in the scenario). Built on every turn, memory recall
+  // or not; they take their space in the knowledge budget first, and what is
+  // left goes to Knowledge and to lore recalled without being named. Reads
+  // only; never throws.
+  const namedLorePromise = buildNamedAtlasLore({
+    chat,
+    characterId: character.id,
+    respondingParticipantId: respondingParticipant?.id ?? null,
+    recentLines,
+    loadEvents: transcript.events,
+    regenerationOfMessageIds: options.regenerationOfMessageIds,
+    workspaceCharacters,
+    budgetTokens: budget.knowledgeBudget,
+    provider,
+    repos: getRepositories(),
+  })
   // Independent reads, so they run together.
   const [recall, knowledge] = await Promise.all([assembleTurnRecall({
     userId,
@@ -623,17 +652,32 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }
     }),
     onStatusChange,
-  }), retrieveTurnKnowledge({
+  }), namedLorePromise.then(named => retrieveTurnKnowledge({
     userId,
     embeddingProfileId: options.embeddingProfileId,
     provider,
     character,
     query: recentWindow,
-    budgetTokens: budget.knowledgeBudget,
+    budgetTokens: Math.max(0, budget.knowledgeBudget - named.tokens),
     skip: skipMemories,
     mountPool,
+    atlas: named.recall,
     warnings,
-  })])
+  }))])
+  const namedLore = await namedLorePromise
+  const lore = joinAtlasLore(namedLore.content, knowledge.lore)
+  const loreTokens = namedLore.tokens + knowledge.loreTokens
+  if (lore) {
+    logger.debug('[ContextManager] Lore assembled for the Commonplace whisper', {
+      chatId: chat.id,
+      characterId: character.id,
+      named: namedLore.told.map(entry => entry.name),
+      namedTokens: namedLore.tokens,
+      recalledTokens: knowledge.loreTokens,
+      knowledgeTokens: knowledge.tokens,
+      knowledgeBudget: budget.knowledgeBudget,
+    })
+  }
   warnings.push(...recall.warnings)
   logger.debug('[ContextManager] Recall assembled', {
     chatId: chat.id,
@@ -686,6 +730,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     recap: recall.sections.recap || undefined,
     relevant: memories.semantic.content || undefined,
     interChar: memories.interCharacter.content || undefined,
+    lore: lore || undefined,
     knowledge: knowledge.content || undefined,
     // Empty unless the per-turn conversation-summary cadence is switched on;
     // the fold-posted whisper carries this section otherwise.
@@ -710,17 +755,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // autonomous room), and the design of record wants both on all of them.
   // The inform block is the operator's passages for this seat, verbatim under
   // their one vouching header; empty-is-absent.
-  // The recent spoken window and the workspace's characters are read once
-  // and shared: the referent ledger names the people, the Atlas the things,
-  // and both must agree on the window (and on which terms are people's).
-  const recentLines = recentSpokenLines({ transcript, newUserMessage })
-  // An async thunk, so even a synchronous throw reaches the readers as a rejection they fail soft on.
-  const workspaceCharacters = (async () => getRepositories().characters.findByUserId(userId))()
-  // Each reader awaits these inside its own try and fails soft; mark them
-  // handled so a rejection that lands before a reader awaits is not reported.
-  recentLines.catch(() => {})
-  workspaceCharacters.catch(() => {})
-  const [progressions, inventory, referents, inform, establishedFacts, atlas] = await Promise.all([
+  // The recent spoken window and the workspace's characters were read once
+  // above (step 4) and are shared with the referent ledger here.
+  const [progressions, inventory, referents, inform, establishedFacts] = await Promise.all([
     buildProgressionsSection({
       character,
       // A thunk: a character carrying no progressions — nearly all of them —
@@ -773,19 +810,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           return ''
         })
       : Promise.resolve(''),
-    // The things being spoken of: entries this character can reach, named in
-    // the recent window (or, on their first turn under the scenario, in the
-    // scenario). Reads only; empty-is-absent; never throws.
-    buildAtlasSection({
-      chat,
-      characterId: character.id,
-      respondingParticipantId: respondingParticipant?.id ?? null,
-      recentLines,
-      loadEvents: transcript.events,
-      regenerationOfMessageIds: options.regenerationOfMessageIds,
-      workspaceCharacters,
-      repos: getRepositories(),
-    }),
   ])
   const notes = buildTurnNotes({
     turnSkip: options.turnSkip,
@@ -812,7 +836,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     inform: inform.content,
     establishedFacts,
     referentLedger: referents.referentLedger,
-    atlas,
     closingEcho: referents.closingEcho,
     turnSkip: notes.turnSkip,
     turnYield: notes.turnYield,
@@ -924,7 +947,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     tokenUsage: {
       systemPrompt: systemBlocks.reduce((sum, block) => sum + countMessageTokens(block, provider), 0),
       memories: memoryTokens,
-      knowledge: knowledge.tokens,
+      knowledge: knowledge.tokens + loreTokens,
       recentMessages: history.tokens + newUserMessageTokens,
       total: countMessagesTokens(contextMessages, provider),
     },

@@ -41,6 +41,10 @@ import { lookupMemoriesToolInputSchema } from '../lookup-memories-tool'
 import { lookupMessagesToolInputSchema } from '../lookup-messages-tool'
 import { readMessagesToolInputSchema } from '../read-messages-tool'
 import { composePublicIdentity } from '@/lib/characters/public-identity'
+import { resolveCharacterRef, type CharacterMatch } from '@/lib/research/characters'
+import { storeAddress, storeOutline } from '@/lib/research/outline'
+import { CONVERSATION_CHAT_TYPES, resolveConversationRef } from '@/lib/research/conversations'
+import { capRecords, containsAll, searchTerms } from '@/lib/research/text'
 
 const logger = createServiceLogger('BrahmaLookup')
 
@@ -53,14 +57,17 @@ export type BrahmaLookupResult =
   | ({ success: true } & Record<string, unknown>)
   | { success: false; error: string }
 
-/** Conversation types an operator means by "conversations". */
-const CONVERSATION_CHAT_TYPES = new Set(['salon', 'autonomous'])
-
 /** Text budgets, in characters. */
 const CORE_FIELD_CHARS = 3000
 const PHYSICAL_CHARS = 1500
-const MEMORY_CHARS = 700
-const MESSAGE_CHARS = 2500
+/** A memory hit's opening, unless `full` (research kit §5.8). */
+const MEMORY_CHARS = 300
+/** A spoken line's length, unless `full` (research kit §5.8). */
+export const MESSAGE_LINE_CHARS = 1500
+/** A plain message search with more hits than this says so and suggests grouping. */
+const UNGROUPED_HIT_NOTE_OVER = 30
+/** Vault outline lines shown by lookup_character. */
+const VAULT_OUTLINE_LINES = 20
 const SNIPPET_CHARS = 320
 const RECENT_CONVERSATIONS = 8
 /** How many holders a "search everyone" memory query may visit. */
@@ -79,63 +86,18 @@ function clip(text: string | null | undefined, max: number): string | null {
   return trimmed.length > max ? `${trimmed.slice(0, max)}… [truncated, ${trimmed.length} chars in all]` : trimmed
 }
 
+/** Cut a line at `max` characters with a `[+N characters]` marker. */
+function capLine(text: string | null | undefined, max: number): string {
+  const trimmed = (text ?? '').trim()
+  return trimmed.length > max ? `${trimmed.slice(0, max)}… [+${trimmed.length - max} characters]` : trimmed
+}
+
 function invalid(tool: string, issues: { path: PropertyKey[]; message: string }[]): BrahmaLookupResult {
   const issue = issues[0]
   return {
     success: false,
     error: `Invalid ${tool} input: ${issue ? `${issue.path.join('.')} — ${issue.message}` : 'malformed arguments'}.`,
   }
-}
-
-type CharacterMatch =
-  | { kind: 'found'; character: Character }
-  | { kind: 'none' }
-  | { kind: 'ambiguous'; candidates: Array<{ id: string; name: string }> }
-
-/**
- * Resolve a name, alias or id to one character. Exact id / name matches come
- * from the unhydrated rows (`findAllRaw` — aliases are not needed to match a
- * name, and hydrating every vault to resolve one would be wasted work); only
- * when that misses are the hydrated rows (`findAll`) consulted for aliases and
- * partial names. The winner is always returned hydrated via `findById`.
- */
-async function resolveCharacterRef(ref: string): Promise<CharacterMatch> {
-  const repos = getRepositories()
-  const needle = ref.trim().toLowerCase()
-  if (!needle) return { kind: 'none' }
-
-  const hydrate = async (id: string): Promise<CharacterMatch> => {
-    const character = await repos.characters.findById(id)
-    return character ? { kind: 'found', character } : { kind: 'none' }
-  }
-
-  const raw = await repos.characters.findAllRaw()
-  const byId = raw.find(c => c.id.toLowerCase() === needle)
-  if (byId) return hydrate(byId.id)
-  const byName = raw.filter(c => c.name.trim().toLowerCase() === needle)
-  if (byName.length === 1) return hydrate(byName[0].id)
-
-  // Aliases live in the vault, so the alias match needs hydrated characters
-  // (a raw row has none — it used to be matched against nothing here).
-  const all = byName.length > 1
-    ? await repos.characters.findByIds(byName.map(c => c.id))
-    : await repos.characters.findAll()
-  const exact = all.filter(c =>
-    c.name.trim().toLowerCase() === needle ||
-    (c.aliases ?? []).some(a => a.trim().toLowerCase() === needle)
-  )
-  const pool = exact.length > 0
-    ? exact
-    : all.filter(c =>
-        c.name.toLowerCase().includes(needle) ||
-        (c.aliases ?? []).some(a => a.toLowerCase().includes(needle))
-      )
-  // Prefer a live character over an archived namesake.
-  const live = pool.filter(c => !c.archivedAt)
-  const chosen = live.length > 0 ? live : pool
-  if (chosen.length === 1) return hydrate(chosen[0].id)
-  if (chosen.length === 0) return { kind: 'none' }
-  return { kind: 'ambiguous', candidates: chosen.slice(0, 10).map(c => ({ id: c.id, name: c.name })) }
 }
 
 /** A resolution failure, phrased for the model. */
@@ -236,12 +198,46 @@ export async function executeLookupCharacterTool(
       ? chats.reduce((a, b) => ((a.createdAt ?? '') <= (b.createdAt ?? '') ? a : b))
       : null
 
+    const want = new Set<string>(parsed.data.fields ?? [
+      'identity', 'description', 'personality', 'manifesto', 'physical', 'conversations', 'stores',
+    ])
+
+    // Where they belong: groups, projects, and the size of their own wardrobe.
+    const groups: string[] = []
+    for (const membership of await repos.groupCharacterMembers.findByCharacterId(c.id).catch(() => [])) {
+      const group = await repos.groups.findByIdRaw(membership.groupId).catch(() => null)
+      if (group) groups.push(group.name)
+    }
+    const projects = (await repos.projects.findByCharacterId(c.id).catch(() => [])).map(p => p.name)
+    const wardrobePieces = (await repos.wardrobe.findByCharacterId(c.id).catch(() => [])).length
+
+    let vault: Record<string, unknown> | null = null
+    if (want.has('stores') && c.characterDocumentMountPointId) {
+      const store = await repos.docMountPoints.findById(c.characterDocumentMountPointId).catch(() => null)
+      if (store) {
+        const outline = await storeOutline(store.id, 2)
+        vault = {
+          store: store.name,
+          // Append a file's path to read it; the outline's paths are relative to this.
+          address: storeAddress(store),
+          files: outline.fileCount,
+          outline: outline.lines.slice(0, VAULT_OUTLINE_LINES),
+          ...(outline.lines.length > VAULT_OUTLINE_LINES
+            ? { more: `${outline.lines.length - VAULT_OUTLINE_LINES} more lines; list_documents store="character:${c.name}"` }
+            : {}),
+        }
+      }
+    }
+
     const pd = c.physicalDescription
     logger.debug('lookup_character resolved', {
       userId: context.userId,
       characterId: c.id,
       memoryCount,
       conversationCount: chats.length,
+      fields: [...want],
+      groups: groups.length,
+      projects: projects.length,
     })
 
     return {
@@ -254,25 +250,36 @@ export async function executeLookupCharacterTool(
       controlledBy: c.controlledBy,
       archived: !!c.archivedAt,
       createdAt: c.createdAt,
-      // The public identity: age, public progressions and pronouns, then identity.md.
-      identity: clip(composePublicIdentity(c, c.identity), CORE_FIELD_CHARS),
       birthday: c.birthday ?? null,
-      description: clip(c.description, CORE_FIELD_CHARS),
-      personality: clip(c.personality, CORE_FIELD_CHARS),
-      manifesto: clip(c.manifesto, CORE_FIELD_CHARS),
-      physicalDescription: pd
-        ? clip(pd.fullDescription ?? pd.completePrompt ?? pd.longPrompt ?? pd.mediumPrompt ?? pd.shortPrompt, PHYSICAL_CHARS)
-        : null,
-      vaultMountPointId: c.characterDocumentMountPointId ?? null,
+      // The public identity: age, public progressions and pronouns, then identity.md.
+      ...(want.has('identity') ? { identity: clip(composePublicIdentity(c, c.identity), CORE_FIELD_CHARS) } : {}),
+      ...(want.has('description') ? { description: clip(c.description, CORE_FIELD_CHARS) } : {}),
+      ...(want.has('personality') ? { personality: clip(c.personality, CORE_FIELD_CHARS) } : {}),
+      ...(want.has('manifesto') ? { manifesto: clip(c.manifesto, CORE_FIELD_CHARS) } : {}),
+      ...(want.has('physical')
+        ? {
+            physicalDescription: pd
+              ? clip(pd.fullDescription ?? pd.completePrompt ?? pd.longPrompt ?? pd.mediumPrompt ?? pd.shortPrompt, PHYSICAL_CHARS)
+              : null,
+          }
+        : {}),
+      ...(want.has('stores') ? { vault } : {}),
+      groups,
+      projects,
+      wardrobePieces,
       memoriesHeld: memoryCount,
-      conversations: {
-        count: chats.length,
-        first: firstChat ? conversationRef(firstChat, firstChat.id) : null,
-        mostRecent: chats.slice(0, RECENT_CONVERSATIONS).map(chat => ({
-          ...conversationRef(chat, chat.id),
-          updatedAt: chat.updatedAt,
-        })),
-      },
+      ...(want.has('conversations')
+        ? {
+            conversations: {
+              count: chats.length,
+              first: firstChat ? conversationRef(firstChat, firstChat.id) : null,
+              mostRecent: chats.slice(0, RECENT_CONVERSATIONS).map(chat => ({
+                ...conversationRef(chat, chat.id),
+                updatedAt: chat.updatedAt,
+              })),
+            },
+          }
+        : { conversationCount: chats.length }),
       hint: 'For facts not in these fields (an age when there is no birthday, a date, an event), use lookup_memories with character set to this one, then lookup_messages.',
     }
   } catch (error) {
@@ -292,8 +299,8 @@ export async function executeLookupMemoriesTool(
 ): Promise<BrahmaLookupResult> {
   const parsed = lookupMemoriesToolInputSchema.safeParse(input)
   if (!parsed.success) return invalid('lookup_memories', parsed.error.issues)
-  const { query, character, about, since, until } = parsed.data
-  const limit = parsed.data.limit ?? 10
+  const { query, character, about, since, until, full } = parsed.data
+  const limit = parsed.data.limit ?? 8
 
   try {
     const repos = getRepositories()
@@ -353,26 +360,26 @@ export async function executeLookupMemoriesTool(
       returned: top.length,
     })
 
-    return {
-      success: true,
-      query,
-      searched: character ? holders[0].name : `${holders.length} characters`,
-      count: top.length,
-      memories: top.map(h => ({
-        memoryId: h.memory.id,
-        heldBy: h.holderName,
-        about: h.memory.aboutCharacterId ? nameById.get(h.memory.aboutCharacterId) ?? h.memory.aboutCharacterId : null,
-        content: clip(h.memory.content, MEMORY_CHARS),
-        happenedAt: h.memory.occurredAt ?? null,
-        narrativeTime: h.memory.narrativeTime ?? null,
-        recordedAt: h.memory.createdAt,
-        importance: Math.round(filterImportance(h.memory) * 100) / 100,
-        relevance: Math.round(h.score * 1000) / 1000,
-        source: h.memory.source,
-        archived: memoryArchivedLabel(h.memory) ?? null,
-        conversation: conversationRef(h.memory.chatId ? chats.get(h.memory.chatId) : undefined, h.memory.chatId),
-      })),
-    }
+    return capRecords(
+      {
+        success: true as const,
+        query,
+        searched: character ? holders[0].name : `${holders.length} characters`,
+        count: top.length,
+        memories: top.map(h => ({
+          memoryId: h.memory.id,
+          heldBy: h.holderName,
+          about: h.memory.aboutCharacterId ? nameById.get(h.memory.aboutCharacterId) ?? h.memory.aboutCharacterId : null,
+          summary: h.memory.summary?.trim() || null,
+          content: full ? (h.memory.content?.trim() ?? null) : clip(h.memory.content, MEMORY_CHARS),
+          happenedAt: h.memory.occurredAt ?? h.memory.createdAt,
+          archived: memoryArchivedLabel(h.memory) ?? null,
+          conversation: conversationRef(h.memory.chatId ? chats.get(h.memory.chatId) : undefined, h.memory.chatId),
+        })),
+      },
+      'memories',
+      (n) => `${n} more memories left out for length; lower \`limit\` or narrow with \`character\` / \`about\`.`,
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.warn('lookup_memories failed', { userId: context.userId, error: message })
@@ -390,21 +397,31 @@ export async function executeLookupMessagesTool(
 ): Promise<BrahmaLookupResult> {
   const parsed = lookupMessagesToolInputSchema.safeParse(input)
   if (!parsed.success) return invalid('lookup_messages', parsed.error.issues)
-  const { query, character, speaker, since, until } = parsed.data
+  const { query, character, speaker, since, until, conversation, group_by } = parsed.data
   const limit = parsed.data.limit ?? 10
 
   try {
     const repos = getRepositories()
 
     let chats: ChatMetadata[]
-    if (character) {
+    if (conversation) {
+      const found = await resolveConversationRef(conversation)
+      if (!found) return { success: false, error: `No conversation with the id or title "${conversation}". Find it with lookup_conversations.` }
+      if ('ambiguous' in found) {
+        return {
+          success: false,
+          error: `More than one conversation is titled "${conversation}"; pass one of these ids: ${found.ambiguous.slice(0, 8).map(c => c.id).join(', ')}.`,
+        }
+      }
+      chats = [found]
+    } else if (character) {
       const match = await resolveCharacterRef(character)
       if (match.kind !== 'found') return unresolved(character, match)
       chats = await repos.chats.findByCharacterId(match.character.id)
     } else {
       chats = await repos.chats.findAll()
     }
-    chats = chats.filter(chat => CONVERSATION_CHAT_TYPES.has(chat.chatType ?? 'salon'))
+    if (!conversation) chats = chats.filter(chat => CONVERSATION_CHAT_TYPES.has(chat.chatType ?? 'salon'))
 
     let speakerCharacterId: string | undefined
     if (speaker) {
@@ -420,22 +437,89 @@ export async function executeLookupMessagesTool(
 
     const chatById = new Map(chats.map(chat => [chat.id, chat]))
     const postFiltered = !!(speakerCharacterId || since || until)
-    const raw = await repos.chats.searchMessagesGlobal(
-      chats.map(chat => chat.id),
-      query,
-      postFiltered ? MESSAGE_OVERFETCH : limit
-    )
+    // Over-fetch always: the total is how a plain search knows to suggest
+    // grouping, and grouping needs every hit it can see.
+    // The message index matches a query as one phrase, in order (the search
+    // bar's contract, help/search.md). A model writes keywords, so when a
+    // query of several words finds nothing as a phrase, search its most
+    // distinctive word and keep the messages that hold every word, any order.
+    const chatIds = chats.map(chat => chat.id)
+    let raw = await repos.chats.searchMessagesGlobal(chatIds, query, MESSAGE_OVERFETCH)
+    let anchorTerm = query
+    let wideCapped = raw.length >= MESSAGE_OVERFETCH
+    const terms = searchTerms(query)
+    const everyWord = raw.length === 0 && terms.length > 1
+    if (everyWord) {
+      anchorTerm = [...terms].sort((a, b) => b.length - a.length)[0]
+      const wide = await repos.chats.searchMessagesGlobal(chatIds, anchorTerm, MESSAGE_OVERFETCH)
+      wideCapped = wide.length >= MESSAGE_OVERFETCH
+      raw = wide.filter(hit => containsAll(hit.content ?? '', terms))
+      logger.debug('lookup_messages: no phrase match, matched every word instead', {
+        userId: context.userId,
+        query,
+        anchorTerm,
+        anchorHits: wide.length,
+        everyWordHits: raw.length,
+      })
+    }
+    const matchedAs = everyWord ? { matchedAs: 'every word, in any order (no message has them as a phrase)' } : {}
 
     const window = await resolveWindow(since, until)
 
-    const kept = raw.filter(hit => {
+    const matching = raw.filter(hit => {
       if (window && (hit.createdAt < window.from || hit.createdAt > window.to)) return false
       if (speakerCharacterId) {
         const seat = chatById.get(hit.chatId)?.participants.find(p => p.id === hit.participantId)
         if (seat?.characterId !== speakerCharacterId) return false
       }
       return true
-    }).slice(0, limit)
+    })
+    const totalLabel = wideCapped ? `at least ${matching.length}` : String(matching.length)
+
+    if (group_by === 'conversation') {
+      const groups = new Map<string, { hits: number; first: string; last: string; best: typeof matching[number] }>()
+      for (const hit of matching) {
+        const g = groups.get(hit.chatId)
+        if (!g) groups.set(hit.chatId, { hits: 1, first: hit.createdAt, last: hit.createdAt, best: hit })
+        else {
+          g.hits++
+          if (hit.createdAt < g.first) g.first = hit.createdAt
+          if (hit.createdAt > g.last) g.last = hit.createdAt
+        }
+      }
+      const grouped = [...groups.entries()]
+        .sort((a, b) => b[1].hits - a[1].hits || b[1].last.localeCompare(a[1].last))
+        .slice(0, limit)
+        .map(([chatId, g]) => ({
+          conversation: conversationRef(chatById.get(chatId), chatId),
+          hits: g.hits,
+          firstHitAt: g.first,
+          lastHitAt: g.last,
+          bestSnippet: snippetAround(g.best.content, anchorTerm),
+          messageId: g.best.messageId,
+        }))
+      logger.debug('lookup_messages grouped by conversation', {
+        userId: context.userId,
+        rawHits: raw.length,
+        conversations: groups.size,
+        returned: grouped.length,
+      })
+      return capRecords(
+        {
+          success: true as const,
+          query,
+          totalHits: totalLabel,
+          ...matchedAs,
+          conversationCount: groups.size,
+          conversations: grouped,
+          ...(grouped.length === 0 ? { note: 'No matches. Try fewer or different words, or a word stem.' } : {}),
+        },
+        'conversations',
+        (n) => `${n} more conversations left out for length; narrow with \`character\`, \`since\` or more words.`,
+      )
+    }
+
+    const kept = matching.slice(0, limit)
 
     const namesByChat = new Map<string, Awaited<ReturnType<typeof resolveSpeakerNames>>>()
     const hits = []
@@ -454,7 +538,7 @@ export async function executeLookupMessagesTool(
           { participantId: hit.participantId ?? undefined, role: hit.role as MessageEvent['role'] },
           names ?? new Map()
         ),
-        snippet: snippetAround(hit.content, query),
+        snippet: snippetAround(hit.content, anchorTerm),
       })
     }
 
@@ -466,15 +550,23 @@ export async function executeLookupMessagesTool(
       postFiltered,
     })
 
-    return {
-      success: true,
-      query,
-      count: hits.length,
-      hits,
-      ...(hits.length === 0
-        ? { note: 'No matches. Try fewer or different words, a word stem (e.g. "birth" finds "birthday"), or drop a filter.' }
-        : {}),
-    }
+    return capRecords(
+      {
+        success: true as const,
+        query,
+        count: hits.length,
+        totalHits: totalLabel,
+        ...matchedAs,
+        hits,
+        ...(hits.length === 0
+          ? { note: 'No matches. Try fewer or different words, a word stem (e.g. "birth" finds "birthday"), or drop a filter.' }
+          : matching.length > UNGROUPED_HIT_NOTE_OVER && !conversation
+            ? { note: `${totalLabel} messages match; these are the newest ${hits.length}. To find which conversation, ask again with group_by: "conversation".` }
+            : {}),
+      },
+      'hits',
+      (n) => `${n} more hits left out for length; lower \`limit\` or use group_by: "conversation".`,
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.warn('lookup_messages failed', { userId: context.userId, error: message })
@@ -492,7 +584,7 @@ export async function executeReadMessagesTool(
 ): Promise<BrahmaLookupResult> {
   const parsed = readMessagesToolInputSchema.safeParse(input)
   if (!parsed.success) return invalid('read_messages', parsed.error.issues)
-  const { conversation_id, around_message_id } = parsed.data
+  const { conversation_id, around_message_id, full } = parsed.data
 
   try {
     const repos = getRepositories()
@@ -544,7 +636,7 @@ export async function executeReadMessagesTool(
         messageId: m.id,
         speaker: speakerLabel(m, names),
         writtenAt: m.createdAt,
-        content: clip(m.content, MESSAGE_CHARS) ?? '',
+        content: full ? (m.content ?? '').trim() : capLine(m.content, MESSAGE_LINE_CHARS),
       })),
     }
   } catch (error) {

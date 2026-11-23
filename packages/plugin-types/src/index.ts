@@ -194,6 +194,7 @@ export type {
   ToolMetadata,
   ToolHierarchyInfo,
   ToolEffect,
+  ToolCallEffect,
   ToolExecutionContext,
   ToolExecutionResult,
   ToolPlugin,
@@ -255,4 +256,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '2.11.0';
+export const PLUGIN_TYPES_VERSION = '2.13.0';

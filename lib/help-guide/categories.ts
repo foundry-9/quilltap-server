@@ -90,13 +90,14 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
     label: 'Appearance & Themes',
     documents: [
       'appearance-settings',
+      'dynamic-backgrounds',
       'themes',
       'theme-quick-switcher',
       'tags',
       'tags-customization',
       'quick-hide',
       'width-toggle',
-      'sidebar',
+      'navigation',
     ],
   },
   {

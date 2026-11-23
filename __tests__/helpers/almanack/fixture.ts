@@ -143,7 +143,7 @@ export function makeAlmanackFixture(
     themeInfo: {
       activeThemeId: 'madmans-box',
       colorMode: 'dark',
-      stats: { total: 6, withDarkMode: 6, withCssOverrides: 4, errors: 0 },
+      stats: { total: 6, withDarkMode: 6, refused: 0, errors: 0 },
       themes: [
         {
           name: "Madman's Box",
@@ -257,6 +257,7 @@ export function makeAlmanackFixture(
       canDressThemselves: 30,
       canCreateOutfits: 12,
       canManageInventory: 28,
+      canEditMemories: 3,
       coreWhisperOverrides: 5,
     },
     featureConfig: {
@@ -285,6 +286,7 @@ export function makeAlmanackFixture(
       agentMode: { maxTurns: 10, defaultEnabled: false },
       storyBackgrounds: { enabled: true, hasDefaultImageProfile: true },
       wardrobeImages: { hasDesignatedImageProfile: false },
+      dynamicBackgrounds: { enabled: true, allowUncensored: false, refreshMinutes: 3 },
       timestamps: { mode: 'EVERY_MESSAGE', format: 'FRIENDLY' },
       autoLock: { enabled: false, idleMinutes: 15 },
       memoryCascade: {

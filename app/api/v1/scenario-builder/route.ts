@@ -11,7 +11,7 @@
  * Design of record: docs/developer/features/complete/scenario-builder.md
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import type { NextRequest, NextResponse } from 'next/server'
 import {
   createContextHandler,
   withCollectionActionDispatch,
@@ -28,7 +28,7 @@ import {
   resolveScenarioBuilderCapabilities,
   runScenarioBuilder,
 } from '@/lib/services/scenario-builder/scenario-builder.service'
-import type { StreamController } from '@/lib/services/chat-message/tool-execution.service'
+import { streamAgentRun } from '@/lib/api/agent-run-stream'
 
 const logger = rootLogger.child({ context: 'ScenarioBuilder' })
 
@@ -122,81 +122,33 @@ async function handleBuild(req: NextRequest, context: RequestContext): Promise<N
     profileId: connectionProfile.id,
   })
 
-  const signal = req.signal
-  const encoder = new TextEncoder()
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(streamController) {
-      let closed = false
-      // processToolCalls enqueues directly; a cancelled stream throws on
-      // enqueue. Swallow those so a closed tab ends the run quietly.
-      const safeController: StreamController = {
-        enqueue: (data: Uint8Array) => {
-          if (closed || signal.aborted) return
-          try {
-            streamController.enqueue(data)
-          } catch {
-            closed = true
-          }
-        },
-      }
-      const onAbort = () => {
-        logger.debug('Scenario Builder client disconnected; aborting the run')
-        closed = true
-      }
-      signal.addEventListener('abort', onAbort)
-
-      try {
-        await runScenarioBuilder(
-          {
-            repos,
-            userId: user.id,
-            connectionProfile,
-            apiKey: keyResolution.apiKey,
-            input: {
-              mode: body.mode,
-              location: body.location,
-              time: body.time,
-              details: body.details,
-              projectId: body.projectId ?? null,
-              characterIds,
-              groupIds,
-              chat,
-              priorDraft: body.priorDraft ?? null,
-              revision: body.revision ?? null,
-            },
+  return streamAgentRun(req.signal, {
+    label: 'Scenario Builder',
+    failureMessage: 'The Host could not complete the enquiry.',
+    logger,
+    run: (controller, signal) =>
+      runScenarioBuilder(
+        {
+          repos,
+          userId: user.id,
+          connectionProfile,
+          apiKey: keyResolution.apiKey,
+          input: {
+            mode: body.mode,
+            location: body.location,
+            time: body.time,
+            details: body.details,
+            projectId: body.projectId ?? null,
+            characterIds,
+            groupIds,
+            chat,
+            priorDraft: body.priorDraft ?? null,
+            revision: body.revision ?? null,
           },
-          safeController,
-          signal,
-        )
-      } catch (error) {
-        // runScenarioBuilder never throws by contract; this is belt and braces.
-        logger.error('Scenario Builder stream failed', {
-          error: error instanceof Error ? error.message : String(error),
-        })
-        safeController.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: 'The Host could not complete the enquiry.' })}\n\n`),
-        )
-      } finally {
-        signal.removeEventListener('abort', onAbort)
-        if (!closed) {
-          closed = true
-          try {
-            streamController.close()
-          } catch {
-            /* already closed */
-          }
-        }
-      }
-    },
-  })
-
-  return new NextResponse(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
+        },
+        controller,
+        signal,
+      ),
   })
 }
 

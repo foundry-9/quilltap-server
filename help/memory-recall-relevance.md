@@ -87,6 +87,14 @@ The clerks now work to a stricter ledger:
 
 Work of any kind — building, filing, fixing, ruling — never rates above 0.65, however firmly it was sworn to. And the clerks rate the *fact*, not the manner of its telling: a pregnancy announced over breakfast is a pregnancy, and rates 0.95 whether it was declared, confessed, or merely overheard through the pantry door. The 0.85 shelf is kept for revelations whose substance is something else. The same ledger governs new notes, the dated accounts of notable days, and the digests that maintenance binds from many notes. Notes written before the change keep the ratings they were given; they are not re-rated after the fact.
 
+#### What a character said, kept as said
+
+A roleplay character is at liberty to furnish particulars nobody had written down (the clerk's name, the year the lighthouse went up), and a particular that is not remembered is apt to be told differently on Thursday. So the clerks now keep one further sort of note for such characters: **what they told someone as fact**. It is filed as the *telling* ("I told Sam the deed is in Amos Cottrell's name"), never as bare truth, for the excellent reason that a character may be mistaken, guessing, or lying through their teeth; what is certainly true is that they said it, and a liar most of all needs to remember their own story. Only checkable things qualify (a name, a date, a figure, a place, what a document says). Jokes, opinions, guesses and anything somebody else said do not. If the character takes it back or owns up, that is what gets filed instead.
+
+The clerks also check what the character has told before. Tell the same tale twice and it is filed once; tell it differently (a new name, a new figure) and the new version is filed as a correction of the old.
+
+Such a note rates 0.35, or 0.45 when others are plainly about to act on it, and at most one is kept per turn, in a slot of its own so that it never crowds out a decision or an event. An answer given at the reference desk (see [Carina](carina.md)) is kept the same way, as "asked this, I answered that," whatever kind of character gave it; an answer of "I don't know" is not kept at all. Assistants on their ordinary rounds, and any character you are playing yourself, get no such notes.
+
 One consequence worth knowing if you use the hourly note limit on the Memory Maintenance card: its importance floor (0.7 by default) now sits above every workshop note, so when a character is writing quickly, the Book keeps the matters of the heart and lets the shop talk go first.
 
 A memory now counts as *recently consulted* only when it actually reached the character — whispered into the turn, returned by a search the character ran, or set before an answerer — and not merely because a search happened to look at it on the way past. That keeps the "recently used" evidence maintenance relies on honest.

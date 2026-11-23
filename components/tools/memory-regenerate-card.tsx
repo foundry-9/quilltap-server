@@ -91,7 +91,7 @@ export function MemoryRegenerateCard() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            className="qt-button qt-button-danger"
+            className="qt-button qt-button-destructive"
             disabled={submitting}
             onClick={() => setConfirming(true)}
           >
@@ -106,7 +106,7 @@ export function MemoryRegenerateCard() {
           </span>
           <button
             type="button"
-            className="qt-button qt-button-danger"
+            className="qt-button qt-button-destructive"
             disabled={submitting}
             onClick={handleConfirm}
           >

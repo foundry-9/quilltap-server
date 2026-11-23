@@ -1,13 +1,14 @@
 /**
  * Theme Font File API Route
  *
- * Serves font files from theme plugins and theme bundles.
- * Path format: /api/themes/fonts/{pluginName}/{fontPath}
+ * Serves font files from theme bundles.
+ * Path format: /api/themes/fonts/bundle:{themeId}/fonts/MyFont.woff2
  *
- * For plugin themes: /api/themes/fonts/qtap-plugin-theme-rains/fonts/FiraCode-Regular.woff2
- * For bundle themes: /api/themes/fonts/bundle:{themeId}/fonts/MyFont.woff2
+ * Security: only a font the bundle declares is served, resolved inside the bundle.
  *
- * Security: Only serves files from registered theme plugins/bundles with valid font definitions.
+ * A theme draft's fonts share these URLs: when no installed theme of the
+ * requested `?v=` answers, a draft of that id and version may
+ * (`lib/themes/drafts/serve.ts`).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,9 +17,9 @@ import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plug
 import { logger } from '@/lib/logger';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { pluginRegistry } from '@/lib/plugins';
 import { resolveInside, PathOutsideBaseError } from '@/lib/paths/resolve-inside';
 import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
+import { registryAnswers, serveDraftThemeFile } from '@/lib/themes/drafts/serve';
 
 // MIME types for font files
 const FONT_MIME_TYPES: Record<string, string> = {
@@ -32,7 +33,7 @@ const FONT_MIME_TYPES: Record<string, string> = {
 
 /**
  * GET /api/themes/fonts/[...path]
- * Serves font files from theme plugins
+ * Serves a theme bundle's declared font files
  *
  * @param request - Next.js request object
  * @param params - Route parameters containing the font path segments
@@ -55,7 +56,7 @@ export async function GET(
       );
     }
 
-    // First segment is plugin name (or "bundle:" prefix for bundle themes), rest is the font path
+    // First segment is "bundle:<themeId>" (URL encoding may split it), rest is the font path
     let pluginName: string;
     let fontPathSegments: string[];
 
@@ -67,7 +68,8 @@ export async function GET(
       pluginName = decodeURIComponent(pathSegments[0]);
       fontPathSegments = pathSegments.slice(1);
     } else {
-      [pluginName, ...fontPathSegments] = pathSegments;
+      logger.debug('Theme font request outside a bundle', { context: 'GET /api/themes/fonts', first: pathSegments[0] });
+      return NextResponse.json({ error: 'Theme not found' }, { status: 404 });
     }
     const relativeFontPath = fontPathSegments.join('/');
 
@@ -82,6 +84,17 @@ export async function GET(
     // Find the theme by plugin name
     const allThemes = themeRegistry.getAll();
     const theme = allThemes.find(t => t.pluginName === pluginName);
+    const requestedVersion = request.nextUrl.searchParams.get('v');
+    if (!registryAnswers(theme?.version, requestedVersion)) {
+      const draft = await serveDraftThemeFile({
+        themeId: pluginName.slice('bundle:'.length),
+        file: relativeFontPath,
+        kind: 'font',
+        version: requestedVersion,
+        mimeTypes: FONT_MIME_TYPES,
+      });
+      if (draft) return draft;
+    }
 
     if (!theme) {
       logger.warn('Theme not found for plugin', {
@@ -111,11 +124,8 @@ export async function GET(
       );
     }
 
-    // The font must resolve inside its theme's directory (symlinks resolved
-    // for installed bundles).
-    const themeRoot = theme.source === 'bundle' && theme.bundlePath
-      ? theme.bundlePath
-      : pluginRegistry.get(pluginName)?.pluginPath;
+    // The font must resolve inside its bundle (symlinks resolved).
+    const themeRoot = theme.source === 'bundle' ? theme.bundlePath : undefined;
     if (!themeRoot) {
       logger.warn('Theme directory not found for font', {
         context: 'GET /api/themes/fonts',
@@ -128,9 +138,7 @@ export async function GET(
     }
     let fontFilePath: string;
     try {
-      fontFilePath = await resolveInside(themeRoot, fontEntry.src, {
-        realpath: theme.source === 'bundle',
-      });
+      fontFilePath = await resolveInside(themeRoot, fontEntry.src, { realpath: true });
     } catch (err) {
       if (!(err instanceof PathOutsideBaseError)) throw err;
       logger.warn('Font path outside its theme directory', {

@@ -6,8 +6,8 @@
  * @module components/settings/appearance/types
  */
 
-import type { ColorMode, ThemeTokens } from '@/lib/themes/types'
-import type { ThemeSummary, ThemeFont } from '@/components/providers/theme-provider'
+import type { ColorMode } from '@/lib/themes/types'
+import type { ThemeSummary } from '@/components/providers/theme-provider'
 
 /**
  * Preview colors for theme display - both light and dark mode colors
@@ -51,24 +51,6 @@ export interface ThemeCardProps {
   onUninstall?: () => void
   /** Callback to export theme as .qtap-theme */
   onExport?: () => void
-}
-
-/**
- * Theme Preview Panel props
- */
-export interface ThemePreviewPanelProps {
-  /** Theme tokens to apply */
-  tokens: ThemeTokens
-  /** Theme ID (used for generating unique scope class) */
-  themeId: string
-  /** Color mode to preview */
-  mode: 'light' | 'dark'
-  /** Custom fonts to load */
-  fonts?: ThemeFont[]
-  /** Additional CSS overrides from the theme */
-  cssOverrides?: string | null
-  /** Optional label to display above the preview */
-  label?: string
 }
 
 /**

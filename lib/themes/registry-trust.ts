@@ -13,8 +13,8 @@
 
 import yauzl from 'yauzl';
 import { logger } from '@/lib/logger';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
-  hashBuffer,
   verifyRegistryIndex,
   verifyBundleSignatureHashes,
   type BundleSignatureDocument,
@@ -126,7 +126,7 @@ async function hashBundleZip(buffer: Buffer): Promise<ZipFileHashes> {
       signatureJson = data;
       continue;
     }
-    hashes[rel] = hashBuffer(data);
+    hashes[rel] = sha256OfBuffer(data);
   }
   return { hashes, signatureJson };
 }

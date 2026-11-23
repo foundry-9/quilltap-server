@@ -2,6 +2,7 @@
 
 import { useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { activateOnKey } from '@/components/ui/activate-on-key'
 
 interface RestoreItemSelectorProps {
   selectedFile: File | null
@@ -25,6 +26,10 @@ export function RestoreItemSelector({
         <div
           className="border-2 border-dashed qt-border-default rounded-lg p-6 text-center cursor-pointer hover:qt-border-input transition-colors"
           onClick={() => fileInputRef.current?.click()}
+          onKeyDown={activateOnKey}
+          role="button"
+          tabIndex={0}
+          aria-label={selectedFile ? `Backup file chosen: ${selectedFile.name}. Press to choose another` : 'Choose a backup file: drop one here or press to browse'}
         >
           <Icon name="plus" className="w-12 h-12 mx-auto qt-text-secondary mb-2" />
           <p className="qt-text-small">

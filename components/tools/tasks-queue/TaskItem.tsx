@@ -111,7 +111,7 @@ export function TaskItem({
                   Attempt {job.attempts}/{job.maxAttempts}
                 </span>
               )}
-              <span>{formatDate(job.scheduledAt)}</span>
+              <span>{job.awaitingTurn ? 'Waiting for the next turn' : formatDate(job.scheduledAt)}</span>
             </div>
             {job.lastError && (
               <div className="text-xs qt-text-destructive mt-1 truncate">

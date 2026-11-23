@@ -7,6 +7,7 @@
 
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
+import { cancelHeldAvatarRefreshes } from '@/lib/background-jobs/queue-service'
 import { fileStorageManager } from '@/lib/file-storage/manager'
 import { retireMemories } from '@/lib/memory/retire'
 import { memoryIndex } from '@/lib/memory/index-store'
@@ -339,6 +340,7 @@ export async function executeCascadeDelete(
     for (const { chat } of preview.exclusiveChats) {
       try {
         await repos.chats.delete(chat.id)
+        await cancelHeldAvatarRefreshes(chat.id)
         deletedChats++
       } catch (err) {
         logger.error(`Failed to delete chat ${chat.id}`, { context: { chatId: chat.id } }, err instanceof Error ? err : undefined)

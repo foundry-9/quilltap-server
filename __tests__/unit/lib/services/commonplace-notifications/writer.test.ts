@@ -8,6 +8,7 @@ import { describe, it, expect } from '@jest/globals'
 import {
   buildCommonplacePersonaWhisper,
   buildCommonplaceLLMContext,
+  COMMONPLACE_LORE_LEAD,
 } from '@/lib/services/commonplace-notifications/writer'
 
 describe('commonplace-notifications writer', () => {
@@ -26,6 +27,18 @@ describe('commonplace-notifications writer', () => {
     expect(out).toContain('past conversations that bear on the present')
     // No steampunk meta-narrative leaks into the LLM body.
     expect(out).not.toContain('Commonplace Book')
+  })
+
+  it('renders lore ahead of knowledge, and never names the Atlas to the model', () => {
+    const lore = '### Convertible\nAppearance: A silver roadster.\n\nIt leaks oil.'
+    const llm = buildCommonplaceLLMContext({ lore, knowledge: '### Knowledge (character) — x' })
+    expect(llm).toContain(`${COMMONPLACE_LORE_LEAD}\n\n${lore}`)
+    expect(llm.indexOf('### Convertible')).toBeLessThan(llm.indexOf('### Knowledge'))
+    expect(llm).not.toMatch(/atlas/i)
+    expect(llm).not.toContain('Commonplace Book')
+    const persona = buildCommonplacePersonaWhisper({ lore })
+    expect(persona).toContain(lore)
+    expect(persona).toContain('Atlas')
   })
 
   it('returns empty string when no parts are set', () => {

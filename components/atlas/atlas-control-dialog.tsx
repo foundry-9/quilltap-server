@@ -28,6 +28,7 @@ import { ItemControlDialogShell, useItemControlState } from '@/components/item-b
 import { AtlasBrowser } from './AtlasBrowser'
 import { AtlasEntryEditor } from './atlas-entry-editor'
 import { AtlasTransferDialog } from './AtlasTransferDialog'
+import { AtlasLoreWizard } from './AtlasLoreWizard'
 import { ItemImageViewer } from '@/components/item-browser/ItemImageViewer'
 import { useAtlasListData } from './hooks/useAtlasListData'
 import { useAtlasEntryActions } from './hooks/useAtlasEntryActions'
@@ -113,9 +114,18 @@ function AtlasControlDialogInner({ initialContainer, onClose, asTab = false, fix
           containerLabel={containerLabel}
           entry={editor.kind === 'edit' ? editor.entry : null}
           initialFolder={editor.kind === 'create' ? editor.folder : undefined}
+          initialDraft={editor.kind === 'create' ? editor.draft : undefined}
           actions={actions}
           onClose={actions.closeEditor}
           onSaved={actions.closeEditor}
+        />
+      )}
+      {actions.loreWizard && container && (
+        <AtlasLoreWizard
+          container={container}
+          containerLabel={containerLabel}
+          onClose={actions.closeLoreWizard}
+          onDraft={actions.openCreateFromDraft}
         />
       )}
       {actions.transfer && container && (

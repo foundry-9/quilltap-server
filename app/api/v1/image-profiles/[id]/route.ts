@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, enrichProfile, type RequestContext } from '@/lib/api/middleware';
-import { dispatchAction } from '@/lib/api/middleware/actions';
+import { withActionDispatch, dispatchAction } from '@/lib/api/middleware/actions';
 import { notFound, badRequest, serverError, messageResponse, successResponse, conflict } from '@/lib/api/responses';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { executeImageGenerationTool } from '@/lib/tools/handlers/image-generation-handler';
@@ -110,8 +110,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/image-profiles/[id]
  */
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (req, { user, repos }, { id }) => {
     try {
 
       // Verify ownership
@@ -131,7 +132,7 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       logger.error('[Image Profiles v1] Error deleting profile', { profileId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete image profile');
     }
-  }
+  })
 );
 
 /**

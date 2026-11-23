@@ -21,10 +21,8 @@ export interface AppearanceSettings {
   availableThemes: ThemeSummary[]
   isLoading: boolean
   error: string | null
-  showNavThemeSelector: boolean
   handleThemeSelect: (themeId: string | null) => Promise<void>
   handleColorModeChange: (mode: ColorMode) => Promise<void>
-  handleNavThemeSelectorChange: (show: boolean) => Promise<void>
   refreshThemes: () => Promise<void>
 }
 
@@ -45,8 +43,6 @@ export function useAppearanceSettings(): AppearanceSettings {
     availableThemes,
     isLoading,
     error,
-    showNavThemeSelector,
-    setShowNavThemeSelector,
     refreshThemes,
   } = useTheme()
 
@@ -67,13 +63,6 @@ export function useAppearanceSettings(): AppearanceSettings {
     await setColorMode(mode)
   }
 
-  /**
-   * Handle nav theme selector toggle with logging
-   */
-  const handleNavThemeSelectorChange = async (show: boolean) => {
-    await setShowNavThemeSelector(show)
-  }
-
   return {
     activeThemeId,
     colorMode,
@@ -81,10 +70,8 @@ export function useAppearanceSettings(): AppearanceSettings {
     availableThemes: themes,
     isLoading,
     error,
-    showNavThemeSelector,
     handleThemeSelect,
     handleColorModeChange,
-    handleNavThemeSelectorChange,
     refreshThemes,
   }
 }

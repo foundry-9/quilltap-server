@@ -67,6 +67,8 @@ import { inventoryGiveToolEffect } from './inventory-give-tool';
 import { inventoryListToolEffect } from './inventory-list-tool';
 import { inventoryPickUpToolEffect } from './inventory-pick-up-tool';
 import { inventoryReadToolEffect } from './inventory-read-tool';
+import { readMemoryToolEffect } from './read-memory-tool';
+import { editMemoryToolEffect } from './edit-memory-tool';
 import { inventoryUnequipToolEffect } from './inventory-unequip-tool';
 import { inventoryUpdateToolEffect } from './inventory-update-tool';
 import { keepImageToolEffect } from './keep-image-tool';
@@ -83,9 +85,20 @@ import { rngToolEffect } from './rng-tool';
 import { runCustomToolEffect } from './run-custom-tool';
 import { runSqlToolEffect } from './run-sql-tool';
 import { lookupCharacterToolEffect } from './lookup-character-tool';
+import { findDocumentsToolEffect } from './find-documents-tool';
+import { listDocumentsToolEffect } from './list-documents-tool';
+import { lookupConversationsToolEffect } from './lookup-conversations-tool';
+import { lookupGroupToolEffect, lookupProjectToolEffect } from './lookup-group-tool';
+import { lookupAtlasToolEffect, lookupWardrobeToolEffect } from './lookup-wardrobe-tool';
+import { lookupChatStateToolEffect } from './lookup-chat-state-tool';
 import { lookupMemoriesToolEffect } from './lookup-memories-tool';
 import { lookupMessagesToolEffect } from './lookup-messages-tool';
 import { readMessagesToolEffect } from './read-messages-tool';
+import { themeReadDraftToolEffect } from './theme-read-draft-tool';
+import { themeLookupTokensToolEffect } from './theme-lookup-tokens-tool';
+import { themeLookupHooksToolEffect } from './theme-lookup-hooks-tool';
+import { themeCheckContrastToolEffect } from './theme-check-contrast-tool';
+import { themeProposeToolEffect } from './theme-propose-tool';
 import { searchScriptoriumToolEffect } from './search-scriptorium-tool';
 import { selfInventoryToolEffect } from './self-inventory-tool';
 import { sendMailToolEffect } from './send-mail-tool';
@@ -139,6 +152,7 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
   doc_write_blob: docWriteBlobToolEffect,
   doc_write_file: docWriteFileToolEffect,
   edit_custom_tool: editCustomToolToolEffect,
+  edit_memory: editMemoryToolEffect,
   help_navigate: helpNavigateToolEffect,
   help_search: helpSearchToolEffect,
   help_settings: helpSettingsToolEffect,
@@ -160,6 +174,7 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
   log_read: logReadToolEffect,
   project_info: projectInfoToolEffect,
   read_conversation: readConversationToolEffect,
+  read_memory: readMemoryToolEffect,
   read_mail: readMailToolEffect,
   request_full_context: requestFullContextToolEffect,
   rng: rngToolEffect,
@@ -169,6 +184,20 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
   lookup_memories: lookupMemoriesToolEffect,
   lookup_messages: lookupMessagesToolEffect,
   read_messages: readMessagesToolEffect,
+  // The research kit (lib/research/): every tool reads.
+  find_documents: findDocumentsToolEffect,
+  list_documents: listDocumentsToolEffect,
+  lookup_conversations: lookupConversationsToolEffect,
+  lookup_group: lookupGroupToolEffect,
+  lookup_project: lookupProjectToolEffect,
+  lookup_wardrobe: lookupWardrobeToolEffect,
+  lookup_atlas: lookupAtlasToolEffect,
+  lookup_chat_state: lookupChatStateToolEffect,
+  theme_read_draft: themeReadDraftToolEffect,
+  theme_lookup_tokens: themeLookupTokensToolEffect,
+  theme_lookup_hooks: themeLookupHooksToolEffect,
+  theme_check_contrast: themeCheckContrastToolEffect,
+  theme_propose: themeProposeToolEffect,
   search: searchScriptoriumToolEffect,
   self_inventory: selfInventoryToolEffect,
   send_mail: sendMailToolEffect,
@@ -192,23 +221,34 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
 
 /** Everything an effect lookup may need beyond the call itself. */
 export interface ToolEffectContext extends ToolEffectLookups {
-  /** Plugin / MCP tool name → declared effect. A plugin tool missing here counts as `write`. */
-  pluginToolEffects?: ReadonlyMap<string, ToolEffect>;
+  /**
+   * Plugin / MCP tool name → declared effect (a plain effect, or one computed
+   * from the call's input). A plugin tool missing here counts as `write`.
+   */
+  pluginToolEffects?: ReadonlyMap<string, ToolEffectSpec>;
 }
 
-/** The declared spec for a tool, or undefined when it declares none. */
+/** The declared spec for a built-in tool, or undefined when it declares none. */
 export function toolEffectSpecOf(name: string): ToolEffectSpec | undefined {
   return Object.prototype.hasOwnProperty.call(BUILT_IN_TOOL_EFFECTS, name) ? BUILT_IN_TOOL_EFFECTS[name] : undefined;
 }
 
 /**
- * The effect of one call. A computed built-in effect sees the call's input
- * (validated by the tool's own schema; invalid input counts as `write`).
+ * The spec for any tool: a built-in's own, else the plugin's declaration, else
+ * undeclared. A built-in name always wins, so a plugin cannot restate one.
+ */
+export function toolEffectSpecFor(name: string, ctx: ToolEffectContext = {}): ToolEffectSpec {
+  return toolEffectSpecOf(name) ?? ctx.pluginToolEffects?.get(name) ?? UNDECLARED_TOOL_EFFECT;
+}
+
+/**
+ * The effect of one call. A computed effect sees the call's input (a built-in's
+ * validated by the tool's own schema, a plugin's by the plugin; invalid input
+ * counts as `write`).
  */
 export function effectOfToolCall(name: string, input: unknown, ctx: ToolEffectContext = {}): ToolEffect {
-  const spec = toolEffectSpecOf(name);
-  if (spec !== undefined) return isComputedToolEffect(spec) ? spec(input, ctx) : spec;
-  return ctx.pluginToolEffects?.get(name) ?? UNDECLARED_TOOL_EFFECT;
+  const spec = toolEffectSpecFor(name, ctx);
+  return isComputedToolEffect(spec) ? spec(input, ctx) : spec;
 }
 
 /**
@@ -217,9 +257,8 @@ export function effectOfToolCall(name: string, input: unknown, ctx: ToolEffectCo
  * tool-list filter, the autonomous-room destructive gate, a bid's named tools.
  */
 export function maxEffectOfTool(name: string, ctx: ToolEffectContext = {}): ToolEffect {
-  const spec = toolEffectSpecOf(name);
-  if (spec !== undefined) return isComputedToolEffect(spec) ? spec.maxEffect : spec;
-  return ctx.pluginToolEffects?.get(name) ?? UNDECLARED_TOOL_EFFECT;
+  const spec = toolEffectSpecFor(name, ctx);
+  return isComputedToolEffect(spec) ? spec.maxEffect : spec;
 }
 
 /** The tool result's text when a call is refused for exceeding the turn's ceiling. */
@@ -267,9 +306,13 @@ export function offeredTools(names: Iterable<string>): ToolOffer {
 export const OPERATOR_TOOL_OFFER: ToolOffer = Object.freeze({ kind: 'operator' as const });
 
 /**
- * Tools that only ever run on the operator surface (the Brahma Console):
- * read-only SQL and the lookup shortcuts, which read every character's
- * memories and every conversation. Refused off that surface whatever the offer.
+ * Tools that only ever run on the operator surface (the Brahma Console and the
+ * builders that run for the operator): read-only SQL, the lookup shortcuts
+ * and the research kit's record tools, which read every character's memories,
+ * every conversation, every group and project. Refused off that surface
+ * whatever the offer. (The kit's document tools, `find_documents` and
+ * `list_documents`, also run under a Scenario Builder mount pool, so they are
+ * not here.)
  */
 export const OPERATOR_SURFACE_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'run_sql',
@@ -277,6 +320,12 @@ export const OPERATOR_SURFACE_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'lookup_memories',
   'lookup_messages',
   'read_messages',
+  'lookup_conversations',
+  'lookup_group',
+  'lookup_project',
+  'lookup_wardrobe',
+  'lookup_atlas',
+  'lookup_chat_state',
 ]);
 
 /** Everything the permit needs beyond the call itself. */

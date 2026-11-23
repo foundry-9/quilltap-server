@@ -13,7 +13,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { lowerToolEffect, offeredTools, type ToolEffect, type ToolOffer } from '@/lib/tools/effects'
+import { lowerToolEffect, offeredTools, type ToolEffect, type ToolEffectSpec, type ToolOffer } from '@/lib/tools/effects'
 import type { RosterContext as CustomToolRosterContext } from '@/lib/pascal/custom-tools'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -69,7 +69,7 @@ export interface TurnToolSlate extends ProfileToolFormat {
   /** The highest effect a tool call may have this turn; unset = no ceiling. */
   effectCeiling: ToolEffect | undefined
   customToolEffects: Map<string, ToolEffect>
-  pluginToolEffects: Map<string, ToolEffect>
+  pluginToolEffects: Map<string, ToolEffectSpec>
   /** The tool names this seat was offered this turn; the executor refuses any other. */
   toolOffer: ToolOffer
   /** The operator changed tool settings since the last turn (the tool-change notice fires). */
@@ -139,6 +139,8 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
   const canDressThemselves = character.canDressThemselves !== false
   const canCreateOutfits = character.canCreateOutfits !== false
   const canManageInventory = character.canManageInventory !== false
+  // Editing their own memories is granted, never assumed (null reads as off).
+  const canEditMemories = character.canEditMemories === true
 
   // System transparency: a character not opted in never gets self_inventory,
   // whatever the chat- and project-level toggles say.
@@ -167,6 +169,7 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     canDressThemselves,
     canCreateOutfits,
     canManageInventory,
+    canEditMemories,
     docToolsMode: documentEditingEnabled ? 'full' : 'off',
     askCarinaEnabled,
     customToolContext: customToolRosterFor(chat, userId, character, chatSettings),
@@ -187,10 +190,11 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
       helpToolsEnabled,
       canDressThemselves,
       canCreateOutfits,
-      canManageInventory
+      canManageInventory,
+      canEditMemories
     )
     if (resolvedToolMode === 'simple-json') {
-      toolInstructions = buildSimpleJsonSystemInstructions(textOptions)
+      toolInstructions = buildSimpleJsonSystemInstructions(textOptions, characterKindPolicy(character).toolRules)
       logSimpleJsonToolUsage(profile.provider, profile.modelName, textOptions)
     } else {
       toolInstructions = buildTextBlockSystemInstructions(textOptions)

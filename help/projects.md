@@ -41,7 +41,7 @@ Projects are entirely optional — you can use Quilltap's full functionality wit
 
 ### Basic Creation
 
-1. Click **Projects** in the left sidebar
+1. Open **Library** and choose **Projects**
 2. Click **Create Project** or **+ New Project**
 3. Enter a project name (required)
 4. Optionally add a description
@@ -251,7 +251,7 @@ For listing, reading, and searching files, characters use the Scriptorium docume
 
 ### Projects List Page
 
-1. Click **Projects** in the sidebar
+1. Open **Library** and choose **Projects**
 2. See all your projects as cards
 3. Search or filter projects
 4. Click a project to open it

@@ -19,6 +19,7 @@ import type {
   ProviderOptionsSchema,
 } from './types';
 import { OpenRouterProvider, SUPPORTED_IMAGE_MIME_TYPES } from './provider';
+import { fetchOpenRouterModelCatalog } from './model-catalog';
 import { OpenRouterEmbeddingProvider } from './embedding-provider';
 import { OpenRouterImageProvider } from './image-provider';
 import {
@@ -252,6 +253,20 @@ export const plugin: TextProviderPlugin = {
       );
       return [];
     }
+  },
+
+  /**
+   * Live, detailed text-model catalog (context, output cap, tools, images,
+   * reasoning) as OpenRouter serves it. Throws on failure; the host caches.
+   */
+  getModelCatalog: async (apiKey: string, _baseUrl?: string) => {
+    logger.debug('Fetching OpenRouter model catalog', { context: 'plugin.getModelCatalog' });
+    const catalog = await fetchOpenRouterModelCatalog(apiKey);
+    logger.debug('OpenRouter model catalog ready', {
+      context: 'plugin.getModelCatalog',
+      count: catalog.length,
+    });
+    return catalog;
   },
 
   /**

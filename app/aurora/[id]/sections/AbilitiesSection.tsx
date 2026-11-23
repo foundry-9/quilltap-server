@@ -91,6 +91,22 @@ export function AbilitiesSection() {
             </>
           }
         />
+        <ToggleRow
+          label="Edits their own memories"
+          checked={character.canEditMemories === true}
+          disabled={readOnly}
+          onChange={(canEditMemories) =>
+            void save({ canEditMemories }, 'The memory-editing setting could not be saved.')
+          }
+          description={
+            <>
+              When on, {name} may take down a memory from their Commonplace Book with <code>read_memory</code> and
+              rewrite it with <code>edit_memory</code> &mdash; mending a detail, sharpening a summary, deciding a thing
+              matters more (or less) than first supposed. Only their own memories, and never a keystone. This is
+              quite apart from System transparency. Requires tool use.
+            </>
+          }
+        />
         <CanDrawDiagramsToggle
           checked={character.canDrawDiagrams ?? false}
           style={character.diagramStyle ?? 'handDrawn'}

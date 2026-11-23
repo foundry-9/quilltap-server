@@ -29,6 +29,8 @@ const nextConfig = {
     '@napi-rs/canvas',  // Native canvas backend used by pdfjs-dist for PDF rendering
     'pdfjs-dist',       // Must load natively: pdfjs-dist finds @napi-rs/canvas (its DOMMatrix polyfill) via createRequire(import.meta.url), which webpack bakes to the build machine's path
     'ws',               // WebSocket library for terminal streaming
+    'fontkit',          // Reads uploaded theme fonts (lib/themes/font-info.ts)
+    'wawoff2',          // WOFF2 encoder (WebAssembly) for theme fonts at install (lib/themes/convert-fonts.ts)
   ],
 
   // Include dependencies in standalone output for Docker deployments
@@ -47,6 +49,29 @@ const nextConfig = {
       './node_modules/@napi-rs/**/*',
       './node_modules/pdfjs-dist/**/*',
       './node_modules/@xterm/**/*',
+      // PostCSS scopes version 2 theme CSS at load (lib/themes/engine/scope.ts);
+      // server.ts and the WebSocket entries keep it external, so it and its
+      // dependencies must ship in the standalone tree.
+      './node_modules/postcss/**/*',
+      './node_modules/nanoid/**/*',
+      './node_modules/picocolors/**/*',
+      './node_modules/source-map-js/**/*',
+      // Theme fonts (Calliope Live, Spec F): fontkit reads them, wawoff2
+      // converts them at install. Both are external, so they and fontkit's
+      // dependencies ship in the standalone tree.
+      './node_modules/fontkit/**/*',
+      './node_modules/wawoff2/**/*',
+      './node_modules/restructure/**/*',
+      './node_modules/brotli/**/*',
+      './node_modules/base64-js/**/*',
+      './node_modules/dfa/**/*',
+      './node_modules/clone/**/*',
+      './node_modules/tiny-inflate/**/*',
+      './node_modules/unicode-trie/**/*',
+      './node_modules/unicode-properties/**/*',
+      './node_modules/fast-deep-equal/**/*',
+      './node_modules/@swc/helpers/**/*',
+      './node_modules/pako/**/*',
       './first-startup/**/*',
       './themes/bundled/**/*',
     ],
@@ -153,7 +178,7 @@ const nextConfig = {
         // route's header of the same name, so those paths must be left out
         // here or their policy never reaches the browser.
         source:
-          '/:path((?!api/v1/files/|api/v1/mount-points/|api/themes/|api/v1/chats/[^/]+/qtap-target).*)',
+          '/:path((?!api/v1/files/|api/v1/mount-points/|api/themes/|api/v1/chats/[^/]+/qtap-target|api/v1/system/dynamic-backgrounds).*)',
         headers: [
           {
             // Set here rather than in proxy.ts so it reaches every response,

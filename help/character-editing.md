@@ -114,6 +114,8 @@ The assembled system prompt addresses the character directly throughout, and eac
 - **Assistant** is a member of the staff: a capable aide whose business is doing work for you, such as research, drafting or keeping the books
 - The choice is about how the character is *performed*, not what they are in the story. A ship's mind or a household automaton who lives in the scene is still a roleplay character
 - With [Agent Mode](agent-mode.md) on, a roleplay character uses their tools as things they do in the scene and still answers in prose; an assistant researches, verifies and delivers a finished report
+- A roleplay character is also handed, on every turn, a short standing note on how a person in a story is played: they may **supply plausible particulars** where nothing on record gainsays them (what the clerk said, how the afternoon went, what they did while out of everyone's sight); they are played **as written, warts included** (the timid may quail, the suspicious may act on it, the scoundrel pursues the scheme); and **their own troubles come into the room with them**. What you narrate, the conversation itself, their memories and anything a tool truly returned all outrank an invention, and their own system prompt outranks the note. See [Sample Prompts](prompts.md) for the full particulars
+- An assistant receives no such note. It gets the facts right and says so plainly when it does not know
 - Every character begins as a roleplay character, including every character made before the choice existed
 
 **Tags**
@@ -123,6 +125,8 @@ The assembled system prompt addresses the character directly throughout, and eac
 ### The Dossier Card
 
 Six Markdown editors, and the editors *are* the view: a filled field reads as handsome prose, an empty one shows its hint as an invitation. Inside them, `{{char}}` and `{{user}}` tokens — and the character's own name and their default partner's — are tinted, so you can see at a glance where a token stands or might stand.
+
+Should a field run longer than the window, its formatting toolbar declines to be left behind: scroll down through a long passage and the row of buttons clings to the top of whatever you are scrolling, so bold, headings and the rest are always within reach. The same courtesy is extended by every Markdown editor in Quilltap — the Atlas, the wardrobe, scenarios, prompts and the like.
 
 **Identity**
 
@@ -406,9 +410,15 @@ The Ariel Clause: the character's standing conditions on how they may be shown, 
 Every switch about the character's powers, in four cards, each saving the moment you change it. Where a setting may **Inherit**, the option tells you what it presently resolves to, so you need not go hunting through Settings to find out.
 
 - **Trust & perception** — **System transparency** (see [System Transparency](character-system-transparency.md)) and **Aurora's Core whisper** (inherit, always or never).
-- **Tools & talents** — **Can answer @-queries (Carina)** (see [Carina](carina.md)) and **Draws diagrams**, with its **Drawing style** of **Hand-drawn** (the default) or **Clean**, greyed out but remembered while the pen is withheld (see [Diagrams](diagrams.md)).
+- **Tools & talents** — **Can answer @-queries (Carina)** (see [Carina](carina.md)), **Edits their own memories** (below) and **Draws diagrams**, with its **Drawing style** of **Hand-drawn** (the default) or **Clean**, greyed out but remembered while the pen is withheld (see [Diagrams](diagrams.md)).
 - **Wardrobe & inventory** — **Dresses themselves**, **Creates outfits**, **Chooses own opening outfit**, **Manages inventory**.
 - **Control** — **You play this character** (the character is user-controlled: you speak for them) and **Non-player character** (an NPC).
+
+### Edits their own memories
+
+Off unless you turn it on. When on, the character is handed two instruments for their own Commonplace Book (see [Episodic Memory](episodic-memory.md)): **`read_memory`**, which takes down one memory by its id (each memory a `search` turns up now shows its **Memory ID**), and **`edit_memory`**, which puts it back revised. The character may mend the text or the summary, change the keywords it is found by, decide it matters more or less than first supposed, say whom it is about, and link it to their other memories. A revised text is re-indexed at once, so the next search finds it as it now reads.
+
+A few rules hold firm. A character may only ever touch their **own** memories. A **keystone** (see [Recall Relevance](memory-recall-relevance.md#keystones-facts-set-in-stone)) — a standing fact you have set in stone — is left strictly alone; only you may change one. The setting is quite apart from **System transparency**: a character may be trusted with the pencil without being shown the workings of the house, or the reverse. And, like every tool, it asks for a connection profile that permits tool use; it also works from an autonomous room.
 
 ## Chat Defaults
 

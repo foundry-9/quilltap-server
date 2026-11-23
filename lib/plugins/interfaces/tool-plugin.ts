@@ -12,7 +12,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import type { ToolEffect } from '@/lib/tools/effect-types';
+import type { DeclaredToolCallEffect, ToolEffect } from '@/lib/tools/effect-types';
 
 /**
  * Universal tool format for cross-provider compatibility
@@ -287,13 +287,17 @@ export interface ToolPlugin {
    * Declare each tool's effect on the world (optional; `@quilltap/plugin-types` 2.9.0+).
    *
    * Tool name → effect. A tool missing from the map, and every tool of a
-   * plugin without this method, counts as `write`.
+   * plugin without this method, counts as `write`. An entry may instead be a
+   * call effect (`{ max, of, notes? }`, plugin-types 2.12.0+) when the effect
+   * depends on the call's input.
    *
    * @param config User configuration for this plugin
    */
   getToolEffects?: (
     config: Record<string, unknown>
-  ) => Record<string, ToolEffect> | Promise<Record<string, ToolEffect>>;
+  ) =>
+    | Record<string, ToolEffect | DeclaredToolCallEffect>
+    | Promise<Record<string, ToolEffect | DeclaredToolCallEffect>>;
 
   // ============================================================================
   // Deprecated Methods (for backwards compatibility)

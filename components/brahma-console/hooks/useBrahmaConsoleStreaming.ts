@@ -55,9 +55,15 @@ interface StreamingState {
 interface UseBrahmaConsoleStreamingOptions {
   chatId: string | null
   onMessageComplete?: (messageId: string) => void
+  /**
+   * The console's collection route; messages are posted to
+   * `${apiBase}/${chatId}/messages` (default: the Brahma Console's). Calliope
+   * passes `/api/v1/calliope` — the same engine, the same frames.
+   */
+  apiBase?: string
 }
 
-export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrahmaConsoleStreamingOptions) {
+export function useBrahmaConsoleStreaming({ chatId, onMessageComplete, apiBase = '/api/v1/brahma-console' }: UseBrahmaConsoleStreamingOptions) {
   const [state, setState] = useState<StreamingState>({
     isStreaming: false,
     isExecutingTools: false,
@@ -100,7 +106,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
     })
 
     try {
-      const res = await fetch(`/api/v1/brahma-console/${effectiveChatId}/messages`, {
+      const res = await fetch(`${apiBase}/${effectiveChatId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, fileIds }),
@@ -211,7 +217,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
         error: error instanceof Error ? error.message : 'Failed to send message',
       }))
     }
-  }, [chatId])
+  }, [chatId, apiBase])
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort()

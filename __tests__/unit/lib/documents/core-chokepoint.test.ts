@@ -90,4 +90,14 @@ describe('document core chokepoint', () => {
     }
     expect(offenders).toEqual([])
   })
+
+  it('the core itself never touches the filesystem; disk goes through the doc-edit backend', () => {
+    const files: string[] = []
+    walk(path.join(ROOT, 'lib', 'documents', 'core'), files)
+    expect(files.length).toBeGreaterThan(0)
+    const offenders = files
+      .filter(file => /from ['"](node:)?fs(\/promises)?['"]|require\(['"](node:)?fs/.test(code(fs.readFileSync(file, 'utf8'))))
+      .map(file => path.relative(ROOT, file))
+    expect(offenders).toEqual([])
+  })
 })

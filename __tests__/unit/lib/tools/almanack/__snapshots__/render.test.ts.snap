@@ -145,7 +145,7 @@ Server names (URLs and credentials are deliberately omitted):
 - **Colour Mode**: dark
 - **Total Themes**: 6
 - **With Dark Mode**: 6
-- **With CSS Overrides**: 4
+- **Refused (earlier format)**: 0
 - **Shipping Icon Overrides**: 1
 - **Total Icon Overrides**: 23
 - **Overrides naming an unknown icon**: 1 (these take effect on nothing — likely typos in a theme manifest)
@@ -265,6 +265,7 @@ Cast sizes:
 - **May dress themselves**: 30
 - **May create outfits**: 12
 - **May manage their inventory**: 28
+- **May edit their own memories**: 3
 - **With a Core-whisper override**: 5
 
 ### Feature Configuration
@@ -303,6 +304,12 @@ Cast sizes:
 #### Wardrobe Images
 
 - **Has Designated Image Profile**: No
+
+#### Dynamic Backgrounds
+
+- **Enabled**: Yes
+- **Allow Uncensored**: No
+- **Minutes Between Changes**: 3
 
 #### Aurora (Core Whisper)
 

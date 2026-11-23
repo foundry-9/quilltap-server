@@ -163,6 +163,7 @@ async function fetchCategorySettings(
         avatarDisplayStyle: settings?.avatarDisplayStyle || null,
         tagStyles: settings?.tagStyles || null,
         sidebarWidth: settings?.sidebarWidth || null,
+        dynamicBackgrounds: settings?.dynamicBackgrounds || null,
       }
     }
 

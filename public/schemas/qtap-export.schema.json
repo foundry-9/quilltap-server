@@ -482,6 +482,10 @@
           "type": ["boolean", "null"],
           "description": "Whether this character may see and change what they carry with the inventory_* tools (null = enabled by default)"
         },
+        "canEditMemories": {
+          "type": ["boolean", "null"],
+          "description": "Whether this character may read and edit their own memories with read_memory / edit_memory (null = disabled by default)"
+        },
         "canChooseOutfit": {
           "type": "boolean",
           "description": "When true, a new chat with this character defaults its Starting Outfit to 'Let character choose'. Absent/false falls back to defaults (or Compose when there is no usable default outfit). Stored in the vault's properties.json."
@@ -751,12 +755,18 @@
         },
 
         "chatType": {
-          "enum": ["salon", "help", "autonomous", "brahma"],
-          "description": "Chat type discriminator. 'salon' = regular human-driven chat; 'help' = help-assistant chat; 'autonomous' = private character-to-character room (4.6 Private Character Rooms); 'brahma' = Brahma Console (character-less generic-LLM) chat."
+          "enum": ["salon", "help", "autonomous", "brahma", "calliope"],
+          "description": "Chat type discriminator. 'salon' = regular human-driven chat; 'help' = help-assistant chat; 'autonomous' = private character-to-character room (4.6 Private Character Rooms); 'brahma' = Brahma Console (character-less generic-LLM) chat; 'calliope' = a conversation with Calliope about one theme draft (see themeDraftId)."
+        },
+        "themeDraftId": {
+          "type": ["string", "null"],
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "maxLength": 64,
+          "description": "Calliope (chatType='calliope'): the id of the theme draft the conversation is about (its folder Themes/<id>/ in Quilltap General). NULL on every other chat type. Not a UUID; travels verbatim."
         },
         "consoleConnectionProfileId": {
           "type": ["string", "null"],
-          "description": "Brahma Console (chatType='brahma') active connection profile (model). NULL on every other chat type."
+          "description": "Console chats (chatType='brahma' or 'calliope'): the conversation's active connection profile (model). NULL on every other chat type."
         },
         "consoleMode": {
           "enum": ["writing", null],
@@ -1919,6 +1929,11 @@
         },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "description": { "type": ["string", "null"] },
+        "generationModeration": {
+          "type": ["string", "null"],
+          "enum": ["moderated", "uncensored-profile", "uncensored-routed", "uncensored-failover", null],
+          "description": "How a generated picture's provider came to draw it, moderation-wise: an ordinary profile ('moderated'), a profile that is itself uncensored ('uncensored-profile'), one the Concierge sent the call to before it ran ('uncensored-routed'), or the uncensored understudy after an ordinary profile refused ('uncensored-failover'). Set only on generated avatars, story backgrounds and image-tool / dialog pictures; null on every other file, and on pictures made before 4.14."
+        },
         "generationKey": {
           "type": ["string", "null"],
           "description": "Avatar configuration cache key — the hash of everything deterministic about the generation that produced this image (prompt, provider, image profile, model, built params). Travels as-is. It folds in the exporting instance's image-profile id, so on a receiving instance the key is simply inert until that same profile id derives it again: nothing on the target will ever compute a matching key by accident, and a round trip back to the origin still hits. Only avatar rows carry one."

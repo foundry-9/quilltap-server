@@ -21,7 +21,6 @@
 
 import { INVENTORY_IMAGES_FOLDER } from '@/lib/file-storage/wardrobe-image-bridge';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import type { FileEntry } from '@/lib/schemas/file.types';
 import type { InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location';
 import { loadPoolForLocation } from '@/lib/inventory/pool';
@@ -76,10 +75,6 @@ export const inventoryItemImages = createItemImages<InventoryRecord, ResolvedInv
 export const NoInventoryImageProfileError = inventoryItemImages.NoProfileError;
 /** The provider refused or failed; carries the trail. */
 export const InventoryImageGenerationError = inventoryItemImages.GenerationError;
-
-/** The object's own pictures, newest first. */
-export const listInventoryItemImages: (repos: Pick<RepositoryContainer, 'files'>, itemId: string) => Promise<FileEntry[]> =
-  inventoryItemImages.list;
 
 /**
  * The pictures to show for an object: its own, or — for an instance with

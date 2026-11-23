@@ -15,6 +15,7 @@ import { resolveVisionProfile, sendVisionRequest } from '@/lib/llm/vision-reques
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { profileParams } from '@/lib/llm/cheap-llm'
+import { isTruncatedFinishReason } from '@/lib/llm/extract-finish-reason'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import type { FileAttachment } from '@/lib/llm/base'
 import { logger } from '@/lib/logger'
@@ -328,7 +329,7 @@ async function describeImageWithProfile(
       })
 
       // Check if this is a reasoning model that hit the token limit
-      if (response.finishReason === 'length' && isReasoningModel) {
+      if (isTruncatedFinishReason(response.finishReason) && isReasoningModel) {
         return unsupportedResult(
           imageDescProfile,
           file,

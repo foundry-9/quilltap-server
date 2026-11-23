@@ -29,6 +29,8 @@ export interface JobDetail {
   estimatedTokens: number
   chatId?: string
   characterName?: string
+  /** An avatar refresh held until the chat's next turn. */
+  awaitingTurn?: boolean
 }
 
 export interface FullJobDetail extends JobDetail {

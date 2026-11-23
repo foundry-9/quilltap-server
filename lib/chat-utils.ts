@@ -46,7 +46,7 @@ export interface SalonChatShape {
   conciergeSetBy?: ConciergeProvenance
   conciergeReason?: ConciergeModeReason | null
   dangerCategories?: string[]
-  chatType?: 'salon' | 'help' | 'autonomous' | 'brahma'
+  chatType?: 'salon' | 'help' | 'autonomous' | 'brahma' | 'calliope'
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
   _count: { messages: number; memories?: number }
 }

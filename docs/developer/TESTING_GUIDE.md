@@ -796,6 +796,36 @@ describe('SlowModule', () => {
 })
 ```
 
+#### Component Tests That Pass Locally and Time Out on CI
+
+The GitHub Actions runner is roughly two to three times slower than a
+developer Mac on jsdom component tests (the theme-editor folder: about 9 s
+locally, 20 s or more on CI). A test with no margin passes on your machine
+and fails in CI. Two rules come out of this:
+
+1. **Scope accessible-name queries to the part of the tree the test is about.**
+   In jsdom, `getByLabelText` and `getByRole(..., { name })` resolve each
+   candidate's label by walking the whole document, so a document-wide query
+   over a form with hundreds of labelled controls is roughly cubic. Query
+   inside the row, panel or toolbar instead, with `within(...)` or a helper
+   such as `__tests__/helpers/theme-editor-queries.ts`. Doing this took the
+   theme-editor tests from 85 s to 8 s.
+
+2. **Give a wait an explicit timeout when what it waits for comes after more
+   than one async step.** `findBy*` and `waitFor` give up after 1 second by
+   default. That is enough for one fetch and a render. It is not enough on CI
+   for a chain such as debounced save, then PUT, then operation, then refetch,
+   then re-render. Pass `{ timeout: 4000 }` to those waits, and use the same
+   value as the other tests in the file:
+
+   ```typescript
+   // The click flushes a pending save, runs the operation and re-renders
+   await screen.findByRole('button', { name: 'Begin a stylesheet' }, { timeout: 4000 })
+   ```
+
+   Before you push a new component test, look at every `findBy*` and
+   `waitFor` in it and ask how many async steps each one waits on.
+
 ## Resources
 
 ### Internal References
@@ -815,5 +845,5 @@ describe('SlowModule', () => {
 
 ---
 
-**Last Updated**: 2026-01-22  
+**Last Updated**: 2026-11-16  
 **Maintainer**: Foundry-9 LLC

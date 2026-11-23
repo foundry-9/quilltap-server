@@ -219,6 +219,7 @@ complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'search' -d '
 complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'update' -d 'Update themes'
 complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'registry' -d 'Manage registries'
 complete -c quilltap -n '__quilltap_using_subcommand themes' -l 'output' -s 'o' -d 'Output path' -r -F
+complete -c quilltap -n '__quilltap_using_subverb themes install; or __quilltap_using_subverb themes validate' -F
 
 # themes registry sub-subverbs
 complete -c quilltap -n '__quilltap_using_subverb themes registry' -f -a 'list' -d 'List registries'

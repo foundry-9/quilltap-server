@@ -10,6 +10,7 @@ import {
 } from '@/lib/llm/llm-json';
 import {
   assembleQtapExport,
+  normalizeGeneratedMemories,
   restampStructuralFields,
 } from '@/lib/services/ai-import.service';
 import { validateQtapExport } from '@/lib/validation/qtap-schema-validator';
@@ -399,6 +400,83 @@ describe('ai-import.service', () => {
         ],
       };
       expect(restampStructuralFields(data as never, now)).toBe(0);
+    });
+  });
+  describe('normalizeGeneratedMemories', () => {
+    it('fills a missing summary from the content instead of failing validation (regression: Calliope, memory 12)', () => {
+      const memories = Array.from({ length: 13 }, (_, i) => ({
+        content: `Memory ${i} happened in the studio. It mattered a great deal.`,
+        summary: `Summary ${i}`,
+        keywords: ['studio'],
+        importance: 0.6,
+      })) as Array<Record<string, unknown>>;
+      delete memories[12].summary;
+
+      const normalized = normalizeGeneratedMemories(memories);
+      expect(normalized).toHaveLength(13);
+      expect(normalized[12].summary).toBe('Memory 12 happened in the studio.');
+
+      const exportData = assembleQtapExport(
+        { character_basics: { name: 'Calliope' }, memories: normalized },
+        true,
+        false,
+        '4.13.0'
+      );
+      expect(validateQtapExport(exportData).valid).toBe(true);
+      expect((exportData.data as unknown as { memories: unknown[] }).memories).toHaveLength(13);
+    });
+
+    it('unwraps { memories: [...] } and coerces keywords and importance', () => {
+      const normalized = normalizeGeneratedMemories({
+        memories: [{ content: 'Knows the house.', summary: 'House', keywords: 'house, stairs', importance: '0.9' }],
+      });
+      expect(normalized).toEqual([
+        { content: 'Knows the house.', summary: 'House', keywords: ['house', 'stairs'], importance: 0.9 },
+      ]);
+    });
+
+    it('drops only entries with no content and no summary', () => {
+      const normalized = normalizeGeneratedMemories([
+        { content: '', summary: '' },
+        null,
+        { summary: 'Only a summary' },
+      ]);
+      expect(normalized).toEqual([
+        { content: 'Only a summary', summary: 'Only a summary', keywords: [], importance: 0.5 },
+      ]);
+    });
+
+    it('returns an empty list for a non-array, non-wrapped answer', () => {
+      expect(normalizeGeneratedMemories('nope')).toEqual([]);
+    });
+  });
+
+  describe('assembleQtapExport physical description', () => {
+    it('fits overlong prompts at a boundary and keeps the full description', () => {
+      const overlong = 'dark hair, grey eyes, olive skin, '.repeat(40);
+      const exportData = assembleQtapExport(
+        {
+          character_basics: { name: 'Calliope' },
+          physical_descriptions: {
+            headAndShouldersPrompt: overlong,
+            shortPrompt: overlong,
+            mediumPrompt: overlong,
+            longPrompt: overlong,
+            completePrompt: overlong,
+            fullDescription: '## Overview\nA painter.',
+          },
+        },
+        false,
+        false,
+        '4.13.0'
+      );
+      const pd = (exportData.data as unknown as { characters: Array<{ physicalDescription: Record<string, string> }> })
+        .characters[0].physicalDescription;
+      expect(pd.shortPrompt.length).toBeLessThanOrEqual(350);
+      expect(pd.shortPrompt.endsWith(',')).toBe(false);
+      expect(pd.shortPrompt).toMatch(/(hair|eyes|skin)$/);
+      expect(pd.completePrompt.length).toBeLessThanOrEqual(1000);
+      expect(pd.fullDescription).toBe('## Overview\nA painter.');
     });
   });
 });

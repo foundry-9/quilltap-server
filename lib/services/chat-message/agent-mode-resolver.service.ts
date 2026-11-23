@@ -23,14 +23,35 @@ const logger = createServiceLogger('AgentModeResolverService')
 
 /**
  * What the agent-mode instructions are for: a character's kind-derived flavor,
- * or `'writing'` — the Brahma Console's Writing Assistant, whose final answer
- * is the finished piece and nothing else.
+ * or one of the research kit's surfaces (docs/developer/features/research-kit.md
+ * §7.2):
+ *
+ *  - `'writing'` — the Brahma Console's Writing Assistant, whose final answer
+ *    is the finished piece and nothing else;
+ *  - `'inquiry'` — the Brahma Console and `@Brahma`: the answer is an answer;
+ *  - `'drafting'` — the builders (New Entry from Lore, Import from
+ *    Instructions, the Scenario Builder): the answer is a piece in the
+ *    surface's own output format.
+ *
+ * The research kinds state the budget and how to finish and nothing else; how
+ * to research is the shared discipline (`lib/research/discipline.ts`). They
+ * never say "use tools iteratively", "verify your work" or "comprehensive".
+ * The `'research'` text is unchanged and stays with assistant characters in
+ * the Salon and the Help chat.
  */
-export type AgentInstructionKind = AgentModeFlavor | 'writing'
+export type AgentInstructionKind = AgentModeFlavor | 'writing' | 'inquiry' | 'drafting'
 
 /** The Writing Assistant's "finish now" instruction (forced final turn and stuck-loop nudge). */
 export const WRITING_FINISH_NOW =
   'Stop researching and do not call any more tools except submit_final_response. Call the submit_final_response tool NOW with the finished piece and nothing else: no preamble, no notes, no account of what you read.'
+
+/** The inquiry surfaces' "finish now" instruction (forced final turn and stuck-loop nudge). */
+export const INQUIRY_FINISH_NOW =
+  'Stop researching and do not call any more tools except submit_final_response. Call the submit_final_response tool NOW with your answer from what you have already read. Lead with the answer.'
+
+/** The builders' "finish now" instruction (forced final turn and stuck-loop nudge). */
+export const DRAFTING_FINISH_NOW =
+  'Stop researching and do not call any more tools except submit_final_response. Call the submit_final_response tool NOW with the piece, in the output format you were given, from what you have already read.'
 
 /**
  * Resolved agent mode state
@@ -125,11 +146,29 @@ export function resolveAgentModeSetting(
  * @returns System prompt text to inject
  */
 export function buildAgentModeInstructions(maxTurns: number, flavor: AgentInstructionKind): string {
+  if (flavor === 'inquiry') {
+    return `
+## Finishing
+
+You have up to **${maxTurns} tool iterations** in all. Most requests need far fewer: follow the budget for the kind of request (see *How to research*). When you reach the limit you will be asked to answer at once.
+
+When you can answer, call the \`submit_final_response\` tool with the answer in its \`response\` parameter. If you do not call it, your last message without tool calls is taken as the answer. Do NOT call other tools after \`submit_final_response\`.
+`.trim()
+  }
+  if (flavor === 'drafting') {
+    return `
+## Finishing
+
+You have up to **${maxTurns} tool iterations** in all. Most pieces need far fewer: follow the budget for the kind of request (see *How to research*). When you reach the limit you will be asked to deliver the piece at once.
+
+When you can write the piece, call the \`submit_final_response\` tool with the piece, in the output format above, in its \`response\` parameter. If you do not call it, your last message without tool calls is taken as the piece. Do NOT call other tools after \`submit_final_response\`.
+`.trim()
+  }
   if (flavor === 'writing') {
     return `
 ## Agent Mode Instructions
 
-You may use tools iteratively to research the piece before you write it: search, read and query as much as the request calls for. You have up to **${maxTurns} tool iterations**; when you reach the limit you will be asked to finish at once.
+You may research the piece before you write it, within the budget for the kind of request (see *How to research*). You have up to **${maxTurns} tool iterations** in all; when you reach the limit you will be asked to finish at once.
 
 When the piece is ready, call the \`submit_final_response\` tool with the finished piece and nothing else in its \`response\` parameter — no preamble, no notes, no account of your research. If you do not call it, your last message without tool calls is taken as the piece, so it too must be the finished piece and nothing else. Do NOT call other tools after \`submit_final_response\`.
 `.trim()
@@ -187,6 +226,12 @@ When you do submit, your final response should be polished and ready for the use
 export function buildForceFinalMessage(flavor: AgentInstructionKind): string {
   if (flavor === 'writing') {
     return WRITING_FINISH_NOW
+  }
+  if (flavor === 'inquiry') {
+    return INQUIRY_FINISH_NOW
+  }
+  if (flavor === 'drafting') {
+    return DRAFTING_FINISH_NOW
   }
   if (flavor === 'in-character') {
     return `You have used every tool step you have this turn. Do not call any more tools. Write your turn now, in character and in prose, from what you have found and done.`

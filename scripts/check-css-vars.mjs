@@ -34,7 +34,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -47,10 +47,16 @@ const TAILWIND_PREFIXES = ['--tw-']
 /** Tokens that already hold a complete colour value. */
 const COMPLETE_COLOUR_TOKEN = /\bhsla?\(\s*var\(\s*--(color|theme)-/
 
+/**
+ * Files git knows about plus new files not yet added (ignored files excluded),
+ * so a stylesheet or generated sheet is checked before it is staged.
+ */
 function tracked(args) {
-  return execFileSync('git', ['ls-files', ...args], { cwd: REPO_ROOT, encoding: 'utf8' })
+  return execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', ...args], { cwd: REPO_ROOT, encoding: 'utf8' })
     .split('\n')
     .filter(Boolean)
+    // A tracked file deleted in the working tree is still listed by --cached.
+    .filter((f) => existsSync(path.join(REPO_ROOT, f)))
 }
 
 /** Replace comments with blanks, keeping newlines so line numbers survive. */

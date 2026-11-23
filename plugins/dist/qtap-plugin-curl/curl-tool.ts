@@ -142,3 +142,22 @@ export function validateCurlInput(input: unknown): input is CurlToolInput {
 
   return true;
 }
+
+/** Methods that ask a server for something and send it no body. */
+const READ_ONLY_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * Whether a call only reads: valid input whose method is GET (the default),
+ * HEAD or OPTIONS. The handler sends a body only for POST, PUT and PATCH, so a
+ * read-only call carries none whatever `data` says. Anything that fails
+ * validation is not read-only.
+ */
+export function isReadOnlyCurlCall(input: unknown): boolean {
+  if (!validateCurlInput(input)) {
+    return false;
+  }
+  return READ_ONLY_METHODS.has(input.request ?? 'GET');
+}
+
+/** The line added to the tool's description on a turn that allows only lookups. */
+export const CURL_READ_ONLY_NOTE = 'Only GET, HEAD and OPTIONS requests are allowed this turn.';

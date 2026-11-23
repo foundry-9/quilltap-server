@@ -33,6 +33,7 @@ jest.mock('../../../migrations/lib/database-utils', () => ({
   closeDatabase: jest.fn(),
   waitForDatabaseReady: jest.fn(async () => true),
   detectDatabaseBackend: jest.fn(() => 'sqlite'),
+  isMainDatabaseEmpty: jest.fn(() => false),
 }));
 
 jest.mock('../../../migrations/state', () => ({
@@ -43,6 +44,7 @@ jest.mock('../../../migrations/state', () => ({
   })),
   isMigrationCompleted: jest.fn(() => false),
   recordCompletedMigration: jest.fn(async (state: unknown) => state),
+  recordBaselinedMigrations: jest.fn(async (state: unknown) => state),
 }));
 
 jest.mock('../../../migrations/scripts', () => ({

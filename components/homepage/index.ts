@@ -7,6 +7,7 @@
 export * from './types'
 export { WelcomeSection } from './WelcomeSection'
 export { QuickActionsRow } from './QuickActionsRow'
+export { ChatsBand } from './ChatsBand'
 export { RecentChatsSection } from './RecentChatsSection'
 export { ProjectsSection } from './ProjectsSection'
 export { CharactersSection } from './CharactersSection'

@@ -8,19 +8,22 @@
  * - list: Show installed themes
  * - install: Install a .qtap-theme bundle
  * - uninstall: Remove a bundle theme
- * - validate: Check a .qtap-theme file
+ * - validate: Check a .qtap-theme file or a bundle directory
  * - export: Export a theme as .qtap-theme
+ *
+ * Bundles are validated, extracted and packed by the app's own theme engine,
+ * bundled into ./theme-engine.generated.js (scripts/build-cli-theme-engine.mjs
+ * in the server repository). Only version 2 bundles are accepted; one made
+ * for an earlier Quilltap is refused by every command that takes a bundle.
  *
  * @module quilltap/lib/theme-commands
  */
 
-const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { execSync } = require('child_process');
-const { validateThemeBundle, validateManifest } = require('./theme-validation');
+const engine = require('./theme-engine.generated');
 const { getDefaultBaseDir } = require('./platform-paths');
 
 // ============================================================================
@@ -87,59 +90,80 @@ async function writeIndex(index, overrideDir) {
 }
 
 // ============================================================================
-// ZIP EXTRACTION (uses yauzl)
+// BUNDLE HELPERS
 // ============================================================================
 
-async function extractZipToDir(zipPath, destDir) {
-  const yauzl = require('yauzl');
+const THEME_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
-  const zipFile = await new Promise((resolve, reject) => {
-    yauzl.open(zipPath, { lazyEntries: true, autoClose: false }, (err, zf) => {
-      if (err) reject(err);
-      else resolve(zf);
-    });
-  });
+/** The install directory for a theme id, or null when the id is not one. */
+function installPathFor(themeId, dataDir) {
+  if (typeof themeId !== 'string' || !THEME_ID_PATTERN.test(themeId)) return null;
+  return path.join(getThemesDir(dataDir), themeId);
+}
+
+/** Validate a .qtap-theme file or a bundle directory with the theme engine. */
+async function validateSource(sourcePath) {
+  let stat;
+  try {
+    stat = await fsp.stat(sourcePath);
+  } catch {
+    return { valid: false, errors: ['Bundle file not found or not readable'], warnings: [], fileCount: 0, totalSize: 0 };
+  }
+  return stat.isDirectory() ? engine.validateThemeDirectory(sourcePath) : engine.validateThemeBundle(sourcePath);
+}
+
+function printProblems(result, indent) {
+  for (const error of result.errors) console.log(`${indent}${c.red}Error:${c.reset} ${error}`);
+  if (result.refused) console.log(`${indent}${c.dim}Only version ${engine.CURRENT_THEME_FORMAT_VERSION} theme bundles are accepted.${c.reset}`);
+}
+
+function printWarnings(result, indent) {
+  if (!result.warnings || result.warnings.length === 0) return;
+  console.log('');
+  for (const warning of result.warnings) console.log(`${indent}${c.yellow}Warning:${c.reset} ${warning}`);
+}
+
+/**
+ * Validate a downloaded or local .qtap-theme file and install it: the old
+ * install is removed only after validation passes, the archive is extracted
+ * through the engine's one extraction routine, and the index is updated.
+ * Returns { ok, manifest?, validation, error? }.
+ */
+async function installBundleFile(zipPath, dataDir, indexFields) {
+  const validation = await engine.validateThemeBundle(zipPath);
+  if (!validation.valid || !validation.manifest) return { ok: false, validation };
+
+  const manifest = validation.manifest;
+  const installPath = installPathFor(manifest.id, dataDir);
+  if (!installPath) return { ok: false, validation, error: `Invalid theme id: ${manifest.id}` };
 
   try {
-    await new Promise((resolve, reject) => {
-      zipFile.readEntry();
-      zipFile.on('entry', async (entry) => {
-        try {
-          const entryPath = path.join(destDir, entry.fileName);
+    await fsp.rm(installPath, { recursive: true, force: true });
+    await engine.extractThemeBundle(zipPath, installPath);
 
-          // Security: prevent path traversal
-          if (!entryPath.startsWith(destDir + path.sep) && entryPath !== destDir) {
-            reject(new Error(`Path traversal detected: ${entry.fileName}`));
-            return;
-          }
-
-          if (/\/$/.test(entry.fileName)) {
-            await fsp.mkdir(entryPath, { recursive: true });
-            zipFile.readEntry();
-          } else {
-            await fsp.mkdir(path.dirname(entryPath), { recursive: true });
-            const data = await new Promise((res, rej) => {
-              zipFile.openReadStream(entry, (err, stream) => {
-                if (err) { rej(err); return; }
-                const chunks = [];
-                stream.on('data', (chunk) => chunks.push(chunk));
-                stream.on('end', () => res(Buffer.concat(chunks)));
-                stream.on('error', rej);
-              });
-            });
-            await fsp.writeFile(entryPath, data);
-            zipFile.readEntry();
-          }
-        } catch (err) {
-          reject(err);
-        }
-      });
-      zipFile.on('end', resolve);
-      zipFile.on('error', reject);
+    const index = await readIndex(dataDir);
+    index.themes = index.themes.filter(t => t.id !== manifest.id);
+    index.themes.push({
+      id: manifest.id,
+      version: manifest.version,
+      installedAt: new Date().toISOString(),
+      source: 'file',
+      sourceUrl: null,
+      registrySource: null,
+      signatureVerified: false,
+      ...indexFields,
     });
-  } finally {
-    zipFile.close();
+    await writeIndex(index, dataDir);
+    return { ok: true, manifest, validation, installPath };
+  } catch (err) {
+    await fsp.rm(installPath, { recursive: true, force: true }).catch(() => {});
+    return { ok: false, validation, error: err.message };
   }
+}
+
+function authorName(author) {
+  if (!author) return '';
+  return typeof author === 'string' ? author : author.name || '';
 }
 
 // ============================================================================
@@ -194,23 +218,24 @@ async function listThemes(dataDir) {
 }
 
 /**
- * Validate a .qtap-theme file
+ * Validate a .qtap-theme file or a bundle directory
  */
 async function validateTheme(filePath) {
   const resolvedPath = path.resolve(filePath);
 
   console.log(`\n${c.bold}Validating:${c.reset} ${resolvedPath}\n`);
 
-  const result = await validateThemeBundle(resolvedPath);
+  const result = await validateSource(resolvedPath);
 
   if (result.valid) {
-    console.log(`  ${c.green}Valid${c.reset} .qtap-theme bundle\n`);
+    console.log(`  ${c.green}Valid${c.reset} version ${engine.CURRENT_THEME_FORMAT_VERSION} theme bundle\n`);
     if (result.manifest) {
+      const author = authorName(result.manifest.author);
       console.log(`  Name:        ${result.manifest.name}`);
       console.log(`  ID:          ${result.manifest.id}`);
       console.log(`  Version:     ${result.manifest.version}`);
       console.log(`  Dark Mode:   ${result.manifest.supportsDarkMode ? 'Yes' : 'No'}`);
-      if (result.manifest.author) console.log(`  Author:      ${result.manifest.author}`);
+      if (author) console.log(`  Author:      ${author}`);
       if (result.manifest.description) {
         console.log(`  Description: ${result.manifest.description.substring(0, 60)}${result.manifest.description.length > 60 ? '...' : ''}`);
       }
@@ -218,19 +243,11 @@ async function validateTheme(filePath) {
     console.log(`  Files:       ${result.fileCount}`);
     console.log(`  Size:        ${(result.totalSize / 1024).toFixed(1)} KB`);
   } else {
-    console.log(`  ${c.red}Invalid${c.reset} .qtap-theme bundle\n`);
-    for (const error of result.errors) {
-      console.log(`  ${c.red}Error:${c.reset} ${error}`);
-    }
+    console.log(`  ${c.red}Invalid${c.reset} theme bundle\n`);
+    printProblems(result, '  ');
   }
 
-  if (result.warnings.length > 0) {
-    console.log('');
-    for (const warning of result.warnings) {
-      console.log(`  ${c.yellow}Warning:${c.reset} ${warning}`);
-    }
-  }
-
+  printWarnings(result, '  ');
   console.log('');
   return result.valid;
 }
@@ -243,101 +260,36 @@ async function installTheme(source, dataDir) {
 
   console.log(`\n${c.bold}Installing theme from:${c.reset} ${resolvedSource}\n`);
 
-  // Validate first
-  const validation = await validateThemeBundle(resolvedSource);
-  if (!validation.valid || !validation.manifest) {
-    console.log(`  ${c.red}Validation failed:${c.reset}`);
-    for (const error of validation.errors) {
-      console.log(`    ${c.red}-${c.reset} ${error}`);
+  const result = await installBundleFile(resolvedSource, dataDir, {});
+  if (!result.ok) {
+    if (result.error) console.log(`  ${c.red}Installation failed:${c.reset} ${result.error}`);
+    else {
+      console.log(`  ${c.red}Validation failed:${c.reset}`);
+      printProblems(result.validation, '    ');
     }
     console.log('');
     return false;
   }
 
-  const manifest = validation.manifest;
-  const themeId = manifest.id;
-  const themesDir = getThemesDir(dataDir);
-  const installPath = path.join(themesDir, themeId);
-
-  // Remove existing installation
-  try {
-    await fsp.rm(installPath, { recursive: true, force: true });
-  } catch {
-    // Ignore
-  }
-
-  // Create directory and extract
-  await fsp.mkdir(installPath, { recursive: true });
-
-  try {
-    await extractZipToDir(resolvedSource, installPath);
-
-    // If theme.json is in a subdirectory, move contents up
-    const directThemeJson = path.join(installPath, 'theme.json');
-    try {
-      await fsp.access(directThemeJson);
-    } catch {
-      const entries = await fsp.readdir(installPath, { withFileTypes: true });
-      const subdirs = entries.filter(e => e.isDirectory());
-      for (const subdir of subdirs) {
-        const subThemeJson = path.join(installPath, subdir.name, 'theme.json');
-        try {
-          await fsp.access(subThemeJson);
-          const subPath = path.join(installPath, subdir.name);
-          const subEntries = await fsp.readdir(subPath);
-          for (const entry of subEntries) {
-            await fsp.rename(
-              path.join(subPath, entry),
-              path.join(installPath, entry)
-            );
-          }
-          await fsp.rmdir(subPath);
-          break;
-        } catch {
-          continue;
-        }
-      }
-    }
-
-    // Update index
-    const index = await readIndex(dataDir);
-    index.themes = index.themes.filter(t => t.id !== themeId);
-    index.themes.push({
-      id: themeId,
-      version: manifest.version,
-      installedAt: new Date().toISOString(),
-      source: 'file',
-      sourceUrl: null,
-      registrySource: null,
-      signatureVerified: false,
-    });
-    await writeIndex(index, dataDir);
-
-    console.log(`  ${c.green}Installed successfully${c.reset}`);
-    console.log(`  Theme: ${manifest.name} (${themeId}) v${manifest.version}`);
-    console.log(`  Path:  ${installPath}`);
-    console.log('');
-    return true;
-  } catch (err) {
-    // Clean up on failure
-    try { await fsp.rm(installPath, { recursive: true, force: true }); } catch { /* ignore */ }
-    console.log(`  ${c.red}Installation failed:${c.reset} ${err.message}`);
-    console.log('');
-    return false;
-  }
+  console.log(`  ${c.green}Installed successfully${c.reset}`);
+  console.log(`  Theme: ${result.manifest.name} (${result.manifest.id}) v${result.manifest.version}`);
+  console.log(`  Path:  ${result.installPath}`);
+  printWarnings(result.validation, '  ');
+  console.log('');
+  return true;
 }
 
 /**
  * Uninstall a theme bundle
  */
 async function uninstallTheme(themeId, dataDir) {
-  const themesDir = getThemesDir(dataDir);
-  const installPath = path.join(themesDir, themeId);
+  const installPath = installPathFor(themeId, dataDir);
 
   console.log(`\n${c.bold}Uninstalling theme:${c.reset} ${themeId}\n`);
 
   // Check if theme exists
   try {
+    if (!installPath) throw new Error('not a theme id');
     await fsp.access(installPath);
   } catch {
     console.log(`  ${c.red}Theme "${themeId}" not found.${c.reset}`);
@@ -359,32 +311,35 @@ async function uninstallTheme(themeId, dataDir) {
 }
 
 /**
- * Export a theme as .qtap-theme bundle
+ * Export an installed theme as a .qtap-theme bundle. The installed directory
+ * is validated first; a theme made for an earlier Quilltap is refused.
  */
 async function exportTheme(themeId, outputPath, dataDir) {
   const themesDir = getThemesDir(dataDir);
-  const themePath = path.join(themesDir, themeId);
+  const themePath = installPathFor(themeId, dataDir);
 
   console.log(`\n${c.bold}Exporting theme:${c.reset} ${themeId}\n`);
 
-  // Check if theme exists
   try {
+    if (!themePath) throw new Error('not a theme id');
     await fsp.access(path.join(themePath, 'theme.json'));
   } catch {
     console.log(`  ${c.red}Theme "${themeId}" not found in ${themesDir}.${c.reset}`);
-    console.log(`  ${c.dim}Note: Only installed bundle themes can be exported from the CLI.${c.reset}`);
-    console.log(`  ${c.dim}To export plugin themes, use the web UI export button.${c.reset}`);
     console.log('');
     return false;
   }
 
-  // Default output path
-  const finalOutput = outputPath || `${themeId}.qtap-theme`;
-  const resolvedOutput = path.resolve(finalOutput);
+  const validation = await engine.validateThemeDirectory(themePath);
+  if (!validation.valid) {
+    console.log(`  ${c.red}Not exported:${c.reset}`);
+    printProblems(validation, '    ');
+    console.log('');
+    return false;
+  }
 
-  // Create zip
+  const resolvedOutput = path.resolve(outputPath || `${themeId}.qtap-theme`);
   try {
-    execSync(`cd "${themePath}" && zip -r "${resolvedOutput}" .`, { stdio: 'pipe' });
+    await engine.packThemeDirectory(themePath, resolvedOutput);
     console.log(`  ${c.green}Exported successfully${c.reset}`);
     console.log(`  Output: ${resolvedOutput}`);
     console.log('');
@@ -759,67 +714,21 @@ async function updateThemes(themeId, dataDir) {
       console.log(`${c.green}OK${c.reset}`);
       process.stdout.write(`    Installing... `);
 
-      // Use existing install logic
-      const validation = await validateThemeBundle(tmpFile);
-      if (!validation.valid || !validation.manifest) {
-        console.log(`${c.red}validation failed${c.reset}`);
-        await fsp.unlink(tmpFile).catch(() => {});
-        continue;
-      }
-
-      const manifest = validation.manifest;
-      const themesDir = getThemesDir(dataDir);
-      const installPath = path.join(themesDir, installed.id);
-
-      await fsp.rm(installPath, { recursive: true, force: true });
-      await fsp.mkdir(installPath, { recursive: true });
-      await extractZipToDir(tmpFile, installPath);
-
-      // Handle subdirectory layout
-      const directThemeJson = path.join(installPath, 'theme.json');
-      try {
-        await fsp.access(directThemeJson);
-      } catch {
-        const entries = await fsp.readdir(installPath, { withFileTypes: true });
-        const subdirs = entries.filter(e => e.isDirectory());
-        for (const subdir of subdirs) {
-          const subThemeJson = path.join(installPath, subdir.name, 'theme.json');
-          try {
-            await fsp.access(subThemeJson);
-            const subPath = path.join(installPath, subdir.name);
-            const subEntries = await fsp.readdir(subPath);
-            for (const entry of subEntries) {
-              await fsp.rename(
-                path.join(subPath, entry),
-                path.join(installPath, entry)
-              );
-            }
-            await fsp.rmdir(subPath);
-            break;
-          } catch {
-            continue;
-          }
-        }
-      }
-
-      // Update index entry
-      const currentIndex = await readIndex(dataDir);
-      currentIndex.themes = currentIndex.themes.filter(t => t.id !== installed.id);
-      currentIndex.themes.push({
-        id: installed.id,
-        version: manifest.version,
-        installedAt: new Date().toISOString(),
+      const result = await installBundleFile(tmpFile, dataDir, {
         source: 'registry',
         sourceUrl: available.downloadUrl,
         registrySource: available._registry,
-        signatureVerified: false,
       });
-      await writeIndex(currentIndex, dataDir);
+      await fsp.unlink(tmpFile).catch(() => {});
+      if (!result.ok) {
+        console.log(`${c.red}${result.error || 'validation failed'}${c.reset}`);
+        if (!result.error) printProblems(result.validation, '      ');
+        console.log('');
+        continue;
+      }
+      const manifest = result.manifest;
 
       console.log(`${c.green}OK${c.reset} (v${manifest.version})`);
-
-      // Clean up temp file
-      await fsp.unlink(tmpFile).catch(() => {});
     } catch (err) {
       console.log(`${c.red}${err.message}${c.reset}`);
     }
@@ -1040,6 +949,47 @@ ${c.bold}For Registry Operators:${c.reset}
   }
 }
 
+/**
+ * Create a blank theme bundle in ./<id>/, the id derived from the name as
+ * the Atelier derives one. The files are the engine's blank bundle, the same
+ * a new draft in the Atelier starts from. Refuses a directory that exists.
+ */
+async function createTheme(name, cwd = process.cwd()) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    console.error('Error: create requires a theme name');
+    console.error('Usage: quilltap themes create <name>');
+    return false;
+  }
+  const id = engine.themeIdFromName(trimmed);
+  const dir = path.join(cwd, id);
+  const relDir = `./${id}`;
+
+  try {
+    await fsp.mkdir(dir);
+  } catch (err) {
+    if (err.code === 'EEXIST') {
+      console.error(`${c.red}Error:${c.reset} ${relDir} already exists; choose another name or move it aside.`);
+    } else {
+      console.error(`${c.red}Error:${c.reset} could not create ${relDir}: ${err.message}`);
+    }
+    return false;
+  }
+
+  for (const file of engine.blankThemeBundle({ id, name: trimmed })) {
+    await fsp.writeFile(path.join(dir, file.path), file.text, 'utf-8');
+  }
+
+  console.log(`\n${c.green}Created${c.reset} ${c.bold}${trimmed}${c.reset} in ${relDir}\n`);
+  console.log(`${c.bold}Next steps:${c.reset}`);
+  console.log(`  1. Check it:  quilltap themes validate ${relDir}`);
+  console.log(`  2. Pack it:   cd ${id} && zip -r ../${id}.qtap-theme . && cd ..`);
+  console.log(`  3. Open ${id}.qtap-theme in the Atelier (/calliope → "Open a theme file")`);
+  console.log('     and carry on there.');
+  console.log('');
+  return true;
+}
+
 // ============================================================================
 // HELP
 // ============================================================================
@@ -1054,9 +1004,9 @@ ${c.bold}Commands:${c.reset}
   list                         List installed theme bundles
   install <file>               Install a .qtap-theme bundle
   uninstall <id>               Uninstall a theme bundle
-  validate <file>              Validate a .qtap-theme file
+  validate <file|dir>          Validate a .qtap-theme file or a bundle directory
   export <id> [--output <path>]  Export a theme as .qtap-theme
-  create <name>                Create a new theme (delegates to create-quilltap-theme)
+  create <name>                Create a blank theme bundle in ./<id>/
   search <query>               Search across registries for themes
   update [id]                  Update one or all themes from registry
 
@@ -1080,6 +1030,7 @@ ${c.bold}Options:${c.reset}
 ${c.bold}Examples:${c.reset}
   quilltap themes list
   quilltap themes validate my-theme.qtap-theme
+  quilltap themes validate ./my-theme/
   quilltap themes install my-theme.qtap-theme
   quilltap themes uninstall my-theme
   quilltap themes export my-theme --output ./my-theme.qtap-theme
@@ -1159,8 +1110,8 @@ async function themesCommand(args) {
 
     case 'validate': {
       if (positional.length === 0) {
-        console.error('Error: validate requires a file path');
-        console.error('Usage: quilltap themes validate <file.qtap-theme>');
+        console.error('Error: validate requires a file or directory path');
+        console.error('Usage: quilltap themes validate <file.qtap-theme | bundle-dir>');
         process.exit(1);
       }
       const isValid = await validateTheme(positional[0]);
@@ -1202,17 +1153,13 @@ async function themesCommand(args) {
     }
 
     case 'create': {
-      // Delegate to create-quilltap-theme
-      const createArgs = positional.join(' ');
-      console.log(`\nDelegating to create-quilltap-theme...\n`);
-      try {
-        execSync(`npx create-quilltap-theme ${createArgs}`, {
-          stdio: 'inherit',
-          cwd: process.cwd(),
-        });
-      } catch {
+      if (positional.length === 0) {
+        console.error('Error: create requires a theme name');
+        console.error('Usage: quilltap themes create <name>');
         process.exit(1);
       }
+      const created = await createTheme(positional.join(' '));
+      process.exit(created ? 0 : 1);
       break;
     }
 
@@ -1236,4 +1183,4 @@ async function themesCommand(args) {
   }
 }
 
-module.exports = { themesCommand };
+module.exports = { themesCommand, createTheme };

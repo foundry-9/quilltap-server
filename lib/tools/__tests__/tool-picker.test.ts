@@ -15,6 +15,7 @@ const everything: ToolAvailabilityContext = {
   canDressThemselves: true,
   canCreateOutfits: true,
   canManageInventory: true,
+  canEditMemories: true,
 }
 
 const listed = (id: string) => BUILT_IN_TOOL_PICKER[id] as ListedToolPickerEntry

@@ -43,6 +43,7 @@ const BUILT_IN_CATEGORY_GROUPS: Record<string, string> = {
   photos: 'Photo Albums',
   wardrobe: 'Wardrobe',
   inventory: 'Inventory',
+  memory: 'The Commonplace Book',
   pascal: "Pascal's Custom Tools",
   log: 'The Log',
   shell: 'Workspace',

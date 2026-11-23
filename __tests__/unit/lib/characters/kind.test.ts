@@ -52,8 +52,8 @@ describe('character kind', () => {
   })
 
   it('derives the policy for each kind', () => {
-    expect(kindPolicy('roleplay')).toEqual({ kind: 'roleplay', agentFlavor: 'in-character', toolRules: 'roleplay', generatorDirection: 'stakes' })
-    expect(kindPolicy('assistant')).toEqual({ kind: 'assistant', agentFlavor: 'research', toolRules: 'assistant', generatorDirection: 'task' })
+    expect(kindPolicy('roleplay')).toEqual({ kind: 'roleplay', agentFlavor: 'in-character', toolRules: 'roleplay', generatorDirection: 'stakes', storySection: true })
+    expect(kindPolicy('assistant')).toEqual({ kind: 'assistant', agentFlavor: 'research', toolRules: 'assistant', generatorDirection: 'task', storySection: false })
   })
 
   it('derives a character\'s policy, defaulting to roleplay', () => {

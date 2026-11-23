@@ -24,9 +24,10 @@ jest.mock('@/lib/api/responses', () => ({
   serverError: (msg: string) => ({ status: 500, msg }),
 }))
 
-jest.mock('@/lib/logger', () => ({
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
-}))
+jest.mock('@/lib/logger', () => {
+  const log = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
+  return { logger: { ...log, child: jest.fn(() => log) } }
+})
 
 const publishRealtime = jest.fn()
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: (...args: unknown[]) => publishRealtime(...args) }))
@@ -39,7 +40,7 @@ const CHAR = 'char-1'
 const PROMPT_ID = '11111111-1111-4111-8111-111111111111'
 const SCENARIO_ID = '22222222-2222-4222-8222-222222222222'
 const params = (extra: Record<string, string> = {}) => ({ params: Promise.resolve({ id: CHAR, ...extra }) })
-const req = (body?: unknown, url = 'https://x.test/') => ({ url, json: jest.fn().mockResolvedValue(body) }) as any
+const req = (body?: unknown, url = 'https://x.test/') => ({ url, nextUrl: new URL(url), json: jest.fn().mockResolvedValue(body) }) as any
 
 beforeEach(() => {
   jest.clearAllMocks()

@@ -30,6 +30,8 @@ import ChatGalleryImageViewModal from '@/components/chat/ChatGalleryImageViewMod
 import { SaveImageDialog } from '@/app/salon/[id]/components/SaveImageDialog'
 import ImageDetailModal from './ImageDetailModal'
 import DeletedImagePlaceholder from './DeletedImagePlaceholder'
+import { UncensoredBadge } from './UncensoredBadge'
+import type { GenerationModeration } from '@/lib/schemas/file.types'
 
 interface GalleryImage {
   id: string
@@ -47,6 +49,8 @@ interface GalleryImage {
     tagType: string
     tagId: string
   }>
+  /** Set when an uncensored profile drew it; drives the Uncensored badge. */
+  generationModeration?: GenerationModeration | null
 }
 
 type BaseGalleryProps = {
@@ -185,6 +189,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
           size: entry.fileSizeBytes || 0,
           createdAt: entry.keptAt,
           tags: [],
+          generationModeration: entry.generationModeration ?? null,
         })),
       )
     } catch (error) {
@@ -364,9 +369,14 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
             className="w-full h-full object-cover"
             onError={() => setMissingImages((prev) => new Set(prev).add(entry.id))}
           />
-          {entry.isCurrent && (
-            <span className="absolute top-1 left-1 qt-bg-success qt-text-on-success text-xs px-1.5 py-0.5 rounded font-medium">
-              current
+          {(entry.isCurrent || entry.generationModeration) && (
+            <span className="absolute top-1 left-1 flex flex-col items-start gap-1">
+              {entry.isCurrent && (
+                <span className="qt-bg-success qt-text-on-success text-xs px-1.5 py-0.5 rounded font-medium">
+                  current
+                </span>
+              )}
+              <UncensoredBadge moderation={entry.generationModeration} />
             </span>
           )}
         </button>
@@ -441,12 +451,15 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
             className="w-full h-full absolute inset-0 !p-2"
           />
         ) : (
-          <img
-            src={src}
-            alt={image.filename}
-            className="w-full h-full object-cover"
-            onError={() => setMissingImages((prev) => new Set(prev).add(image.id))}
-          />
+          <>
+            <img
+              src={src}
+              alt={image.filename}
+              className="w-full h-full object-cover"
+              onError={() => setMissingImages((prev) => new Set(prev).add(image.id))}
+            />
+            <UncensoredBadge moderation={image.generationModeration} className="absolute top-1 left-1" />
+          </>
         )}
       </Container>
     )

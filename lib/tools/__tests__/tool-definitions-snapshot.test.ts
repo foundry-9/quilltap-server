@@ -59,9 +59,20 @@ import { runCustomToolDefinition } from '../run-custom-tool'
 import { editCustomToolToolDefinition } from '../edit-custom-tool-tool'
 import { runSqlToolDefinition } from '../run-sql-tool'
 import { lookupCharacterToolDefinition } from '../lookup-character-tool'
+import { findDocumentsToolDefinition } from '../find-documents-tool'
+import { listDocumentsToolDefinition } from '../list-documents-tool'
+import { lookupConversationsToolDefinition } from '../lookup-conversations-tool'
+import { lookupGroupToolDefinition, lookupProjectToolDefinition } from '../lookup-group-tool'
+import { lookupAtlasToolDefinition, lookupWardrobeToolDefinition } from '../lookup-wardrobe-tool'
+import { lookupChatStateToolDefinition } from '../lookup-chat-state-tool'
 import { lookupMemoriesToolDefinition } from '../lookup-memories-tool'
 import { lookupMessagesToolDefinition } from '../lookup-messages-tool'
 import { readMessagesToolDefinition } from '../read-messages-tool'
+import { themeReadDraftToolDefinition } from '../theme-read-draft-tool'
+import { themeLookupTokensToolDefinition } from '../theme-lookup-tokens-tool'
+import { themeLookupHooksToolDefinition } from '../theme-lookup-hooks-tool'
+import { themeCheckContrastToolDefinition } from '../theme-check-contrast-tool'
+import { themeProposeToolDefinition } from '../theme-propose-tool'
 import {
   searchScriptoriumToolDefinition,
   searchScriptoriumBrahmaToolDefinition,
@@ -84,6 +95,8 @@ import { wardrobeRollbackToolDefinition } from '../wardrobe-rollback-tool'
 import { wardrobeHistoryToolDefinition } from '../wardrobe-history-tool'
 import { inventoryListToolDefinition } from '../inventory-list-tool'
 import { inventoryReadToolDefinition } from '../inventory-read-tool'
+import { readMemoryToolDefinition } from '../read-memory-tool'
+import { editMemoryToolDefinition } from '../edit-memory-tool'
 import { inventoryEquipToolDefinition } from '../inventory-equip-tool'
 import { inventoryUnequipToolDefinition } from '../inventory-unequip-tool'
 import { inventoryPickUpToolDefinition } from '../inventory-pick-up-tool'
@@ -130,6 +143,8 @@ const ALL_TOOLS = {
   imageGeneration: imageGenerationToolDefinition,
   inventoryList: inventoryListToolDefinition,
   inventoryRead: inventoryReadToolDefinition,
+  readMemory: readMemoryToolDefinition,
+  editMemory: editMemoryToolDefinition,
   inventoryEquip: inventoryEquipToolDefinition,
   inventoryUnequip: inventoryUnequipToolDefinition,
   inventoryPickUp: inventoryPickUpToolDefinition,
@@ -157,6 +172,19 @@ const ALL_TOOLS = {
   lookupMemories: lookupMemoriesToolDefinition,
   lookupMessages: lookupMessagesToolDefinition,
   readMessages: readMessagesToolDefinition,
+  findDocuments: findDocumentsToolDefinition,
+  listDocuments: listDocumentsToolDefinition,
+  lookupConversations: lookupConversationsToolDefinition,
+  lookupGroup: lookupGroupToolDefinition,
+  lookupProject: lookupProjectToolDefinition,
+  lookupWardrobe: lookupWardrobeToolDefinition,
+  lookupAtlas: lookupAtlasToolDefinition,
+  lookupChatState: lookupChatStateToolDefinition,
+  themeReadDraft: themeReadDraftToolDefinition,
+  themeLookupTokens: themeLookupTokensToolDefinition,
+  themeLookupHooks: themeLookupHooksToolDefinition,
+  themeCheckContrast: themeCheckContrastToolDefinition,
+  themePropose: themeProposeToolDefinition,
   searchScriptorium: searchScriptoriumToolDefinition,
   searchScriptoriumBrahma: searchScriptoriumBrahmaToolDefinition,
   searchScriptoriumScenario: searchScriptoriumScenarioToolDefinition,

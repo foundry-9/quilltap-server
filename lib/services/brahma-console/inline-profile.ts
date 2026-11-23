@@ -13,7 +13,8 @@
  * the next step with a warning — a deleted profile never leaves Brahma mute.
  *
  * The standalone Brahma Console does not come through here: it has its own
- * per-chat picker (`resolveBrahmaConnectionProfile`).
+ * per-chat picker (`resolveBrahmaConnectionProfile`). The Atlas's lore wizard
+ * does, by project (`resolveBrahmaConnectionProfileForProject`).
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
@@ -52,7 +53,6 @@ export async function resolveInlineBrahmaConnectionProfile(
   userId: string,
   chatId: string,
 ): Promise<ConnectionProfile | null> {
-  // 1. Project override
   let projectId: string | null = null
   try {
     const chat = await repos.chats.findById(chatId)
@@ -63,21 +63,35 @@ export async function resolveInlineBrahmaConnectionProfile(
       error: error instanceof Error ? error.message : String(error),
     })
   }
+  return resolveBrahmaConnectionProfileForProject(repos, userId, projectId, { chatId })
+}
 
+/**
+ * The same order for a surface that has a project (or none) rather than a
+ * chat — the Atlas's "new entry from lore" wizard. Returns null only when the
+ * user has no profiles at all.
+ */
+export async function resolveBrahmaConnectionProfileForProject(
+  repos: Repos,
+  userId: string,
+  projectId: string | null,
+  context: Record<string, unknown> = {},
+): Promise<ConnectionProfile | null> {
+  // 1. Project override
   if (projectId) {
     try {
       const project = await repos.projects.findById(projectId)
       const projectProfileId = project?.brahmaConnectionProfileId ?? null
       if (projectProfileId) {
-        const profile = await findConfiguredProfile(repos, userId, projectProfileId, 'project', { chatId, projectId })
+        const profile = await findConfiguredProfile(repos, userId, projectProfileId, 'project', { ...context, projectId })
         if (profile) {
-          logger.debug('Inline Brahma using project connection profile', { chatId, projectId, profileId: profile.id })
+          logger.debug('Brahma using project connection profile', { ...context, projectId, profileId: profile.id })
           return profile
         }
       }
     } catch (error) {
-      logger.warn('Could not read project for inline Brahma profile resolution; skipping project override', {
-        chatId,
+      logger.warn('Could not read project for Brahma profile resolution; skipping project override', {
+        ...context,
         projectId,
         error: error instanceof Error ? error.message : String(error),
       })
@@ -91,20 +105,20 @@ export async function resolveInlineBrahmaConnectionProfile(
     globalProfileId = settings.inlineConnectionProfileId ?? null
   } catch (error) {
     logger.warn('Could not read Brahma Console settings; skipping global inline profile', {
-      chatId,
+      ...context,
       error: error instanceof Error ? error.message : String(error),
     })
   }
   if (globalProfileId) {
-    const profile = await findConfiguredProfile(repos, userId, globalProfileId, 'global', { chatId })
+    const profile = await findConfiguredProfile(repos, userId, globalProfileId, 'global', context)
     if (profile) {
-      logger.debug('Inline Brahma using global connection profile', { chatId, profileId: profile.id })
+      logger.debug('Brahma using global connection profile', { ...context, profileId: profile.id })
       return profile
     }
   }
 
   // 3. The user's default profile
   const fallback = await repos.connections.findDefault(userId)
-  logger.debug('Inline Brahma using default connection profile', { chatId, profileId: fallback?.id ?? null })
+  logger.debug('Brahma using default connection profile', { ...context, profileId: fallback?.id ?? null })
   return fallback
 }

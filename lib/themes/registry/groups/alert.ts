@@ -1,0 +1,120 @@
+/**
+ * Theme token registry — Alert.
+ *
+ * Generated into app/styles/qt-components/_variables.css by
+ * `npm run generate:theme-variables`; edit here, not there.
+ */
+
+import type { TokenDef } from '../types';
+
+export const ALERT_TOKENS: readonly TokenDef[] = [
+  {
+    name: "--qt-alert-success-bg",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert success background",
+    descriptionDark: "Alert tokens — lifted brightness for dark backgrounds",
+    default: "color-mix(in srgb, var(--theme-status-success) var(--theme-status-tint), transparent)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-success-fg",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert success text colour",
+    default: "var(--theme-status-success-foreground)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-success-border",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert success border",
+    default: "color-mix(in srgb, var(--theme-status-success) var(--theme-status-edge), transparent)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-warning-bg",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert warning background",
+    default: "color-mix(in srgb, var(--theme-status-warning) var(--theme-status-tint), transparent)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-warning-fg",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert warning text colour",
+    default: "var(--theme-status-warning-foreground)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-warning-border",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert warning border",
+    default: "color-mix(in srgb, var(--theme-status-warning) var(--theme-status-edge), transparent)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-error-bg",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert error background",
+    default: "color-mix(in srgb, var(--theme-status-danger) var(--theme-status-tint), transparent)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-error-fg",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert error text colour",
+    default: "var(--theme-status-danger-foreground)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-error-border",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert error border",
+    default: "color-mix(in srgb, var(--theme-status-danger) var(--theme-status-edge), transparent)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-info-bg",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert info background",
+    default: "color-mix(in srgb, var(--theme-status-info) var(--theme-status-tint), transparent)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-info-fg",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert info text colour",
+    default: "var(--theme-status-info-foreground)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-alert-info-border",
+    tier: 'component',
+    type: 'color',
+    group: 'alert',
+    label: "Alert info border",
+    default: "color-mix(in srgb, var(--theme-status-info) var(--theme-status-edge), transparent)",
+    visibility: 'standard',
+  },
+];

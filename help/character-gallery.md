@@ -20,6 +20,7 @@ The character's pre-existing portrait — the one you set as their avatar at cha
 - **Download a photograph** — hover over any thumbnail and click the downward arrow. The picture is handed to you as a proper file: a native save dialog in the desktop application, your browser's customary arrangements otherwise. No right-clicking required, which matters a great deal in the desktop shell, where right-clicking offers nothing at all. The same **Download** button (with **Copy**, beside it) sits at the top right of the enlarged view when you click a thumbnail.
 - **Delete a photograph** — hover and click the bin, then click it again to confirm. The link is severed; if your character's album was the last place holding a hand on those bytes, the bytes themselves are garbage-collected. (If another character's album, a chat attachment, your own *My Photos* gallery, or any other link still points at the picture, the bytes stay where they are.)
 - **Zoom in and out** with the magnifier controls to make the thumbnails larger or smaller.
+- **Spot an uncensored picture** — any photograph, avatar roll or wardrobe picture that an uncensored image provider painted wears a small red **Uncensored** badge in its top-left corner (below the **Avatar** badge, where there is one). Hover over it to learn how it came to the uncensored desk; the Concierge's help page has the particulars.
 
 ## Avatar Rolls — the plates the house has already developed
 
@@ -36,6 +37,8 @@ Each plate carries the same four courtesies the album offers, plus one of its ow
 - **View** — click the plate itself for the enlarged view, with its generation prompt, **Copy**, **Download**, and **Save to my gallery** (which files it in your own *My Photos* collection rather than the character's album).
 
 Avatar rolls do not appear in the album above unless you put them there. The album is what someone chose to keep; this drawer is what the house had to draw along the way.
+
+With [Dynamic Backgrounds](dynamic-backgrounds.md) switched on (Settings → Appearance), these plates are also what papers the character's page: once a character has three or more, a changing collage of them hangs behind it.
 
 ## Wardrobe Pictures — likenesses of every garment within reach
 

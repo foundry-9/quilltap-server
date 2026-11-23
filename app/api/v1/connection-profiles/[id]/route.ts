@@ -10,14 +10,14 @@
  * POST /api/v1/connection-profiles/[id]?action=auto-configure - Auto-configure profile settings
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createContextParamsHandler, RequestContext, resolveEditorTags } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, badRequest, serverError, conflict, successResponse } from '@/lib/api/responses';
+import { notFound, forbidden, badRequest, serverError, conflict, successResponse, created } from '@/lib/api/responses';
 import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
-import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
+import { autoConfigureProfile, profileUpdateFromAutoConfigure } from '@/lib/services/auto-configure.service';
 import {
   ConnectionProfileUpdateSchema,
   applyCourierForcing,
@@ -177,9 +177,11 @@ export const PUT = createContextParamsHandler<{ id: string }>(
 /**
  * DELETE /api/v1/connection-profiles/[id] - Delete a profile
  */
+// No actions on DELETE: an unknown `?action=` is a 400, never a deleted profile.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id }) => {
-    try {// Verify ownership
+  async (req, { user, repos }, { id }) => dispatchAction(req, {}, async () => {
+    try {
+      // Verify ownership
       const existingProfile = await repos.connections.findById(id);
 
       if (!existingProfile) {
@@ -191,12 +193,12 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
 
       logger.info('[Connection Profiles v1] Profile deleted', { profileId: id });
 
-      return NextResponse.json({ success: true });
+      return successResponse({ success: true });
     } catch (error) {
       logger.error('[Connection Profiles v1] Error deleting profile', { profileId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete connection profile');
     }
-  }
+  })
 );
 
 /**
@@ -229,7 +231,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
           tagId: validatedData.tagId,
         });
 
-        return NextResponse.json({ success: true, tag }, { status: 201 });
+        return created({ success: true, tag });
       },
       'remove-tag': async () => {
         const body = await req.json();
@@ -243,27 +245,21 @@ export const POST = createContextParamsHandler<{ id: string }>(
           tagId: validatedData.tagId,
         });
 
-        return NextResponse.json({ success: true });
+        return successResponse({ success: true });
       },
       'auto-configure': async () => {
         try {
-          // Call auto-configure service
-          const result = await autoConfigureProfile(profile.provider, profile.modelName, user.id);
-
-          // Merge result into profile
-          const existingParams = typeof profile.parameters === 'string' ? JSON.parse(profile.parameters) : (profile.parameters || {});
-          const updateData: Record<string, unknown> = {
-            maxContext: result.maxContext,
-            maxTokens: result.maxTokens,
-            modelClass: result.modelClass,
-            isDangerousCompatible: result.isDangerousCompatible,
-            parameters: {
-              ...existingParams,
-              temperature: result.temperature,
-              max_tokens: result.maxTokens,
-              top_p: result.topP,
+          const result = await autoConfigureProfile(
+            {
+              provider: profile.provider,
+              modelName: profile.modelName,
+              baseUrl: profile.baseUrl,
+              apiKeyId: profile.apiKeyId,
             },
-          };
+            user.id
+          );
+
+          const updateData = profileUpdateFromAutoConfigure(profile, result);
 
           // Update the profile
           const updatedProfile = await repos.connections.update(id, updateData);
@@ -286,10 +282,13 @@ export const POST = createContextParamsHandler<{ id: string }>(
               topP: result.topP,
               modelClass: result.modelClass,
               isDangerousCompatible: result.isDangerousCompatible,
+              supportsTools: result.supportsTools,
+              supportsImages: result.supportsImages,
+              pseudoToolMode: updateData.pseudoToolMode ?? null,
             },
           });
 
-          return NextResponse.json({ profile: enrichedProfile, autoConfigureResult: result }, { status: 200 });
+          return successResponse({ profile: enrichedProfile, autoConfigureResult: result });
         } catch (error) {
           logger.error('[Connection Profiles v1] Error auto-configuring profile', { profileId: id }, error instanceof Error ? error : undefined);
           return serverError(error instanceof Error ? error.message : 'Failed to auto-configure connection profile');

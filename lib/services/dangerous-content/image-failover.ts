@@ -40,6 +40,7 @@ import { getErrorMessage } from '@/lib/error-utils'
 import { classifyFallbackTrigger } from '@/lib/llm/fallback'
 import type { RouteAttempt, RouteAttemptVia } from '@/lib/schemas/chat.types'
 import type { ImageProfile } from '@/lib/schemas/types'
+import type { GenerationModeration } from '@/lib/schemas/file.types'
 import type { ResolvedConciergePolicy } from './resolver.service'
 import {
   postConciergeRefusalAnnouncement,
@@ -49,7 +50,7 @@ import { conciergeStateMayFailOver, getConciergeState, type ConciergeState } fro
 import { readCurrentConciergeOnDuty, readCurrentConciergeState } from './current-state'
 import { classifyRefusal, type RefusalVerdict } from './refusal'
 import { recordModerationRefusal } from './refusal-ledger'
-import { resolveUncensoredImageUnderstudy } from './understudy'
+import { isUncensoredImageProfile, resolveUncensoredImageUnderstudy } from './understudy'
 
 const logger = createServiceLogger('ConciergeImageFailover')
 
@@ -59,6 +60,8 @@ export interface FailoverProfile {
   name: string
   provider: string
   modelName: string
+  /** Marked uncensored-compatible; read by `generationModerationOf`. */
+  isDangerousCompatible?: boolean | null
 }
 
 export interface ImageFailoverContext<P extends FailoverProfile = ImageProfile> {
@@ -105,6 +108,29 @@ export interface ImageFailoverOutcome<T, P extends FailoverProfile = ImageProfil
   rerouted: boolean
   /** Empty when the primary answered first time; otherwise ends with the answering row. */
   trail: RouteAttempt[]
+  /**
+   * How the answering profile came to draw it, moderation-wise — what a
+   * generated picture's `files.generationModeration` records.
+   */
+  moderation: GenerationModeration
+}
+
+/**
+ * The moderation record for a picture: the failover's understudy, a profile
+ * the Concierge sent the call to before it ran (`primaryVia: 'concierge'`), a
+ * profile that is itself uncensored, or an ordinary one. Pure; the one place
+ * the value is derived.
+ */
+export function generationModerationOf(args: {
+  answering: Pick<FailoverProfile, 'id' | 'isDangerousCompatible'>
+  rerouted: boolean
+  primaryVia: RouteAttemptVia
+  conciergePolicy: ResolvedConciergePolicy
+}): GenerationModeration {
+  if (args.rerouted) return 'uncensored-failover'
+  if (args.primaryVia === 'concierge') return 'uncensored-routed'
+  if (isUncensoredImageProfile(args.answering, args.conciergePolicy)) return 'uncensored-profile'
+  return 'moderated'
 }
 
 /** An error rethrown by the chokepoint, carrying what was tried. */
@@ -236,8 +262,14 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
   let primaryError: unknown
   try {
     const result = await attempt(primary.profile, primary.apiKey)
-    logger.debug('Image call answered first time', logContext)
-    return { result, profile: primary.profile, apiKey: primary.apiKey, rerouted: false, trail: [] }
+    const moderation = generationModerationOf({
+      answering: primary.profile,
+      rerouted: false,
+      primaryVia,
+      conciergePolicy: ctx.conciergePolicy,
+    })
+    logger.debug('Image call answered first time', { ...logContext, moderation })
+    return { result, profile: primary.profile, apiKey: primary.apiKey, rerouted: false, trail: [], moderation }
   } catch (error) {
     primaryError = error
   }
@@ -346,7 +378,14 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
       understudy.profile.name,
     )
     await ledger(ctx as ImageFailoverContext<FailoverProfile>, primary.profile, verdict, true)
-    return { result, profile: understudy.profile, apiKey: understudy.apiKey, rerouted: true, trail }
+    return {
+      result,
+      profile: understudy.profile,
+      apiKey: understudy.apiKey,
+      rerouted: true,
+      trail,
+      moderation: 'uncensored-failover',
+    }
   } catch (understudyError) {
     const understudyVerdict = classifyRefusal({ error: understudyError })
     trail.push(

@@ -5,6 +5,8 @@
 **Non-scope:** users' own prompt copies (never touched, as before); the committee-flavoured memories already in instances (§9); the Brahma Console, Help chat, Scenario Builder and other one-shot loops (they are not characters and stay on the research flavour); per-family Roleplay variants (decision D4).
 **Related:** [prompt-trust-and-anti-committee.md](prompt-trust-and-anti-committee.md) (the generator chokepoint and sample-prompt edit pattern this spec extends), [prompt-trust-the-probation.md](../prompt-trust-the-probation.md), [salon-inform](salon-inform.md) (the inform header, design of record), [prompt-person-consistency.md](prompt-person-consistency.md) (identity-stack versioning rules).
 
+> **Amended 2026-11-18** by [roleplay-character-latitude.md](../roleplay-character-latitude.md): `KindPolicy` gained `storySection`; rule 6 of the tool rules (recalling past events) now differs by kind, so only rules 1 to 5 are shared word for word; `generatorDirectionFor('roleplay')` and `kindDriftSignalFor('roleplay')` each carry a second passage; a roleplay Carina answerer is kind-aware; and the Brahma brief gained an accuracy sentence.
+
 ## 1. The problem
 
 On 2026-11-03, in the Friday instance, the operator wrote a scene in which Lyle Hoelscher, the county assessor, came to the Estate armed, forced his way through the mansion and drew his pistol on the way to the East Pool. Two chats cover it: `339af5b0-01fc-447e-aabb-de337daa3ee5` ("The Assessor at the Bronze Door") and its continuation `057d2128-af40-4382-9e1e-873d5f1deba9` ("No Quarter at the East Pool").

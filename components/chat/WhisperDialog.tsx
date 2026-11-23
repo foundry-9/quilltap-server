@@ -92,7 +92,7 @@ export function WhisperDialog({
       title={`Whisper to ${targetName}`}
       maxWidth="md"
       className="mx-4"
-      bodyClassName="qt-dialog-body"
+      bodyClassName="qt-dialog-body-default"
       footer={
         <>
           <button

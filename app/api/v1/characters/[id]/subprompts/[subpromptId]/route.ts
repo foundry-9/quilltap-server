@@ -12,6 +12,7 @@
 
 import { z } from 'zod';
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse, conflict, badRequest } from '@/lib/api/responses';
 import { publishRealtime } from '@/lib/realtime/bus';
@@ -99,8 +100,9 @@ export const PUT = createContextParamsHandler<Params>(
 );
 
 // DELETE /api/v1/characters/[id]/subprompts/[subpromptId]
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<Params>(
-  async (_request, { user, repos }, { id: characterId, subpromptId }) => {
+  withActionDispatch<Params>({}, async (_request, { user, repos }, { id: characterId, subpromptId }) => {
     if (!isValidSubpromptId(subpromptId)) {
       return badRequest('Invalid subprompt id');
     }
@@ -130,5 +132,5 @@ export const DELETE = createContextParamsHandler<Params>(
       logger.error('[Characters v1] Error deleting subprompt', { characterId, subpromptId }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete subprompt');
     }
-  }
+  })
 );

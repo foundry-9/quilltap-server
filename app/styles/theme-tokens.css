@@ -1,10 +1,10 @@
 /**
- * Tailwind token map — shared by the app and the theme-storybook generator.
+ * Tailwind token map — shared by the app and the qt-* layer compiler.
  *
- * Imported by app/globals.css, and by scripts/generate-storybook-css.mjs when
- * it compiles app/styles/qt-components/ into
- * packages/theme-storybook/src/css/qt-components.css. Keeping the map in one
- * file is what makes `@apply bg-accent` expand to the same declaration in both.
+ * Imported by app/globals.css, and by scripts/lib/qt-components-css.mjs when
+ * it compiles app/styles/qt-components/ in memory for Calliope's styled-by
+ * table. Keeping the map in one file is what makes `@apply bg-accent` expand
+ * to the same declaration in both.
  *
  * Holds only Tailwind configuration at-rules (`@variant`, `@theme inline`);
  * it emits no CSS of its own.

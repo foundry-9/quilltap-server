@@ -15,7 +15,7 @@
 import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
-import { dispatchAction } from '@/lib/api/middleware/actions';
+import { withActionDispatch, dispatchAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import type { ChatMetadata } from '@/lib/schemas/types';
@@ -357,8 +357,9 @@ export const POST = createContextParamsHandler<{ id: string }>(
     dispatchAction(req, { 'save-output': () => handleSaveOutput(req, context, id) })
 );
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
 export const DELETE = createContextParamsHandler<{ id: string }>(
-  async (req, context, { id }) => {
+  withActionDispatch<{ id: string }>({}, async (req, context, { id }) => {
     return handleDelete(req, context, id);
-  }
+  })
 );

@@ -1,0 +1,113 @@
+/**
+ * Theme token registry — Status palette (semantic tier).
+ *
+ * Generated into app/styles/_theme-defaults.css by
+ * `npm run generate:theme-variables`; edit here, not there.
+ */
+
+import type { TokenDef } from '../types';
+
+export const STATUS_PALETTE_TOKENS: readonly TokenDef[] = [
+  {
+    name: "--theme-status-tint",
+    tier: 'semantic',
+    type: 'opacity',
+    group: 'status-palette',
+    label: "Status fill strength",
+    description: "How strongly a status colour fills an alert background.",
+    default: "8%",
+    defaultDark: "15%",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-status-edge",
+    tier: 'semantic',
+    type: 'opacity',
+    group: 'status-palette',
+    label: "Status border strength",
+    description: "How strongly a status colour draws an alert border.",
+    default: "25%",
+    defaultDark: "40%",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-status-success",
+    tier: 'semantic',
+    type: 'color',
+    group: 'status-palette',
+    label: "Success alert colour",
+    default: "hsl(152 60% 38%)",
+    defaultDark: "hsl(152 55% 38%)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-status-success-foreground",
+    tier: 'semantic',
+    type: 'color',
+    group: 'status-palette',
+    label: "Success alert text",
+    default: "hsl(152 60% 28%)",
+    defaultDark: "hsl(152 55% 62%)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-status-warning",
+    tier: 'semantic',
+    type: 'color',
+    group: 'status-palette',
+    label: "Warning alert colour",
+    default: "hsl(38 90% 46%)",
+    defaultDark: "hsl(38 85% 50%)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-status-warning-foreground",
+    tier: 'semantic',
+    type: 'color',
+    group: 'status-palette',
+    label: "Warning alert text",
+    default: "hsl(38 90% 28%)",
+    defaultDark: "hsl(38 85% 68%)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-status-danger",
+    tier: 'semantic',
+    type: 'color',
+    group: 'status-palette',
+    label: "Danger alert colour",
+    default: "hsl(0 68% 50%)",
+    defaultDark: "hsl(0 60% 54%)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-status-danger-foreground",
+    tier: 'semantic',
+    type: 'color',
+    group: 'status-palette',
+    label: "Danger alert text",
+    default: "hsl(0 68% 35%)",
+    defaultDark: "hsl(0 60% 68%)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-status-info",
+    tier: 'semantic',
+    type: 'color',
+    group: 'status-palette',
+    label: "Info alert colour",
+    default: "hsl(210 75% 48%)",
+    defaultDark: "hsl(210 70% 55%)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-status-info-foreground",
+    tier: 'semantic',
+    type: 'color',
+    group: 'status-palette',
+    label: "Info alert text",
+    default: "hsl(210 75% 30%)",
+    defaultDark: "hsl(210 70% 68%)",
+    visibility: 'standard',
+  },
+];

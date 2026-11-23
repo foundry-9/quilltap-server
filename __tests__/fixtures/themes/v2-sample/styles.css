@@ -1,0 +1,33 @@
+/* Every scoping rule of Spec A 3.3 in one file. */
+:root {
+  --sample-glow: 0 0 6px var(--p-gold);
+}
+
+.dark .qt-card {
+  border-color: var(--p-gold);
+}
+
+body {
+  letter-spacing: 0.01em;
+}
+
+.qt-homepage-section::before {
+  content: "";
+  background-image: url("textures/paper.webp");
+  opacity: 0.2;
+}
+
+@keyframes glow {
+  from { box-shadow: none; }
+  to { box-shadow: var(--sample-glow); }
+}
+
+.qt-button-primary:hover {
+  animation: glow 1.2s ease-in-out infinite alternate;
+}
+
+@media (max-width: 640px) {
+  html .qt-card {
+    padding: 0.75rem;
+  }
+}

@@ -358,64 +358,81 @@
     transition: opacity 200ms ease;
   }
 
-  /**
-   * Queue badge idle state (count is 0)
-   */
-  .qt-queue-badge-idle {
-    opacity: var(--qt-queue-badge-idle-opacity);
-  }
-
-  /**
-   * Queue badge blip — work that started and finished between two polls never
-   * shows up as a count, so the badge pulses once to mark that it happened.
-   */
-  .qt-queue-badge-pulse {
-    animation: qt-queue-badge-blip 600ms ease-in-out 2;
-  }
-
-  @keyframes qt-queue-badge-blip {
-    0%, 100% { opacity: var(--qt-queue-badge-idle-opacity); }
-    50% { opacity: 1; }
-  }
 
   /**
    * Memory queue badge (blue)
    */
   .qt-queue-badge-memory {
-    background: var(--qt-queue-badge-memory-bg);
-    color: var(--qt-queue-badge-memory-fg);
+    --qt-queue-badge-current-bg: var(--qt-queue-badge-memory-bg);
+    --qt-queue-badge-current-fg: var(--qt-queue-badge-memory-fg);
+    background: var(--qt-queue-badge-current-bg);
+    color: var(--qt-queue-badge-current-fg);
   }
 
   /**
    * Embedding queue badge (purple)
    */
   .qt-queue-badge-embedding {
-    background: var(--qt-queue-badge-embedding-bg);
-    color: var(--qt-queue-badge-embedding-fg);
+    --qt-queue-badge-current-bg: var(--qt-queue-badge-embedding-bg);
+    --qt-queue-badge-current-fg: var(--qt-queue-badge-embedding-fg);
+    background: var(--qt-queue-badge-current-bg);
+    color: var(--qt-queue-badge-current-fg);
   }
 
   /**
    * Summarization queue badge (green)
    */
   .qt-queue-badge-summary {
-    background: var(--qt-queue-badge-summary-bg);
-    color: var(--qt-queue-badge-summary-fg);
+    --qt-queue-badge-current-bg: var(--qt-queue-badge-summary-bg);
+    --qt-queue-badge-current-fg: var(--qt-queue-badge-summary-fg);
+    background: var(--qt-queue-badge-current-bg);
+    color: var(--qt-queue-badge-current-fg);
   }
 
   /**
    * Danger classification queue badge (red)
    */
   .qt-queue-badge-danger {
-    background: var(--qt-queue-badge-danger-bg);
-    color: var(--qt-queue-badge-danger-fg);
+    --qt-queue-badge-current-bg: var(--qt-queue-badge-danger-bg);
+    --qt-queue-badge-current-fg: var(--qt-queue-badge-danger-fg);
+    background: var(--qt-queue-badge-current-bg);
+    color: var(--qt-queue-badge-current-fg);
   }
 
   /**
    * Story background queue badge (dark gray)
    */
   .qt-queue-badge-story {
-    background: var(--qt-queue-badge-story-bg);
-    color: var(--qt-queue-badge-story-fg);
+    --qt-queue-badge-current-bg: var(--qt-queue-badge-story-bg);
+    --qt-queue-badge-current-fg: var(--qt-queue-badge-story-fg);
+    background: var(--qt-queue-badge-current-bg);
+    color: var(--qt-queue-badge-current-fg);
+  }
+
+  /**
+   * Queue badge idle state (count is 0). Only the colour fades — to the
+   * idle-opacity share of the badge's own colour — and the label is set in
+   * the page's foreground, so "Mem 0" stays legible (WCAG 1.4.3). After the
+   * colour rules above so it wins at equal specificity.
+   */
+  .qt-queue-badge-idle {
+    background: color-mix(in srgb, var(--qt-queue-badge-current-bg) calc(var(--qt-queue-badge-idle-opacity) * 100%), transparent);
+    color: var(--color-foreground);
+  }
+
+  /**
+   * Queue badge blip — work that started and finished between two polls never
+   * shows up as a count, so the idle badge flashes its working colours twice.
+   */
+  .qt-queue-badge-pulse {
+    animation: qt-queue-badge-blip 600ms ease-in-out 2;
+  }
+
+  @keyframes qt-queue-badge-blip {
+    50% {
+      background: var(--qt-queue-badge-current-bg);
+      color: var(--qt-queue-badge-current-fg);
+    }
   }
 
   /* ==========================================================================
@@ -656,6 +673,245 @@
     border-radius: var(--qt-code-radius) var(--qt-code-radius) 0 0;
     background: var(--qt-code-bg);
   }
+
+  /* ==========================================================================
+     CODE EDITOR
+     components/code-editor/CodeEditor.tsx — one JSON or CSS file, highlighted,
+     with line numbers and problem markers. Gutter and text share one line
+     height, so a marker at line n sits at (n - 1) line heights.
+     ========================================================================== */
+
+  .qt-code-editor {
+    --qt-code-editor-line-height: 1.25rem;
+    --qt-code-editor-pad-y: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-radius: var(--qt-code-radius);
+    background: var(--qt-code-bg);
+    color: var(--qt-code-fg);
+    border: 1px solid var(--qt-code-border);
+    font-family: var(--qt-code-font);
+  }
+
+  .qt-code-editor:focus-within {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+  }
+
+  .qt-code-editor-scroll {
+    overflow: auto;
+    font-size: 0.8125rem;
+    line-height: var(--qt-code-editor-line-height);
+    border-radius: inherit;
+  }
+
+  .qt-code-editor-body {
+    display: flex;
+    min-width: max-content;
+    min-height: 100%;
+  }
+
+  .qt-code-editor-gutter {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    flex: none;
+    background: var(--qt-code-bg);
+    border-right: 1px solid var(--qt-code-border);
+    user-select: none;
+  }
+
+  .qt-code-editor-line-numbers {
+    margin: 0;
+    padding: var(--qt-code-editor-pad-y) 0.5rem var(--qt-code-editor-pad-y) 1.5rem;
+    min-width: 3.5rem;
+    text-align: right;
+    font: inherit;
+    line-height: var(--qt-code-editor-line-height);
+    color: var(--qt-code-token-comment);
+    white-space: pre;
+  }
+
+  .qt-code-editor-marker {
+    position: absolute;
+    left: 0.125rem;
+    top: calc(var(--qt-code-editor-pad-y) + var(--qt-code-editor-marker-line) * var(--qt-code-editor-line-height));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: var(--qt-code-editor-line-height);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .qt-code-editor-marker:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 0;
+  }
+
+  .qt-code-editor-marker-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex: none;
+  }
+
+  .qt-code-editor-marker-error,
+  .qt-code-editor-problem-error .qt-code-editor-marker-icon {
+    color: var(--color-destructive);
+  }
+
+  .qt-code-editor-marker-warning,
+  .qt-code-editor-problem-warning .qt-code-editor-marker-icon {
+    color: var(--color-warning);
+  }
+
+  .qt-code-editor-marker-info,
+  .qt-code-editor-problem-info .qt-code-editor-marker-icon {
+    color: var(--color-info);
+  }
+
+  /* The message beside a marker, on hover and on keyboard focus. */
+  .qt-code-editor-tooltip {
+    position: absolute;
+    left: 1.5rem;
+    top: 0;
+    z-index: 2;
+    display: none;
+    flex-direction: column;
+    gap: 0.125rem;
+    width: max-content;
+    max-width: 28rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-popover);
+    color: var(--color-popover-foreground);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    text-align: left;
+    white-space: normal;
+    box-shadow: var(--qt-popover-shadow);
+  }
+
+  .qt-code-editor-marker:hover .qt-code-editor-tooltip,
+  .qt-code-editor-marker:focus-visible .qt-code-editor-tooltip {
+    display: flex;
+  }
+
+  .qt-code-editor-text {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* A tint across a marked line, behind its text. */
+  .qt-code-editor-band {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(var(--qt-code-editor-pad-y) + var(--qt-code-editor-marker-line) * var(--qt-code-editor-line-height));
+    height: var(--qt-code-editor-line-height);
+    pointer-events: none;
+  }
+
+  .qt-code-editor-band-error {
+    background: color-mix(in srgb, var(--color-destructive) 12%, transparent);
+  }
+
+  .qt-code-editor-band-warning {
+    background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  }
+
+  .qt-code-editor-band-info {
+    background: color-mix(in srgb, var(--color-info) 10%, transparent);
+  }
+
+  .qt-code-editor-content {
+    position: relative;
+    min-height: 100%;
+    padding: var(--qt-code-editor-pad-y) 1rem var(--qt-code-editor-pad-y) 0.75rem;
+    outline: none;
+    caret-color: var(--qt-code-fg);
+    tab-size: 4;
+  }
+
+  .qt-code-editor-code {
+    display: block;
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    line-height: var(--qt-code-editor-line-height);
+    white-space: pre;
+    background: transparent;
+    color: inherit;
+  }
+
+  .qt-code-editor-problems {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin: 0;
+    padding: 0.375rem;
+    list-style: none;
+    border-top: 1px solid var(--qt-code-border);
+    max-height: 9rem;
+    overflow-y: auto;
+  }
+
+  .qt-code-editor-problem {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.25rem 0.375rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--qt-code-fg);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .qt-code-editor-problem .qt-code-editor-marker-icon {
+    align-self: center;
+  }
+
+  .qt-code-editor-problem:hover {
+    background: color-mix(in srgb, var(--qt-code-fg) 8%, transparent);
+  }
+
+  .qt-code-editor-problem:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
+  }
+
+  .qt-code-editor-problem-line {
+    flex: none;
+    font-family: var(--qt-code-font);
+    color: var(--qt-code-token-comment);
+  }
+
+  .qt-code-editor-problem-message {
+    min-width: 0;
+  }
+
+  /* Highlighted source: the --qt-code-token-* colours. */
+  .qt-code-token-comment { color: var(--qt-code-token-comment); font-style: italic; }
+  .qt-code-token-keyword { color: var(--qt-code-token-keyword); }
+  .qt-code-token-string { color: var(--qt-code-token-string); }
+  .qt-code-token-number { color: var(--qt-code-token-number); }
+  .qt-code-token-property { color: var(--qt-code-token-property); }
+  .qt-code-token-selector { color: var(--qt-code-token-selector); }
+  .qt-code-token-function { color: var(--qt-code-token-function); }
+  .qt-code-token-punctuation { color: var(--qt-code-token-punctuation); }
 
   /* ==========================================================================
      DIAGRAMS
@@ -1362,39 +1618,65 @@
   }
 
   /**
-   * Heading styles
+   * Heading styles. --qt-heading-font-weight / -letter-spacing /
+   * -text-transform / -color are optional hooks: unset, each level keeps
+   * the value written here as the fallback.
    */
   .qt-heading-1 {
-    @apply text-3xl font-bold tracking-tight;
+    @apply text-3xl;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 700);
+    letter-spacing: var(--qt-heading-letter-spacing, -0.025em);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   .qt-heading-2 {
-    @apply text-2xl font-semibold tracking-tight;
+    @apply text-2xl;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, -0.025em);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   .qt-heading-3 {
-    @apply text-xl font-semibold;
+    @apply text-xl;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, inherit);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   .qt-heading-4 {
-    @apply text-lg font-semibold;
+    @apply text-lg;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, inherit);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   /**
    * Size-name aliases — prefer the numbered variants above for precision
    */
   .qt-heading-lg {
-    @apply text-2xl font-semibold tracking-tight;
+    @apply text-2xl;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, -0.025em);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   .qt-heading-sm {
-    @apply text-lg font-semibold;
+    @apply text-lg;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, inherit);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   /**
@@ -2071,5 +2353,19 @@
   .qt-gallery-caption-detail {
     font-size: 0.625rem;
     opacity: 0.85;
+  }
+
+  /**
+   * Uncensored badge — laid over a gallery tile (and the gallery's large view)
+   * when an uncensored profile drew the picture (`files.generationModeration`).
+   * A solid fill, not a tint, because it sits on a photo; the destructive pair
+   * is the same red-and-ink the Concierge's Unmoderated pill speaks in.
+   */
+  .qt-uncensored-badge {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium leading-none;
+    background: var(--qt-uncensored-badge-bg, var(--color-destructive));
+    color: var(--qt-uncensored-badge-fg, var(--color-destructive-foreground));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    pointer-events: auto;
   }
 }

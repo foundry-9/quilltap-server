@@ -55,6 +55,11 @@ export interface TextBlockPromptOptions extends InventoryToolFlags {
   wardrobeUpdate?: boolean
   /** Enable wardrobe_archive tool */
   wardrobeArchive?: boolean
+  /**
+   * The research kit (lib/research/): `'documents'` documents find_documents
+   * and list_documents; `'full'` adds the record lookups.
+   */
+  researchKit?: 'off' | 'documents' | 'full'
 }
 
 /**
@@ -228,6 +233,34 @@ By name: [[UPDATE_WARDROBE_ITEM name="Rain Outfit" context="formal" /]]`)
 Retire an item you own — hidden from listings and no longer wearable, but a human can restore it. Only your own items can be archived.
 By id: [[ARCHIVE_WARDROBE_ITEM id="item-uuid" /]]
 By name: [[ARCHIVE_WARDROBE_ITEM title="Red Scarf" /]]`)
+  }
+
+  if (options.researchKit === 'documents' || options.researchKit === 'full') {
+    toolDocs.push(`
+### Find Documents
+Find files in every store you can reach by what they say (\`text\`, words or a "quoted phrase"), what they are called (\`name\`), or both. Narrow with \`store\` or \`folder\` only when the request names one. If it finds nothing, the text is not in any store; do not retry with small spelling changes.
+[[FIND_DOCUMENTS text="formal staff meetings" /]]
+[[FIND_DOCUMENTS name="blazer" store="character:Amy" /]]
+
+### List Documents
+With no arguments, the stores you can reach; with \`store\` (and \`folder\`), what that store holds.
+[[LIST_DOCUMENTS /]]
+[[LIST_DOCUMENTS store="Estate Papers" folder="Staff" /]]`)
+  }
+
+  if (options.researchKit === 'full') {
+    toolDocs.push(`
+### Look Up Conversations
+Find conversations by words in the title or summary, who took part, and a date window; \`conversation\` returns one in full.
+[[LOOKUP_CONVERSATIONS character="Camille" since="2026-10-01" /]]
+
+### Look Up a Group / Project
+[[LOOKUP_GROUP group="Estate Staff" /]]
+[[LOOKUP_PROJECT project="The Estate" /]]
+
+### Look Up a Wardrobe / the Atlas
+[[LOOKUP_WARDROBE owner="Amy" query="formal" /]]
+[[LOOKUP_ATLAS name="the Winnower" /]]`)
   }
 
   if (options.inventoryList) {

@@ -215,7 +215,6 @@ export async function addWardrobeItemImage(
   // (bug 132) — `describe_image` reads `description` as what the picture shows.
   const file = await createGeneratedFileRow(repos, {
     userId: input.userId,
-    sha256: written.sha256,
     originalFilename: written.leafName,
     stored: written,
     width: input.width ?? null,

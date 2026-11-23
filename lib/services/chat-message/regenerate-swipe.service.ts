@@ -38,6 +38,7 @@ import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { MemoryCascadeAction } from '@/lib/schemas/settings.types'
+import { releaseHeldAvatarRefreshes } from '@/lib/background-jobs/queue-service'
 
 const logger = createServiceLogger('RegenerateSwipeService')
 
@@ -106,6 +107,9 @@ export async function regenerateMessageAsSwipe({
   if (targetMessage.systemSender) {
     throw new Error('Staff and system messages cannot be regenerated')
   }
+
+  // A swipe is a character's turn too: held avatar refreshes start now.
+  await releaseHeldAvatarRefreshes(chat.id)
 
   // Resolve the responder from the message's own participant so the regeneration
   // speaks as the same character. A null participant (legacy/single-character

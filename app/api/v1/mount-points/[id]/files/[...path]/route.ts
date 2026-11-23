@@ -30,15 +30,14 @@ import { createContextParamsHandler } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import { dispositionFor } from '@/lib/api/content-disposition';
 import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
 import { storeMountFile } from '@/lib/mount-index/store-file';
 import { readMountFile, readMountFileBytes } from '@/lib/mount-index/read-file';
 import { moveFile, deleteFile } from '@/lib/mount-index/file-ops';
 import { FileOpError } from '@/lib/mount-index/file-op-error';
-import { DatabaseStoreError } from '@/lib/mount-index/database-store';
-import { fileOpStatus } from '@/lib/mount-index/file-op-status';
+import { fileOpFailure } from '@/lib/api/file-op-failure';
 import { renderDocxToHtml } from '@/lib/mount-index/converters/docx-html';
 import type { DocMountLinkLocation } from '@/lib/schemas/mount-index.types';
 
@@ -52,14 +51,6 @@ function joinPath(parts: string[]): string {
     // than letting decodeURIComponent's URIError become a generic 500.
     throw new FileOpError('Malformed percent-encoding in path', 'INVALID_PATH');
   }
-}
-
-function handleFileOpError(error: unknown, action: string, ctx: Record<string, unknown>): NextResponse {
-  if (error instanceof FileOpError || error instanceof DatabaseStoreError) {
-    return NextResponse.json({ error: error.message, code: error.code }, { status: fileOpStatus(error) });
-  }
-  logger.error(`[Mount Points v1] Error ${action}`, ctx, error instanceof Error ? error : undefined);
-  return serverError(`Failed to ${action}`);
 }
 
 // ============================================================================
@@ -119,7 +110,7 @@ async function handleRead(req: NextRequest, id: string, path: string[]): Promise
     });
     return successResponse(result);
   } catch (error) {
-    return handleFileOpError(error, 'read file', { mountPointId: id, relativePath });
+    return fileOpFailure(error, 'read file', { mountPointId: id, relativePath });
   }
 }
 
@@ -156,7 +147,7 @@ async function handleLinks(ctx: RequestContext, id: string, path: string[]): Pro
     logger.debug('[Mount Points v1] Listed file locations', { mountPointId: id, relativePath, count: locations.length });
     return successResponse({ linkGroupId: link.linkGroupId ?? null, locations });
   } catch (error) {
-    return handleFileOpError(error, 'list file locations', { mountPointId: id, relativePath });
+    return fileOpFailure(error, 'list file locations', { mountPointId: id, relativePath });
   }
 }
 
@@ -173,7 +164,7 @@ async function handleRenderHtml(id: string, path: string[]): Promise<NextRespons
     logger.debug('[Mount Points v1] Rendered DOCX for viewing', { mountPointId: id, relativePath, warnings: warnings.length });
     return successResponse({ html });
   } catch (error) {
-    return handleFileOpError(error, 'render file', { mountPointId: id, relativePath });
+    return fileOpFailure(error, 'render file', { mountPointId: id, relativePath });
   }
 }
 
@@ -273,7 +264,7 @@ export const PUT = createContextParamsHandler<Params>(
         mtime: result.mtime,
       });
     } catch (error) {
-      return handleFileOpError(error, 'write file', { mountPointId: id, relativePath });
+      return fileOpFailure(error, 'write file', { mountPointId: id, relativePath });
     }
   }
 );
@@ -282,8 +273,10 @@ export const PUT = createContextParamsHandler<Params>(
 // DELETE
 // ============================================================================
 
+// No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
+// (`path` is a catch-all array, so `withActionDispatch`'s string params don't fit.)
 export const DELETE = createContextParamsHandler<Params>(
-  async (_req: NextRequest, { user }: RequestContext, { id, path }) => {
+  async (req: NextRequest, { user }: RequestContext, { id, path }) => dispatchAction(req, {}, async () => {
     // Raw (still-encoded) join for error-logging context until we can safely
     // decode; joinPath() may throw FileOpError on malformed encoding.
     let relativePath = path.join('/');
@@ -299,9 +292,9 @@ export const DELETE = createContextParamsHandler<Params>(
       if (!result.deleted) return notFound('File');
       return successResponse(result);
     } catch (error) {
-      return handleFileOpError(error, 'delete file', { mountPointId: id, relativePath });
+      return fileOpFailure(error, 'delete file', { mountPointId: id, relativePath });
     }
-  }
+  })
 );
 
 // ============================================================================
@@ -366,7 +359,7 @@ export const PATCH = createContextParamsHandler<Params>(
         fileType: updated?.fileType,
       });
     } catch (error) {
-      return handleFileOpError(error, 'update file', { mountPointId: id, relativePath });
+      return fileOpFailure(error, 'update file', { mountPointId: id, relativePath });
     }
   }
 );

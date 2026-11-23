@@ -28,11 +28,13 @@ You can create multiple profiles for different purposes, such as:
 
 Connection profiles live with the providers they telephone, under **Settings → Connections → Providers**:
 
-1. Click **Settings** (gear icon) in the left sidebar
+1. Click **Settings** (gear icon) on the rail
 2. Choose the **Connections** group and open the **Providers** card
 3. With the view set to **By provider** (the default), open the card of the provider in question — Anthropic, OpenAI, Ollama, and so forth
 
 A provider gets a card if it holds a key *or* if any profile names it, so a keyless establishment such as Ollama on your own machine is listed as readily as the grand hotels. Inside each card the provider's keys come first, and below them every profile that uses the provider — connection, image and embedding alike — in one column. Connection profiles wear a **Connection** badge and the Forge's portrait, the Forge being the member of staff who keeps the wires humming. Each row shows the profile's name and model; click it to open the profile.
+
+Courier profiles keep a card of their own, **The Courier**, set at the foot of the list after every provider that answers the telephone. A Courier profile calls upon no provider at all — its requests go by your own hand — so it is never filed under OpenAI or anyone else, whatever its paperwork happens to say. The card's **+ Add** menu offers a connection profile and nothing else, and opens the form with the Courier already chosen as the transport.
 
 ### The other way of looking at it: By kind
 
@@ -202,6 +204,24 @@ If your provider has many models, you can see all available ones:
 5. Select which one to use
 
 **Note:** This requires a valid API key for the provider.
+
+## Auto-Configure
+
+The **Auto-Configure** button, beside the test buttons in the profile form (and on each profile's card menu), fills in the figures a profile needs — context window, maximum output, temperature, Top P, model class, the uncensored flag — and, where it can find out, whether the model takes tools and pictures *by this particular road*. It consults its sources in strict order of reliability, much as a sensible butler checks the household ledger before asking the neighbours:
+
+1. **The provider's own catalogue.** OpenRouter, NanoGPT, Google and Ollama publish what each of their models can do, and Quilltap reads it with this profile's own key and address. What a provider says of its own service outranks everything else — which matters, because the same model may behave quite differently depending on who is serving it. A Gemini model reached through NanoGPT, say, is NanoGPT's Gemini, tool manners and all.
+2. **The plugin's own model table**, for providers that keep one.
+3. **OpenRouter's public catalogue**, for the model's published limits when nothing nearer says. Its word on tools is taken only for OpenRouter profiles; what OpenRouter's road supports proves nothing about another's.
+4. **A web search and your default model**, for whatever is still unknown — chiefly temperature and Top P, which no catalogue publishes. Without a search provider configured, the model answers from its own general knowledge.
+
+The model class is then worked out from the limits themselves. When it is done, the form lists every figure beside where it came from — "NanoGPT's model catalog", "estimated from web search and model knowledge", and so on — so a looked-up fact can be told from an educated guess at a glance.
+
+Two settings are changed only on good evidence:
+
+- **Supports Image Attachments** is set only when a catalogue states it; otherwise your choice stands.
+- **Tool Format** is moved to **Simple JSON** only when a catalogue says this road has no native tool calling, and only from **Auto** or **Native**. If you have chosen Simple JSON yourself — for a provider whose native tool calling misbehaves despite what its catalogue claims — Auto-Configure leaves it be.
+
+**Note:** Auto-Configure needs a default connection profile to estimate what the catalogues leave out. If the catalogues give both limits, it will finish without one, using ordinary defaults for temperature and Top P.
 
 ## Advanced: Custom Base URLs
 
@@ -406,7 +426,7 @@ When several characters share a room, each reply must be pinned to exactly one o
 
 **Quilltap unticks it for you in two cases.** A new profile arrives with the box already settled, and it settles it against the prefill when either of these holds:
 
-- **Anthropic.** Their recent models refuse outright to accept a reply that someone else has already started, and will return an error on every multi-character turn. New Anthropic profiles therefore begin with the box unticked, and you should think twice before ticking it.
+- **Claude, by whatever door it is reached.** Anthropic's recent models refuse outright to accept a reply that someone else has already started, and will return an error on every multi-character turn — including the very first line of a chat in which you have a character of your own. The refusal travels with the model, so a profile that reaches Claude through a go-between (OpenRouter's `anthropic/claude-…`, NanoGPT, an OpenAI-compatible proxy) is treated exactly as an Anthropic one: new profiles of either sort begin with the box unticked, and you should think twice before ticking it.
 - **Any model that will reason before it answers.** A thinking turn and a turn already opened are poor company. Some providers refuse the request outright — DeepSeek's V4 models reason whether or not you asked them to, and reply to a pre-opened turn with a brusque note about `reasoning_content` and nothing else. Others accept the request and quietly swallow the deliberation instead: a local Ollama model opens its study door at the very start of its turn, so if Quilltap has already opened the turn the door is shut before the model reaches it, and the reply arrives with no thinking whatsoever however firmly you have ticked *Enable Thinking*.
 
   Quilltap judges this per profile rather than per provider, because the same provider will serve you a ruminative model and a plain one on the same key. Set **Thinking Mode** to *Disabled* (or leave *Enable Thinking* unticked) and the prefill — the firmer grip, and the one a plainer model benefits from most — comes back of its own accord. If you have watched your thinking model take the prefill in its stride, tick the box: an explicit choice outranks Quilltap's, always. A warning appears beneath it, and nothing more.
@@ -415,7 +435,7 @@ When several characters share a room, each reply must be pinned to exactly one o
 
 - **Models that get suspicious.** A certain sort of model will spend a paragraph of its reply working out whether `[Marie]` was an instruction to it or a slip left behind by whoever spoke last. If you see the model narrating its own confusion about the name in the brackets, untick the box and the question stops being asked.
 
-**Profiles made before all this** were given the prefill by an older rule that only knew about Anthropic. Quilltap corrects them once, on the upgrade, and only where the profile is genuinely running a thinking turn — a DeepSeek profile that has been failing every turn since you made it should simply start working. Nothing else is touched, and a box you tick yourself is never touched again.
+**Profiles made before all this** were given the prefill by an older rule that only knew about the Anthropic provider. Quilltap corrects them once, on the upgrade, and only where the box could never have worked: a profile genuinely running a thinking turn, and a profile reaching Claude through a go-between other than Anthropic itself — a DeepSeek profile that has been failing every turn since you made it, or an OpenRouter Claude profile the setup wizard made for you, should simply start working. Nothing else is touched, and a box you tick yourself afterwards is never touched again.
 
 **Profiles arriving from an older archive** are settled by the same courtesy. A backup or a `.qtap` bundle made before the checkbox existed carries no opinion about it, and rather than reading that silence as a *yes*, Quilltap leaves the matter open and lets the provider's own good sense decide — which is to say the box stays unticked on an Anthropic profile, where a ticked one would refuse every turn in a crowded room. A box the archive does carry is honoured exactly as it was set.
 

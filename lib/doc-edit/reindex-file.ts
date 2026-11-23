@@ -19,6 +19,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { convertToPlainText } from '@/lib/mount-index/converters';
 import { chunkDocument } from '@/lib/mount-index/chunker';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
+import { isThemeDraftStorePath } from '@/lib/themes/drafts/location';
 
 const logger = createServiceLogger('DocEdit:ReindexFile');
 
@@ -66,6 +67,20 @@ export async function reindexSingleFile(
   }
 
   try {
+    // A theme draft's files (`Themes/` in Quilltap General) are a theme's
+    // JSON and CSS, not knowledge: they are never chunked, so nothing of
+    // them reaches search or a character's context. Any chunks a link
+    // gathered before (a file moved into the folder) are dropped.
+    if (await isThemeDraftStorePath(mountPointId, relativePath)) {
+      const draftLink = await repos.docMountFileLinks.findByMountPointAndPath(mountPointId, relativePath);
+      if (draftLink && draftLink.chunkCount > 0) {
+        await repos.docMountChunks.deleteByLinkId(draftLink.id);
+        await repos.docMountFileLinks.update(draftLink.id, { chunkCount: 0 });
+      }
+      logger.debug('Not chunking a theme draft file', { mountPointId, relativePath, droppedChunks: draftLink?.chunkCount ?? 0 });
+      return;
+    }
+
     // Database-backed store: bytes come from doc_mount_documents, not the
     // filesystem. Skip fs.stat / convertToPlainText and chunk directly.
     const mountPoint = await repos.docMountPoints.findById(mountPointId);

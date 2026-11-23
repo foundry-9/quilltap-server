@@ -310,3 +310,24 @@ describe('message snippets', () => {
     expect(snippet.startsWith('nothing of the sort')).toBe(true);
   });
 });
+
+describe("Calliope's conversations", () => {
+  it('are neither chat results nor searched for messages', async () => {
+    documentSearch.mockResolvedValue({ results: [], hasMore: false } as never);
+    const searchMessagesGlobal = jest.fn(async () => [] as unknown[]);
+    const { ctx } = makeCtx({
+      chats: {
+        findByUserId: jest.fn(async () => [
+          { id: 'salon-1', title: 'Lighthouse talk', chatType: 'salon', participants: [], createdAt: '2026-01-01T00:00:00.000Z' },
+          { id: 'muse-1', title: 'Lighthouse palette', chatType: 'calliope', themeDraftId: 'rains', participants: [], createdAt: '2026-01-01T00:00:00.000Z' },
+        ]),
+        searchMessagesGlobal,
+      },
+    });
+
+    const data = await body(await GET(req({ q: 'lighthouse', types: 'chats,messages' }), ctx));
+
+    expect(data.results.map((r) => r.id)).toEqual(['salon-1']);
+    expect(searchMessagesGlobal).toHaveBeenCalledWith(['salon-1'], 'lighthouse', 100);
+  });
+});

@@ -371,3 +371,63 @@ describe('fitToBudget — result size budget', () => {
     expect(fitted.note).toMatch(/only the first \d+ of 400 rows fit/);
   });
 });
+
+describe('executeRunSqlTool — self-correcting schema errors (research kit §5.8)', () => {
+  it('answers a wrong column with the referenced table\'s real columns', async () => {
+    const result = await executeRunSqlTool({ sql: 'SELECT title FROM notes' }, CTX);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain('Real columns — notes: id, body.');
+  });
+
+  it('answers a wrong table with this database\'s tables', async () => {
+    const result = await executeRunSqlTool({ sql: 'SELECT * FROM note' }, CTX);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain('Tables in main: memories, notes.');
+  });
+
+  it('names the database a table lives in when it is asked for in the wrong one', async () => {
+    const result = await executeRunSqlTool({ sql: 'SELECT * FROM llm_logs' }, CTX);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain('`llm_logs` is in the llm-logs database; pass database: "llm-logs".');
+  });
+});
+
+describe('executeRunSqlTool — the qt_documents view', () => {
+  it('is made on the read-only mount-index connection and joins store, path and text', async () => {
+    const fs = require('fs');
+    const os = require('os');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-sql-view-'));
+    const file = path.join(dir, 'mount-index.sqlite');
+    const rw = new Database(file);
+    applySqlcipherKey(rw);
+    rw.exec(`
+      CREATE TABLE doc_mount_points (id TEXT PRIMARY KEY, name TEXT);
+      CREATE TABLE doc_mount_file_links (mountPointId TEXT, relativePath TEXT, fileId TEXT, extractedText TEXT, lastModified TEXT);
+      CREATE TABLE doc_mount_documents (fileId TEXT, content TEXT);
+      INSERT INTO doc_mount_points VALUES ('mp-1', 'Estate Lore');
+      INSERT INTO doc_mount_file_links VALUES ('mp-1', 'Places/Inn.md', 'f-1', NULL, '2026-11-01');
+      INSERT INTO doc_mount_file_links VALUES ('mp-1', 'Letters/old.pdf', 'f-2', 'extracted words', '2026-10-01');
+      INSERT INTO doc_mount_documents VALUES ('f-1', 'The inn by the quay.');
+    `);
+    jest.mocked(getRawMountIndexDatabase).mockReturnValue(rw as never);
+    try {
+      const result = await executeRunSqlTool(
+        { sql: 'SELECT store, path, text FROM qt_documents ORDER BY path', database: 'mount-index' },
+        CTX
+      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.rows).toEqual([
+          { store: 'Estate Lore', path: 'Letters/old.pdf', text: 'extracted words' },
+          { store: 'Estate Lore', path: 'Places/Inn.md', text: 'The inn by the quay.' },
+        ]);
+      }
+      // Nothing was written to the database file itself.
+      expect(rw.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'qt_documents'").get()).toEqual({ n: 0 });
+    } finally {
+      closeReadonlyQueryClients();
+      rw.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

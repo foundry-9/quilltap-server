@@ -1,0 +1,111 @@
+/**
+ * Theme token registry — Chat surfaces (semantic tier).
+ *
+ * Generated into app/styles/_theme-defaults.css by
+ * `npm run generate:theme-variables`; edit here, not there.
+ */
+
+import type { TokenDef } from '../types';
+
+export const CHAT_SURFACES_TOKENS: readonly TokenDef[] = [
+  {
+    name: "--theme-chat-assistant",
+    tier: 'semantic',
+    type: 'color',
+    group: 'chat-surfaces',
+    label: "Assistant message surface",
+    default: "var(--theme-muted)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-chat-assistant-foreground",
+    tier: 'semantic',
+    type: 'color',
+    group: 'chat-surfaces',
+    label: "Assistant message text",
+    default: "var(--theme-foreground)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-chat-system",
+    tier: 'semantic',
+    type: 'color',
+    group: 'chat-surfaces',
+    label: "Staff (system) message accent",
+    description: "Mixed into the assistant surface for the one-line Staff bar.",
+    default: "var(--theme-muted)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-chat-system-foreground",
+    tier: 'semantic',
+    type: 'color',
+    group: 'chat-surfaces',
+    label: "Staff (system) message text",
+    default: "var(--theme-muted-foreground)",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-chat-whisper",
+    tier: 'semantic',
+    type: 'color',
+    group: 'chat-surfaces',
+    label: "Whisper accent",
+    description: "Mixed 40% into the assistant surface for the whisper bubble, and its border.",
+    default: "#9b8ec4",
+    defaultDark: "#6b5b95",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-chat-whisper-foreground",
+    tier: 'semantic',
+    type: 'color',
+    group: 'chat-surfaces',
+    label: "Whisper label",
+    default: "#5c447e",
+    defaultDark: "#b5a9d1",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-chat-silent",
+    tier: 'semantic',
+    type: 'color',
+    group: 'chat-surfaces',
+    label: "Silent (inner) message accent",
+    description: "Mixed 35% into the assistant surface for the silent bubble, and its border.",
+    default: "#7a9e8e",
+    defaultDark: "#4a7a6a",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-chat-silent-foreground",
+    tier: 'semantic',
+    type: 'color',
+    group: 'chat-surfaces',
+    label: "Silent (inner) message label",
+    default: "#445c51",
+    defaultDark: "#8ab8a4",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-chat-wardrobe",
+    tier: 'semantic',
+    type: 'color',
+    group: 'chat-surfaces',
+    label: "Wardrobe notice accent",
+    description: "Mixed 40% into the assistant surface for the wardrobe bubble, and its border.",
+    default: "#c4a24e",
+    defaultDark: "#8a6d1b",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-chat-wardrobe-foreground",
+    tier: 'semantic',
+    type: 'color',
+    group: 'chat-surfaces',
+    label: "Wardrobe notice label",
+    default: "#69551f",
+    defaultDark: "#d4b65c",
+    visibility: 'standard',
+  },
+];

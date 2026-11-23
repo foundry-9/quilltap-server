@@ -1043,9 +1043,8 @@
     @apply font-bold;
   }
 
-  .qt-chat-message-content em {
-    @apply italic;
-  }
+  /* <em> is Emphasis: its slant, and the upright flip inside an italic voice,
+     live with .qt-roleplay-emphasis in _roleplay.css. */
 
   .qt-chat-message-content del {
     @apply line-through;
@@ -1147,7 +1146,7 @@
    */
   .qt-chat-toolbar-button {
     @apply inline-flex items-center justify-center;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
     @apply disabled:pointer-events-none disabled:opacity-50;
     cursor: pointer;
     width: 2.75rem;
@@ -1486,7 +1485,7 @@
     @apply h-12 w-12;
     @apply rounded-full;
     @apply transition-all duration-200;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
     cursor: pointer;
     background: var(--qt-button-primary-bg);
@@ -1564,7 +1563,7 @@
    */
   .qt-composer-gutter-button {
     @apply inline-flex items-center justify-center;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
     @apply disabled:pointer-events-none disabled:opacity-50;
     @apply transition-colors duration-150;
     width: 2rem;
@@ -2104,6 +2103,7 @@
     color: var(--qt-rp-fg);
     background: var(--qt-rp-bg);
     font-style: var(--qt-rp-narration-style);
+    --qt-rp-voice-style: var(--qt-rp-narration-style);
     padding: var(--qt-rp-narration-padding);
     border-radius: var(--qt-rp-narration-radius);
     display: inline;
@@ -2120,6 +2120,7 @@
     color: var(--qt-rp-fg);
     background: var(--qt-rp-bg);
     font-style: var(--qt-rp-inner-monologue-style);
+    --qt-rp-voice-style: var(--qt-rp-inner-monologue-style);
     padding: var(--qt-rp-inner-monologue-padding);
     border-radius: var(--qt-rp-inner-monologue-radius);
     display: inline;
@@ -2554,6 +2555,23 @@
   }
 
   /**
+   * The Markdown editor's toolbar stays in reach on long text: it sticks to
+   * the top of whatever surface scrolls the editor (a dialog body, a card
+   * page). Its frame clips with `overflow: clip`, not `hidden`, so the frame
+   * does not become the scroll container and pin the toolbar to itself.
+   * Opaque, so the text it rides over does not show through. Sticky stops
+   * at the scroller's padding edge, so the upward shadow covers that strip
+   * of padding; at rest the frame's clip hides it.
+   */
+  .qt-doc-toolbar-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--qt-content-bg);
+    box-shadow: 0 -2rem 0 0 var(--qt-content-bg);
+  }
+
+  /**
    * Document editor area
    * Fills available vertical space, independently scrollable
    */
@@ -2617,6 +2635,12 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+  }
+
+  /* Document Mode's code editor (JSON and CSS): fills the pane edge to edge,
+     as the plain textarea beside it does. */
+  .qt-doc-code-editor {
+    border-radius: 0;
   }
 
   .qt-doc-gutter {

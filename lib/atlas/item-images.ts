@@ -18,7 +18,6 @@
  */
 
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import type { FileEntry } from '@/lib/schemas/file.types';
 import type { AtlasRecord } from '@/lib/schemas/atlas.types';
 import type { PendingImageMove } from '@/lib/wardrobe/item-images';
 import { resolveAtlasLocation, type AtlasLocation } from '@/lib/atlas/location';
@@ -70,10 +69,6 @@ export const atlasEntryImages = createItemImages<AtlasRecord, AtlasRecord, Atlas
 export const NoAtlasImageProfileError = atlasEntryImages.NoProfileError;
 /** The provider refused or failed; carries the trail. */
 export const AtlasImageGenerationError = atlasEntryImages.GenerationError;
-
-/** The entry's pictures, newest first. */
-export const listAtlasEntryImages: (repos: Pick<RepositoryContainer, 'files'>, entryId: string) => Promise<FileEntry[]> =
-  atlasEntryImages.list;
 
 /** The entry's pictures, as the gallery shows them. */
 export function listAtlasEntryImageSummaries(repos: Pick<RepositoryContainer, 'files'>, entryId: string): Promise<AtlasImageSummary[]> {

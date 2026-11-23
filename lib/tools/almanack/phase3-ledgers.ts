@@ -162,6 +162,7 @@ export function emptyCharacterBreakdown(): CharacterBreakdownInfo {
     canDressThemselves: 0,
     canCreateOutfits: 0,
     canManageInventory: 0,
+    canEditMemories: 0,
     coreWhisperOverrides: 0,
   };
 }
@@ -570,6 +571,7 @@ export async function collectCharacterBreakdown(userId: string): Promise<Charact
     dress: number;
     outfits: number;
     inventory: number;
+    memoryEdit: number;
     coreWhisper: number;
   }>(
     `SELECT COUNT(*)                                                                     AS total,
@@ -584,6 +586,8 @@ export async function collectCharacterBreakdown(userId: string): Promise<Charact
             SUM(CASE WHEN "canDressThemselves" IS NOT 0 THEN 1 ELSE 0 END)               AS dress,
             SUM(CASE WHEN "canCreateOutfits" IS NOT 0 THEN 1 ELSE 0 END)                 AS outfits,
             SUM(CASE WHEN "canManageInventory" IS NOT 0 THEN 1 ELSE 0 END)               AS inventory,
+            -- Memory editing is granted, never assumed: only an explicit 1 allows.
+            SUM(CASE WHEN "canEditMemories" = 1 THEN 1 ELSE 0 END)                        AS memoryEdit,
             SUM(CASE WHEN "coreWhisperEnabled" IS NOT NULL THEN 1 ELSE 0 END)            AS coreWhisper
      FROM "characters" WHERE "userId" = ?`,
     [userId],
@@ -604,6 +608,7 @@ export async function collectCharacterBreakdown(userId: string): Promise<Charact
     canDressThemselves: num(row?.dress),
     canCreateOutfits: num(row?.outfits),
     canManageInventory: num(row?.inventory),
+    canEditMemories: num(row?.memoryEdit),
     coreWhisperOverrides: num(row?.coreWhisper),
   };
 }
@@ -623,6 +628,7 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
     agentMode: { maxTurns: 10, defaultEnabled: false },
     storyBackgrounds: { enabled: false, hasDefaultImageProfile: false },
     wardrobeImages: { hasDesignatedImageProfile: false },
+    dynamicBackgrounds: { enabled: false, allowUncensored: false, refreshMinutes: 3 },
     timestamps: { mode: 'NONE', format: 'FRIENDLY' },
     autoLock: { enabled: false, idleMinutes: 15 },
     memoryCascade: {
@@ -724,6 +730,11 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
     },
     wardrobeImages: {
       hasDesignatedImageProfile: !!chatSettings?.wardrobeImageSettings?.imageProfileId,
+    },
+    dynamicBackgrounds: {
+      enabled: chatSettings?.dynamicBackgrounds?.enabled ?? false,
+      allowUncensored: chatSettings?.dynamicBackgrounds?.allowUncensored ?? false,
+      refreshMinutes: chatSettings?.dynamicBackgrounds?.refreshMinutes ?? 3,
     },
     timestamps: {
       mode: ts?.mode ?? 'NONE',

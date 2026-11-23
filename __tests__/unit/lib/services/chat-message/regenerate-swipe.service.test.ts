@@ -68,7 +68,6 @@ const buildRepos = (overrides: Record<string, unknown> = {}) => ({
     findByUserId: jest.fn(async () => ({ memoryCascadePreferences: { onSwipeRegenerate: 'DELETE_MEMORIES' } })),
   },
   memories: {
-    countBySourceMessageId: jest.fn(async () => 0),
   },
   ...overrides,
 }) as never
@@ -252,7 +251,7 @@ describe('regenerateMessageAsSwipe', () => {
       yield { content: '', done: true, usage: { totalTokens: 3, promptTokens: 3, completionTokens: 0 } }
     })
     const findBySourceMessageId = jest.fn(async () => [{ id: 'mem-1' }])
-    const repos = buildRepos({ memories: { findBySourceMessageId, countBySourceMessageId: jest.fn(async () => 1) } })
+    const repos = buildRepos({ memories: { findBySourceMessageId } })
     const target = makeMessage('msg-abigail', 'ASSISTANT', now + 100, 'p-abigail')
 
     await expect(regenerateMessageAsSwipe({

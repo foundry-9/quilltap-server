@@ -49,7 +49,7 @@ it('nothing outside lib/atlas/match.ts builds an Atlas matcher', () => {
   for (const file of users) expect(file.startsWith('lib/atlas/')).toBe(true)
 })
 
-it('lib/chat reads the Atlas only through buildAtlasSection and findAtlasMentions', () => {
+it('lib/chat reads the Atlas only through the lore module (prompt-section) and findAtlasMentions', () => {
   for (const file of grep("from '@/lib/atlas/", ['lib/chat/*.ts'])) {
     const imports = readFileSync(path.join(ROOT, file), 'utf8').match(/from '@\/lib\/atlas\/[^']+'/g) ?? []
     for (const spec of imports) expect(['prompt-section', 'mentions']).toContain(spec.replace(/^from '@\/lib\/atlas\//, '').replace(/'$/, ''))

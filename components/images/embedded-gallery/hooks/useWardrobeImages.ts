@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast } from '@/lib/toast'
 import { triggerDownload } from '@/lib/download-utils'
+import type { GenerationModeration } from '@/lib/schemas/file.types'
 import type { WardrobeGalleryImage } from '../types'
 
 interface WardrobeGalleryImageEntry {
@@ -25,6 +26,7 @@ interface WardrobeGalleryImageEntry {
   locationLabel: string
   itemArchived: boolean
   isCurrentItemImage: boolean
+  generationModeration?: GenerationModeration | null
 }
 
 interface WardrobeImagesListResponse {
@@ -54,6 +56,7 @@ function toWardrobeGalleryImage(entry: WardrobeGalleryImageEntry): WardrobeGalle
     isCurrentItemImage: entry.isCurrentItemImage,
     generationPrompt: entry.generationPrompt,
     generationModel: entry.generationModel,
+    generationModeration: entry.generationModeration ?? null,
   }
 }
 

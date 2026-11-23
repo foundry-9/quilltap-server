@@ -175,7 +175,7 @@ export function SelectLLMProfileDialog({
                   className={`
                     flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors
                     ${selectedProfileId === profile.id
-                      ? 'qt-card-selected'
+                      ? 'qt-option-selected'
                       : 'qt-card hover:qt-bg-muted/50'
                     }
                   `}

@@ -34,6 +34,13 @@ jest.mock('@/lib/logger', () => ({
   },
 }));
 
+// Which store is Quilltap General (theme drafts in it stay out of exports).
+const mockGeneralMountPointId = jest.fn<() => Promise<string | null>>();
+jest.mock('@/lib/instance-settings', () => ({
+  ...(jest.requireActual('@/lib/instance-settings') as object),
+  getGeneralMountPointId: () => mockGeneralMountPointId(),
+}));
+
 import {
   streamExportRecords,
   createNdjsonStream,
@@ -889,6 +896,107 @@ describe('ndjson-writer', () => {
       expect(chunkRecords[0].total).toBe(1);
       expect(Buffer.from(chunkRecords[0].dataBase64, 'base64').equals(realData))
         .toBe(true);
+    });
+  });
+  describe('streamExportRecords() - theme drafts', () => {
+    const doc = (mountPointId: string, relativePath: string) => ({
+      mountPointId,
+      relativePath,
+      fileName: relativePath.split('/').pop() as string,
+      fileType: 'json',
+      content: '{}',
+      contentSha256: 'a'.repeat(64),
+      plainTextLength: 2,
+      lastModified: '2026-01-01T00:00:00.000Z',
+      folderId: null,
+      fileId: generateId(),
+      linkId: generateId(),
+      linkGroupId: null,
+    });
+    const folder = (mountPointId: string, path: string) => ({
+      id: generateId(),
+      mountPointId,
+      parentId: null,
+      name: path.split('/').pop() as string,
+      path,
+    });
+    const blob = (mountPointId: string, relativePath: string) => ({
+      id: generateId(),
+      mountPointId,
+      relativePath,
+      originalFileName: relativePath.split('/').pop() as string,
+      originalMimeType: 'image/png',
+      storedMimeType: 'image/png',
+      sizeBytes: 3,
+      sha256: 'b'.repeat(64),
+      description: '',
+      fileId: generateId(),
+      linkId: generateId(),
+    });
+    const store = (id: string) => ({
+      id,
+      name: 'Quilltap General',
+      basePath: '',
+      mountType: 'database' as const,
+      storeType: 'documents',
+      includePatterns: [],
+      excludePatterns: [],
+      enabled: true,
+    });
+
+    function seed(storeId: string) {
+      globalRepos.docMountPoints.findById.mockResolvedValue(store(storeId));
+      globalRepos.docMountFolders.findByMountPointId.mockResolvedValue([
+        folder(storeId, 'Notes'),
+        folder(storeId, 'Themes'),
+        folder(storeId, 'Themes/my-theme'),
+        folder(storeId, 'Themes/my-theme/images'),
+      ]);
+      globalRepos.docMountDocuments.findByMountPointId.mockResolvedValue([
+        doc(storeId, 'Notes/plan.json'),
+        doc(storeId, 'Themes/my-theme/theme.json'),
+        doc(storeId, 'themes/my-theme/tokens.json'),
+        doc(storeId, 'Themesong.json'),
+      ]);
+      globalRepos.docMountBlobs.listByMountPoint.mockResolvedValue([
+        blob(storeId, 'Notes/photo.png'),
+        blob(storeId, 'Themes/my-theme/images/preview.png'),
+      ]);
+      globalRepos.docMountBlobs.readData.mockResolvedValue(Buffer.from('png'));
+    }
+
+    async function exportStore(storeId: string) {
+      return (await drain(
+        streamExportRecords(testUserId, { type: 'document-stores', scope: 'selected', selectedIds: [storeId] })
+      )) as Array<Record<string, unknown>>;
+    }
+
+    const pathsOf = (records: Array<Record<string, unknown>>, kind: string, field: string) =>
+      records.filter((r) => r.kind === kind).map((r) => (r.data as Record<string, string>)[field]);
+
+    it('leaves the Themes folder of Quilltap General out of the export', async () => {
+      const storeId = generateId();
+      mockGeneralMountPointId.mockResolvedValue(storeId);
+      seed(storeId);
+
+      const records = await exportStore(storeId);
+
+      expect(pathsOf(records, 'doc_mount_folder', 'path')).toEqual(['Notes']);
+      expect(pathsOf(records, 'doc_mount_document', 'relativePath')).toEqual(['Notes/plan.json', 'Themesong.json']);
+      expect(pathsOf(records, 'doc_mount_blob', 'relativePath')).toEqual(['Notes/photo.png']);
+      expect(records.filter((r) => r.kind === 'doc_mount_blob_chunk')).toHaveLength(1);
+    });
+
+    it('keeps a Themes folder in any other store', async () => {
+      const storeId = generateId();
+      mockGeneralMountPointId.mockResolvedValue(generateId());
+      seed(storeId);
+
+      const records = await exportStore(storeId);
+
+      expect(pathsOf(records, 'doc_mount_folder', 'path')).toHaveLength(4);
+      expect(pathsOf(records, 'doc_mount_document', 'relativePath')).toHaveLength(4);
+      expect(pathsOf(records, 'doc_mount_blob', 'relativePath')).toHaveLength(2);
     });
   });
 });

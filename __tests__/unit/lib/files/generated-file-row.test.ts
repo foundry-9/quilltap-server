@@ -1,6 +1,6 @@
 /**
  * createGeneratedFileRow (lib/files/generated-file-row.ts): the one `files`
- * row every stored picture gets — the bridge's stored type and size, measured
+ * row every stored picture gets — the bridge's stored type, size and hash, measured
  * dimensions, and no label in `description` (bug 132).
  */
 
@@ -14,15 +14,15 @@ describe('createGeneratedFileRow', () => {
     const row = await createGeneratedFileRow({ files: { create } } as never, {
       id: 'file-1',
       userId: 'user-1',
-      sha256: SHA,
       originalFilename: 'avatar_x.webp',
-      stored: { storageKey: 'mount-blob:m:b', storedMimeType: 'image/webp', sizeBytes: 1234 },
+      stored: { storageKey: 'mount-blob:m:b', storedMimeType: 'image/webp', sizeBytes: 1234, sha256: SHA },
       width: 832,
       height: 1216,
       linkedTo: ['chat-1', 'char-1'],
       tags: ['char-1'],
       generation: { prompt: 'the prompt', model: 'gpt-image-1', revisedPrompt: null },
       generationKey: 'key-1',
+      generationModeration: 'uncensored-failover',
     })
 
     expect(create).toHaveBeenCalledWith(
@@ -41,6 +41,7 @@ describe('createGeneratedFileRow', () => {
         generationModel: 'gpt-image-1',
         generationRevisedPrompt: null,
         generationKey: 'key-1',
+        generationModeration: 'uncensored-failover',
         description: null,
         tags: ['char-1'],
         storageKey: 'mount-blob:m:b',
@@ -56,14 +57,15 @@ describe('createGeneratedFileRow', () => {
     const create = jest.fn(async (data: object, options?: { id?: string }) => ({ ...data, id: options?.id }))
     await createGeneratedFileRow({ files: { create } } as never, {
       userId: 'user-1',
-      sha256: SHA,
       originalFilename: 'x.webp',
-      stored: { storageKey: 'k', storedMimeType: 'image/webp', sizeBytes: 1 },
+      stored: { storageKey: 'k', storedMimeType: 'image/webp', sizeBytes: 1, sha256: SHA },
       linkedTo: ['item-1'],
       source: 'IMPORTED',
     })
     const [data, options] = create.mock.calls[0]
     expect(options?.id).toMatch(/^[0-9a-f-]{36}$/)
-    expect(data).toEqual(expect.objectContaining({ source: 'IMPORTED', width: null, height: null, generationPrompt: null }))
+    expect(data).toEqual(expect.objectContaining({
+      source: 'IMPORTED', width: null, height: null, generationPrompt: null, generationModeration: null,
+    }))
   })
 })

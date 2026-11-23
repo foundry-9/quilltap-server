@@ -1,0 +1,27 @@
+# Release Checklist 11 — Backup/Restore Completeness
+
+If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
+
+**Goal (checklist item 11 of 15):** The backup/restore system must include **everything that can be backed up** — usually everything except secrets so sensitive they must stay encrypted (e.g. API keys).
+
+Related project convention (CLAUDE.md): data/schema changes must be reflected in `.qtap`/SillyTavern exports, [`qtap-export.schema.json`](../../public/schemas/qtap-export.schema.json), backups, and/or `migrations/`. This step is the backup half of that.
+
+## Steps
+
+1. Find what changed in the data model since the last release:
+   ```bash
+   LAST_TAG=$(scripts/last-release-tag.sh)  # rel/X.Y.Z on main-line branches, X.Y.Z on bugfix; never a dev tag
+   git diff --name-only "${LAST_TAG}"..HEAD -- 'lib/schemas/**' 'migrations/**' 'lib/db/**' 'docs/developer/DDL.md' | sort -u
+   ```
+2. Locate the backup/restore implementation (search for the backup service and its included-tables/entities list) and confirm every new table, column, entity, or on-disk asset added this cycle is covered by **both** backup and restore.
+3. For anything intentionally excluded, confirm it's only genuinely-secret material (API keys, encryption secrets — Saquel Ytzama's domain). Everything else must be included.
+   Sanctioned non-secret exclusions, already documented under "Not Included in Backups" in [`help/system-backup-restore.md`](../../help/system-backup-restore.md): background jobs, open Storyteller rounds, a chat's opening progress (`chats.openingState` / `openingPhase` / `openingPlan` — a restored chat reads as `'done'`; also absent from `.qtap` bundles), built-in plugins, help pages, and Ariel's `terminal_sessions` rows with their `logs/terminals/` transcripts (runtime state that can hold printed secrets; guarded by `__tests__/unit/lib/backup/terminal-sessions-excluded.test.ts`). Report these as **EXCLUDED (sanctioned)**; anything else excluded is a gap.
+4. Cross-check the related surfaces so backups and exports don't drift:
+   - `.qtap` export/import (remember: **always include new data-model fields in import/export**).
+   - [`qtap-export.schema.json`](../../public/schemas/qtap-export.schema.json).
+   - [DDL.md](../../docs/developer/DDL.md) is current.
+5. If you find a gap, add the missing field/entity to backup and restore, and add a round-trip test (backup → restore → assert equality) if one doesn't already cover it.
+
+## Report
+
+List new data-model additions this cycle and, for each, **BACKED UP** / **RESTORED** / **EXCLUDED (secret)**. Note any gaps fixed and tests added. Leave the commit to [/commit](commit.md) — see "Commits and branches" in [CLAUDE.md](../../CLAUDE.md): on `main` nothing is committed without an explicit `/commit`; on any other branch (a worktree, a cloud session) commit the fixes to that branch.

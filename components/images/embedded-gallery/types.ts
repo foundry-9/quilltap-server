@@ -7,6 +7,8 @@
  * the UI can drop straight into `<img src>`.
  */
 
+import type { GenerationModeration } from '@/lib/schemas/file.types'
+
 export interface GalleryImage {
   /** doc_mount_file_links.id — the canonical id for set-as-avatar, delete, etc. */
   id: string
@@ -27,6 +29,8 @@ export interface GalleryImage {
    * informational only — they no longer drive gallery membership.
    */
   tags: string[]
+  /** Set when an uncensored profile drew these bytes; drives the Uncensored badge. */
+  generationModeration?: GenerationModeration | null
 }
 
 // EntityType is now only 'character' — personas have been migrated to

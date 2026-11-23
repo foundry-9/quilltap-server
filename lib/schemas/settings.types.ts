@@ -413,6 +413,35 @@ export const BrahmaConsoleSettingsSchema = z.object({
 export type BrahmaConsoleSettings = z.infer<typeof BrahmaConsoleSettingsSchema>;
 
 // ============================================================================
+// CALLIOPE (the theme editor's assistant)
+// ============================================================================
+
+/** Calliope's agent-turn budget when the operator hasn't set one. */
+export const DEFAULT_CALLIOPE_MAX_AGENT_TURNS = 25;
+
+/**
+ * Calliope's settings (Calliope Live, Spec J decision 10), stored
+ * instance-wide in `instance_settings['calliope']` like the Brahma Console's.
+ * Accessors `getCalliopeSettings` / `setCalliopeSettings` in
+ * `lib/instance-settings`; resolved for her turns by
+ * `resolveCalliopeConnectionProfile` / `resolveCalliopeMaxAgentTurns`
+ * (`lib/services/calliope/settings.ts`).
+ */
+export const CalliopeSettingsSchema = z.object({
+  /**
+   * The engine a new conversation with Calliope starts on (and the one a
+   * conversation falls back to when the profile it pinned is gone).
+   * null/undefined = the user's default connection profile; a stale id falls
+   * through. A conversation's own picker overrides it for that conversation.
+   */
+  connectionProfileId: UUIDSchema.nullable().optional(),
+  /** Tool-use rounds per question before she must answer with what she has. */
+  maxAgentTurns: z.number().int().min(1).default(DEFAULT_CALLIOPE_MAX_AGENT_TURNS),
+});
+
+export type CalliopeSettings = z.infer<typeof CalliopeSettingsSchema>;
+
+// ============================================================================
 // TABOO (instance-wide forbidden phrases)
 // ============================================================================
 
@@ -755,6 +784,45 @@ export const WardrobeImageSettingsSchema = z.object({
 export type WardrobeImageSettings = z.infer<typeof WardrobeImageSettingsSchema>;
 
 // ============================================================================
+// DYNAMIC BACKGROUNDS
+// ============================================================================
+
+/** Bounds and default for `DynamicBackgroundsSettings.refreshMinutes`. */
+export const DYNAMIC_BACKGROUND_REFRESH_MIN = 1;
+export const DYNAMIC_BACKGROUND_REFRESH_MAX = 120;
+export const DYNAMIC_BACKGROUND_REFRESH_DEFAULT = 3;
+
+/**
+ * Dynamic backgrounds (Settings → Appearance → Dynamic Backgrounds): a
+ * server-composed collage of generated pictures behind the home, project and
+ * character pages. Instance-wide and independent of the theme. Read on the
+ * server only through `resolveDynamicBackgroundSettings`
+ * (`lib/dynamic-backgrounds/settings.ts`).
+ */
+export const DynamicBackgroundsSettingsSchema = z.object({
+  /** Master switch. Off: no page asks for a collage. */
+  enabled: z.boolean().default(false),
+  /** Let pictures drawn by an uncensored profile into collages. */
+  allowUncensored: z.boolean().default(false),
+  /** Minutes a collage stays up before a new one is drawn. */
+  refreshMinutes: z
+    .number()
+    .int()
+    .min(DYNAMIC_BACKGROUND_REFRESH_MIN)
+    .max(DYNAMIC_BACKGROUND_REFRESH_MAX)
+    .default(DYNAMIC_BACKGROUND_REFRESH_DEFAULT),
+});
+
+export type DynamicBackgroundsSettings = z.infer<typeof DynamicBackgroundsSettingsSchema>;
+
+/** A fresh instance's dynamic-backgrounds settings. */
+export const DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS: DynamicBackgroundsSettings = {
+  enabled: false,
+  allowUncensored: false,
+  refreshMinutes: DYNAMIC_BACKGROUND_REFRESH_DEFAULT,
+};
+
+// ============================================================================
 // CHAT SETTINGS
 // ============================================================================
 
@@ -779,7 +847,12 @@ export const ChatSettingsSchema = z.object({
   themePreference: ThemePreferenceSchema.default({
     activeThemeId: null,
     colorMode: 'system',
-    showNavThemeSelector: false,
+  }),
+  /** Dynamic backgrounds: the changing collage behind the home, project and character pages. */
+  dynamicBackgrounds: DynamicBackgroundsSettingsSchema.default({
+    enabled: false,
+    allowUncensored: false,
+    refreshMinutes: DYNAMIC_BACKGROUND_REFRESH_DEFAULT,
   }),
   /** Sidebar width in pixels (256-512, default: 256) */
   sidebarWidth: z.number().min(256).max(512).default(256).optional(),

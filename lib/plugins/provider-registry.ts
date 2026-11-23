@@ -331,6 +331,42 @@ class ProviderRegistry extends AbstractProviderRegistry<LLMProviderPlugin> {
   }
 
   /**
+   * The plugin's static model table (`getModelInfo()`), or `[]` when it has
+   * none or the call throws.
+   */
+  getStaticModelInfo(providerName: string): ModelInfo[] {
+    const plugin = this.getProvider(providerName);
+    try {
+      return plugin?.getModelInfo?.() ?? [];
+    } catch (error) {
+      this.registryLogger.warn('Provider getModelInfo threw', {
+        provider: providerName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Whether the plugin publishes a live model catalog (`getModelCatalog`).
+   */
+  hasModelCatalog(providerName: string): boolean {
+    return typeof this.getProvider(providerName)?.getModelCatalog === 'function';
+  }
+
+  /**
+   * The plugin's live, detailed model catalog. Returns `null` when the plugin
+   * has no `getModelCatalog`; rethrows the plugin's own failure so the caller
+   * can say why. Uncached — `lib/llm/model-catalog.ts` caches it.
+   */
+  async getModelCatalog(providerName: string, apiKey: string, baseUrl?: string): Promise<ModelInfo[] | null> {
+    const plugin = this.getProvider(providerName);
+    if (!plugin?.getModelCatalog) return null;
+    this.registryLogger.debug('Fetching provider model catalog', { provider: providerName, hasBaseUrl: !!baseUrl });
+    return plugin.getModelCatalog(apiKey, this.resolveBaseUrl(baseUrl));
+  }
+
+  /**
    * Whether a connection profile on this provider will run a thinking turn.
    *
    * Joins the two halves the plugin owns — its declared `thinkingTurnRule`
@@ -608,6 +644,27 @@ export function getDefaultContextWindow(name: string): number {
  */
 export function getModelPricing(providerName: string, modelId: string): { input: number; output: number } | null {
   return providerRegistry.getModelPricing(providerName, modelId);
+}
+
+/**
+ * A provider plugin's static model table (`getModelInfo()`), `[]` if none.
+ */
+export function getStaticModelInfo(providerName: string): ModelInfo[] {
+  return providerRegistry.getStaticModelInfo(providerName);
+}
+
+/**
+ * Whether a provider plugin publishes a live model catalog.
+ */
+export function hasModelCatalog(providerName: string): boolean {
+  return providerRegistry.hasModelCatalog(providerName);
+}
+
+/**
+ * A provider plugin's live model catalog, or `null` when it has none.
+ */
+export function getProviderModelCatalog(providerName: string, apiKey: string, baseUrl?: string): Promise<ModelInfo[] | null> {
+  return providerRegistry.getModelCatalog(providerName, apiKey, baseUrl);
 }
 
 /**

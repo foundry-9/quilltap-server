@@ -236,7 +236,7 @@ export interface EnrichedChatSummary {
   conciergeReason: ConciergeModeReason | null
   /** The classifier's categories, for the mark's tooltip. `[]` when none. */
   dangerCategories: string[]
-  chatType: 'salon' | 'help' | 'autonomous' | 'brahma'
+  chatType: 'salon' | 'help' | 'autonomous' | 'brahma' | 'calliope'
   /** Scriptorium status, derived from chunk embeddings (lib/scriptorium/status.ts). */
   scriptoriumStatus: ScriptoriumStatus
   _count: { messages: number; memories: number }
@@ -616,7 +616,7 @@ export async function enrichChatForList(
     conciergeSetBy: getConciergeProvenance(chat),
     conciergeReason: getConciergeReason(chat),
     dangerCategories: chat.dangerCategories ?? [],
-    chatType: (chat.chatType ?? 'salon') as 'salon' | 'help' | 'autonomous' | 'brahma',
+    chatType: (chat.chatType ?? 'salon') as 'salon' | 'help' | 'autonomous' | 'brahma' | 'calliope',
     scriptoriumStatus,
     _count: { messages: messageCount, memories: memoryCount },
     _allTagIds: allTagIds,

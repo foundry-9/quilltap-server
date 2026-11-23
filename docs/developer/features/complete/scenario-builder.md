@@ -346,3 +346,7 @@ by step 8.
 - Reading the current chat's transcript by tool (`read_conversation`) rather than passing `contextSummary`.
 - A "Generate a few" mode producing two or three alternative scenes to choose from.
 - Extracting the *streaming* Brahma orchestrator onto the shared loop.
+
+## Later: web search readiness (4.14-dev, 2026-11-18)
+
+`isWebSearchConfigured()` is now `isWebSearchConfigured(userId)` and is true only when the registered search provider has the API key it needs (or, with no provider registered, the legacy env var is set). Before, a registered plugin with no key counted as configured, so real mode offered `search_web` and every call failed. `isScenarioWebAvailable` is async and takes the user id; the capabilities read is `resolveWebCapabilities` (`lib/tools/web-capabilities.ts`).

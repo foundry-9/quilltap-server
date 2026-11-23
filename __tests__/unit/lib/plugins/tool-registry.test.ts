@@ -22,10 +22,6 @@ jest.mock('@/lib/logger', () => ({
   },
 }))
 
-jest.mock('@/lib/errors', () => ({
-  getErrorMessage: jest.fn((err: unknown) => err instanceof Error ? err.message : String(err)),
-}))
-
 // Define types inline to avoid module resolution issues
 interface ToolMetadata {
   toolName: string

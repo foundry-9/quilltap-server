@@ -233,7 +233,7 @@ export function StartupProgress() {
         )}
 
         {events.length > 0 && (
-          <div className="qt-divider mt-2 border-t pt-3">
+          <div className="mt-2 border-t qt-border-default pt-3">
             <div className="qt-text-secondary mb-2 text-xs uppercase tracking-wide">
               Recently
             </div>

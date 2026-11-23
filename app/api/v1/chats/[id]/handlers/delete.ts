@@ -9,9 +9,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
-import { notFound, serverError } from '@/lib/api/responses';
+import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { handleResetState, handleStopImpersonate } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
+import { cancelHeldAvatarRefreshes } from '@/lib/background-jobs/queue-service';
 
 /**
  * DELETE handler for removing a chat
@@ -51,10 +52,12 @@ async function handleDeleteChat(chatId: string, { repos }: RequestContext): Prom
     }
 
     await repos.chats.delete(chatId);
+    // A held avatar refresh waits for a turn this chat will never take.
+    await cancelHeldAvatarRefreshes(chatId);
 
     logger.info('[Chats v1] Chat deleted', { chatId });
 
-    return NextResponse.json({ success: true });
+    return successResponse({ success: true });
   } catch (error) {
     logger.error('[Chats v1] Error deleting chat', { chatId }, error instanceof Error ? error : undefined);
     return serverError('Failed to delete chat');

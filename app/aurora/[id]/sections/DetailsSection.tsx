@@ -47,7 +47,7 @@ export function DetailsSection() {
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Facts" description="The particulars: what they are called, by whom, and since when.">
+      <SectionCard title="Facts" anchor="facts" description="The particulars: what they are called, by whom, and since when.">
         <CharacterFactsFields
           name={name}
           title={title}
@@ -72,6 +72,7 @@ export function DetailsSection() {
 
       <SectionCard
         title="Dossier"
+        anchor="dossier"
         description="Who they are from every side: what the world knows, what others see, what holds them together, what they know of themselves — and how they open a conversation."
       >
         <CharacterDossierFields

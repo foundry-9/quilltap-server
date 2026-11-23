@@ -470,8 +470,8 @@ export function WardrobeItemEditor({
         title={isEditing ? 'Edit Wardrobe Item' : 'New Wardrobe Item'}
         showCloseButton
         maxWidth="wide"
-        bodyClassName="qt-dialog-body space-y-4 flex-1 overflow-y-auto"
-        footerClassName="qt-dialog-footer flex-shrink-0"
+        bodyClassName="qt-dialog-body-default space-y-4 flex-1 overflow-y-auto"
+        footerClassName="qt-dialog-footer-default flex-shrink-0"
         footer={
           <FormActions
             onCancel={onClose}

@@ -237,9 +237,9 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           'participants.characterId': characterId,
           contextSummary: { $exists: true },
           // Exclude the stripped-down floating surfaces (Help Chat, Brahma
-          // Console) from the per-character memory-recap "Recent Conversations"
-          // pool. Any new non-salon type should be added here too.
-          chatType: { $nin: ['help', 'brahma'] },
+          // Console, Calliope) from the per-character memory-recap "Recent
+          // Conversations" pool. Any new non-salon type should be added here too.
+          chatType: { $nin: ['help', 'brahma', 'calliope'] },
         };
         if (options.excludeChatId) {
           filter.id = { $ne: options.excludeChatId };
@@ -257,8 +257,16 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   /**
    * Find chats by user ID and chat type
    */
-  async findByType(userId: string, chatType: 'salon' | 'help' | 'brahma'): Promise<ChatMetadata[]> {
+  async findByType(userId: string, chatType: 'salon' | 'help' | 'brahma' | 'calliope'): Promise<ChatMetadata[]> {
     return this.findByFilter({ userId, chatType } as TypedQueryFilter<ChatMetadata>);
+  }
+
+  /**
+   * Calliope's conversations about one theme draft (`chatType: 'calliope'`,
+   * `themeDraftId`). The draft's delete takes them with it.
+   */
+  async findCalliopeByThemeDraft(themeDraftId: string): Promise<ChatMetadata[]> {
+    return this.findByFilter({ chatType: 'calliope', themeDraftId } as TypedQueryFilter<ChatMetadata>);
   }
 
   /**
@@ -357,14 +365,16 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
               participantCharacterIds = Array.from(
                 new Set(chat.participants.map(p => p.characterId))
               );
-              // A Brahma Console conversation takes its attachments with it —
-              // only those still directly under `Brahma/` in Quilltap General.
-              // Read before the messages go. Bulk callers (restore, import)
-              // pass `syncVaults: false` and manage stores wholesale.
-              if (chat.chatType === 'brahma') {
-                const { deleteConsoleAttachmentsForChat } = await import('@/lib/brahma-console/attachments');
+              // A console conversation (Brahma, Calliope) takes its attachments
+              // with it — only those still directly under its folder in
+              // Quilltap General. Read before the messages go. Bulk callers
+              // (restore, import) pass `syncVaults: false` and manage stores
+              // wholesale.
+              const { consoleAttachmentFolderFor, deleteConsoleAttachmentsForChat } = await import('@/lib/console-engine/attachments');
+              const attachmentFolder = consoleAttachmentFolderFor(chat.chatType);
+              if (attachmentFolder) {
                 const { getRepositories } = await import('@/lib/repositories/factory');
-                await deleteConsoleAttachmentsForChat(getRepositories(), id);
+                await deleteConsoleAttachmentsForChat(attachmentFolder, getRepositories(), id);
               }
             }
           } catch (error) {

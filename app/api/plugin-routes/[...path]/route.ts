@@ -331,7 +331,6 @@ export async function OPTIONS(request: NextRequest, params: RouteParams): Promis
       status: 200,
       headers: {
         Allow: [...methods, 'OPTIONS'].join(', '),
-        'Access-Control-Allow-Methods': [...methods, 'OPTIONS'].join(', '),
       },
     });
   } catch (error) {

@@ -306,6 +306,14 @@ function quoteTolerant(delim: string, side: 'open' | 'close'): { source: string;
 }
 
 /**
+ * The `_word_` wrap. An underscore opens only where no word character sits
+ * before it and closes only where none follows, and the body may not begin or
+ * end with a space, so `snake_case_name` and `a _ b _ c` are left alone. A
+ * backslash before the opening mark keeps it literal.
+ */
+export const UNDERSCORE_WRAP_REGEX = '(?<![\\w\\\\])_(?=\\S)(?<rpBody>[^_]+)(?<=\\S)_(?!\\w)'
+
+/**
  * Build an inline wrap regex for a prefix/suffix pair.
  * Returns null if the pair is empty. Scope is always `inline`.
  *
@@ -349,6 +357,12 @@ function buildWrapPattern(
 
   const escapedPrefix = escapeRegex(prefix)
   const escapedSuffix = escapeRegex(suffix)
+
+  // Underscores join words far more often than they mark anything, so a `_`
+  // wrap follows Markdown's own rule (see UNDERSCORE_WRAP_REGEX).
+  if (prefix === '_' && suffix === '_') {
+    return { regex: UNDERSCORE_WRAP_REGEX, scope: 'inline' }
+  }
 
   if (prefix === suffix) {
     // Same open/close delimiter (e.g., * or +)

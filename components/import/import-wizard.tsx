@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { activateOnKey } from '@/components/ui/activate-on-key'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -267,6 +268,10 @@ export function ImportWizard({
                     : 'qt-border-default hover:qt-border-primary/50'
               }`}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={activateOnKey}
+              role="button"
+              tabIndex={0}
+              aria-label={selectedFile ? `Chosen file: ${selectedFile.name}. Press to choose another` : 'Choose a chat file: drop one here or press to browse'}
               onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(true) }}
               onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false) }}
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
@@ -291,7 +296,7 @@ export function ImportWizard({
             </div>
 
             {error && (
-              <div className="text-sm qt-text-destructive whitespace-pre-wrap">
+              <div role="alert" className="text-sm qt-text-destructive whitespace-pre-wrap">
                 {error}
               </div>
             )}
@@ -340,7 +345,7 @@ export function ImportWizard({
             </div>
 
             {error && (
-              <div className="text-sm qt-text-destructive whitespace-pre-wrap">
+              <div role="alert" className="text-sm qt-text-destructive whitespace-pre-wrap">
                 {error}
               </div>
             )}
@@ -457,7 +462,7 @@ export function ImportWizard({
         maxWidth="2xl"
         className="w-[90vw]"
         footer={renderFooter()}
-        footerClassName="qt-dialog-footer flex-shrink-0"
+        footerClassName="qt-dialog-footer-default flex-shrink-0"
       >
         {/* Step indicator */}
         <div className="flex items-center gap-1 mb-4">

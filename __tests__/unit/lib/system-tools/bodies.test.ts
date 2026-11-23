@@ -93,8 +93,6 @@ describe('system/tools POST bodies are validated (phase 5a)', () => {
     ['delete-data without the confirmation', 'delete-data', {}, 'Confirmation required', () => deleteAllUserData],
     ['delete-data with a wrong confirmation', 'delete-data', { confirm: 'yes' }, 'Confirmation required', () => deleteAllUserData],
     ['delete-data with a string keepArchivedCharacterBundles', 'delete-data', { confirm: 'DELETE_ALL_MY_DATA', keepArchivedCharacterBundles: 'no' }, 'keepArchivedCharacterBundles', () => deleteAllUserData],
-    ['tasks-queue with an unknown action', 'tasks-queue', { action: 'pause' }, 'Invalid action', () => startProcessor],
-    ['tasks-queue with no action', 'tasks-queue', {}, 'Invalid action', () => stopProcessor],
     ['job-concurrency above the cap', 'job-concurrency', { concurrency: 64 }, 'concurrency', () => setMaxConcurrentJobs],
     ['job-concurrency as a string', 'job-concurrency', { concurrency: '4' }, 'concurrency', () => setMaxConcurrentJobs],
     ['export with no type', 'export', { scope: 'all' }, 'type', () => createNdjsonStream],
@@ -119,7 +117,15 @@ describe('system/tools POST bodies are validated (phase 5a)', () => {
     expect((sideEffect as () => jest.Mock)()).not.toHaveBeenCalled()
   })
 
-  it('capabilities-report-generate with no body is still accepted (untracked run)', async () => {
+  it('the removed POST ?action=tasks-queue body form is an unknown action (400)', async () => {
+    const res = await POST(jsonRequest('tasks-queue', { action: 'start' }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('Unknown action: tasks-queue')
+    expect(startProcessor).not.toHaveBeenCalled()
+    expect(stopProcessor).not.toHaveBeenCalled()
+  })
+
+    it('capabilities-report-generate with no body is still accepted (untracked run)', async () => {
     jest.mocked(generateAndSaveAlmanack).mockResolvedValue({
       reportId: 'r1', filename: 'a.md', storageKey: 'k', size: 1, content: 'x',
     } as any)

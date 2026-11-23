@@ -35,13 +35,15 @@ jest.mock('@/lib/services/chat-message/agent-mode-resolver.service', () => ({
   buildForceFinalMessage: jest.fn(() => 'FORCE FINAL'),
   extractSubmitFinalResponseFromText: jest.fn((s: string) => s),
 }))
-jest.mock('@/lib/services/brahma-console/orchestrator.service', () => ({
+jest.mock('@/lib/services/console-engine/loop-guard', () => ({
   normalizeToolCallSignature: jest.fn(() => 'sig'),
+  // The research guards are exercised in loop-guard.test.ts; off here.
+  researchGuardFor: jest.fn(() => null),
 }))
 
 import { streamMessage } from '@/lib/services/chat-message/streaming.service'
 import { processToolCalls, detectToolCallsInResponse } from '@/lib/services/chat-message/tool-execution.service'
-import { normalizeToolCallSignature } from '@/lib/services/brahma-console/orchestrator.service'
+import { normalizeToolCallSignature } from '@/lib/services/console-engine/loop-guard'
 
 const MOCK_PROFILE = {
   id: 'conn-1',
@@ -181,6 +183,36 @@ describe('runOneShotToolLoop — ported scenarios', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.answer).toContain('2-turn budget')
+      expect(result.answer).toContain('rows: 7')
+    }
+  })
+
+  it('names an output-token cut-off, not the budget, when an early turn comes back empty', async () => {
+    jest
+      .mocked(streamMessage)
+      .mockImplementationOnce(async function* () {
+        yield { done: true, rawResponse: { tool: true } }
+      } as never)
+      .mockImplementationOnce(async function* () {
+        // Thinking used every output token; no text, no tool call.
+        yield { done: true, rawResponse: { choices: [{ finish_reason: 'length' }] } }
+      } as never)
+    jest
+      .mocked(detectToolCallsInResponse)
+      .mockReturnValueOnce([{ name: 'run_sql', arguments: { sql: 'select 1' }, callId: 'c1' }] as never)
+      .mockReturnValueOnce([] as never)
+    jest.mocked(processToolCalls).mockResolvedValue({
+      toolMessages: [{ toolName: 'run_sql', success: true, content: 'rows: 7', callId: 'c1' }],
+      generatedImagePaths: [],
+    } as never)
+
+    const result = await runOneShotToolLoop(baseOpts({ maxAgentTurns: 25 }))
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.answer).toContain('ran out of output tokens')
+      expect(result.answer).toContain('after 2 of 25 turns')
+      expect(result.answer).not.toContain('25-turn budget')
       expect(result.answer).toContain('rows: 7')
     }
   })

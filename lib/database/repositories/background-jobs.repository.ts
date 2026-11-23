@@ -8,6 +8,7 @@
  */
 
 import { BackgroundJob, BackgroundJobSchema, BackgroundJobType, BackgroundJobStatus } from '@/lib/schemas/types';
+import { HELD_UNTIL_NEXT_TURN } from '@/lib/schemas/job.types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
 import { QueryFilter, TypedQueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
@@ -528,9 +529,11 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           );
           if (types.length === 0) continue;
 
+          // A job held for its chat's next turn is waiting, not working.
           const filter: TypedQueryFilter<BackgroundJob> = {
             status: { $in: ['PENDING', 'PROCESSING'] },
             type: { $in: types },
+            scheduledAt: { $lt: HELD_UNTIL_NEXT_TURN },
           } as TypedQueryFilter<BackgroundJob>;
           if (userId) {
             filter.userId = userId;
@@ -553,9 +556,11 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   async getActiveCountsByType(userId?: string): Promise<Record<string, number>> {
     return this.safeQuery(
       async () => {
+        // A job held for its chat's next turn is waiting, not working.
         const filter: TypedQueryFilter<BackgroundJob> = {
           status: { $in: ['PENDING', 'PROCESSING'] },
-        };
+          scheduledAt: { $lt: HELD_UNTIL_NEXT_TURN },
+        } as TypedQueryFilter<BackgroundJob>;
         if (userId) {
           filter.userId = userId;
         }
@@ -572,30 +577,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
       'Error getting active counts by type',
       { userId },
       {}
-    );
-  }
-
-  /**
-   * @deprecated Single-window reaper that treats COMPLETED and DEAD jobs the
-   * same. Retention now differs by status (completed jobs are short-lived,
-   * dead jobs are kept longer as a forensic trail), so production should call
-   * {@link cleanupOldJobsByStatus}. Retained only so the existing
-   * queue-service unit test keeps compiling.
-   */
-  async cleanupOldJobs(olderThan: Date): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const deletedCount = await this.deleteMany({
-          status: { $in: ['COMPLETED', 'DEAD'] },
-          completedAt: { $lt: olderThan.toISOString() },
-        });
-
-        logger.info('Cleaned up old background jobs', { deletedCount });
-        return deletedCount;
-      },
-      'Error cleaning up old jobs',
-      {},
-      0
     );
   }
 

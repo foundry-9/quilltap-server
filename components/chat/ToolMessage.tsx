@@ -439,6 +439,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🧵',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
+    read_memory: {
+      displayName: 'Read Memory',
+      icon: '🧠',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    edit_memory: {
+      displayName: 'Edit Memory',
+      icon: '🧠',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
     inventory_list: {
       displayName: 'Inventory',
       icon: '🎒',
@@ -544,7 +554,10 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   // (nested in a character's bubble) drops the row/avatar and renders the card
   // directly, wrapped in qt-chat-tool-embedded.
   return (
-    <div className={embedded ? 'qt-chat-tool-embedded' : 'qt-chat-message-row-tool'}>
+    <div
+      className={embedded ? 'qt-chat-tool-embedded' : 'qt-chat-message-row-tool'}
+      data-role={embedded ? undefined : 'tool'}
+    >
       {/* Avatar slot — author portrait (Prospero or calling character) when
           known, otherwise the tool's emoji on a muted circle. Omitted when
           embedded, since the character's own avatar already heads the bubble. */}
@@ -582,7 +595,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             </div>
           </div>
         )}
-        <div className={`px-4 py-3 rounded-lg ${info.bgColor}`}>
+        <div className={`qt-chat-tool-call px-4 py-3 rounded-lg ${info.bgColor}`} data-tool={toolData.toolName || undefined}>
           {/* Tool header */}
           <div className="flex items-center gap-2 mb-2">
             <div className="flex flex-col gap-1">

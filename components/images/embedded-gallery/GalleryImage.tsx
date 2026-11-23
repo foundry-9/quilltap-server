@@ -1,5 +1,6 @@
 'use client'
 
+import { UncensoredBadge } from '@/components/images/UncensoredBadge'
 import { Icon } from '@/components/ui/icon'
 import type { GalleryImageProps } from './types'
 
@@ -67,10 +68,15 @@ export function GalleryImage({
           </div>
         )}
 
-        {/* Avatar Badge */}
-        {isAvatar && (
-          <div className="absolute top-1 left-1 qt-bg-success qt-text-on-success text-xs px-1.5 py-0.5 rounded font-medium">
-            Avatar
+        {/* Badges — Avatar, and Uncensored when an uncensored profile drew it */}
+        {(isAvatar || image.generationModeration) && (
+          <div className="absolute top-1 left-1 flex flex-col items-start gap-1">
+            {isAvatar && (
+              <div className="qt-bg-success qt-text-on-success text-xs px-1.5 py-0.5 rounded font-medium">
+                Avatar
+              </div>
+            )}
+            <UncensoredBadge moderation={image.generationModeration} />
           </div>
         )}
       </button>

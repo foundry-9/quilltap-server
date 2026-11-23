@@ -360,35 +360,6 @@ export class DocMountBlobsRepository {
   }
 
   /**
-   * Update the relativePath of the link associated with a blob. Legacy
-   * facade; mirrors the old per-blob updatePath semantics by writing to
-   * the first matching link row.
-   */
-  async updatePath(id: string, newRelativePath: string): Promise<boolean> {
-    try {
-      const db = this.db();
-      const blob = await this.findById(id);
-      if (!blob) return false;
-      const link = db.prepare(
-        `SELECT id FROM doc_mount_file_links WHERE fileId = ? LIMIT 1`
-      ).get(blob.fileId) as { id: string } | undefined;
-      if (!link) return false;
-      const now = new Date().toISOString();
-      const res = db.prepare(
-        `UPDATE doc_mount_file_links SET relativePath = ?, updatedAt = ? WHERE id = ?`
-      ).run(newRelativePath, now, link.id);
-      return res.changes > 0;
-    } catch (error) {
-      logger.warn('Failed to update blob path', {
-        id,
-        newRelativePath,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
-  }
-
-  /**
    * Delete a blob row directly. In normal use the cascade from
    * doc_mount_files (when its last link is removed) handles cleanup; this
    * is for migration and reconciliation paths that hold a fileId directly.

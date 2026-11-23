@@ -13,6 +13,7 @@ import { firstActiveScenarioContent } from '@/lib/characters/active-scenarios'
 import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
 import { isHumanoid, pickPhysicalDescription } from '@/lib/characters/physical-description'
 import { publicIdentityFacts, renderPublicIdentityFacts } from '@/lib/characters/public-identity'
+import { buildStoryCharacterSection } from './story-character-section'
 
 /**
  * Universal formatting note appended to every character's system prompt,
@@ -458,6 +459,18 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   const tabooSection = renderTabooSection(tabooPhrases)
   if (tabooSection) {
     parts.push(tabooSection)
+  }
+
+  // Story-character section — latitude to invent within what is established,
+  // to be played at their worst, and to be preoccupied. Chosen by the
+  // character's kind: a roleplay character gets it, an assistant gets '' and
+  // nothing is pushed (so an assistant's prompt is byte-identical). Stable per
+  // character, so it lives in the cacheable prefix; after the character's own
+  // prompt and before the operator's standing instructions, both of which
+  // outrank it. Not part of the identity stack — no version bump, no golden.
+  const storySection = buildStoryCharacterSection(character)
+  if (storySection) {
+    parts.push(processTemplate(storySection, templateContext))
   }
 
   // Standing instructions (project + group `instructions`). Stable per

@@ -51,6 +51,8 @@ import { isCharacterPageSection } from '@/lib/characters/page-sections'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
 import { SettingsWizardView } from '@/app/settings/wizard/SettingsWizardView'
 import { CustomToolsView } from '@/app/custom-tools/CustomToolsView'
+import { ThemeEditorView } from '@/app/calliope/ThemeEditorView'
+import { SpecimenGalleryView } from '@/app/calliope/specimens/SpecimenGalleryView'
 import type {
   ProsperoTabPayload,
   ScriptoriumTabPayload,
@@ -63,6 +65,7 @@ import type {
   AtlasTabPayload,
   CharacterTabPayload,
   CustomToolsTabPayload,
+  ThemeEditorTabPayload,
 } from '@/lib/workspace/types'
 
 /**
@@ -150,6 +153,10 @@ function renderView(tab: WorkspaceTab) {
       return <SettingsWizardView />
     case 'custom-tools':
       return <CustomToolsView payload={tab.payload as CustomToolsTabPayload | undefined} />
+    case 'theme-editor':
+      return <ThemeEditorView payload={tab.payload as ThemeEditorTabPayload | undefined} />
+    case 'theme-specimens':
+      return <SpecimenGalleryView />
     default:
       return null
   }

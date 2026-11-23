@@ -11,7 +11,7 @@
 jest.mock('@google/genai', () => ({ GoogleGenAI: jest.fn() }), { virtual: true })
 
 import { classifyRefusal } from '@/lib/services/dangerous-content/refusal'
-import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
+import { extractFinishReason, isTruncatedFinishReason } from '@/lib/llm/extract-finish-reason'
 import { toOpenAIImageModerationError } from '@/plugins/dist/qtap-plugin-openai/image-provider'
 import { toGrokImageModerationError } from '@/plugins/dist/qtap-plugin-grok/image-provider'
 import { toZaiImageModerationError } from '@/plugins/dist/qtap-plugin-z-ai/image-provider'
@@ -186,6 +186,32 @@ describe('streamed finish reasons reach the host', () => {
       output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'No.' }] }],
     }))
     expect(extractFinishReason(raw)).toBe('refusal')
+  })
+
+  // #228: a tool call cut off mid-arguments must read as truncated, not as
+  // `tool_calls` — the incomplete status outranks the function_call.
+  const cutOffToolCall = {
+    status: 'incomplete',
+    incomplete_details: { reason: 'max_output_tokens' },
+    output: [{ type: 'function_call', call_id: 'c1', name: 'doc_write_file', arguments: '{"content":"abc' }],
+  }
+
+  it('OpenAI: an incomplete response holding a cut-off function_call reads as truncated (#228)', () => {
+    const raw = (new OpenAIProvider() as any).buildRawResponse(responsesResponse(cutOffToolCall))
+    expect(extractFinishReason(raw)).toBe('max_output_tokens')
+    expect(isTruncatedFinishReason(extractFinishReason(raw))).toBe(true)
+  })
+
+  it('Grok: an incomplete response holding a cut-off function_call reads as truncated (#228)', () => {
+    const raw = (new GrokProvider() as any).buildRawResponse(responsesResponse(cutOffToolCall))
+    expect(extractFinishReason(raw)).toBe('max_output_tokens')
+    expect(isTruncatedFinishReason(extractFinishReason(raw))).toBe(true)
+  })
+
+  it('OpenAI and Grok: a completed function_call still reads as tool_calls', () => {
+    const done = { output: [{ type: 'function_call', call_id: 'c1', name: 'x', arguments: '{}' }] }
+    expect(extractFinishReason((new OpenAIProvider() as any).buildRawResponse(responsesResponse(done)))).toBe('tool_calls')
+    expect(extractFinishReason((new GrokProvider() as any).buildRawResponse(responsesResponse(done)))).toBe('tool_calls')
   })
 
   it('Grok: an incomplete content_filter response', () => {

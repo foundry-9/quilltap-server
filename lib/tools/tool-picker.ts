@@ -56,6 +56,8 @@ import { inventoryGiveToolDefinition } from './inventory-give-tool';
 import { inventoryListToolDefinition } from './inventory-list-tool';
 import { inventoryPickUpToolDefinition } from './inventory-pick-up-tool';
 import { inventoryReadToolDefinition } from './inventory-read-tool';
+import { readMemoryToolDefinition } from './read-memory-tool';
+import { editMemoryToolDefinition } from './edit-memory-tool';
 import { inventoryUnequipToolDefinition } from './inventory-unequip-tool';
 import { inventoryUpdateToolDefinition } from './inventory-update-tool';
 import { keepImageToolDefinition } from './keep-image-tool';
@@ -93,7 +95,8 @@ export type ToolRequirement =
   | 'multiCharacter'
   | 'canDressThemselves'
   | 'canCreateOutfits'
-  | 'canManageInventory';
+  | 'canManageInventory'
+  | 'canEditMemories';
 
 /** A tool the picker lists. */
 export interface ListedToolPickerEntry {
@@ -339,6 +342,22 @@ export const BUILT_IN_TOOL_PICKER: Readonly<Record<string, ToolPickerEntry>> = {
     category: 'wardrobe',
     definition: wardrobeHistoryToolDefinition,
     requires: ['canDressThemselves'],
+  },
+  read_memory: {
+    listed: true,
+    name: 'Read Memory',
+    description: 'Read one of the character\'s own memories as the object Edit Memory takes',
+    category: 'memory',
+    definition: readMemoryToolDefinition,
+    requires: ['canEditMemories'],
+  },
+  edit_memory: {
+    listed: true,
+    name: 'Edit Memory',
+    description: 'Rewrite one of the character\'s own memories: its text, summary, keywords, importance, subject and links',
+    category: 'memory',
+    definition: editMemoryToolDefinition,
+    requires: ['canEditMemories'],
   },
   inventory_list: {
     listed: true,
@@ -624,12 +643,25 @@ export const BUILT_IN_TOOL_PICKER: Readonly<Record<string, ToolPickerEntry>> = {
   doc_move_folder: { listed: false, reason: "Executable, but no surface offers it: `buildTools` never adds it to a tool list, so a picker switch would turn nothing off." },
   doc_read_blob: { listed: false, reason: "Executable, but no surface offers it: `buildTools` never adds it to a tool list, so a picker switch would turn nothing off." },
   doc_write_blob: { listed: false, reason: "Executable, but no surface offers it: `buildTools` never adds it to a tool list, so a picker switch would turn nothing off." },
+  find_documents: { listed: false, reason: "The research kit's: offered by the Console, @Brahma and the builders through `researchKit`, never to a chat seat." },
+  list_documents: { listed: false, reason: "The research kit's: offered by the Console, @Brahma and the builders through `researchKit`, never to a chat seat." },
+  lookup_conversations: { listed: false, reason: "Brahma's Console and the operator's builders only (operator surface, research kit)." },
+  lookup_group: { listed: false, reason: "Brahma's Console and the operator's builders only (operator surface, research kit)." },
+  lookup_project: { listed: false, reason: "Brahma's Console and the operator's builders only (operator surface, research kit)." },
+  lookup_wardrobe: { listed: false, reason: "Brahma's Console and the operator's builders only (operator surface, research kit)." },
+  lookup_atlas: { listed: false, reason: "Brahma's Console and the operator's builders only (operator surface, research kit)." },
+  lookup_chat_state: { listed: false, reason: "Brahma's Console and the operator's builders only (operator surface, research kit)." },
   lookup_character: { listed: false, reason: "Brahma's Console only (operator surface)." },
   lookup_memories: { listed: false, reason: "Brahma's Console only (operator surface)." },
   lookup_messages: { listed: false, reason: "Brahma's Console only (operator surface)." },
   read_messages: { listed: false, reason: "Brahma's Console only (operator surface)." },
   request_full_context: { listed: false, reason: "A safety valve: always offered, never switchable." },
   run_sql: { listed: false, reason: "Brahma's Console only (operator surface)." },
+  theme_check_contrast: { listed: false, reason: "Calliope's only, in a conversation about a theme draft." },
+  theme_lookup_hooks: { listed: false, reason: "Calliope's only, in a conversation about a theme draft." },
+  theme_lookup_tokens: { listed: false, reason: "Calliope's only, in a conversation about a theme draft." },
+  theme_propose: { listed: false, reason: "Calliope's only, in a conversation about a theme draft." },
+  theme_read_draft: { listed: false, reason: "Calliope's only, in a conversation about a theme draft." },
   submit_final_response: { listed: false, reason: "Agent mode's own closing call, not a tool an operator chooses." },
 };
 
@@ -644,6 +676,7 @@ export interface ToolAvailabilityContext {
   canDressThemselves: boolean;
   canCreateOutfits: boolean;
   canManageInventory: boolean;
+  canEditMemories: boolean;
 }
 
 /** Why a requirement is unmet, or null when it is met. */
@@ -671,6 +704,8 @@ function unmetReason(requirement: ToolRequirement, ctx: ToolAvailabilityContext)
       return ctx.canCreateOutfits ? null : 'Character does not have wardrobe item creation enabled';
     case 'canManageInventory':
       return ctx.canManageInventory ? null : 'Character does not have inventory management enabled';
+    case 'canEditMemories':
+      return ctx.canEditMemories ? null : 'Character does not have memory editing enabled';
   }
 }
 

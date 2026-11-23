@@ -2,6 +2,7 @@
 
 import { RefObject } from 'react'
 import { formatBytes } from '@/lib/utils/format-bytes'
+import { activateOnKey } from '@/components/ui/activate-on-key'
 
 interface ImportFileStepProps {
   selectedFile: File | null
@@ -40,6 +41,10 @@ export function ImportFileStep({
             : 'qt-border-default hover:qt-border-primary/50'
         }`}
         onClick={() => fileInputRef.current?.click()}
+        onKeyDown={activateOnKey}
+        role="button"
+        tabIndex={0}
+        aria-label="Choose a Quilltap export file: drop one here or press to browse"
         onDragEnter={onDragEnter}
         onDragLeave={onDragLeave}
         onDragOver={onDragOver}

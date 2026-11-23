@@ -2,6 +2,67 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [2.7.8] - 2026-11-22
+
+Dependency update only; no code changes.
+
+### Changed
+
+- `@quilltap/plugin-types` dependency raised to `^2.13.0`.
+- Dev dependency `openai` raised to `^7.62.0`.
+
+## [2.7.7] - 2026-11-19
+
+Dependency update only; no code changes.
+
+### Changed
+
+- `@quilltap/plugin-types` dependency raised to `^2.12.0`.
+- Dev dependency `openai` raised to `^7.60.0`.
+
+## [2.7.6] - 2026-11-14
+
+Dependency update only; no code changes.
+
+### Changed
+
+- `@quilltap/plugin-types` dependency raised to `^2.11.0`.
+- Dev dependency `openai` raised to `^7.57.0`.
+
+## [2.7.5] - 2026-11-09
+
+Dependency update only; no code changes.
+
+### Changed
+
+- Dev dependency `openai` raised to `^7.54.0`.
+
+## [2.7.4] - 2026-11-03
+
+Dependency update only; no code changes.
+
+### Changed
+
+- `@quilltap/plugin-types` dependency raised to `^2.10.0`.
+- Dev dependency `openai` raised to `^7.47.0`.
+
+## [2.7.3] - 2026-10-29
+
+Dependency update only; no code changes.
+
+### Changed
+
+- `@quilltap/plugin-types` dependency raised to `^2.9.1`.
+- Dev dependency `openai` raised to `^7.45.1`.
+
+## [2.7.2] - 2026-10-29
+
+Build toolchain update only; no code changes.
+
+### Changed
+
+- Built with TypeScript 6 (`^6.0.3`) and tsup 9 (`^9.0.0`).
+
 ## [2.7.1] - 2026-10-13
 
 Version-only republish of 2.7.0 (no code changes): 2.7.0 had not appeared on the registry yet when the plugins needed it.

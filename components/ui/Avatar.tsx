@@ -144,7 +144,7 @@ export function Avatar({
 
   // Build image container classes
   const containerClasses = [
-    'overflow-hidden qt-bg-muted flex items-center justify-center',
+    'qt-avatar-image overflow-hidden qt-bg-muted flex items-center justify-center',
     style === 'CIRCULAR' ? 'rounded-full' : '',
     isActive ? 'ring-2 qt-ring-brand ring-offset-1 ring-offset-card' : '',  /* ring-primary uses shadcn token */
   ].filter(Boolean).join(' ')

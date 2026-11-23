@@ -513,12 +513,4 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
     return rows;
   }
 
-  /** Every ledger row one character holds. */
-  async findRowsForWearer(characterId: string): Promise<WardrobeWearStatsRow[]> {
-    const found = await rawQuery<RawRow[]>(
-      `SELECT * FROM "${WARDROBE_WEAR_STATS_TABLE}" WHERE "wearerCharacterId" = ?`,
-      [characterId],
-    );
-    return found.map(normalizeRow);
-  }
 }

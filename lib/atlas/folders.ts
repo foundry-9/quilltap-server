@@ -76,9 +76,6 @@ const family = defineItemFolderFamily(ATLAS_FOLDER_RULES, '.md', errors);
 /** A folder an existing entry carries, in normal form or the root. */
 export const normalizeAtlasFolderPathOrRoot = family.normalizeOrRoot;
 
-/** True when `path` is structurally safe to write under `Atlas/`. */
-export const isSafeAtlasFolderPath = family.isSafe;
-
 /** Resolve an operator's requested folder against the folders a tier already has. */
 export const resolveAtlasFolder = family.resolve;
 

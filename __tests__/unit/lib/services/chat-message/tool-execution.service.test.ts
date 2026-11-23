@@ -7,6 +7,7 @@ import {
   detectToolCallsInResponse,
   createToolContext,
   saveToolMessages,
+  processToolCalls,
   type ToolWhisperContext,
 } from '@/lib/services/chat-message/tool-execution.service'
 import * as toolExecutor from '@/lib/chat/tool-executor'
@@ -573,6 +574,42 @@ describe('tool-execution.service', () => {
       )
       const persisted = addMessage.mock.calls[0][1] as { content: string }
       expect('anchorOffset' in JSON.parse(persisted.content)).toBe(false)
+    })
+  })
+
+  describe('processToolCalls — what the model is handed', () => {
+    const mockedExecute = toolExecutor.executeToolCallWithContext as jest.MockedFunction<typeof toolExecutor.executeToolCallWithContext>
+    const controller = { enqueue: jest.fn() } as unknown as Parameters<typeof processToolCalls>[2]
+    const context = {} as Parameters<typeof processToolCalls>[1]
+
+    it('hands `search` its rendered text, not the raw results array', async () => {
+      mockedExecute.mockResolvedValue({
+        toolName: 'search',
+        success: true,
+        result: {
+          formattedText: 'Found 1 results:\n\n[Result 1 - Memory] (Importance: High, Relevance: 82%)\nMemory ID: mem-1',
+          results: [{ content: 'the full memory', sourceType: 'memory', relevanceScore: 0.82, metadata: { memoryId: 'mem-1' } }],
+          totalFound: 1,
+          query: 'proposal',
+        },
+      } as Awaited<ReturnType<typeof toolExecutor.executeToolCallWithContext>>)
+
+      const out = await processToolCalls([{ name: 'search', arguments: { query: 'proposal' }, callId: 'c1' }], context, controller, new TextEncoder())
+
+      expect(out.toolMessages[0].content).toBe('Found 1 results:\n\n[Result 1 - Memory] (Importance: High, Relevance: 82%)\nMemory ID: mem-1')
+      expect(out.toolMessages[0].content).not.toContain('the full memory')
+    })
+
+    it('still sends other tools as JSON', async () => {
+      mockedExecute.mockResolvedValue({
+        toolName: 'state',
+        success: true,
+        result: { formattedText: 'x', value: 3 },
+      } as Awaited<ReturnType<typeof toolExecutor.executeToolCallWithContext>>)
+
+      const out = await processToolCalls([{ name: 'state', arguments: {}, callId: 'c2' }], context, controller, new TextEncoder())
+
+      expect(JSON.parse(out.toolMessages[0].content)).toEqual({ formattedText: 'x', value: 3 })
     })
   })
 })

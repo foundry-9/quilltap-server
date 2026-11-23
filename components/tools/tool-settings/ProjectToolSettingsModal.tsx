@@ -108,7 +108,7 @@ export function ProjectToolSettingsModal({
       onClose={onClose}
       title="Default Tool Settings"
     >
-      <div className="qt-dialog-body">
+      <div className="qt-dialog-body qt-dialog-body-default">
         <ToolSettingsContent
           availableTools={availableTools}
           disabledTools={localDisabledTools}
@@ -122,7 +122,7 @@ export function ProjectToolSettingsModal({
       </div>
 
       {/* Footer with save/cancel buttons */}
-      <div className="qt-dialog-footer">
+      <div className="qt-dialog-footer qt-dialog-footer-default">
         <button
           type="button"
           onClick={onClose}

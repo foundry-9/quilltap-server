@@ -63,6 +63,12 @@ What the answerer does **not** receive:
 
 This isolation is the point. A Carina answer is a reference answer: drawn from the character's nature, its own recollections, and the tools at hand — not from the conversational context it has not been party to.
 
+### When the records are silent
+
+A roleplay character rung at the desk is assumed, by everyone in the room, to know their own business, and they now answer accordingly. They **look first**: if their memory or a tool holds the answer, you receive it exactly as it stands. Where both are silent and nothing established says otherwise, they supply the particulars a person in their position would have (the date, the name, the figure, what the ledger says) in place of a regretful "I couldn't say." Since they cannot see the conversation, they make no claims about what anyone in it has said or done. Whatever they supply is remembered afterward, so the same question fetches the same answer next time.
+
+A character whose kind is set to **Assistant** does no such thing: asked for what it does not have, it tells you so. Neither does Brahma, of whom more below. Should an invented answer ever collide with your story, narrate the truth of the matter and the character will fall in with it.
+
 ### What the answerer remembers afterward
 
 A consultation is not forgotten the moment it concludes. After the answer is delivered, the answerer forms its own memories of the exchange — what it was asked, and what it replied — filed away in its Commonplace Book exactly as any other turn would be. Whispered consultations are remembered no less than public ones: the answerer experienced the question regardless of who was permitted to see the reply. Over time, a frequently consulted reference character accumulates a sense of what it is repeatedly asked, and its recollections inform later answers. (The party putting the question — you, or another character via `ask_carina` — forms no memory of the exchange on Carina's account; only the answerer remembers.)
@@ -105,7 +111,7 @@ There is one answerer at the reference desk who keeps no character file at all, 
 
 Brahma is a creature apart, and a few particulars follow from that:
 
-- **It keeps no memories.** Nothing asked of Brahma is filed away, and nothing it has answered before colours a later reply. Each consultation stands entirely alone — Brahma does not even recall the rest of the present conversation, only the single question you put to it.
+- **It keeps no memories.** Nothing asked of Brahma is filed away, and nothing it has answered before colours a later reply. Each consultation stands entirely alone — Brahma does not even recall the rest of the present conversation, only the single question you put to it. It does know *which* conversation it was rung from, and may look up that conversation's present state — who is here, and what each is carrying and wearing.
 - **It appears on no roster.** Brahma is not a character; you will not find it in Aurora, in a participant list, or anywhere a character might ordinarily be enrolled. It exists only at the moment it is consulted.
 - **It answers with the Console's full powers** — the same read-only inspection of your records and access to your document stores that the standalone Console enjoys.
 - **It answers with the engine you appoint.** **Settings → Games & Tools → Brahma Console** names the connection profile for `@Brahma` (your default, unless you choose otherwise), and a project's **Model Behavior** card may overrule it for that project's chats. See [Brahma Console](brahma-console.md).

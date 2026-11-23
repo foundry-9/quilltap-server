@@ -78,7 +78,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   if (isSetupPage || isUnlockPage) {
     return (
       <div className="flex flex-col h-screen qt-bg-default qt-text">
-        <main className="flex-1 min-h-0 overflow-auto">
+        <main className="qt-app-content flex-1 min-h-0 overflow-auto">
           {children}
         </main>
       </div>
@@ -97,7 +97,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   if (isAuthPage || !session) {
     return (
       <div className="flex flex-col h-screen qt-bg-default qt-text">
-        <main className="flex-1 min-h-0 overflow-auto">
+        <main className="qt-app-content flex-1 min-h-0 overflow-auto">
           {children}
         </main>
       </div>
@@ -113,9 +113,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       <a href="#main-content" className="qt-skip-link">Skip to content</a>
       <LeftSidebar />
       <div className="qt-app-main">
-        <main id="main-content" tabIndex={-1} className="flex flex-col flex-1 min-h-0 overflow-hidden focus:outline-none">
+        <main id="main-content" tabIndex={-1} className="qt-app-content flex flex-col flex-1 min-h-0 overflow-hidden focus:outline-none">
           <PageToolbar />
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="qt-app-scroll flex-1 min-h-0 overflow-y-auto">
             {children}
           </div>
         </main>

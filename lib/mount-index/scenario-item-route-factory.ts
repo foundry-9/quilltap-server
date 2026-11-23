@@ -22,6 +22,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -244,8 +245,9 @@ export function createScenarioItemHandlers<P extends ItemParams>(config: Scenari
   // DELETE — delete a scenario file
   // ==========================================================================
 
+  // No actions on DELETE: an unknown `?action=` is a 400, never a deletion.
   const DELETE = createContextParamsHandler<P>(
-    async (req: NextRequest, ctx: RequestContext, params) => {
+    withActionDispatch<P>({}, async (req: NextRequest, ctx: RequestContext, params) => {
       const { scenarioPath } = params;
       const id: string | undefined = params.id;
       try {
@@ -279,7 +281,7 @@ export function createScenarioItemHandlers<P extends ItemParams>(config: Scenari
         );
         return serverError(`Failed to delete ${owner} scenario`);
       }
-    },
+    }),
   );
 
   return { GET, PUT, POST, DELETE };
