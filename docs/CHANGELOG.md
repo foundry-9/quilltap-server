@@ -4,6 +4,22 @@
 
 ### 4.14-dev
 
+#### Fix: Reset Built-in Characters kept neither character's id
+
+- The reset rewrote the seed bundle's character ids to the existing ones, then imported without `preserveIds`, so the importer minted new ids anyway. Chats and links that named the old Lorian or Riya were left pointing at rows that no longer existed
+- The id plan is now `planBuiltinReset` (`lib/characters/builtin-reset.ts`) and the import runs with `preserveIds`. An existing built-in keeps its id; one that did not exist takes the seed's id, or a new one if another row holds it; every memory gets a new id, so the importer's collision check cannot refuse the reset
+- A re-import that fails now returns a 500 instead of `success: true`
+- Characters reset before this fix keep the new ids they were given; the old ids are not recovered
+
+#### Change: Lorian and Riya rewritten
+
+- The built-in characters' seed bundle (`first-startup/imports/lorian-and-riya.qtap`) is rewritten from new character seeds. Names, titles, character ids and system-prompt ids are unchanged. Both are now written as ordinary people in no particular setting: Lorian (Lounès Haddad) a teacher of literature and Latin from Béjaïa, Riya (Riya Selvam) a mechanical engineer from Chennai and Delhi
+- The bundle is in the current character shape. The old one carried `physicalDescriptions` (plural) and `clothingRecords`, which the importer no longer reads, so a new instance's Lorian and Riya had no physical description. Each now has `manifesto`, `identity`, a singular `physicalDescription` with all five prompts, a named scenario, an alias for the full name, eight wardrobe items with image prompts (one a `hair` item) and twelve memories (24 in all, replacing 42)
+- `manifesto` and `personality` are in second person, `identity` and `description` in third. `firstMessage` stays empty so the greeting is composed for whatever scene the chat opens in; the seed's opening is an example dialogue instead
+- Each system prompt tells the character to use the help tools for questions about Quilltap and not to guess. Help Tools stay on by default for both
+- Existing instances are not changed (seeding skips characters that exist). Reset Built-in Characters brings in the new versions
+- Help: `character-management.md`
+
 #### Feature: export a character from Summon From Lore
 
 - The AI import wizard (Aurora's Summon From Lore, and the Salon's Summon from Lore in Add Character) could only import its result. The review step now has Export as .qtap beside Import Character, and again on the success screen
