@@ -3,7 +3,7 @@
  *
  * GET /api/v1/characters/[id] - Get a specific character
  * GET /api/v1/characters/[id]?action=export - Export character (JSON or PNG)
- * GET /api/v1/characters/[id]?action=chats - List recent chats with this character
+ * GET /api/v1/characters/[id]?action=chats - List recent chats with this character (each with its summary excerpt)
  * GET /api/v1/characters/[id]?action=cascade-preview - Get cascade delete preview
  * GET /api/v1/characters/[id]?action=default-partner - Get default partner
  * GET /api/v1/characters/[id]?action=get-tags - Get character tags
@@ -27,6 +27,7 @@ import { badRequest, notFound, serverError, successResponse } from '@/lib/api/re
 import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
+import { summaryExcerpt } from '@/lib/chat/summary-excerpt';
 import {
   getConciergeProvenance,
   getConciergeReason,
@@ -266,6 +267,8 @@ function hydratedGetHandlers(
               project,
               storyBackground,
               messages: recentMessages,
+              // The same line the home page's resume card shows.
+              summaryExcerpt: summaryExcerpt(chat.contextSummary),
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
               conciergeState: getConciergeState(chat),
               conciergeSetBy: getConciergeProvenance(chat),

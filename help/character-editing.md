@@ -433,7 +433,7 @@ The settings a new chat with the character begins with — exactly what the New 
 
 ## History
 
-- **Conversations** — every chat the character has appeared in
+- **Conversations** — every chat the character has appeared in, each card bearing a line on where matters stand, taken from the conversation's running summary (the very line the home page's **Where You Left Off** card shows). A conversation too young to have been summarised shows its latest line instead
 - **Memories** — the character's Commonplace Book, each memory opened and saved in its own dialog. See [Memory Maintenance](memory-maintenance.md)
 
 Conversations and Memories both arrive folded shut, their counts beside their headings; click a heading to open the list. Once open, each shows one page at a time — ten conversations, thirty memories — with **← Previous** and **Next →** at the foot and a note of where you stand, rather than growing ever longer as you scroll. A search or filter returns you to the first page.

@@ -4,6 +4,11 @@
 
 ### 4.14.1
 
+#### Fix: character History cards preview the context summary
+
+- Conversation cards on a character's **History** tab previewed a raw recent message, which was often a Staff whisper (Commonplace Book recall, a Host line) and said nothing about the chat
+- `GET /api/v1/characters/[id]?action=chats` now returns `summaryExcerpt` (`summaryExcerpt(chat.contextSummary)`, the line the home page's resume card shows), and `transformCharacterChatToCardData` previews it, falling back to the latest message when the chat has no summary yet
+
 #### Fix: cheap-LLM reasoning headroom pushed max_tokens past the model's limit
 
 - The cheap-LLM sender (`sendToProvider`, `lib/memory/cheap-llm-tasks/core-execution.ts`) added 4,000 tokens of reasoning headroom on top of whatever the caller asked for. Memory extraction and consolidation ask for the profile's whole output budget, so a profile on the `Deep` model class (128,000) sent 132,000, and NanoGPT/DeepSeek refused every call with `400 The max_tokens parameter is illegal` (limit 131,072). Consolidation clusters failed and extraction's OTHER fold formed nothing
