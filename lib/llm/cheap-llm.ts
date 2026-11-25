@@ -25,6 +25,7 @@ import {
 import { getCheapModelConfig } from '@/lib/plugins/provider-registry'
 import { getResolvedCheapModel } from './cheap-model-resolver'
 import { LEGACY_CHEAPEST_MODEL_MAP } from './fallback-data'
+import { resolveMaxTokens } from './model-context-data'
 
 /**
  * Strategy for selecting the cheap LLM provider
@@ -73,6 +74,14 @@ export interface CheapLLMSelection {
    * apply the allowlisted extras from this object.
    */
   profileParameters?: Record<string, unknown>
+  /**
+   * The profile's output ceiling (`resolveMaxTokens`: explicit `maxTokens`,
+   * else its model class's `maxOutput`, else the default). Senders cap their
+   * reasoning headroom at it so a full-budget request never overshoots what
+   * the model accepts. Absent when the selection runs a model other than the
+   * profile's own, whose ceiling the profile does not describe.
+   */
+  maxOutputTokens?: number
 }
 
 /**
@@ -135,6 +144,7 @@ export function selectionFromProfile(
     connectionProfileId: profile.id,
     isLocal,
     profileParameters: profileParams(profile),
+    maxOutputTokens: resolveMaxTokens(profile),
   }
 }
 
@@ -314,8 +324,9 @@ export function getCheapLLMProvider(
     logger.warn('[CheapLLM] Using FALLBACK to cheapest model for current provider', logContext)
   }
 
-  // The current profile, but on its provider's cheapest model.
-  return { ...selectionFromProfile(currentProfile), modelName: cheapModel }
+  // The current profile, but on its provider's cheapest model. The profile's
+  // output ceiling describes its own model, not this one, so it is dropped.
+  return { ...selectionFromProfile(currentProfile), modelName: cheapModel, maxOutputTokens: undefined }
 }
 
 /**

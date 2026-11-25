@@ -682,6 +682,56 @@ describe('Cheap LLM Tasks Service', () => {
     })
   })
 
+  describe('output budget', () => {
+    const parseAny = (content: string) => content
+
+    it('keeps the reasoning headroom under the profile output ceiling', async () => {
+      mockSendMessage.mockResolvedValue({
+        content: 'ok',
+        usage: { promptTokens: 5, completionTokens: 1, totalTokens: 6 },
+      })
+
+      await executeCheapLLMTask(
+        { ...testSelection, maxOutputTokens: 128000 },
+        [{ role: 'user', content: 'Hello' }],
+        testUserId,
+        parseAny,
+        'memory-consolidation',
+        undefined,
+        undefined,
+        undefined,
+        128000,
+      )
+
+      expect(mockSendMessage.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ maxTokens: 128000 }),
+      )
+    })
+
+    it('adds the full headroom when the selection names no ceiling', async () => {
+      mockSendMessage.mockResolvedValue({
+        content: 'ok',
+        usage: { promptTokens: 5, completionTokens: 1, totalTokens: 6 },
+      })
+
+      await executeCheapLLMTask(
+        testSelection,
+        [{ role: 'user', content: 'Hello' }],
+        testUserId,
+        parseAny,
+        'memory-consolidation',
+        undefined,
+        undefined,
+        undefined,
+        8000,
+      )
+
+      expect(mockSendMessage.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ maxTokens: 12000 }),
+      )
+    })
+  })
+
   describe('Error handling', () => {
     it('should handle LLM provider errors gracefully', async () => {
       mockSendMessage.mockRejectedValue(new Error('API rate limit exceeded'))

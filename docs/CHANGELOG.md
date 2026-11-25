@@ -4,6 +4,12 @@
 
 ### 4.14.1
 
+#### Fix: cheap-LLM reasoning headroom pushed max_tokens past the model's limit
+
+- The cheap-LLM sender (`sendToProvider`, `lib/memory/cheap-llm-tasks/core-execution.ts`) added 4,000 tokens of reasoning headroom on top of whatever the caller asked for. Memory extraction and consolidation ask for the profile's whole output budget, so a profile on the `Deep` model class (128,000) sent 132,000, and NanoGPT/DeepSeek refused every call with `400 The max_tokens parameter is illegal` (limit 131,072). Consolidation clusters failed and extraction's OTHER fold formed nothing
+- `CheapLLMSelection` now carries `maxOutputTokens`, the profile's `resolveMaxTokens` ceiling, set by `selectionFromProfile`. `withReasoningHeadroom` takes an optional ceiling and stops the headroom there, never cutting below the requested answer budget. A selection that swaps in the provider's cheapest model carries no ceiling, since the profile's does not describe that model
+- The uncensored image-prompt selections in scene-state tracking, story backgrounds and the image-generation tool were built by hand; they now go through `selectionFromProfile`, which also gives them the profile's provider parameters and keeps a non-Ollama profile's own base URL
+
 #### Fix: conversation summary files follow their chat's current title
 
 - A chat's summary file in each participant's vault (`Conversation Summaries/<title>.md`) was named, and its frontmatter `conversationTitle` set, from the chat's title at the last summary fold. Chats are retitled between folds, so files kept old names and recall's "relevant past conversations" reported old titles
