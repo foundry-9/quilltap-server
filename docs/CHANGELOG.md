@@ -2,6 +2,14 @@
 
 ## Recent Changes
 
+### 4.14.1
+
+#### Fix: conversation summary files follow their chat's current title
+
+- A chat's summary file in each participant's vault (`Conversation Summaries/<title>.md`) was named, and its frontmatter `conversationTitle` set, from the chat's title at the last summary fold. Chats are retitled between folds, so files kept old names and recall's "relevant past conversations" reported old titles
+- New startup pass `syncConversationSummaryTitles` (`lib/startup/sync-conversation-summary-titles.ts`), chained after the vault backfill in `instrumentation.ts`, matches each file to its chat by frontmatter `conversationId` and renames it to the current title, with the writer's name rule (`summaryFileName`, or `disambiguatedSummaryFileName` when another conversation holds the name; both now exported from the bridge). A changed frontmatter title is rewritten; nothing else in the file changes
+- A rename alone keeps the file's chunks and embeddings. A title rewrite re-chunks the file and queues its embedding again (frontmatter is not embedded, so the vectors do not change). Files whose chat no longer exists and archived characters' vaults are skipped. Matching files are not touched
+
 ### 4.14.0
 
 #### Docs: release checklist adds a fresh-instance dogfood step
