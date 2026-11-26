@@ -107,6 +107,14 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // posts Pascal's line, which publishes `chats`; a write from the
             // equip chokepoint publishes it too.
             queryKeys.inventory.equipped(id),
+            // Which custom tools the chat may run. Availability gates read
+            // what the invoker carries, their fact sheet and progressions —
+            // an equip, a Pascal effect or a tool call all publish `chats` —
+            // so the composer's wand, the `/` commands and the run dialog
+            // must re-resolve the roster rather than keep the one they
+            // opened with. The prefix also reaches the chat's held runs and
+            // tool presets, which are cheap to re-read.
+            queryKeys.customTools.byChat(id),
             // Where the scene came from. A scenario change posts the Host's
             // revision announcement, which publishes `chats`.
             queryKeys.chats.scenarioSource(id),

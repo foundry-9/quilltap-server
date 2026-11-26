@@ -88,7 +88,7 @@ describe('useChatInventory', () => {
     expect(invalidate).not.toHaveBeenCalled()
   })
 
-  it('refreshes this chat\'s carried sets and the lists itself while the socket is down', async () => {
+  it('refreshes this chat\'s carried sets, the lists and its custom-tool roster itself while the socket is down', async () => {
     status.mockReturnValue('connecting')
     respond({ inventory: {}, projectId: null })
     const { invalidate, wrapper } = setup()
@@ -96,6 +96,11 @@ describe('useChatInventory', () => {
     await act(async () => {
       await result.current.equip('c-1', ['i-1'])
     })
-    expect(invalidatedKeys(invalidate)).toEqual([queryKeys.inventory.equipped('chat-1'), queryKeys.inventory.lists])
+    // What the cast carries answers custom-tool gates, so the roster re-reads too.
+    expect(invalidatedKeys(invalidate)).toEqual([
+      queryKeys.inventory.equipped('chat-1'),
+      queryKeys.inventory.lists,
+      queryKeys.customTools.byChat('chat-1'),
+    ])
   })
 })

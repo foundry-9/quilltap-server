@@ -4,6 +4,11 @@
 
 ### 4.14.1
 
+#### Fix: custom-tool availability follows equip changes in an open Salon chat
+
+- The Salon read a chat's custom-tool roster (`queryKeys.customTools.byChat`) once and kept it. Availability gates on `inventory`, `metadata` or `progress` could flip mid-chat (an equip, a Pascal effect, a tool call), but the composer's wand, the `/` commands and the run dialog kept the old roster until the conversation tab was closed and reopened
+- The `chats` realtime topic, which equips and new messages already publish, now invalidates `customTools.byChat(chatId)` (`lib/realtime/topic-map.ts`). The Inventory dialog's offline fallback refresh (`useChatInventory`) includes it too
+
 #### Fix: output-token requests are capped at what the provider accepts
 
 - A profile's max tokens was sent as set, even above the provider's limit. Z.AI rejects any `max_tokens` over 131,072 with a 400; a GLM 5.3 Flash profile at 943,718 made memory extraction, consolidation and fold episode passes fail on every call (about 5,700 failures on one instance since Nov 22). Consolidation asks for the profile's whole budget, plus 4,000 tokens of reasoning headroom

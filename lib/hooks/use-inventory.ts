@@ -248,7 +248,12 @@ export function useChatInventory(chatId: string | null) {
     // A carried-set write publishes `chats` (this chat's carried set); a kit's
     // archetype members instantiated into the vault publish `inventory`.
     onSettled: () =>
-      refreshUnlessRealtime(queryClient, [queryKeys.inventory.equipped(chatId ?? 'none'), queryKeys.inventory.lists]),
+      refreshUnlessRealtime(queryClient, [
+        queryKeys.inventory.equipped(chatId ?? 'none'),
+        queryKeys.inventory.lists,
+        // What the cast carries answers custom-tool gates (`inventory`).
+        ...(chatId ? [queryKeys.customTools.byChat(chatId)] : []),
+      ]),
   })
   const run = mutation.mutateAsync
   const inventory = query.data?.inventory ?? {}
