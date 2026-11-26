@@ -100,6 +100,7 @@ export {
   isAllLLMChat,
   loneCharacterHasAnswered,
 } from './utils';
+export { seatlessOperatorRoundAnswered } from './operator-round';
 
 // Turn order computation (display-only)
 export {

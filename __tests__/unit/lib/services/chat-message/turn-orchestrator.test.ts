@@ -28,6 +28,7 @@ jest.mock('@/lib/chat/turn-manager', () => ({
   loadRoomCharacters: jest.fn().mockResolvedValue(new Map()),
   isAllLLMChat: jest.fn().mockReturnValue(false),
   loneCharacterHasAnswered: jest.requireActual('@/lib/chat/turn-manager/utils').loneCharacterHasAnswered,
+  seatlessOperatorRoundAnswered: jest.requireActual('@/lib/chat/turn-manager/operator-round').seatlessOperatorRoundAnswered,
   shouldPauseForAllLLM: jest.fn().mockReturnValue(false),
   isUserDrivenSeat: (p: { id?: string; controlledBy?: string } | null | undefined, ids?: readonly string[] | null) =>
     p?.controlledBy === 'user' || (Array.isArray(ids) && !!p?.id && ids.includes(p.id)),
@@ -237,6 +238,70 @@ describe('turn-orchestrator.service', () => {
       expect(result.chain).toBe(true);
       expect(result.characterName).toBe('Alice');
       expect(result.reason).toBe('continue');
+    });
+  });
+
+  describe('a seatless operator with two or more characters', () => {
+    const margit = { id: 'llm-m', characterId: 'char-m', controlledBy: 'llm', type: 'CHARACTER', status: 'active' };
+    const tobias = { id: 'llm-t', characterId: 'char-t', controlledBy: 'llm', type: 'CHARACTER', status: 'active' };
+    const post = { type: 'message', role: 'USER', participantId: null, content: 'Margit steps aboard.' };
+    const said = (participantId: string) => ({ type: 'message', role: 'ASSISTANT', participantId, content: '…' });
+
+    beforeEach(() => {
+      (turnManager.selectNextSpeaker as jest.Mock).mockReturnValue({ nextSpeakerId: 'llm-m', reason: 'weighted_selection' });
+    });
+
+    it('hands the floor back once every character has answered the post', async () => {
+      const repos = createMockRepos();
+      repos.chats.findById.mockResolvedValue(createMockChat({ participants: [margit, tobias] }));
+      repos.chats.getMessages.mockResolvedValue([said('llm-t'), post, said('llm-m'), said('llm-t')]);
+
+      const result = await shouldChainNext(repos as any, 'chat-1', null, 1, Date.now());
+      expect(result).toEqual({ chain: false, reason: 'user_turn' });
+    });
+
+    it('counts a passed turn as an answer', async () => {
+      const repos = createMockRepos();
+      repos.chats.findById.mockResolvedValue(createMockChat({ participants: [margit, tobias] }));
+      repos.chats.getMessages.mockResolvedValue([
+        post,
+        said('llm-m'),
+        { type: 'message', role: 'ASSISTANT', systemSender: 'host', systemKind: 'turn-pass', hostEvent: { participantId: 'llm-t' } },
+      ]);
+
+      const result = await shouldChainNext(repos as any, 'chat-1', null, 1, Date.now());
+      expect(result).toEqual({ chain: false, reason: 'user_turn' });
+    });
+
+    it('keeps going until everyone has answered, whatever was said before the post', async () => {
+      const repos = createMockRepos();
+      repos.chats.findById.mockResolvedValue(createMockChat({ participants: [margit, tobias] }));
+      repos.chats.getMessages.mockResolvedValue([said('llm-m'), post, said('llm-t')]);
+
+      const result = await shouldChainNext(repos as any, 'chat-1', null, 1, Date.now());
+      expect(result.chain).toBe(true);
+    });
+
+    it('leaves a chat with a user seat to the rotation', async () => {
+      const repos = createMockRepos();
+      repos.chats.findById.mockResolvedValue(createMockChat({
+        participants: [margit, tobias, { ...userParticipant, status: 'active' }],
+      }));
+      repos.chats.getMessages.mockResolvedValue([post, said('llm-m'), said('llm-t')]);
+
+      const result = await shouldChainNext(repos as any, 'chat-1', 'user-p-1', 1, Date.now());
+      expect(result.chain).toBe(true);
+    });
+
+    it('leaves an autonomous room running', async () => {
+      const repos = createMockRepos();
+      repos.chats.findById.mockResolvedValue(createMockChat({ participants: [margit, tobias] }));
+      repos.chats.getMessages.mockResolvedValue([post, said('llm-m'), said('llm-t')]);
+
+      const result = await shouldChainNext(repos as any, 'chat-1', null, 1, Date.now(), DEFAULT_CHAIN_CONFIG, {
+        neverPauseForUser: true,
+      });
+      expect(result.chain).toBe(true);
     });
   });
 

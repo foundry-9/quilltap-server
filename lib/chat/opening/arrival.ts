@@ -275,10 +275,22 @@ async function announceOpeningOutfit(
     if (!equippedSlots) return
 
     const equippedItemIds = allEquippedItemIds(equippedSlots).filter((id) => typeof id === 'string' && id.length > 0)
-    const pool = equippedItemIds.length > 0
-      ? await loadWearablePool(repos, character.id, projectMountPointIds)
-      : null
-    const equippedItemsMap = new Map(pool ? pool.getMany(equippedItemIds).map((item) => [item.id, item]) : [])
+    const pool = await loadWearablePool(repos, character.id, projectMountPointIds)
+
+    // Nothing worn and nothing in reach to wear: the character has no wardrobe,
+    // not an empty one. An announcement would render "completely naked and
+    // unadorned", which the chat model, the scene tracker and the Lantern all
+    // take as fact; without it they fall back to the physical description.
+    // A character who owns clothes and wears none is still announced.
+    if (equippedItemIds.length === 0 && pool.wearable().length === 0) {
+      logger.debug('[SeatArrival] No wardrobe to announce; skipping the opening-outfit whisper', {
+        chatId: chat.id,
+        characterId: character.id,
+        unreadTiers: pool.unread.length,
+      })
+      return
+    }
+    const equippedItemsMap = new Map(pool.getMany(equippedItemIds).map((item) => [item.id, item]))
     const titlesFor = (slot: keyof typeof equippedSlots): string[] => {
       const ids = equippedSlots[slot]
       if (!ids || ids.length === 0) return []

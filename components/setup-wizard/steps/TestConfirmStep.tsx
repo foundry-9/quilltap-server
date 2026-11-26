@@ -46,6 +46,14 @@ function TestStatusIndicator({ status, error }: { status?: TestStatus; error?: s
   }
 }
 
+/** The note beside Test All, naming exactly what was tested. */
+export function testedSummary(cheapTested: boolean, embeddingsTested: boolean): string {
+  const parts = ['Chat', ...(cheapTested ? ['the background model'] : []), ...(embeddingsTested ? ['embeddings'] : [])]
+  if (parts.length === 1) return 'Chat works'
+  const last = parts.pop()
+  return `${parts.join(', ')} and ${last} work`
+}
+
 export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
   const [testErrors, setTestErrors] = useState<Record<string, string>>({})
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -68,9 +76,13 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
   // Test All
   // ------------------------------------------------------------------
 
-  // Chat and embeddings are tested with a real call. Images are not: a test
-  // would draw, and bill, a picture, so the row says so instead.
+  // Chat, a manually chosen background model and embeddings are tested with a
+  // real call. Images are not: a test would draw, and bill, a picture, so the
+  // row says so instead. Auto needs no test of its own: it uses the chat
+  // provider's cheapest model on the key the chat test just proved.
   const embeddingTestable = !!state.embeddingConfig && state.embeddingConfig.provider !== 'BUILTIN'
+  const cheapTestable =
+    state.cheapConfig.strategy === 'USER_DEFINED' && !!state.cheapConfig.provider && !!state.cheapConfig.model
 
   const handleTestAll = useCallback(async () => {
     setTestErrors({})
@@ -89,6 +101,24 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
     } catch (err) {
       dispatch({ type: 'SET_TEST_RESULT', key: 'chat', status: 'error' })
       errors.chat = err instanceof Error ? err.message : 'Chat test failed'
+    }
+
+    if (cheapTestable && state.cheapConfig.provider && state.cheapConfig.model) {
+      const cheapProviderId = state.cheapConfig.provider
+      dispatch({ type: 'SET_TEST_RESULT', key: 'cheap', status: 'testing' })
+      try {
+        const result = await testMessage({
+          provider: cheapProviderId,
+          apiKeyId: state.apiKeys[cheapProviderId]?.apiKeyId,
+          baseUrl: state.baseUrls[cheapProviderId],
+          modelName: state.cheapConfig.model,
+        })
+        dispatch({ type: 'SET_TEST_RESULT', key: 'cheap', status: result.success ? 'success' : 'error' })
+        if (!result.success) errors.cheap = result.error || 'Background model test failed'
+      } catch (err) {
+        dispatch({ type: 'SET_TEST_RESULT', key: 'cheap', status: 'error' })
+        errors.cheap = err instanceof Error ? err.message : 'Background model test failed'
+      }
     }
 
     if (state.embeddingConfig && embeddingTestable) {
@@ -111,12 +141,16 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
     }
 
     setTestErrors(errors)
-  }, [state.chatConfig, state.embeddingConfig, state.apiKeys, state.baseUrls, embeddingTestable, dispatch])
+  }, [state.chatConfig, state.cheapConfig, state.embeddingConfig, state.apiKeys, state.baseUrls, cheapTestable, embeddingTestable, dispatch])
 
-  const testing = state.testResults.chat === 'testing' || state.testResults.embedding === 'testing'
-  const testedKeys = embeddingTestable ? ['chat', 'embedding'] : ['chat']
+  const testedKeys = [
+    'chat',
+    ...(cheapTestable ? ['cheap'] : []),
+    ...(embeddingTestable ? ['embedding'] : []),
+  ]
+  const testing = testedKeys.some((k) => state.testResults[k] === 'testing')
   const allTestsPassed = testedKeys.every((k) => state.testResults[k] === 'success')
-  const passedSummary = embeddingTestable ? 'Chat and embeddings work' : 'Chat works'
+  const passedSummary = testedSummary(cheapTestable, embeddingTestable)
 
   // ------------------------------------------------------------------
   // Save & Complete
@@ -142,7 +176,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
       // 2. If cheap LLM is manual, create separate cheap connection profile
       if (state.cheapConfig.strategy === 'USER_DEFINED' && state.cheapConfig.provider && state.cheapConfig.model) {
         const cheapProfile = await createConnectionProfile({
-          name: `Cheap - ${state.cheapConfig.provider} - ${state.cheapConfig.model}`,
+          name: `Cheap - ${cheapProvider?.displayName || state.cheapConfig.provider} - ${state.cheapConfig.model}`,
           provider: state.cheapConfig.provider,
           apiKeyId: state.apiKeys[state.cheapConfig.provider]?.apiKeyId,
           baseUrl: state.baseUrls[state.cheapConfig.provider],
@@ -210,7 +244,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
       })
       dispatch({ type: 'SET_SAVING', saving: false })
     }
-  }, [state, chatProvider, embeddingProvider, imageProvider, dispatch, invalidateProfileLists, queryClient])
+  }, [state, chatProvider, cheapProvider, embeddingProvider, imageProvider, dispatch, invalidateProfileLists, queryClient])
 
   // ------------------------------------------------------------------
   // Render
@@ -250,6 +284,9 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
                 )}
               </p>
             </div>
+            {cheapTestable && (
+              <TestStatusIndicator status={state.testResults.cheap} error={testErrors.cheap} />
+            )}
           </div>
 
           {/* Embeddings */}

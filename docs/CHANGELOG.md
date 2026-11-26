@@ -8,6 +8,46 @@
 
 - New `docs/releases/4.14.1.md` covering the output-token ceiling, cheap-LLM reasoning headroom, summary file titles, History card previews and the custom-tool roster refresh
 
+#### Fix: the sample characters keep their wardrobes on a fresh instance
+
+- The first-startup seed imported Lorian's and Riya's wardrobes into their vaults, and then the one-time `refreshVaultWardrobe` startup task (`lib/startup/refresh-vault-wardrobe.ts`), never yet run on the new database, projected the empty legacy `wardrobe_items` table over every vault and deleted them. Both sample characters had no clothes at all. With no legacy rows anywhere, the task now marks itself done and leaves the vaults alone (`hasAnyLegacyWardrobeRows`, `migrations/lib/legacy-wardrobe-rows.ts`); an upgraded database with rows projects them as before.
+- An instance already affected gets the wardrobes back from **Reset Built-in Characters** on the Characters (Aurora) page toolbar.
+- Regression test: `__tests__/unit/lib/startup/refresh-vault-wardrobe.test.ts`.
+
+#### Fix: a character with no wardrobe is no longer announced as naked
+
+- At a chat's opening, Aurora's outfit whisper rendered an empty outfit as "completely naked and unadorned" even when the character owned no wardrobe at all (the operator's own persona, any hand-made character). The chat model, the scene-state tracker and the Lantern took it as fact, and the first story background on a fresh instance painted the user's persona undressed. `announceOpeningOutfit` (`lib/chat/opening/arrival.ts`) now skips the whisper when nothing is worn and nothing is in reach; a character who owns clothes and wears none is still announced.
+- Regression tests: `__tests__/unit/lib/chat/opening/arrival.test.ts` ("the opening-outfit whisper needs a wardrobe to speak of").
+
+#### Fix: uploading a file from a project's Files card works
+
+- `useProjectFileUpload` posted to `/api/v1/projects/[id]/files/upload`, a route that has never existed, so every upload from the project page failed with a 409 "Server Action unavailable". It now posts to `POST /api/v1/files?action=upload` with `projectId` in the form and reads the `data` field the route returns.
+- Regression test: `__tests__/unit/components/files/use-project-file-upload.test.tsx`.
+
+#### Fix: a group chat without a user seat waits for the operator after each round
+
+- In a chat started as "Chat as yourself" (no user-controlled seat; the default for any character without a default partner) with two or more characters, the characters kept answering each other after every message until the chain cap (20 turns or 5 minutes). The operator's posts carry no participant, so they never enter the rotation's cycle bookkeeping, and nothing handed the floor back. Bug 249 fixed only the one-character case. Found in the fresh-instance dogfood run (two characters chained six replies to one message before being paused)
+- New `seatlessOperatorRoundAnswered` (`lib/chat/turn-manager/operator-round.ts`): when the human has posted, holds no seat, and every present character seat has answered or passed (`turn-pass`) since that post, `shouldChainNext` returns `user_turn`. A queued nudge still runs; chats with a user seat, genuinely all-LLM chats and autonomous rooms are unchanged
+
+#### Fix: new-chat picker no longer promises who speaks first
+
+- The new-chat character picker (`components/new-chat/CharacterPickerPanel.tsx`) marked the first selected character **Speaks First**. The opening greeting has been drawn by talkativeness, not list order, since before 4.13 (the opening turn's participant resolver), so the mark was often wrong: a two-character chat opened with the second character's line. The badge is gone, and `help/chat-multi-character.md` says how the opener is chosen and that characters can be seated from the Start Chat dialog. Found in the fresh-instance dogfood run
+
+#### Fix: out-of-chat portrait preview says where the picture goes
+
+- The Wardrobe dialog's out-of-chat portrait pane (reached from a character's avatar menu, **Generate portrait…**) said "Generates a one-off preview. Download to keep.", and the help said it saved nothing. The preview is in fact stored as a generated file linked to the character (`lib/wardrobe/routes/preview-avatar.ts`), so it shows in the character's photos and can be set as the avatar from **Choose from photos…**. The pane (`components/wardrobe/AvatarGenerationPane.tsx`) now says so, and the "Discard preview" button is "Close preview", since closing it deletes nothing. `help/wardrobe.md` and `help/character-editing.md` updated. Found in the fresh-instance dogfood run
+
+#### Fix: job child no longer tries to create tables on a fresh instance
+
+- On a fresh instance the first chat's `CONVERSATION_RENDER` job reached `conversation_chunks` in the forked job child before the parent had. A repository's first access runs the schema's idempotent `CREATE TABLE` / `CREATE INDEX IF NOT EXISTS` DDL, and `idx_conversation_chunks_createdAt` is made by no migration, so the child's read-only connection failed with `attempt to write a readonly database` (three errors in the log). The throw also skipped registering the collection's JSON, array and boolean columns, so the child's later reads of that collection were misparsed until restart. Found in the fresh-instance dogfood run
+- `SQLiteBackend.ensureCollection` (`lib/database/backends/sqlite/backend.ts`) skips the DDL on a read-only connection and still registers the columns. The parent, the only writer, runs the same DDL on its own first access
+
+#### Fix: setup wizard Test All checks a Manual background model
+
+- Test All tested the chat model and the embedding model, but not a background (cheap) model chosen under **Manual**, which can be a different provider and model. A bad pick passed the review page and showed up later as failing background jobs. Found in the fresh-instance dogfood run
+- `TestConfirmStep` now sends the same one-line test message to the Manual model, with its own row result, and the note names it ("Chat, the background model and embeddings work"; `testedSummary`). Auto makes no extra call: it uses the chat provider's key the chat test just proved
+- The Manual background profile was named with the raw provider id (`Cheap - OPENAI - gpt-5.4-nano`); it now uses the display name like the other wizard profiles
+
 #### Fix: custom-tool availability follows equip changes in an open Salon chat
 
 - The Salon read a chat's custom-tool roster (`queryKeys.customTools.byChat`) once and kept it. Availability gates on `inventory`, `metadata` or `progress` could flip mid-chat (an equip, a Pascal effect, a tool call), but the composer's wand, the `/` commands and the run dialog kept the old roster until the conversation tab was closed and reopened

@@ -5,6 +5,7 @@ import {
   loadRoomCharacters,
   isAllLLMChat,
   loneCharacterHasAnswered,
+  seatlessOperatorRoundAnswered,
   shouldPauseForAllLLM,
   isUserDrivenSeat,
   resolveCycleOrder,
@@ -172,6 +173,30 @@ export async function shouldChainNext(
   // reach the draw below, and their archived state has to reach the filter.
   // One batched read serves both the selection and the name lookups after it.
   const charactersMap = await loadRoomCharacters(repos, freshChat.participants)
+
+  // A human with no seat in the room: once every present character has
+  // answered (or passed) since their last post, the floor is theirs. Their
+  // posts never enter the rotation, so without this a room of two or more
+  // characters cycled on to the depth cap on every message (the lone-character
+  // case is bug 249, below). A queued nudge still runs.
+  if (
+    !nextParticipantId &&
+    seatlessOperatorRoundAnswered({
+      participants: freshChat.participants,
+      impersonatingParticipantIds: freshChat.impersonatingParticipantIds,
+      messages: messageEvents,
+      archivedCharacterIds: new Set(
+        [...charactersMap.values()].filter(c => c.archivedAt).map(c => c.id),
+      ),
+      neverPauseForUser: !!guards.neverPauseForUser,
+    })
+  ) {
+    logger.info('[TurnOrchestrator] Every character has answered the operator; floor returns to them', {
+      chatId,
+      chainDepth,
+    })
+    return { chain: false, reason: 'user_turn' }
+  }
 
   if (!nextParticipantId && selectionReason !== 'queue') {
     // Use turn selection algorithm
