@@ -4,6 +4,13 @@
 
 ### 4.14.1
 
+#### Fix: regenerating a reply forms memories from the new swipe (#236)
+
+- With the default swipe cascade (`onSwipeRegenerate` = `DELETE_MEMORIES`), regenerating a character's reply retired the memories formed from the replaced line and never extracted any from the new one, so every swipe made the character forget that exchange. `regenerateMessageAsSwipe` (`lib/services/chat-message/regenerate-swipe.service.ts`) now goes through the edit path's `regenerateEditedMessageMemories` (`message-edit-impact.ts`, new `reason: 'swipe-regenerate'` option): the turn's AUTO memories are retired and a memory extraction job re-reads the turn with the new swipe in place of the old one. `REGENERATE_MEMORIES` does the same; `KEEP_MEMORIES` still neither retires nor extracts. With no extraction profile, the old line's memories are retired as before.
+- Extraction now reads a swipe group as its newest variant only. `loadChatMessageEvents` (`turn-transcript.ts`) drops superseded variants through the new `withoutSupersededSwipes` (`lib/chat/swipe-variants.ts`), and `locateMemorySource` locates a turn on that same reading, so a replaced variant is no longer extracted beside its replacement and no longer splits an autonomous room's speaker turn. This also applies to *Re-extract Memories*, the chat-wide memory regenerate and SillyTavern imports with swipes.
+- The server keeps no record of which swipe the operator is viewing, so extraction follows the newest variant, which is what the Salon shows by default. Swiping back to an older variant does not restore its memories.
+- Regression tests: `__tests__/unit/lib/services/chat-message/regenerate-swipe.service.test.ts` ("memory cascade"), `message-edit-impact.test.ts`, `load-chat-message-events.test.ts`, `__tests__/unit/lib/chat/swipe-variants.test.ts`.
+
 #### Docs: 4.14.1 release notes
 
 - New `docs/releases/4.14.1.md` covering the output-token ceiling, cheap-LLM reasoning headroom, summary file titles, History card previews and the custom-tool roster refresh

@@ -139,6 +139,7 @@ Get an alternative response:
 **What happens:**
 - The same character regenerates — in a multi-character scene the new version is spoken and attributed by the very character whose message you regenerated, with their full persona, memory, and the scene's context
 - The newest version is shown in place; the original is kept one swipe away in the same group
+- **What the Commonplace Book makes of it.** Under the usual setting (*When regenerating a response (swipe): Always delete memories*, or *Delete and regenerate*), the notes the character took from the line you replaced are torn out, and the exchange is read afresh with the new version standing in its place, so the character remembers what was *now* said rather than nothing at all. The Book always reads the newest version of a line; swiping back to an older one shows it to you but does not restore the notes it once inspired. Choose *Always keep memories* and the old notes stay where they are, with none taken from the new line
 - Should the provider return nothing at all — a content filter, a reply made entirely of reasoning, an understudy with nothing to say — no blank swipe is filed, the original line stays as it was (memories included), and the regeneration reports the empty reply
 - Token usage counts for each generation
 

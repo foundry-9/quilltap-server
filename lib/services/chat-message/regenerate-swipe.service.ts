@@ -25,6 +25,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { profileParams } from '@/lib/llm/cheap-llm'
 import { retireMemories } from '@/lib/memory/retire'
+import { regenerateEditedMessageMemories } from './message-edit-impact'
 import {
   resolveRespondingParticipant,
   loadAllParticipantData,
@@ -368,14 +369,43 @@ export async function regenerateMessageAsSwipe({
   await repos.chats.addMessage(chat.id, newSwipe)
   await repos.chats.update(chat.id, {})
 
-  // Memory cascade: the variant being replaced may have seeded memories.
+  // Memory cascade: the variant being replaced may have seeded memories, and
+  // the new one has seeded none — no live turn ran for it. Retire the old
+  // line's and extract the turn again with the new line standing in its place,
+  // as an edit does (#236). Only when nothing could extract it (no profile, no
+  // turn to address) are the old memories simply retired, as before.
   const cascadeAction: MemoryCascadeAction =
     chatSettings?.memoryCascadePreferences?.onSwipeRegenerate || 'DELETE_MEMORIES'
   if (cascadeAction !== 'KEEP_MEMORIES') {
     try {
-      const memories = await repos.memories.findBySourceMessageId(targetMessage.id)
-      if (memories.length > 0) {
-        await retireMemories(memories.map((m) => m.id), { reason: 'swipe-regenerate' })
+      const transcript = (await repos.chats.getMessages(chat.id)).filter(
+        (m): m is MessageEvent => m.type === 'message'
+      )
+      const regen = await regenerateEditedMessageMemories(
+        chat,
+        transcript,
+        { ...targetMessage, swipeGroupId, swipeIndex: targetMessage.swipeIndex ?? 0 },
+        userId,
+        { reason: 'swipe-regenerate' }
+      )
+      if (regen.jobId) {
+        logger.debug('[RegenerateSwipe] Memory extraction enqueued for the new swipe', {
+          chatId: chat.id,
+          targetMessageId: targetMessage.id,
+          newSwipeId: newSwipe.id,
+          memoriesRetired: regen.memoriesRetired,
+          jobId: regen.jobId,
+        })
+      } else {
+        const memories = await repos.memories.findBySourceMessageId(targetMessage.id)
+        if (memories.length > 0) {
+          await retireMemories(memories.map((m) => m.id), { reason: 'swipe-regenerate' })
+        }
+        logger.debug('[RegenerateSwipe] No extraction for the new swipe; retired the old line\'s memories only', {
+          chatId: chat.id,
+          targetMessageId: targetMessage.id,
+          memoriesRetired: memories.length,
+        })
       }
     } catch (error) {
       logger.warn('[RegenerateSwipe] Memory cascade failed; swipe kept', {

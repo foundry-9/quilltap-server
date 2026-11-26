@@ -37,7 +37,9 @@ import {
 import { ensureProcessorRunning } from '@/lib/background-jobs/processor'
 import { resolveChatExtractionProfileId } from '@/lib/memory/extraction'
 import { isAutonomousTurnAnchor, listExtractionTurns, type ExtractionTurnLocator } from './turn-transcript'
+import { liveSwipeVariantIds, withoutSupersededSwipes } from '@/lib/chat/swipe-variants'
 import { logger } from '@/lib/logger'
+import type { RetireReason } from '@/lib/memory/retire'
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
 import type { MessageEditImpact } from '@/lib/schemas/message-edit-impact.types'
@@ -61,7 +63,14 @@ const OWN_GENERATION_LOG_TYPES: LLMLogType[] = ['CHAT_MESSAGE', 'TOOL_CONTINUATI
 
 /**
  * Locate the path that formed (or would form) this message's memories.
- * `messages` is the chat's message events in transcript order.
+ * `messages` is the chat's message events in transcript order, swipe variants
+ * included.
+ *
+ * Extraction reads a swipe group as its newest variant alone
+ * (`loadChatMessageEvents`), so the turn is located on that reading too. A
+ * superseded variant is located through the variant that replaced it — the
+ * same turn — and its own id stays among the turn's sources, since memories
+ * formed from it are stamped with it (#236).
  */
 export function locateMemorySource(
   messages: MessageEvent[],
@@ -77,25 +86,28 @@ export function locateMemorySource(
   }
   // Every other Staff row is left out of the turn transcript.
   if (target.systemSender) return null
+  if (!messages.some(m => m.id === target.id)) return null
 
-  const index = messages.findIndex(m => m.id === target.id)
+  const live = withoutSupersededSwipes(messages)
+  const standingId = target.swipeGroupId && !live.some(m => m.id === target.id)
+    ? liveSwipeVariantIds(messages).get(target.swipeGroupId)
+    : target.id
+  const index = live.findIndex(m => m.id === standingId)
   if (index === -1) return null
 
-  const span = turnSpanFor(messages, index, chatType)
+  const span = turnSpanFor(live, index, chatType)
   if (!span) return null
 
-  const locator = listExtractionTurns(messages, chatType).find(
+  const locator = listExtractionTurns(live, chatType).find(
     t =>
       (t.turnOpenerMessageId ?? null) === span.turnOpenerMessageId &&
       (t.extractionAnchorMessageId ?? null) === (span.extractionAnchorMessageId ?? null),
   )
   if (!locator) return null
 
-  return {
-    kind: 'turn',
-    locator,
-    sourceMessageIds: messages.slice(span.start, span.end).map(m => m.id),
-  }
+  const sourceMessageIds = live.slice(span.start, span.end).map(m => m.id)
+  if (!sourceMessageIds.includes(target.id)) sourceMessageIds.push(target.id)
+  return { kind: 'turn', locator, sourceMessageIds }
 }
 
 /** The half-open slice of `messages` that is the turn holding `index`, addressed as extraction addresses it. */
@@ -199,6 +211,11 @@ export async function assessMessageEditImpact(
   return impact
 }
 
+export interface RegenerateMemoriesOptions {
+  /** Why the old memories go: an edit by hand, or a swipe re-roll replacing the line. */
+  reason?: Extract<RetireReason, 'message-edit' | 'swipe-regenerate'>
+}
+
 export interface RegenerateEditedMemoriesResult {
   memoriesRetired: number
   jobId: string | null
@@ -208,15 +225,22 @@ export interface RegenerateEditedMemoriesResult {
  * Retire the memories an edited line formed and enqueue the job that forms
  * them again from its new text. Call after the edit is written.
  *
+ * A swipe re-roll is the same act (`reason: 'swipe-regenerate'`): pass the
+ * replaced variant as `target` and a transcript that already holds the new
+ * one, and the replaced line's memories are retired while the turn — read
+ * with the new variant standing in its place — is extracted afresh (#236).
+ *
  * A regenerate with no profile to extract on retires nothing: the operator
  * keeps the old memories rather than losing them for nothing.
  */
 export async function regenerateEditedMessageMemories(
-  chat: ChatMetadata,
+  chat: Pick<ChatMetadata, 'id' | 'participants' | 'chatType'>,
   messages: MessageEvent[],
   target: MessageEvent,
   userId: string,
+  options: RegenerateMemoriesOptions = {},
 ): Promise<RegenerateEditedMemoriesResult> {
+  const reason = options.reason ?? 'message-edit'
   const source = locateMemorySource(messages, target, chat.chatType)
   if (!source) {
     logger.debug('[MessageEdit] No memory source for edited line; nothing to regenerate', { chatId: chat.id, messageId: target.id })
@@ -234,7 +258,7 @@ export async function regenerateEditedMessageMemories(
 
   const memoryIds = await findSourcedMemoryIds(source)
   const report = memoryIds.length > 0
-    ? await retireMemories(memoryIds, { reason: 'message-edit' })
+    ? await retireMemories(memoryIds, { reason })
     : { retired: 0 }
 
   let jobId: string
@@ -267,6 +291,7 @@ export async function regenerateEditedMessageMemories(
   logger.info('[MessageEdit] Regenerating memories for edited line', {
     chatId: chat.id,
     messageId: target.id,
+    reason,
     source: source.kind,
     memoriesRetired: report.retired,
     jobId,
