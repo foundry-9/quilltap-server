@@ -4,6 +4,10 @@
 
 ### 4.14.1
 
+#### Docs: 4.14.1 release notes
+
+- New `docs/releases/4.14.1.md` covering the output-token ceiling, cheap-LLM reasoning headroom, summary file titles, History card previews and the custom-tool roster refresh
+
 #### Fix: custom-tool availability follows equip changes in an open Salon chat
 
 - The Salon read a chat's custom-tool roster (`queryKeys.customTools.byChat`) once and kept it. Availability gates on `inventory`, `metadata` or `progress` could flip mid-chat (an equip, a Pascal effect, a tool call), but the composer's wand, the `/` commands and the run dialog kept the old roster until the conversation tab was closed and reopened
