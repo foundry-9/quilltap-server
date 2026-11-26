@@ -114,6 +114,17 @@ async function readLiveCatalog(query: ModelFactsQuery): Promise<ModelInfo[] | nu
 }
 
 /**
+ * The provider's own live-catalog entry for a model, or null when the plugin
+ * has no catalog or the model is not in it. Shares the catalog cache above.
+ * Throws when the catalog cannot be read.
+ */
+export async function lookupLiveModelEntry(query: ModelFactsQuery): Promise<ModelInfo | null> {
+  const live = await readLiveCatalog(query)
+  if (!live) return null
+  return findModelEntry(live, query.modelName) ?? null
+}
+
+/**
  * Find a model in a list by the id a profile names: exact, then
  * case-insensitive, then the part after a `vendor/` prefix when exactly one
  * entry has it.

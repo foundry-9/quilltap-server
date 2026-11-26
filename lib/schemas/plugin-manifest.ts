@@ -296,6 +296,14 @@ export const ProviderConfigSchema = z.object({
   /** Whether the provider requires a custom base URL */
   requiresBaseUrl: z.boolean().default(false),
 
+  /**
+   * The most output tokens (`max_tokens`) the provider's API accepts on any
+   * model. The plugin clamps its requests to it; the host's startup check
+   * (`lib/startup/check-profile-output-ceilings.ts`) warns about connection
+   * profiles set above it. Omit when the provider has no single ceiling.
+   */
+  maxOutputTokens: z.number().int().positive().optional(),
+
   /** Custom label for the API key field (defaults to 'API Key') */
   apiKeyLabel: z.string().min(1).max(100).optional(),
 

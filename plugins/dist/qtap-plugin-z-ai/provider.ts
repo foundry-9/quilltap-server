@@ -23,8 +23,30 @@ import {
   getQuilltapUserAgent,
 } from '@quilltap/plugin-utils';
 import { STATIC_CHAT_MODEL_IDS, IMAGE_GEN_MODEL_PATTERN } from './models';
+import manifest from './manifest.json';
 
 const logger = createPluginLogger('qtap-plugin-z-ai');
+
+/**
+ * The most `max_tokens` Z.AI's API accepts on any model — it answers 400
+ * "The max_tokens parameter is illegal" above this. Declared once, in the
+ * manifest (`providerConfig.maxOutputTokens`), where the host's startup check
+ * reads it too.
+ */
+const MAX_OUTPUT_TOKENS: number = manifest.providerConfig.maxOutputTokens;
+
+/** Clamp a requested output budget to what Z.AI accepts. */
+export function clampMaxTokens(requested: number | undefined, model: string): number {
+  const wanted = requested ?? 4096;
+  if (wanted <= MAX_OUTPUT_TOKENS) return wanted;
+  logger.debug('Clamped max_tokens to the Z.AI ceiling', {
+    context: 'ZAIProvider.clampMaxTokens',
+    model,
+    requested: wanted,
+    ceiling: MAX_OUTPUT_TOKENS,
+  });
+  return MAX_OUTPUT_TOKENS;
+}
 
 const Z_AI_SUPPORTED_MIME_TYPES = [
   'image/jpeg',
@@ -312,7 +334,7 @@ export class ZAIProvider implements TextProvider {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 4096,
+      max_tokens: clampMaxTokens(params.maxTokens, params.model),
       top_p: params.topP ?? 1,
       stream: false,
     };
@@ -413,7 +435,7 @@ export class ZAIProvider implements TextProvider {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 4096,
+      max_tokens: clampMaxTokens(params.maxTokens, params.model),
       top_p: params.topP ?? 1,
       stream: true,
       stream_options: { include_usage: true },

@@ -4,6 +4,13 @@
 
 ### 4.14.1
 
+#### Fix: output-token requests are capped at what the provider accepts
+
+- A profile's max tokens was sent as set, even above the provider's limit. Z.AI rejects any `max_tokens` over 131,072 with a 400; a GLM 5.3 Flash profile at 943,718 made memory extraction, consolidation and fold episode passes fail on every call (about 5,700 failures on one instance since Nov 22). Consolidation asks for the profile's whole budget, plus 4,000 tokens of reasoning headroom
+- New `lib/llm/output-ceiling.ts`: `withOutputCeiling` wraps every text provider `ProviderRegistry.createLLMProvider` returns, so `sendMessage` and `streamMessage` lower `maxTokens` to the provider's ceiling. The ceiling is the lower of the model's `maxOutputTokens` in the provider's live catalog (`lookupLiveModelEntry`, new in `model-catalog.ts`) and the manifest's new `providerConfig.maxOutputTokens`. It is resolved once per process per provider, base URL, key and model; a failed catalog read is retried after 10 minutes. The profile's stored value is unchanged
+- The Z.AI plugin (1.1.41) declares `maxOutputTokens: 131072` in its manifest and clamps its own requests to it, so it stays within the limit under an older host
+- The context budget is unchanged; it already counts at most 20% of the context window for output
+
 #### Fix: character History cards preview the context summary
 
 - Conversation cards on a character's **History** tab previewed a raw recent message, which was often a Staff whisper (Commonplace Book recall, a Host line) and said nothing about the chat
