@@ -28,14 +28,34 @@ interface DestinationPickerProps {
   onCancel: () => void
   /** Open an existing definition instead (same-store duplicate escape hatch). */
   onOpenExisting?: (mountPointId: string) => void
+  /**
+   * A store to start chosen (the `?new=1&mount=<id>` deep link). Ignored when
+   * no listed store carries that id; a click on another row replaces it.
+   */
+  initialMountPointId?: string | null
 }
 
-export function DestinationPicker({ toolName, onPick, onCancel, onOpenExisting }: Readonly<DestinationPickerProps>) {
-  const [selected, setSelected] = useState<PickedDestination | null>(null)
+export function DestinationPicker({
+  toolName,
+  onPick,
+  onCancel,
+  onOpenExisting,
+  initialMountPointId,
+}: Readonly<DestinationPickerProps>) {
+  const [chosen, setSelected] = useState<PickedDestination | null>(null)
 
   const destinationsQuery = useCustomToolDestinations()
 
   const data = destinationsQuery.data
+
+  // The preselection is derived, not copied into state: the store list may
+  // still be loading when the dialog opens.
+  const preselected =
+    !chosen && initialMountPointId && data
+      ? allStores(data).find((s) => s.mountPointId === initialMountPointId)
+      : undefined
+  const selected: PickedDestination | null =
+    chosen ?? (preselected ? { mountPointId: preselected.mountPointId, mountName: preselected.mountName } : null)
 
   const nameElsewhere =
     data && toolName

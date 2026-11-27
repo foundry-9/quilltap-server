@@ -150,10 +150,17 @@ function HeldRun({ chatId, hold, waiting, onSettled }: Readonly<HeldRunProps>) {
   const [serverPreview, setPreview] = useState<InterventionPreview | null>(null)
   const [consults, setConsults] = useState(hold.consults)
   const [confirmingVeto, setConfirmingVeto] = useState(false)
+  /**
+   * Whether the oracle has been re-asked. The server then deals with the
+   * newest answer, so the frozen `hold.baseline` no longer describes the run
+   * even with nothing pinned (#244): from here on the server's preview is the
+   * one shown.
+   */
+  const [reasked, setReasked] = useState(false)
   const shown = useMemo(() => new Set<string>(hold.eligible.fields), [hold.eligible.fields])
   const pinnedCount = Object.keys(overrides).length
-  // With nothing pinned the run is simply the run as dealt.
-  const preview = pinnedCount === 0 ? hold.baseline : (serverPreview ?? hold.baseline)
+  // With nothing pinned and no re-ask the run is simply the run as dealt.
+  const preview = pinnedCount === 0 && !reasked ? hold.baseline : (serverPreview ?? hold.baseline)
 
   const base = `/api/v1/chats/${chatId}/custom-tools`
   const post = useCallback(
@@ -176,10 +183,10 @@ function HeldRun({ chatId, hold, waiting, onSettled }: Readonly<HeldRunProps>) {
 
   // Every edit asks the server; nothing is computed here.
   useEffect(() => {
-    if (Object.keys(overrides).length === 0) return
+    if (Object.keys(overrides).length === 0 && !reasked) return
     const timer = setTimeout(() => runPreview(overrides), PREVIEW_DEBOUNCE_MS)
     return () => clearTimeout(timer)
-  }, [overrides, runPreview])
+  }, [overrides, reasked, runPreview])
 
   const reaskMutation = useMutation({
     mutationFn: () =>
@@ -190,6 +197,7 @@ function HeldRun({ chatId, hold, waiting, onSettled }: Readonly<HeldRunProps>) {
     onSuccess: (data) => {
       // Re-ask replaces a pinned answer with a fresh one.
       setOverrides((prev) => unpin(prev, 'llmAnswer'))
+      setReasked(true)
       setConsults(data.consults)
       setPreview(data.preview)
     },

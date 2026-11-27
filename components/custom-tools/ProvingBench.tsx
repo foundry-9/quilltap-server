@@ -168,6 +168,12 @@ function mockRowsOf(rows: readonly MockInventoryDraftRow[]): MockInventoryRow[] 
  * beside the roll rather than replacing it.
  */
 type BenchRoll = CustomToolRunResult & {
+  /**
+   * The draft the roll was dealt against. A roll names its outcome by index,
+   * so its bubble reads the row from this, not the live draft — a row deleted
+   * or reordered afterwards must not relabel an old result (#322).
+   */
+  dealtDraft: ToolDraft
   gate?: ToolGateVerdict
   /** With a character in the chair: what each wardrobe gesture would have found. */
   wardrobeResolution?: PreviewWardrobeResolution[]
@@ -234,9 +240,15 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
   const benchInventory = mockRows.length > 0 ? mockRows : undefined
   const [oracle, setOracle] = useState<BenchOracle>({ mode: 'scripted', answer: '' })
   const [rolls, setRolls] = useState<BenchRoll[]>([])
-  const [audit, setAudit] = useState<CustomToolAuditResult | null>(null)
+  /** The last audit, with the draft it was dealt against (#322 — see {@link BenchRoll}). */
+  const [auditRun, setAuditRun] = useState<{ result: CustomToolAuditResult; dealtDraft: ToolDraft } | null>(null)
+  const audit = auditRun?.result ?? null
+  const auditDraft = auditRun?.dealtDraft ?? draft
   /** The reachable rows a consult reading `{{outcome.brief}}` would find blank. */
-  const missingBrief = useMemo(() => (audit ? reachableOutcomesMissingBrief(draft, audit.outcomes) : []), [draft, audit])
+  const missingBrief = useMemo(
+    () => (auditRun ? reachableOutcomesMissingBrief(auditRun.dealtDraft, auditRun.result.outcomes) : []),
+    [auditRun]
+  )
 
   // Merge declared defaults under whatever the user has touched, so a fresh
   // parameter shows up pre-filled without wiping edits to the others.
@@ -263,18 +275,24 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
    * Held in state and advanced by an interval rather than read during render:
    * `Date.now()` in a render body is impure, and React is entitled to re-run a
    * render whenever it likes. The interval runs only while a hand-typed sheet
-   * is in play, so a bench with no progressions on it costs nothing.
+   * carrying a `progressions` key is in play, so a bench with no progressions
+   * on it costs nothing (#320).
    */
   const [benchNowMs, setBenchNowMs] = useState(() => Date.now())
+  const sheetHasProgressions = useMemo(() => {
+    if (sheet.mode !== 'manual') return false
+    const parsed = parseJsonObject(sheet.text)
+    return parsed.ok && Object.prototype.hasOwnProperty.call(parsed.value, 'progressions')
+  }, [sheet])
 
   useEffect(() => {
-    if (sheet.mode !== 'manual') return
+    if (!sheetHasProgressions) return
     // The interval alone, with no priming call: the first tick lands within a
     // second, and setting state straight from an effect body is the render
     // loop nobody wants.
     const timer = setInterval(() => setBenchNowMs(Date.now()), 1000)
     return () => clearInterval(timer)
-  }, [sheet.mode])
+  }, [sheetHasProgressions])
 
   /**
    * The progress sheet a hand-typed fact sheet derives to, at THIS instant.
@@ -365,8 +383,11 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
   }
 
   const rollMutation = useMutation({
-    mutationFn: () =>
-      apiFetch<BenchRoll>('/api/v1/custom-tools?action=preview', {
+    mutationFn: async (): Promise<BenchRoll> => {
+      // Captured as the deal is sent, so the result is read against the rows
+      // it was dealt from (#322).
+      const dealtDraft = draft
+      const result = await apiFetch<Omit<BenchRoll, 'dealtDraft'>>('/api/v1/custom-tools?action=preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -378,20 +399,23 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           inventory: benchInventory,
           llm: previewOracle(),
         }),
-      }),
+      })
+      return { ...result, dealtDraft }
+    },
     onSuccess: (result) => {
       const chairName =
         sheet.mode === 'character'
           ? (charactersQuery.data ?? []).find((c) => c.id === chairCharacterId)?.name ?? null
           : null
       setRolls((prev) => [{ ...result, chairName }, ...prev].slice(0, 10))
-      onMatched?.(draft.outcomes[result.outcomeIndex]?.id ?? null)
+      onMatched?.(result.dealtDraft.outcomes[result.outcomeIndex]?.id ?? null)
     },
   })
 
   const auditMutation = useMutation({
-    mutationFn: () =>
-      apiFetch<CustomToolAuditResult>('/api/v1/custom-tools?action=audit', {
+    mutationFn: async () => {
+      const dealtDraft = draft
+      const result = await apiFetch<CustomToolAuditResult>('/api/v1/custom-tools?action=audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -402,8 +426,10 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           inventory: benchInventory,
           llm: auditOracle(),
         }),
-      }),
-    onSuccess: setAudit,
+      })
+      return { result, dealtDraft }
+    },
+    onSuccess: setAuditRun,
   })
 
   const benchDisabled =
@@ -451,7 +477,7 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
         </div>
 
         {rolls.map((roll, index) => (
-          <MiniPascalBubble key={`${roll.raw}-${roll.value}-${index}`} roll={roll} draft={draft} faded={index > 0} />
+          <MiniPascalBubble key={`${roll.raw}-${roll.value}-${index}`} roll={roll} draft={roll.dealtDraft} faded={index > 0} />
         ))}
       </section>
 
@@ -471,7 +497,12 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
             { value: 'manual', label: 'Hand-typed sheet' },
           ]}
           value={sheet.mode}
-          onSelect={(mode) => setSheet(mode === 'character' ? { mode: 'character' } : { mode: 'manual', text: '{}' })}
+          // Choosing the mode already in force keeps the sheet as typed (#317).
+          onSelect={(mode) =>
+            setSheet((prev) =>
+              prev.mode === mode ? prev : mode === 'character' ? { mode: 'character' } : { mode: 'manual', text: '{}' }
+            )
+          }
           optionClassName={segmentedButtonClass('xs')}
         />
 
@@ -728,7 +759,7 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           disabled={benchDisabled || auditMutation.isPending}
           title={benchDisabled ? 'The draft must be valid before the house will audit it' : undefined}
         >
-          {auditMutation.isPending ? 'Dealing…' : 'Deal a thousand hands'}
+          {auditMutation.isPending ? 'Dealing…' : 'Deal ten thousand hands'}
         </button>
         {auditMutation.isError && (
           <p className="text-xs qt-text-destructive">{extractErrorMessage(auditMutation.error)}</p>
@@ -741,7 +772,7 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
               mean {formatValue(audit.valueMean)}
             </p>
             {audit.outcomes.map((entry) => {
-              const outcome = draft.outcomes[entry.index]
+              const outcome = auditDraft.outcomes[entry.index]
               const label = outcome?.catchAll ? 'otherwise' : `row ${entry.index + 1}`
               return (
                 <div key={entry.index} className="space-y-0.5">

@@ -78,6 +78,25 @@ function useDebounced<T>(value: T, delayMs: number): T {
   return debounced
 }
 
+/** What the JSON editor's text amounts to: valid, or the issues against it. */
+function assessJsonText(text: string) {
+  const parsed = parseDefinitionText(text)
+  if (!parsed.ok && parsed.stage === 'json') {
+    return { valid: false as const, issues: [`Not valid JSON: ${parsed.reason}`], unknownKeys: [] as string[] }
+  }
+  if (!parsed.ok) {
+    return {
+      valid: false as const,
+      issues: parsed.error.issues.map(
+        (issue) => `${issue.path.length ? `${issue.path.join('.')}: ` : ''}${issue.message}`
+      ),
+      summary: formatDefinitionIssues(parsed.error),
+      unknownKeys: collectUnknownKeys(parsed.raw),
+    }
+  }
+  return { valid: true as const, issues: [] as string[], unknownKeys: collectUnknownKeys(parsed.raw) }
+}
+
 /** {@link apiErrorMessage} with the bench's own fallback. */
 function extractErrorMessage(err: unknown): string {
   return apiErrorMessage(err, 'Something went sideways at the bench.')
@@ -112,6 +131,8 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
   const [benchOpen, setBenchOpen] = useState(true)
   const [pickerOpen, setPickerOpen] = useState<'save' | 'save-as' | null>(null)
   const [conflicted, setConflicted] = useState(false)
+  /** A rename-on-save runs outside `saveMutation`; this keeps Save shut meanwhile (#319). */
+  const [renaming, setRenaming] = useState(false)
   const [flashOutcomeId, setFlashOutcomeId] = useState<string | null>(null)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -179,13 +200,16 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
   const [vantage, setVantage] = useState<WardrobeVantage>({ kind: 'none' })
   const [vantageChosen, setVantageChosen] = useState(false)
   const [vantageSeed, setVantageSeed] = useState<string | null>(null)
-  const seedKey = destinations ? `loaded|${location?.mountPointId ?? ''}` : null
+  // Before a new draft has a home, a `?mount=` deep link names the store it is
+  // headed for (#316); the vantage opens there as it would on a saved file.
+  const homeMountPointId = location?.mountPointId ?? create?.mountPointId ?? null
+  const seedKey = destinations ? `loaded|${homeMountPointId ?? ''}` : null
   // Derive-from-state during render, latched on the seed key (the same
   // sanctioned pattern as the content initialisation above).
   if (seedKey !== null && seedKey !== vantageSeed) {
     setVantageSeed(seedKey)
     if (!vantageChosen && destinations) {
-      setVantage(defaultWardrobeVantage(location?.mountPointId ?? null, destinations))
+      setVantage(defaultWardrobeVantage(homeMountPointId, destinations))
     }
   }
   const chooseVantage = (next: WardrobeVantage) => {
@@ -202,25 +226,14 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
   const issues = useMemo(() => (draft ? validateDraft(draft) : []), [draft])
   const formValid = useMemo(() => (draft ? draftIsValid(draft) : false), [draft])
 
+  // The on-screen issue list reads a debounced parse so typing stays cheap;
+  // the save path re-assesses the live text (#315), so a quick click after an
+  // edit can never write what the list has not caught up with.
   const debouncedJson = useDebounced(jsonText, 300)
-  const jsonState = useMemo(() => {
-    if (editorMode !== 'json') return null
-    const parsed = parseDefinitionText(debouncedJson)
-    if (!parsed.ok && parsed.stage === 'json') {
-      return { valid: false as const, issues: [`Not valid JSON: ${parsed.reason}`], unknownKeys: [] as string[] }
-    }
-    if (!parsed.ok) {
-      return {
-        valid: false as const,
-        issues: parsed.error.issues.map(
-          (issue) => `${issue.path.length ? `${issue.path.join('.')}: ` : ''}${issue.message}`
-        ),
-        summary: formatDefinitionIssues(parsed.error),
-        unknownKeys: collectUnknownKeys(parsed.raw),
-      }
-    }
-    return { valid: true as const, issues: [], unknownKeys: collectUnknownKeys(parsed.raw) }
-  }, [editorMode, debouncedJson])
+  const jsonState = useMemo(
+    () => (editorMode === 'json' ? assessJsonText(debouncedJson) : null),
+    [editorMode, debouncedJson]
+  )
 
   const unknownKeysInDraft = draft?.unknownKeys.map(([key]) => key) ?? []
 
@@ -318,6 +331,8 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
     },
   })
 
+  const saving = saveMutation.isPending || renaming
+
   /**
    * The full save pipeline for a chosen store: figure out the path (create =
    * `Tools/<name>.tool.json`), offer the file rename when `name` changed, and
@@ -351,10 +366,14 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
   /** Save in place, offering the filename realignment when `name` changed. */
   const handleSave = async () => {
-    if (saveIsBlocked && repairReason === null) return
+    if (saving) return
+    // Judge the live text, not the debounced list (#315).
+    const liveJson = editorMode === 'json' ? assessJsonText(jsonText) : null
+    const blockedNow = editorMode === 'form' ? !formValid : liveJson ? !liveJson.valid && repairReason === null : true
+    if (blockedNow) return
 
     // Repair mode may save an invalid file back only as itself (§6.4).
-    if (editorMode === 'json' && jsonState && !jsonState.valid) {
+    if (liveJson && !liveJson.valid) {
       const confirmed = await showConfirmation('Save it broken? It will stay off the table until it validates.')
       if (!confirmed) return
     }
@@ -375,12 +394,21 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
           ['Cancel', 'OK']
         )) === 'OK'
       if (renameFile) {
+        setRenaming(true)
         try {
           if (await fileExists(location.mountPointId, expectedFileName)) {
             showErrorToast(`${expectedFileName} already exists in this store; the file keeps its name.`)
           } else {
             const content = contentToWrite()
             if (content === null) return
+            // The old file is about to be deleted, so it gets the same
+            // conflict check an in-place save would (#319): if it changed
+            // since it was opened, ask before anything is written.
+            const current = await apiFetch<FileEnvelope>(buildMountFileItemUrl(location.mountPointId, location.path))
+            if (mtime !== null && current.mtime !== mtime) {
+              setConflicted(true)
+              return
+            }
             // Write the new path first, delete the old only once that landed —
             // a failure between the two leaves both copies, never neither.
             const result = await putFile(location.mountPointId, expectedFileName, content, {})
@@ -396,6 +424,8 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
         } catch (error) {
           showErrorToast(extractErrorMessage(error))
           return
+        } finally {
+          setRenaming(false)
         }
       }
     }
@@ -519,16 +549,16 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
               type="button"
               className="qt-button qt-button-primary qt-button-sm"
               onClick={handleSave}
-              disabled={(saveIsBlocked && repairReason === null) || saveMutation.isPending}
+              disabled={(saveIsBlocked && repairReason === null) || saving}
               title={saveIsBlocked && repairReason === null ? 'The draft has errors to resolve first' : undefined}
             >
-              {saveMutation.isPending ? 'Saving…' : 'Save'}
+              {saving ? 'Saving…' : 'Save'}
             </button>
             <button
               type="button"
               className="qt-button qt-button-secondary qt-button-sm"
               onClick={() => setPickerOpen('save-as')}
-              disabled={saveIsBlocked || saveMutation.isPending}
+              disabled={saveIsBlocked || saving}
               title="Write a copy to another store; the original stays put"
             >
               Save As…
@@ -551,12 +581,12 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
           <div className="flex-1 min-w-0 space-y-4">
             {editorMode === 'form' && draft ? (
               <>
-                <BuilderForm draft={draft} issues={issues} onChange={handleDraftChange} disabled={saveMutation.isPending} />
+                <BuilderForm draft={draft} issues={issues} onChange={handleDraftChange} disabled={saving} />
                 <SideEffectsSection
                   draft={draft}
                   issues={issues}
                   onChange={handleDraftChange}
-                  disabled={saveMutation.isPending}
+                  disabled={saving}
                   vantage={vantage}
                   onVantageChange={chooseVantage}
                   destinations={destinations}
@@ -567,7 +597,7 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
                   issues={issues}
                   onChange={handleDraftChange}
                   flashOutcomeId={flashOutcomeId}
-                  disabled={saveMutation.isPending}
+                  disabled={saving}
                 />
               </>
             ) : (
@@ -626,6 +656,7 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
       {pickerOpen && (
         <DestinationPicker
           toolName={currentName() ?? ''}
+          initialMountPointId={create?.mountPointId ?? null}
           onPick={(store) => void saveToStore(store)}
           onCancel={() => setPickerOpen(null)}
           onOpenExisting={(mountPointId) => {

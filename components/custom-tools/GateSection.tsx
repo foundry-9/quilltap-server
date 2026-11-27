@@ -116,7 +116,9 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
     draft.gateConditions,
     setConditions,
     (a, b) => a.subject === b.subject && gateConditionSlotKey(a) === gateConditionSlotKey(b),
-    (next) => `A line of the gate can test “${next.key}” with ${COMPARATOR_LABELS[next.comparator]} only once.`
+    (next) => `A line of the gate can test “${next.key}” with ${COMPARATOR_LABELS[next.comparator]} only once.`,
+    // Typing a key passes through other keys on the way (#266).
+    (prev, next) => prev.subject === next.subject && prev.comparator === next.comparator && prev.key !== next.key
   )
 
   const setMode = (gateMode: GateMode) => {

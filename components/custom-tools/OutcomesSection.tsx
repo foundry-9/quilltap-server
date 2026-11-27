@@ -13,8 +13,9 @@
  * each key once.
  */
 
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { ItemActionMenu, type MenuEntryLike } from '@/components/item-browser/ItemActionMenu'
 import { showPrompt } from '@/lib/alert'
 import { SegmentedRadioGroup } from '@/components/ui/SegmentedRadioGroup'
 import {
@@ -408,7 +409,8 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
     outcome.conditions,
     setConditions,
     (a, b) => conditionSlotKey(a) === conditionSlotKey(b),
-    describeSlot
+    describeSlot,
+    isConditionKeyEdit
   )
 
   const addCondition = () => {
@@ -474,6 +476,17 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
       </button>
     </div>
   )
+}
+
+/**
+ * An edit that changes only a chip's typed key (metadata, progress or an
+ * inventory reference) — let through the line-slot guard while it collides,
+ * since a key is typed one character at a time (#266).
+ */
+function isConditionKeyEdit(prev: DraftCondition, next: DraftCondition): boolean {
+  if (prev.comparator !== next.comparator || prev.subject.kind !== next.subject.kind) return false
+  if (!('key' in prev.subject) || !('key' in next.subject)) return false
+  return prev.subject.key !== next.subject.key
 }
 
 function describeSlot(condition: Pick<DraftCondition, 'subject' | 'comparator'>): string {
@@ -853,11 +866,9 @@ interface MessageEditorProps {
 
 function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageEditorProps>) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
 
   const insertAtCursor = (placeholder: string) => {
     const textarea = textareaRef.current
-    setMenuOpen(false)
     if (!textarea) {
       onUpdate({ message: outcome.message + placeholder })
       return
@@ -889,7 +900,6 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
   const insertMetadataKey = async () => {
     const key = await showPrompt('Metadata key to render (any non-empty string):', testedKey('metadata') ?? '')
     if (key && key.trim() !== '') insertAtCursor(`{{metadata.${key.trim()}}}`)
-    else setMenuOpen(false)
   }
 
   const insertProgressField = async () => {
@@ -898,8 +908,25 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
       testedKey('progress') ?? 'cannon.percent'
     )
     if (key && key.trim() !== '') insertAtCursor(`{{progress.${key.trim()}}}`)
-    else setMenuOpen(false)
   }
+
+  const insertEntries: MenuEntryLike[] = [
+    { key: 'value', label: 'Value', onSelect: () => insertAtCursor('{{value}}') },
+    { key: 'roll', label: 'Raw roll', onSelect: () => insertAtCursor('{{roll}}') },
+    draft.rollForm === 'dice' && { key: 'dice', label: 'Dice breakdown', onSelect: () => insertAtCursor('{{dice}}') },
+    ...draft.parameters
+      .filter((p) => p.name)
+      .map((p) => ({
+        key: `param-${p.id}`,
+        label: `Parameter: ${p.name}`,
+        onSelect: () => insertAtCursor(`{{params.${p.name}}}`),
+      })),
+    { key: 'character', label: 'Character name', onSelect: () => insertAtCursor('{{character}}') },
+    { key: 'metadata', label: 'Metadata key…', onSelect: () => void insertMetadataKey() },
+    { key: 'progress', label: 'Progress field…', onSelect: () => void insertProgressField() },
+    { key: 'now', label: 'Now (epoch ms)', onSelect: () => insertAtCursor('{{now}}') },
+    draft.llmEnabled && { key: 'llm', label: 'Consult answer', onSelect: () => insertAtCursor('{{llm}}') },
+  ]
 
   /** Placeholders present in the text, for the visibility strip. */
   const placeholders = [...outcome.message.matchAll(PLACEHOLDER_PATTERN)].map((m) => m[0])
@@ -918,41 +945,17 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
           placeholder="What Pascal announces when this row wins…"
           aria-label="Outcome message"
         />
+        {/* The shared menu button (#314): focus moves in on open, arrows /
+            Home / End move, Escape closes and returns focus, and Tab or an
+            outside click closes it. */}
         <div className="absolute top-1 right-1">
-          <button
-            type="button"
-            className="qt-button qt-button-ghost qt-button-sm"
-            onClick={() => setMenuOpen(!menuOpen)}
+          <ItemActionMenu
+            label="Insert value"
             disabled={disabled}
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-          >
-            Insert value ▾
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 mt-1 qt-card qt-shadow-lg rounded border z-10 py-1 w-52" role="menu">
-              <MenuItem label="Value" onClick={() => insertAtCursor('{{value}}')} />
-              <MenuItem label="Raw roll" onClick={() => insertAtCursor('{{roll}}')} />
-              {draft.rollForm === 'dice' && (
-                <MenuItem label="Dice breakdown" onClick={() => insertAtCursor('{{dice}}')} />
-              )}
-              {draft.parameters
-                .filter((p) => p.name)
-                .map((p) => (
-                  <MenuItem key={p.id} label={`Parameter: ${p.name}`} onClick={() => insertAtCursor(`{{params.${p.name}}}`)} />
-                ))}
-              <MenuItem label="Character name" onClick={() => insertAtCursor('{{character}}')} />
-              <MenuItem label="Metadata key…" onClick={() => void insertMetadataKey()} />
-              <MenuItem label="Progress field…" onClick={() => void insertProgressField()} />
-              <MenuItem
-                label="Now (epoch ms)"
-                onClick={() => insertAtCursor('{{now}}')}
-              />
-              {draft.llmEnabled && (
-                <MenuItem label="Consult answer" onClick={() => insertAtCursor('{{llm}}')} />
-              )}
-            </div>
-          )}
+            minWidthClass="w-52"
+            trigger={{ content: 'Insert value ▾', className: 'qt-button qt-button-ghost qt-button-sm' }}
+            entries={insertEntries}
+          />
         </div>
       </div>
       <div className="flex items-center gap-1 flex-wrap">
@@ -966,19 +969,6 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
         </span>
       </div>
     </div>
-  )
-}
-
-function MenuItem({ label, onClick }: Readonly<{ label: string; onClick: () => void }>) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      className="block w-full text-left px-3 py-1 text-sm hover:qt-bg-muted"
-      onClick={onClick}
-    >
-      {label}
-    </button>
   )
 }
 

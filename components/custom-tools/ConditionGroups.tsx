@@ -19,21 +19,33 @@ import { groupsOf, type ConditionJoiner } from '@/lib/pascal/tool-draft'
  * carries each key once, so an edit that would put a chip on the same slot as
  * another chip of its line is refused and `describe`d in `notice`; another
  * line is another object, and may repeat it.
+ *
+ * Typing is the exception (#266). A key is typed a character at a time, and
+ * on the way to `hp_max` it passes through `hp` — refusing that keystroke
+ * would make the key untypeable. So an edit `isKeyEdit` says only changes the
+ * typed key is always applied; while it collides the notice stays up (and
+ * `validateDraft` refuses the save), and it clears once the key moves on. An
+ * edit that leaves a colliding chip's slot alone (its operand) is applied
+ * too. Only a discrete change that *lands* on a taken slot — a subject or
+ * comparator picked from a list — is refused.
  */
 export function useLineSlotGuard<C extends { id: string; joiner?: ConditionJoiner }>(
   conditions: readonly C[],
   setConditions: (next: C[]) => void,
   sameSlot: (a: C, b: C) => boolean,
   describe: (next: C) => string,
+  isKeyEdit: (prev: C, next: C) => boolean = () => false,
 ) {
   const [notice, setNotice] = useState<string | null>(null)
   const update = (id: string, next: C) => {
+    const prev = conditions.find((c) => c.id === id)
     const line = groupsOf(conditions).find((group) => group.some((c) => c.id === id)) ?? []
-    if (line.some((c) => c.id !== id && sameSlot(c, next))) {
+    const collides = line.some((c) => c.id !== id && sameSlot(c, next))
+    if (collides && !(prev && (sameSlot(prev, next) || isKeyEdit(prev, next)))) {
       setNotice(describe(next))
       return
     }
-    setNotice(null)
+    setNotice(collides ? describe(next) : null)
     setConditions(conditions.map((c) => (c.id === id ? next : c)))
   }
   return { notice, clearNotice: () => setNotice(null), update }

@@ -4,6 +4,19 @@
 
 ### 4.14.2
 
+#### Fix: Pascal's Workbench, the Proving Bench and the hold dialog
+
+- A condition key could not be typed in order when a prefix of it was already tested on the same line (typing `hp_max` beside `hp` stuck at `h`). `useLineSlotGuard` (`components/custom-tools/ConditionGroups.tsx`) now applies key-text edits while they collide, keeps the duplicate notice up, and refuses only a subject or comparator change that lands on a taken slot; `validateDraft` still blocks the save. Outcome chips and the gate both. Fixes #266.
+- The outcome message's "Insert value" menu had no keyboard handling. It is now the shared `ItemActionMenu` with a visible trigger: focus moves in on open, arrows / Home / End move, Escape and Tab close it, an outside click closes it. Fixes #314.
+- JSON mode could save broken JSON without the "Save it broken?" confirm when Save was clicked within the 300 ms parse debounce. `handleSave` now judges the live text; the debounced parse only drives the issue list. Fixes #315.
+- `/custom-tools?new=1&mount=<id>` did not preselect the save destination. `DestinationPicker` takes `initialMountPointId`, and the wardrobe vantage of an unsaved draft opens on that store. Fixes #316.
+- Clicking the already-selected "Hand-typed sheet" on the Proving Bench reset the sheet to `{}`. Re-choosing the current mode keeps the sheet. Fixes #317.
+- Renaming a tool's file on save deleted the old file without a conflict check, and Save stayed enabled during the rename. The old file's mtime is now checked first (a change opens the conflict dialog and nothing is written), and Save and the form are disabled while the rename runs. Fixes #319.
+- The Proving Bench ticked a one-second clock whenever the fact sheet was hand-typed. It now runs only while the sheet has a `progressions` key. Fixes #320.
+- The audit button said "Deal a thousand hands"; it deals ten thousand. Fixes #321.
+- Test rolls and the audit looked up row labels in the live draft, so editing the table relabelled old results. Each roll and audit now keeps the draft it was dealt against. Fixes #322.
+- After Re-ask in the Pascal hold dialog with nothing (or only the answer) pinned, the dialog went on showing the original deal while "Deal it" used the new answer. Once re-asked, the dialog shows the server's preview, including with no pins. Fixes #244.
+
 #### Fix: import selection, server-side document close, character delete preview, nested dialog order
 
 - The import preview's checkboxes did nothing; every entity in the file was imported, and Overwrite replaced entities left unticked. `applyImportSelection` (`lib/import/quilltap-import/selection.ts`) now cuts the bundle to `selectedIds` before any write: a listed kind keeps only its ids, an absent kind is imported whole, a left-out row is neither imported nor counted as skipped, and a left-out character's memories and vault (and a left-out project's or group's official store, and a left-out store's folders, documents, blobs and links) go with it. The preview now starts with everything ticked. Fixes #267.
