@@ -11,6 +11,7 @@ import { useEffect, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
 import MessageContent from '@/components/chat/MessageContent'
 import type { NavigationLink } from './hooks/useHelpChatStreaming'
+import { ConsoleBubble } from './ConsoleBubble'
 
 interface HelpMessage {
   id: string
@@ -40,6 +41,19 @@ interface HelpChatMessageListProps {
   /** Links extracted from help_search results — suggested pages based on search relevance */
   suggestedLinks?: NavigationLink[]
   onNavigate?: (url: string) => void
+}
+
+/** A help character's portrait, or their initial (else `fallback`) when they have none. */
+function HelpAvatar({ character, fallback }: { character: CharacterInfo | null; fallback: string }) {
+  return (
+    <div className="qt-help-avatar">
+      {character?.avatarUrl ? (
+        <img src={character.avatarUrl} alt={character.name} className="w-full h-full object-cover" />
+      ) : (
+        <span className="text-xs qt-text-secondary">{character?.name?.[0] || fallback}</span>
+      )}
+    </div>
+  )
 }
 
 export function HelpChatMessageList({
@@ -100,89 +114,46 @@ export function HelpChatMessageList({
         const character = getCharacterForParticipant(msg.participantId)
 
         return (
-          <div
+          <ConsoleBubble
             key={msg.id}
-            className={`flex items-start ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+            side={isUser ? 'user' : 'assistant'}
+            avatar={<HelpAvatar character={character} fallback="?" />}
           >
-            {/* Avatar */}
-            {!isUser && (
-              <div className="qt-help-avatar">
-                {character?.avatarUrl ? (
-                  <img
-                    src={character.avatarUrl}
-                    alt={character.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-xs qt-text-secondary">
-                    {character?.name?.[0] || '?'}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Bubble tail */}
-            <svg className={`qt-help-tail ${isUser ? 'qt-help-tail-user' : 'qt-help-tail-assistant'}`} viewBox="0 0 10 16" fill="currentColor">
-              {isUser ? (
-                <path d="M0 0 L10 8 L0 16 Z" />
-              ) : (
-                <path d="M10 0 L0 8 L10 16 Z" />
-              )}
-            </svg>
-
             {/* Message bubble */}
             <div className={isUser ? 'qt-help-msg-user' : 'qt-help-msg-assistant'}>
-              {!isUser && character && visibleMessages.filter(m => m.role !== 'USER' && m.role !== 'user').length > 0 && (
+              {!isUser && character && (
                 <div className="qt-help-msg-character-name">
                   {character.name}
                 </div>
               )}
               <MessageContent content={msg.content} />
             </div>
-          </div>
+          </ConsoleBubble>
         )
       })}
 
       {/* Streaming message */}
       {isStreaming && streamingContent && (
-        <div className="flex items-start flex-row">
-          <div className="qt-help-avatar">
-            {(() => {
-              const char = getCharacterForParticipant(streamingParticipantId)
-              if (char?.avatarUrl) {
-                return <img src={char.avatarUrl} alt={char.name} className="w-full h-full object-cover" />
-              }
-              return <span className="text-xs qt-text-secondary">{char?.name?.[0] || '?'}</span>
-            })()}
-          </div>
-          <svg className="qt-help-tail qt-help-tail-assistant" viewBox="0 0 10 16" fill="currentColor">
-            <path d="M10 0 L0 8 L10 16 Z" />
-          </svg>
+        <ConsoleBubble
+          side="assistant"
+          avatar={<HelpAvatar character={getCharacterForParticipant(streamingParticipantId)} fallback="?" />}
+        >
           <div className="qt-help-msg-assistant">
             <MessageContent content={streamingContent} />
           </div>
-        </div>
+        </ConsoleBubble>
       )}
 
       {/* Streaming indicator (no content yet, or executing tools) */}
       {isStreaming && !streamingContent && (
-        <div className="flex items-start flex-row">
-          <div className="qt-help-avatar">
-            {(() => {
-              const char = getCharacterForParticipant(streamingParticipantId)
-              if (char?.avatarUrl) {
-                return <img src={char.avatarUrl} alt={char.name} className="w-full h-full object-cover" />
-              }
-              return <span className="text-xs qt-text-secondary">{char?.name?.[0] || '...'}</span>
-            })()}
-          </div>
-          <svg className="qt-help-tail qt-help-tail-assistant" viewBox="0 0 10 16" fill="currentColor">
-            <path d="M10 0 L0 8 L10 16 Z" />
-          </svg>
+        <ConsoleBubble
+          side="assistant"
+          avatar={<HelpAvatar character={getCharacterForParticipant(streamingParticipantId)} fallback="..." />}
+        >
           <div className="qt-help-msg-assistant italic">
             {isExecutingTools ? 'Consulting the archives...' : 'Thinking...'}
           </div>
-        </div>
+        </ConsoleBubble>
       )}
 
       {/* Navigation links from help_navigate tool calls */}

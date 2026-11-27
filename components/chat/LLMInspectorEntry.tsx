@@ -203,7 +203,7 @@ export default function LLMInspectorEntry({ log, isHighlighted }: Readonly<LLMIn
   )
 }
 
-function RequestTab({ log }: { log: LLMLog }) {
+export function RequestTab({ log }: { log: LLMLog }) {
   return (
     <div className="space-y-3">
       <div className="qt-bg-surface-alt p-2 rounded space-y-1">
@@ -256,7 +256,7 @@ function RequestTab({ log }: { log: LLMLog }) {
   )
 }
 
-function ResponseTab({ log }: { log: LLMLog }) {
+export function ResponseTab({ log }: { log: LLMLog }) {
   // Backward compat: use content, fall back to fullContent, then contentPreview for old entries
   const responseContent = log.response.content || log.response.fullContent || log.response.contentPreview || ''
 
@@ -342,7 +342,7 @@ function MessageContentBlock({ role, contentLength, hasAttachments, children }: 
   )
 }
 
-function UsageTab({ log }: { log: LLMLog }) {
+export function UsageTab({ log }: { log: LLMLog }) {
   return (
     <div className="space-y-3">
       {log.usage && (

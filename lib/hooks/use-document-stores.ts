@@ -12,10 +12,8 @@
  * @module lib/hooks/use-document-stores
  */
 
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useEnvelopeSelect, type EntityListOptions, type EntityRow } from './use-profiles'
+import { useEnvelopeListQuery, type EntityListOptions, type EntityRow } from './use-profiles'
 
 /** The list response's envelope, for callers that edit the cached entry. */
 export interface DocumentStoresResponse<S> {
@@ -25,13 +23,10 @@ export interface DocumentStoresResponse<S> {
 const unwrapStores = <S,>(data: DocumentStoresResponse<S>) => data.mountPoints
 
 export function useDocumentStoresQuery<S = EntityRow, R = S[]>(options?: EntityListOptions<S, R>) {
-  const select = useEnvelopeSelect<DocumentStoresResponse<S>, S, R>(unwrapStores, options?.select)
-  return useQuery({
+  return useEnvelopeListQuery<DocumentStoresResponse<S>, S, R>({
     queryKey: queryKeys.mountPoints.list(),
-    queryFn: ({ signal }) => apiFetch<DocumentStoresResponse<S>>('/api/v1/mount-points', { signal }),
-    select,
-    enabled: options?.enabled,
-    staleTime: options?.staleTime,
-    refetchOnMount: options?.refetchOnMount,
+    url: '/api/v1/mount-points',
+    unwrap: unwrapStores,
+    options,
   })
 }

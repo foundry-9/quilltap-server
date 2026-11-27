@@ -718,8 +718,8 @@ describe('SQLite Query Translator', () => {
         const update: UpdateSpec = { $inc: { count: 1, score: 10 } };
         const result = translateUpdate(update);
         expect(result.setClauses).toHaveLength(2);
-        expect(result.setClauses[0]).toContain('"count" = "count" + ?');
-        expect(result.setClauses[1]).toContain('"score" = "score" + ?');
+        expect(result.setClauses[0]).toContain('"count" = COALESCE("count", 0) + ?');
+        expect(result.setClauses[1]).toContain('"score" = COALESCE("score", 0) + ?');
         expect(result.params).toEqual([1, 10]);
       });
 

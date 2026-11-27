@@ -5,7 +5,7 @@ import { getErrorMessage } from '@/lib/error-utils'
 import { triggerDownload } from '@/lib/download-utils'
 import { useDialogState } from '@/hooks/useDialogState'
 import { useWizardState } from '@/hooks/useWizardState'
-import type { ExportState, ExportStep, AvailableEntity } from '../types'
+import { supportsMemories, type ExportState, type ExportStep, type AvailableEntity } from '../types'
 import type { ExportEntityType } from '@/lib/export/types'
 
 interface UseExportDataOptions {
@@ -41,10 +41,6 @@ const initialState: ExportState = {
   error: null,
 }
 
-// Helper to check if entity type supports memories
-const supportsMemories = (type: ExportEntityType | null): boolean =>
-  type === 'characters' || type === 'chats'
-
 export function useExportData({
   isOpen,
   onSuccess,
@@ -75,7 +71,7 @@ export function useExportData({
   // Calculate memory count based on scope and selection
   useEffect(() => {
     // Only calculate for entity types that support memories
-    if (!state.entityType || !['characters', 'chats'].includes(state.entityType)) {
+    if (!supportsMemories(state.entityType)) {
       return
     }
 
@@ -213,25 +209,19 @@ export function useExportData({
         break
 
       case 'select':
+        // Only a type with an options step moves on with Next; every other
+        // type exports straight from this step (handleExport).
+        if (!supportsMemories(state.entityType)) return
         if (state.scope === 'selected' && state.selectedIds.length === 0) {
           return
         }
-        // Use wizard for conditional navigation based on entity type
-        if (supportsMemories(state.entityType)) {
-          wizard.goTo('options')
-          // Characters carry their vaults now, which can dwarf everything else
-          // in the bundle. Ask what that costs once we know the selection —
-          // never on the way past, and never for a type without vaults.
-          if (state.entityType === 'characters') {
-            void loadVaultPreview(state.scope, state.selectedIds)
-          }
-        } else {
-          wizard.goTo('exporting')
+        wizard.goTo('options')
+        // Characters carry their vaults now, which can dwarf everything else
+        // in the bundle. Ask what that costs once we know the selection —
+        // never on the way past, and never for a type without vaults.
+        if (state.entityType === 'characters') {
+          void loadVaultPreview(state.scope, state.selectedIds)
         }
-        break
-
-      case 'options':
-        wizard.goNext() // Goes to 'exporting'
         break
 
       default:

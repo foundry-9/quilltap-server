@@ -13,8 +13,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   applyAgentStreamEvent,
   EMPTY_AGENT_TOOL_CALL_STATE,
-  parseAgentSseLine,
-  splitSseBuffer,
+  readAgentSse,
   type AgentStreamToolCall,
   type AgentToolCallState,
 } from '@/components/agent-stream/parse-agent-stream'
@@ -118,92 +117,77 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete, apiBase =
         throw new Error(errorData.error || `HTTP ${res.status}`)
       }
 
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response body')
-
-      const decoder = new TextDecoder()
-      let buffer = ''
       let currentContent = ''
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+      const outcome = await readAgentSse(res, (event) => {
+        // Content chunk
+        if (typeof event.content === 'string' && event.content) {
+          currentContent += event.content
+          setState(prev => ({
+            ...prev,
+            isExecutingTools: false,
+            streamingContent: currentContent,
+          }))
+        }
 
-        const split = splitSseBuffer(buffer, decoder.decode(value, { stream: true }))
-        buffer = split.rest
+        // Reasoning ("thinking") chunk — cumulative chain so far; replace,
+        // not append. Left intact across tool-execution status so the
+        // chain stays visible between turns. DISPLAY ONLY.
+        if (typeof event.reasoning === 'string') {
+          const reasoning = event.reasoning
+          reasoningRef.current = reasoning
+          setState(prev => ({ ...prev, streamingReasoning: reasoning }))
+        }
 
-        for (const line of split.lines) {
-          const event = parseAgentSseLine(line)
-          if (!event) continue
-
-          // Content chunk
-          if (typeof event.content === 'string' && event.content) {
-            currentContent += event.content
-            setState(prev => ({
-              ...prev,
-              isExecutingTools: false,
-              streamingContent: currentContent,
-            }))
+        // Tool batch detected / tool result — pending entries appear so the
+        // operator sees the query before its rows land, then settle.
+        const nextToolState = applyAgentStreamEvent(toolStateRef.current, event)
+        if (nextToolState !== toolStateRef.current) {
+          const isNewBatch = typeof event.toolsDetected === 'number'
+          const mark: StreamingToolBatchMark = {
+            reasoningLength: reasoningRef.current.length,
+            toolIndex: nextToolState.batchBase,
           }
+          toolStateRef.current = nextToolState
+          setState(prev => ({
+            ...prev,
+            streamingToolCalls: nextToolState.toolCalls,
+            streamingToolBatchMarks: isNewBatch
+              ? [...prev.streamingToolBatchMarks, mark]
+              : prev.streamingToolBatchMarks,
+          }))
+        }
 
-          // Reasoning ("thinking") chunk — cumulative chain so far; replace,
-          // not append. Left intact across tool-execution status so the
-          // chain stays visible between turns. DISPLAY ONLY.
-          if (typeof event.reasoning === 'string') {
-            const reasoning = event.reasoning
-            reasoningRef.current = reasoning
-            setState(prev => ({ ...prev, streamingReasoning: reasoning }))
-          }
+        // Tool execution status — clear stale streamed text, show "working"
+        if (event.status) {
+          currentContent = ''
+          setState(prev => ({
+            ...prev,
+            isExecutingTools: true,
+            streamingContent: '',
+          }))
+        }
 
-          // Tool batch detected / tool result — pending entries appear so the
-          // operator sees the query before its rows land, then settle.
-          const nextToolState = applyAgentStreamEvent(toolStateRef.current, event)
-          if (nextToolState !== toolStateRef.current) {
-            const isNewBatch = typeof event.toolsDetected === 'number'
-            const mark: StreamingToolBatchMark = {
-              reasoningLength: reasoningRef.current.length,
-              toolIndex: nextToolState.batchBase,
-            }
-            toolStateRef.current = nextToolState
-            setState(prev => ({
-              ...prev,
-              streamingToolCalls: nextToolState.toolCalls,
-              streamingToolBatchMarks: isNewBatch
-                ? [...prev.streamingToolBatchMarks, mark]
-                : prev.streamingToolBatchMarks,
-            }))
-          }
-
-          // Tool execution status — clear stale streamed text, show "working"
-          if (event.status) {
-            currentContent = ''
-            setState(prev => ({
-              ...prev,
-              isExecutingTools: true,
-              streamingContent: '',
-            }))
-          }
-
-          // Done — persisted message ready; reload the transcript. The reloaded
-          // transcript carries the settled tool cards, so the live ones clear.
-          if (event.done) {
-            const messageId = typeof event.messageId === 'string' ? event.messageId : null
-            currentContent = ''
-            toolStateRef.current = EMPTY_AGENT_TOOL_CALL_STATE
-            setState(prev => ({ ...prev, streamingContent: '', streamingReasoning: '', streamingToolCalls: [], streamingToolBatchMarks: [] }))
-            if (messageId) {
-              onMessageCompleteRef.current?.(messageId)
-            }
-          }
-
-          // Error
-          if (event.error) {
-            const message = String(event.error)
-            setState(prev => ({ ...prev, error: message, isStreaming: false, streamingReasoning: '', streamingToolCalls: [], streamingToolBatchMarks: [] }))
-            return
+        // Done — persisted message ready; reload the transcript. The reloaded
+        // transcript carries the settled tool cards, so the live ones clear.
+        if (event.done) {
+          const messageId = typeof event.messageId === 'string' ? event.messageId : null
+          currentContent = ''
+          toolStateRef.current = EMPTY_AGENT_TOOL_CALL_STATE
+          setState(prev => ({ ...prev, streamingContent: '', streamingReasoning: '', streamingToolCalls: [], streamingToolBatchMarks: [] }))
+          if (messageId) {
+            onMessageCompleteRef.current?.(messageId)
           }
         }
-      }
+
+        // Error
+        if (event.error) {
+          const message = String(event.error)
+          setState(prev => ({ ...prev, error: message, isStreaming: false, streamingReasoning: '', streamingToolCalls: [], streamingToolBatchMarks: [] }))
+          return true
+        }
+      })
+      if (outcome === 'stopped') return
 
       // Stream closed
       setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '', streamingToolCalls: [], streamingToolBatchMarks: [] }))

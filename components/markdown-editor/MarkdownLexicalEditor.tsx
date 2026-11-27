@@ -26,12 +26,8 @@ import { CheckListPlugin } from '@lexical/react/LexicalCheckListPlugin'
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin'
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { HeadingNode, QuoteNode } from '@lexical/rich-text'
-import { ListNode, ListItemNode } from '@lexical/list'
-import { LinkNode } from '@lexical/link'
-import { CodeNode, CodeHighlightNode } from '@lexical/code'
-import { TableNode, TableCellNode, TableRowNode } from '@lexical/table'
 import { composerTheme } from '@/components/chat/lexical/theme'
+import { COMPOSER_NODES } from '@/components/chat/lexical/nodes'
 import {
   MarkdownBridgePlugin,
   COMPOSER_TRANSFORMERS,
@@ -205,18 +201,7 @@ export default function MarkdownLexicalEditor({
     () => ({
       namespace,
       theme: composerTheme,
-      nodes: [
-        HeadingNode,
-        QuoteNode,
-        ListNode,
-        ListItemNode,
-        LinkNode,
-        CodeNode,
-        CodeHighlightNode,
-        TableNode,
-        TableCellNode,
-        TableRowNode,
-      ],
+      nodes: COMPOSER_NODES,
       editable: !disabled,
       onError: (error: Error) => {
         console.error('[MarkdownLexicalEditor] Editor error:', error)

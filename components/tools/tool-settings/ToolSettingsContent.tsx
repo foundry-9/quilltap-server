@@ -15,7 +15,7 @@ import {
   makeSubgroupPattern,
   getGroupCheckState,
   buildToolHierarchy,
-  extractAllGroupIds,
+  collectGroupIds,
 } from './utils'
 
 // ============================================================================
@@ -38,16 +38,14 @@ export function ToolSettingsContent({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [collapsedSubgroups, setCollapsedSubgroups] = useState<Set<string>>(new Set())
 
+  // Build hierarchical structure from flat tool list
+  const toolHierarchy = useMemo(() => buildToolHierarchy(availableTools), [availableTools])
+
   // Compute which groups are expanded (all minus explicitly collapsed)
-  const { allGroupIds, allSubgroupIds } = useMemo(() => {
-    if (availableTools.length === 0) {
-      return { allGroupIds: new Set<string>(), allSubgroupIds: new Set<string>() }
-    }
-    return {
-      allGroupIds: extractAllGroupIds(availableTools).groupIds,
-      allSubgroupIds: extractAllGroupIds(availableTools).subgroupIds,
-    }
-  }, [availableTools])
+  const { groupIds: allGroupIds, subgroupIds: allSubgroupIds } = useMemo(
+    () => collectGroupIds(toolHierarchy),
+    [toolHierarchy],
+  )
 
   // A group is expanded if it exists and is not in the collapsed set
   const isGroupExpanded = useCallback((groupId: string) => {
@@ -57,9 +55,6 @@ export function ToolSettingsContent({
   const isSubgroupExpanded = useCallback((subgroupId: string) => {
     return allSubgroupIds.has(subgroupId) && !collapsedSubgroups.has(subgroupId)
   }, [allSubgroupIds, collapsedSubgroups])
-
-  // Build hierarchical structure from flat tool list
-  const toolHierarchy = useMemo(() => buildToolHierarchy(availableTools), [availableTools])
 
   // Check if a tool is enabled (not disabled by individual or group pattern)
   const isToolEnabled = useCallback((tool: AvailableTool): boolean => {

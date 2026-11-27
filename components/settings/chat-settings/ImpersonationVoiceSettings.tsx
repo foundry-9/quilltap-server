@@ -1,6 +1,6 @@
 'use client'
 
-import type { ChatSettings, ImpersonationVoiceMode } from './types'
+import { DEFAULT_IMPERSONATION_VOICE_MODE, type ChatSettings, type ImpersonationVoiceMode } from './types'
 
 export interface ImpersonationVoiceSettingsProps {
   settings: ChatSettings
@@ -35,7 +35,7 @@ export function ImpersonationVoiceSettings({
   saving,
   onChange,
 }: ImpersonationVoiceSettingsProps) {
-  const mode = settings.impersonationVoiceMode ?? 'off'
+  const mode = settings.impersonationVoiceMode ?? DEFAULT_IMPERSONATION_VOICE_MODE
 
   return (
     <fieldset>

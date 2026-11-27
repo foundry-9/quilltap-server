@@ -7,84 +7,48 @@
  * Allows users to generate images using their configured image profiles.
  */
 
-import { useId, useState, useRef, useCallback, useMemo } from 'react'
+import { useId, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
-import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { downloadFetchedFile } from '@/lib/download-utils'
-import { useClickOutside } from '@/hooks/useClickOutside'
+import { apiErrorMessage } from '@/lib/query/fetcher'
+import { useEntitySearch } from '@/components/chat/useEntitySearch'
+import { insertAtCursor, useGenerateImage, type GeneratedImageFile } from '@/components/images/generate-image'
 import ImageModal from '@/components/chat/ImageModal'
+import { Spinner } from '@/components/ui/Spinner'
 
-interface EntityOption {
-  id: string
-  name: string
-  type: 'character'
-}
-
-interface GeneratedImage {
-  id: string
-  filename: string
-  filepath: string
-  mimeType: string
-  generationPrompt?: string
-  generationRevisedPrompt?: string
-}
+type GeneratedImage = GeneratedImageFile
 
 export function GenerateImageView() {
   const fieldId = useId()
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
   const [imageCount, setImageCount] = useState(1)
-  const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [previewImage, setPreviewImage] = useState<{ src: string; filename: string } | null>(null)
   const promptRef = useRef<HTMLTextAreaElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
-  const { data: charactersData, isLoading } = useCharactersList<{ id: string; name: string }>()
 
   // Every character, for placeholder insertion, alphabetical.
-  const allEntities = useMemo<EntityOption[]>(
-    () =>
-      (charactersData ?? [])
-        .map((c) => ({ id: c.id, name: c.name, type: 'character' as const }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [charactersData],
-  )
+  const {
+    filteredEntities,
+    searchTerm,
+    setSearchTerm,
+    isDropdownOpen,
+    setIsDropdownOpen,
+    dropdownRef,
+  } = useEntitySearch(true)
+  const generate = useGenerateImage(selectedProfileId)
+  const isGenerating = generate.isPending
 
   const insertPlaceholder = (text: string) => {
     const textarea = promptRef.current
     if (!textarea) return
-
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const before = prompt.substring(0, start)
-    const after = prompt.substring(end)
-
-    const placeholder = `{{${text}}}`
-    const newPrompt = before + placeholder + after
-    setPrompt(newPrompt)
-
-    // Set cursor position after the inserted placeholder
-    setTimeout(() => {
-      textarea.focus()
-      const newPosition = start + placeholder.length
-      textarea.setSelectionRange(newPosition, newPosition)
-    }, 0)
-
+    setPrompt(insertAtCursor(textarea, text))
     setSearchTerm('')
     setIsDropdownOpen(false)
   }
-
-  const filteredEntities = allEntities.filter(entity =>
-    entity.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  useClickOutside(dropdownRef, () => setIsDropdownOpen(false))
 
   const handleGenerate = async () => {
     if (!selectedProfileId) {
@@ -97,26 +61,8 @@ export function GenerateImageView() {
       return
     }
 
-    setIsGenerating(true)
-
     try {
-      const requestBody = {
-        prompt: prompt.trim(),
-        count: imageCount,
-      }
-
-      const res = await fetch(`/api/v1/image-profiles/${selectedProfileId}?action=generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        const errorMessage = data.error || data.message || 'Failed to generate image'
-        throw new Error(errorMessage)
-      }
+      const data = await generate.mutateAsync({ prompt, count: imageCount })
 
       // API returns images in data.data (matching chat dialog pattern)
       const images: GeneratedImage[] = data.data || []
@@ -128,11 +74,9 @@ export function GenerateImageView() {
         showErrorToast('No images were generated')
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = apiErrorMessage(error, 'Failed to generate image')
       console.error('Error generating image:', message)
       showErrorToast(message || 'Failed to generate image')
-    } finally {
-      setIsGenerating(false)
     }
   }
 
@@ -268,10 +212,7 @@ export function GenerateImageView() {
             >
               {isGenerating ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
+                  <Spinner className="-ml-1 mr-2 h-4 w-4" />
                   Generating...
                 </>
               ) : (

@@ -7,6 +7,7 @@
  */
 
 import { useRouter } from 'next/navigation'
+import { EmptyStatePanel } from '@/components/ui/EmptyState'
 import { ProjectCard } from './ProjectCard'
 import type { Project } from '../types'
 
@@ -32,7 +33,7 @@ export function ProjectsGrid({ projects, onCreateClick, onDeleteClick, onOpenPro
 
   if (projects.length === 0) {
     return (
-      <div className="mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
+      <EmptyStatePanel>
         <p className="mb-4 text-lg qt-text-secondary">No projects yet</p>
         <button
           onClick={onCreateClick}
@@ -40,7 +41,7 @@ export function ProjectsGrid({ projects, onCreateClick, onDeleteClick, onOpenPro
         >
           Create your first project
         </button>
-      </div>
+      </EmptyStatePanel>
     )
   }
 

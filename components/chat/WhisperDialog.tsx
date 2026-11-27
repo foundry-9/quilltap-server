@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
+import { showErrorToast } from '@/lib/toast'
 
 interface WhisperDialogProps {
   /** Whether the dialog is open */
@@ -73,10 +74,12 @@ export function WhisperDialog({
       onSent()
     } catch (error) {
       console.error('Failed to send whisper:', error)
+      // The dialog stays open with the text, so the whisper can be tried again.
+      showErrorToast(`The whisper to ${targetName} did not go through.`)
     } finally {
       setSending(false)
     }
-  }, [message, sending, chatId, targetParticipantId, speakingAsParticipantId, onSent, onClose])
+  }, [message, sending, chatId, targetParticipantId, targetName, speakingAsParticipantId, onSent, onClose])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

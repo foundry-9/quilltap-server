@@ -198,6 +198,14 @@ Controls whether token counts are shown in the UI.
 - Debugging token limit issues
 - Optimizing prompts for efficiency
 
+### What a Chat's Total Counts
+
+The chat's running total and its estimated cost take in *every* call made on the conversation's behalf: each reply and each tool errand it runs before it speaks, a substitute tried when the first profile failed, regenerated replies, and the staff's work for that chat — memories, titles, summaries, the Concierge's classifier. Each call is entered at the moment it is made, by whichever profile made it.
+
+Where the provider keeps a prompt cache, the total shows the cached input apart (*cached*, and *cache-written* where the provider charges to fill the cache), and the cost prices each at its own rate: a cache read is usually a fraction of the ordinary input price, a cache write a little more. When a model's price list does not say what its cache costs, those tokens are priced at the ordinary input rate rather than left out — an honest overestimate rather than a flattering omission.
+
+> **As of 4.14.2.** Until now the total missed a great deal: only the last request of a turn that used tools, nothing for a regenerated reply, nothing for cached input, and — for calls made from a background job — sometimes all but the last of a batch. Totals for older chats still carry those gaps; everything from here on is counted whole.
+
 ## LLM Logging Settings
 
 Controls whether interactions with AI providers are logged and stored.
@@ -291,6 +299,7 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 
 **Solution:**
 
+- A chat whose turns ran before 4.14.2 undercounts those turns (see *What a Chat's Total Counts* above)
 - Token counting varies by model
 - Some providers round differently
 - This is normal and expected

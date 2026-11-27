@@ -15,6 +15,41 @@ import {
   resolveToolResultVerbatimTurns,
 } from '@/lib/llm/connection-profile-utils'
 import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types'
+import type { AutoConfigureResult } from '@/lib/services/auto-configure.service'
+import type { ModelInfo } from '../../model-selector'
+
+/** `?action=test-connection` and `?action=test-message` answer with a line to show. */
+export interface ProfileCheckResult {
+  message?: string
+}
+
+/** `POST /api/v1/models`: the provider's model ids, with details where it gives them. */
+export interface FetchModelsResult {
+  models?: string[]
+  modelsWithInfo?: ModelInfo[]
+}
+
+/** `?action=auto-configure`: the catalog's figures and where each came from. */
+export interface AutoConfigureResponse {
+  suggestions: AutoConfigureResult
+}
+
+/** A sampling field as a number, or null when it is unset or unparseable. */
+function finiteOrNull(value: number | null | undefined, parse: (raw: string) => number): number | null {
+  if (value === null || value === undefined) return null
+  const parsed = parse(String(value))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/** What the form needs to know about a provider (defaults when it is unknown). */
+export interface ProviderRequirements {
+  requiresApiKey: boolean
+  acceptsApiKey: boolean
+  requiresBaseUrl: boolean
+  supportsWebSearch: boolean
+  supportsToolUse: boolean
+  supportsSamplingParameters: boolean
+}
 
 /**
  * Hook for managing profile form state and operations
@@ -27,15 +62,15 @@ import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_TOOL_RESULT_VERBATIM_TURNS } fr
 export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = []) {
   const form = useFormState<ProfileFormData>(initialFormState)
 
-  const saveOp = useAsyncOperation<any>()
-  const connectOp = useAsyncOperation<any>()
-  const fetchModelsOp = useAsyncOperation<any>()
-  const testMessageOp = useAsyncOperation<any>()
-  const autoConfigureOp = useAsyncOperation<any>()
+  const saveOp = useAsyncOperation<unknown>()
+  const connectOp = useAsyncOperation<ProfileCheckResult | undefined>()
+  const fetchModelsOp = useAsyncOperation<FetchModelsResult | undefined>()
+  const testMessageOp = useAsyncOperation<ProfileCheckResult | undefined>()
+  const autoConfigureOp = useAsyncOperation<AutoConfigureResponse | undefined>()
 
   // Get provider config requirements - returns defaults if provider not found
   const getProviderRequirements = useCallback(
-    (providerName: string) => {
+    (providerName: string): ProviderRequirements => {
       const provider = providers.find((p) => p.name === providerName)
       return {
         requiresApiKey: providerRequiresApiKey(provider?.configRequirements),
@@ -52,16 +87,20 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
   /**
    * The editor's sampling controls as they are allowed to leave the form.
    * `temperature` / `top_p` are dropped for a provider that declares
-   * `capabilities.samplingParameters: false` (the sliders are hidden there);
-   * `max_tokens` always goes.
+   * `capabilities.samplingParameters: false` (the sliders are hidden there).
+   * A knob left unset (null, or not a finite number) is omitted, so the
+   * provider keeps its own default — a profile made with `parameters: {}` must
+   * not come back from an unrelated edit capped at an invented ceiling (#256).
    */
   const outboundSamplingParameters = useCallback((): Record<string, number> => {
-    const out: Record<string, number> = {
-      max_tokens: parseInt(String(form.formData.maxTokens)),
-    }
+    const out: Record<string, number> = {}
+    const maxTokens = finiteOrNull(form.formData.maxTokens, parseInt)
+    if (maxTokens !== null) out.max_tokens = maxTokens
     if (getProviderRequirements(form.formData.provider).supportsSamplingParameters) {
-      out.temperature = parseFloat(String(form.formData.temperature))
-      out.top_p = parseFloat(String(form.formData.topP))
+      const temperature = finiteOrNull(form.formData.temperature, parseFloat)
+      const topP = finiteOrNull(form.formData.topP, parseFloat)
+      if (temperature !== null) out.temperature = temperature
+      if (topP !== null) out.top_p = topP
     }
     return out
   }, [getProviderRequirements, form.formData.provider, form.formData.maxTokens, form.formData.temperature, form.formData.topP])
@@ -158,9 +197,10 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
         apiKeyId: profile.apiKeyId || '',
         baseUrl: profile.baseUrl || '',
         modelName: profile.modelName,
-        temperature: profile.parameters?.temperature ?? 1,
-        maxTokens: profile.parameters?.max_tokens ?? 1000,
-        topP: profile.parameters?.top_p ?? 1,
+        // Absent stays absent: the provider's own default applies (#256).
+        temperature: profile.parameters?.temperature ?? null,
+        maxTokens: profile.parameters?.max_tokens ?? null,
+        topP: profile.parameters?.top_p ?? null,
         isDefault: profile.isDefault,
         isCheap: profile.isCheap ?? false,
         isDangerousCompatible: profile.isDangerousCompatible ?? false,
@@ -229,12 +269,12 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
     // Base parameters carry sampling controls; provider-specific options
     // come from the schema-driven `parameters` form field, which already
     // matches the wire-side key names each plugin reads.
-    const parameters: Record<string, any> = {
+    const parameters: Record<string, unknown> = {
       ...outboundSamplingParameters(),
       ...form.formData.parameters,
     }
 
-    const requestBody: any = {
+    const requestBody: Record<string, unknown> = {
       name: form.formData.name,
       transport: 'api',
       provider: form.formData.provider,
@@ -277,7 +317,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
   }, [form.formData, outboundBaseUrl, outboundApiKeyId, outboundSamplingParameters])
 
   const handleConnect = useCallback(
-    async (onSuccess?: (data: any) => void) => {
+    async (onSuccess?: (data: ProfileCheckResult) => void) => {
       const result = await connectOp.execute(async () => {
         // Validate required fields
         if (!form.formData.provider) {
@@ -299,7 +339,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
         }
 
         // Test the connection
-        const fetchResult = await fetchJson<any>('/api/v1/connection-profiles?action=test-connection', {
+        const fetchResult = await fetchJson<ProfileCheckResult>('/api/v1/connection-profiles?action=test-connection', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -326,7 +366,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
   )
 
   const handleFetchModels = useCallback(
-    async (onSuccess?: (data: any) => void) => {
+    async (onSuccess?: (data: FetchModelsResult) => void) => {
       const result = await fetchModelsOp.execute(async () => {
         // Validate required fields based on provider
         const requirements = getProviderRequirements(form.formData.provider)
@@ -334,7 +374,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
           throw new Error('Base URL is required for this provider')
         }
 
-        const fetchResult = await fetchJson<any>('/api/v1/models', {
+        const fetchResult = await fetchJson<FetchModelsResult>('/api/v1/models', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -361,14 +401,14 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
   )
 
   const handleTestMessage = useCallback(
-    async (onSuccess?: (data: any) => void) => {
+    async (onSuccess?: (data: ProfileCheckResult) => void) => {
       const result = await testMessageOp.execute(async () => {
         // Validate model name
         if (!form.formData.modelName) {
           throw new Error('Model name is required')
         }
 
-        const fetchResult = await fetchJson<any>('/api/v1/connection-profiles?action=test-message', {
+        const fetchResult = await fetchJson<ProfileCheckResult>('/api/v1/connection-profiles?action=test-message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -397,7 +437,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
   )
 
   const handleAutoConfigure = useCallback(
-    async (onSuccess?: (data: any) => void) => {
+    async (onSuccess?: (data: AutoConfigureResponse) => void) => {
       const result = await autoConfigureOp.execute(async () => {
         // Validate required fields
         if (!form.formData.provider) {
@@ -408,7 +448,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
           throw new Error('Model name is required')
         }
 
-        const fetchResult = await fetchJson<any>('/api/v1/connection-profiles?action=auto-configure', {
+        const fetchResult = await fetchJson<AutoConfigureResponse>('/api/v1/connection-profiles?action=auto-configure', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -443,7 +483,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
         const url = editingId ? `/api/v1/connection-profiles/${editingId}` : '/api/v1/connection-profiles'
         const requestBody = buildRequestBody()
 
-        const fetchResult = await fetchJson<any>(url, {
+        const fetchResult = await fetchJson<unknown>(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),

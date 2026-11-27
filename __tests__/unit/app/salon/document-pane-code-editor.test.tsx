@@ -40,7 +40,6 @@ let onContentChange: jest.Mock
 let onBlur: jest.Mock
 let onCloseDocument: jest.Mock
 let onFocusProcessed: jest.Mock
-let onFocusCleared: jest.Mock
 
 function props(document: ActiveDocument, extra: Partial<Props> = {}): Props {
   return {
@@ -48,7 +47,6 @@ function props(document: ActiveDocument, extra: Partial<Props> = {}): Props {
     mode: 'split',
     isDirty: false,
     isSaving: false,
-    isLLMEditing: false,
     contentVersion: 1,
     baselineContent: document.content,
     getScrollPosition: () => 0,
@@ -61,7 +59,6 @@ function props(document: ActiveDocument, extra: Partial<Props> = {}): Props {
     onDeleteDocument: jest.fn(),
     focusRequest: null,
     onFocusResolved: jest.fn(),
-    onFocusCleared,
     onFocusProcessed,
     ...extra,
   }
@@ -111,7 +108,6 @@ beforeEach(() => {
   onBlur = jest.fn()
   onCloseDocument = jest.fn()
   onFocusProcessed = jest.fn()
-  onFocusCleared = jest.fn()
 })
 
 afterEach(() => {
@@ -205,14 +201,6 @@ describe('the code editor in the pane', () => {
     expect(onContentChange.mock.invocationCallOrder.at(-1)!).toBeLessThan(onCloseDocument.mock.invocationCallOrder[0])
   })
 
-  it('is read-only while the AI is editing', () => {
-    const { rerender } = render(<DocumentPane {...props(doc('Themes/x/styles.css', '.a {}\n'))} />)
-    expect(codeEditor().isEditable()).toBe(true)
-    rerender(<DocumentPane {...props(doc('Themes/x/styles.css', '.a {}\n'), { isLLMEditing: true })} />)
-    expect(codeEditor().isEditable()).toBe(false)
-    expect(screen.getByText('AI editing...', { selector: '.qt-doc-status-item' })).toBeInTheDocument()
-  })
-
   it('takes a change from outside without handing it back', () => {
     const d = doc('Themes/x/styles.css', '.a {}\n')
     const { rerender } = render(<DocumentPane {...props(d)} />)
@@ -238,10 +226,6 @@ describe('the code editor in the pane', () => {
     expect(scroller.scrollTop).toBeGreaterThan(0)
     expect(onFocusProcessed).toHaveBeenCalledTimes(1)
     expect(document.activeElement).toBe(before)
-
-    rerender(<DocumentPane {...props(d, { focusRequest: { clear_focus: true } })} />)
-    expect(onFocusCleared).toHaveBeenCalledTimes(1)
-    expect(onFocusProcessed).toHaveBeenCalledTimes(2)
   })
 
   it('keeps the scroll position the pane remembers', () => {

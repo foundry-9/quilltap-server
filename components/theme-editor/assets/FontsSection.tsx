@@ -13,7 +13,7 @@
  * @module components/theme-editor/assets/FontsSection
  */
 
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { formatFontFamily, type ThemeTokensDocument } from '@/lib/themes/engine/client'
 import type { UploadedFontReading } from '@/lib/themes/drafts/operations'
@@ -223,16 +223,18 @@ function AddFontForm({ files, detail, onClose }: { files: File[]; detail: DraftD
   const [licenceFile, setLicenceFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [started, setStarted] = useState(false)
+  const started = useRef(false)
 
   // Read each file once, when the dialog opens.
-  if (!started) {
-    setStarted(true)
+  const draftId = detail.id
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
     void Promise.all(
       files.map(async (file, i) => {
         let next: Partial<PendingFont>
         try {
-          const { font } = await themeDraftUpload<{ font: UploadedFontReading }>(detail.id, 'read-font', file, {})
+          const { font } = await themeDraftUpload<{ font: UploadedFontReading }>(draftId, 'read-font', file, {})
           next = font.read
             ? {
                 status: 'ready',
@@ -253,7 +255,7 @@ function AddFontForm({ files, detail, onClose }: { files: File[]; detail: DraftD
       const named = hints.map(licenceFromHint).find((l) => l !== null)
       if (named) setLicence((current) => current || named)
     })
-  }
+  }, [files, draftId])
 
   const update = (i: number, part: Partial<PendingFont>) => setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...part } : r)))
   const reading = rows.some((r) => r.status === 'reading')

@@ -1,6 +1,6 @@
 'use client'
 
-import type { ChatSettings } from './types'
+import { DEFAULT_COMPOSER_SLASH_COMMANDS, type ChatSettings } from './types'
 import { SettingsToggleRow } from './components/SettingsToggleRow'
 
 export interface ComposerSlashCommandsSettingsProps {
@@ -14,7 +14,7 @@ export function ComposerSlashCommandsSettings({
   saving,
   onChange,
 }: ComposerSlashCommandsSettingsProps) {
-  const enabled = settings.composerSlashCommands ?? true
+  const enabled = settings.composerSlashCommands ?? DEFAULT_COMPOSER_SLASH_COMMANDS
 
   return (
     <SettingsToggleRow

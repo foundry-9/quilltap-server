@@ -16,9 +16,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import { queryKeys } from '@/lib/query/keys'
-import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { apiErrorMessage } from '@/lib/query/fetcher'
 import { fetchDocumentStore, type DocumentStoreRecord } from '@/components/document-browser/useDocumentStoreSource'
-import type { UpdateDocumentStoreData, ScanResult } from '../../types'
+import type { UpdateDocumentStoreData } from '../../types'
+import { scanCompleteMessage, scanDocumentStore, updateDocumentStore, type ScanResponse } from '../../document-store-requests'
 
 interface UseDocumentStoreDetailReturn {
   store: DocumentStoreRecord | null
@@ -28,7 +29,7 @@ interface UseDocumentStoreDetailReturn {
   /** Re-read the record and listing in place (tab re-activation). */
   refresh: () => Promise<void>
   updateStore: (data: UpdateDocumentStoreData) => Promise<DocumentStoreRecord | null>
-  scanStore: () => Promise<{ scanResult: ScanResult; embeddingJobsEnqueued: number } | null>
+  scanStore: () => Promise<ScanResponse | null>
 }
 
 export function useDocumentStoreDetail(storeId: string): UseDocumentStoreDetailReturn {
@@ -52,11 +53,7 @@ export function useDocumentStoreDetail(storeId: string): UseDocumentStoreDetailR
   const updateStore = useCallback(
     async (data: UpdateDocumentStoreData): Promise<DocumentStoreRecord | null> => {
       try {
-        const result = await apiFetch<{ mountPoint: DocumentStoreRecord }>(`/api/v1/mount-points/${storeId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        })
+        const result = await updateDocumentStore<DocumentStoreRecord>(storeId, data)
         await invalidate()
         showSuccessToast('Document store updated successfully!')
         return result.mountPoint
@@ -71,14 +68,9 @@ export function useDocumentStoreDetail(storeId: string): UseDocumentStoreDetailR
   const scanStore = useCallback(async () => {
     setScanning(true)
     try {
-      const result = await apiFetch<{ scanResult: ScanResult; embeddingJobsEnqueued: number }>(
-        `/api/v1/mount-points/${storeId}?action=scan`,
-        { method: 'POST' },
-      )
+      const result = await scanDocumentStore(storeId)
       await invalidate()
-      showSuccessToast(
-        `Scan complete: ${result.scanResult.filesScanned} files scanned, ${result.embeddingJobsEnqueued} embedding jobs queued`,
-      )
+      showSuccessToast(scanCompleteMessage(result))
       if (result.embeddingJobsEnqueued > 0) notifyQueueChange()
       return result
     } catch (err) {

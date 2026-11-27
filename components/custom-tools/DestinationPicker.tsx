@@ -11,11 +11,10 @@
  */
 
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { apiErrorMessage } from '@/lib/query/fetcher'
 import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import type { CustomToolDestinations, DestinationStore } from '@/lib/pascal/workbench'
+import { useCustomToolDestinations } from './use-custom-tool-destinations'
 
 export interface PickedDestination {
   mountPointId: string
@@ -29,17 +28,34 @@ interface DestinationPickerProps {
   onCancel: () => void
   /** Open an existing definition instead (same-store duplicate escape hatch). */
   onOpenExisting?: (mountPointId: string) => void
+  /**
+   * A store to start chosen (the `?new=1&mount=<id>` deep link). Ignored when
+   * no listed store carries that id; a click on another row replaces it.
+   */
+  initialMountPointId?: string | null
 }
 
-export function DestinationPicker({ toolName, onPick, onCancel, onOpenExisting }: Readonly<DestinationPickerProps>) {
-  const [selected, setSelected] = useState<PickedDestination | null>(null)
+export function DestinationPicker({
+  toolName,
+  onPick,
+  onCancel,
+  onOpenExisting,
+  initialMountPointId,
+}: Readonly<DestinationPickerProps>) {
+  const [chosen, setSelected] = useState<PickedDestination | null>(null)
 
-  const destinationsQuery = useQuery({
-    queryKey: queryKeys.customTools.destinations(),
-    queryFn: ({ signal }) => apiFetch<CustomToolDestinations>('/api/v1/custom-tools?action=destinations', { signal }),
-  })
+  const destinationsQuery = useCustomToolDestinations()
 
   const data = destinationsQuery.data
+
+  // The preselection is derived, not copied into state: the store list may
+  // still be loading when the dialog opens.
+  const preselected =
+    !chosen && initialMountPointId && data
+      ? allStores(data).find((s) => s.mountPointId === initialMountPointId)
+      : undefined
+  const selected: PickedDestination | null =
+    chosen ?? (preselected ? { mountPointId: preselected.mountPointId, mountName: preselected.mountName } : null)
 
   const nameElsewhere =
     data && toolName
@@ -86,7 +102,7 @@ export function DestinationPicker({ toolName, onPick, onCancel, onOpenExisting }
       {destinationsQuery.isLoading && <p className="text-sm qt-text-secondary">Surveying the premises…</p>}
       {destinationsQuery.isError && (
         <p className="text-sm qt-text-destructive">
-          {destinationsQuery.error instanceof Error ? destinationsQuery.error.message : 'The stores could not be listed.'}
+          {apiErrorMessage(destinationsQuery.error, 'The stores could not be listed.')}
         </p>
       )}
 

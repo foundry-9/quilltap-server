@@ -253,6 +253,80 @@ export async function createImageProfile(params: {
   return { id: data.id }
 }
 
+/** The fields a settings-mode re-run changes on a profile it preloaded (#268). */
+export interface WizardProfileUpdate {
+  name: string
+  modelName: string
+  apiKeyId?: string
+  baseUrl?: string
+  dimensions?: number
+  isDefault?: boolean
+  isCheap?: boolean
+}
+
+async function putProfile(url: string, body: Record<string, unknown>, failure: string): Promise<void> {
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || failure)
+  }
+}
+
+/**
+ * Update a connection profile the wizard preloaded: its model (and the name
+ * that follows it), the key and URL for its provider, and its role. A partial
+ * PUT — sampling parameters and every other field stay as they are.
+ */
+export async function updateConnectionProfile(id: string, params: WizardProfileUpdate): Promise<void> {
+  await putProfile(
+    `/api/v1/connection-profiles/${id}`,
+    {
+      name: params.name,
+      modelName: params.modelName,
+      ...(params.apiKeyId ? { apiKeyId: params.apiKeyId } : {}),
+      ...(params.baseUrl ? { baseUrl: params.baseUrl } : {}),
+      ...(params.isDefault !== undefined ? { isDefault: params.isDefault } : {}),
+      ...(params.isCheap !== undefined ? { isCheap: params.isCheap } : {}),
+    },
+    'Failed to update connection profile'
+  )
+}
+
+/** Update an embedding profile the wizard preloaded (partial PUT). */
+export async function updateEmbeddingProfile(id: string, params: WizardProfileUpdate): Promise<void> {
+  await putProfile(
+    `/api/v1/embedding-profiles/${id}`,
+    {
+      name: params.name,
+      modelName: params.modelName,
+      dimensions: params.dimensions || null,
+      ...(params.apiKeyId ? { apiKeyId: params.apiKeyId } : {}),
+      ...(params.baseUrl ? { baseUrl: params.baseUrl } : {}),
+      isDefault: params.isDefault ?? true,
+    },
+    'Failed to update embedding profile'
+  )
+}
+
+/** Update an image profile the wizard preloaded (partial PUT). */
+export async function updateImageProfile(id: string, params: WizardProfileUpdate): Promise<void> {
+  await putProfile(
+    `/api/v1/image-profiles/${id}`,
+    {
+      name: params.name,
+      modelName: params.modelName,
+      ...(params.apiKeyId ? { apiKeyId: params.apiKeyId } : {}),
+      ...(params.baseUrl ? { baseUrl: params.baseUrl } : {}),
+      isDefault: params.isDefault ?? true,
+    },
+    'Failed to update image profile'
+  )
+}
+
 /**
  * Update chat settings (cheap LLM configuration).
  */

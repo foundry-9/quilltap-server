@@ -17,7 +17,6 @@ import { Icon } from '@/components/ui/icon'
 interface DisplayOptionsProps {
   colorMode: ColorMode
   resolvedColorMode: 'light' | 'dark'
-  isLoading?: boolean
   error?: string | null
   onColorModeChange: (mode: ColorMode) => void
 }
@@ -28,7 +27,6 @@ interface DisplayOptionsProps {
 export function DisplayOptions({
   colorMode,
   resolvedColorMode,
-  isLoading = false,
   error = null,
   onColorModeChange,
 }: DisplayOptionsProps) {
@@ -51,7 +49,6 @@ export function DisplayOptions({
           value={colorMode}
           resolvedMode={resolvedColorMode}
           onChange={onColorModeChange}
-          disabled={isLoading}
         />
       </SettingsCard>
     </>

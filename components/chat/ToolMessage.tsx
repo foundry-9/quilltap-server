@@ -9,6 +9,7 @@ import { getAvatarSrc } from '@/components/ui/Avatar'
 import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import { Icon } from '@/components/ui/icon'
 import { RouteTrailBadge } from '@/components/ui/RouteTrailBadge'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
 interface ToolMessageProps {
@@ -244,6 +245,130 @@ function buildInventoryActionSummary(toolData: ToolResult): { label: string; lin
   return lines.length > 0 ? { label: 'Inventory', lines } : null
 }
 
+/** Display name and emoji for each built-in tool's card; anything unlisted shows its id and a gear. */
+const TOOL_INFO: Record<string, { displayName: string; icon: string }> = {
+  generate_image: {
+    displayName: 'Image Generation',
+    icon: '🎨',
+  },
+  search: {
+    displayName: 'Search',
+    icon: '🧠',
+  },
+  search_web: {
+    displayName: 'Web Search',
+    icon: '🔍',
+  },
+  project_info: {
+    displayName: 'Project Info',
+    icon: '📋',
+  },
+  rng: {
+    displayName: 'Random Number Generator',
+    icon: '🎲',
+  },
+  edit_custom_tool: {
+    displayName: 'Edit Custom Tool',
+    icon: '🎲',
+  },
+  state: {
+    displayName: 'State Manager',
+    icon: '🗃️',
+  },
+  help_search: {
+    displayName: 'Help Search',
+    icon: '📖',
+  },
+  help_settings: {
+    displayName: 'Settings Reader',
+    icon: '⚙️',
+  },
+  help_navigate: {
+    displayName: 'Navigation',
+    icon: '🧭',
+  },
+  wardrobe_list: {
+    displayName: 'Wardrobe',
+    icon: '👗',
+  },
+  wardrobe_read: {
+    displayName: 'Wardrobe Item',
+    icon: '👗',
+  },
+  wardrobe_wear: {
+    displayName: 'Put On',
+    icon: '👗',
+  },
+  wardrobe_take_off: {
+    displayName: 'Take Off',
+    icon: '👗',
+  },
+  wardrobe_rollback: {
+    displayName: 'Earlier Outfit',
+    icon: '👗',
+  },
+  wardrobe_history: {
+    displayName: 'Outfit History',
+    icon: '👗',
+  },
+  wardrobe_create: {
+    displayName: 'New Wardrobe Item',
+    icon: '🧵',
+  },
+  wardrobe_update: {
+    displayName: 'Edit Wardrobe Item',
+    icon: '🧵',
+  },
+  wardrobe_archive: {
+    displayName: 'Archive Wardrobe Item',
+    icon: '🧵',
+  },
+  read_memory: {
+    displayName: 'Read Memory',
+    icon: '🧠',
+  },
+  edit_memory: {
+    displayName: 'Edit Memory',
+    icon: '🧠',
+  },
+  inventory_list: {
+    displayName: 'Inventory',
+    icon: '🎒',
+  },
+  inventory_read: {
+    displayName: 'Inspect Object',
+    icon: '🎒',
+  },
+  inventory_equip: {
+    displayName: 'Equip',
+    icon: '🎒',
+  },
+  inventory_unequip: {
+    displayName: 'Set Down',
+    icon: '🎒',
+  },
+  inventory_pick_up: {
+    displayName: 'Pick Up',
+    icon: '🎒',
+  },
+  inventory_create: {
+    displayName: 'New Object',
+    icon: '🎒',
+  },
+  inventory_update: {
+    displayName: 'Edit Object',
+    icon: '🎒',
+  },
+  inventory_archive: {
+    displayName: 'Put Away Object',
+    icon: '🎒',
+  },
+  inventory_give: {
+    displayName: 'Give Object',
+    icon: '🎒',
+  },
+}
+
 /**
  * Copy text to clipboard
  */
@@ -307,6 +432,46 @@ function formatResultContent(toolData: ToolResult): string {
   }
 }
 
+/** An attachment path as an absolute app URL (stored paths may lack the leading slash). */
+function normalizePath(filepath: string): string {
+  return filepath.startsWith('/') ? filepath : `/${filepath}`
+}
+
+interface ToolThumbnailProps {
+  attachment: { id: string; filename: string; filepath: string }
+  imagesHidden: boolean
+  onOpen?: (filepath: string, filename: string, fileId: string) => void
+  onMissing: (attachmentId: string) => void
+}
+
+/** A tool result's image as a clickable 80px thumbnail that opens the viewer. */
+function ToolThumbnail({ attachment, imagesHidden, onOpen, onMissing }: ToolThumbnailProps) {
+  const src = normalizePath(attachment.filepath)
+  return (
+    <button
+      onClick={() => onOpen?.(src, attachment.filename, attachment.id)}
+      className="relative group/thumb overflow-hidden rounded cursor-pointer block"
+      type="button"
+    >
+      <div className="relative w-20 h-20 qt-bg-muted">
+        {imagesHidden ? (
+          <HiddenImageTile label={attachment.filename} />
+        ) : (
+          <img
+            src={src}
+            alt={attachment.filename}
+            className="w-full h-full object-cover"
+            onError={() => onMissing(attachment.id)}
+          />
+        )}
+      </div>
+      <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
+        <Icon name="zoom-in" className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />
+      </div>
+    </button>
+  )
+}
+
 export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, headerAvatar, embedded = false, onTryUncensored }: ToolMessageProps) {
   const [showRequest, setShowRequest] = useState(false)
   const [showResponse, setShowResponse] = useState(false)
@@ -342,164 +507,9 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
     a.mimeType.startsWith('image/')
   )
 
-  // Map tool names to display names and icons
-  const toolInfo: Record<string, { displayName: string; icon: string; bgColor: string }> = {
-    generate_image: {
-      displayName: 'Image Generation',
-      icon: '🎨',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    search: {
-      displayName: 'Search',
-      icon: '🧠',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    search_web: {
-      displayName: 'Web Search',
-      icon: '🔍',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    project_info: {
-      displayName: 'Project Info',
-      icon: '📋',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    rng: {
-      displayName: 'Random Number Generator',
-      icon: '🎲',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    edit_custom_tool: {
-      displayName: 'Edit Custom Tool',
-      icon: '🎲',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    state: {
-      displayName: 'State Manager',
-      icon: '🗃️',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    help_search: {
-      displayName: 'Help Search',
-      icon: '📖',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    help_settings: {
-      displayName: 'Settings Reader',
-      icon: '⚙️',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    help_navigate: {
-      displayName: 'Navigation',
-      icon: '🧭',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    wardrobe_list: {
-      displayName: 'Wardrobe',
-      icon: '👗',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    wardrobe_read: {
-      displayName: 'Wardrobe Item',
-      icon: '👗',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    wardrobe_wear: {
-      displayName: 'Put On',
-      icon: '👗',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    wardrobe_take_off: {
-      displayName: 'Take Off',
-      icon: '👗',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    wardrobe_rollback: {
-      displayName: 'Earlier Outfit',
-      icon: '👗',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    wardrobe_history: {
-      displayName: 'Outfit History',
-      icon: '👗',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    wardrobe_create: {
-      displayName: 'New Wardrobe Item',
-      icon: '🧵',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    wardrobe_update: {
-      displayName: 'Edit Wardrobe Item',
-      icon: '🧵',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    wardrobe_archive: {
-      displayName: 'Archive Wardrobe Item',
-      icon: '🧵',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    read_memory: {
-      displayName: 'Read Memory',
-      icon: '🧠',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    edit_memory: {
-      displayName: 'Edit Memory',
-      icon: '🧠',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    inventory_list: {
-      displayName: 'Inventory',
-      icon: '🎒',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    inventory_read: {
-      displayName: 'Inspect Object',
-      icon: '🎒',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    inventory_equip: {
-      displayName: 'Equip',
-      icon: '🎒',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    inventory_unequip: {
-      displayName: 'Set Down',
-      icon: '🎒',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    inventory_pick_up: {
-      displayName: 'Pick Up',
-      icon: '🎒',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    inventory_create: {
-      displayName: 'New Object',
-      icon: '🎒',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    inventory_update: {
-      displayName: 'Edit Object',
-      icon: '🎒',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    inventory_archive: {
-      displayName: 'Put Away Object',
-      icon: '🎒',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    inventory_give: {
-      displayName: 'Give Object',
-      icon: '🎒',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-  }
-
-  const info = toolInfo[toolData.toolName!] || {
+  const info = TOOL_INFO[toolData.toolName!] || {
     displayName: toolData.toolName,
     icon: '⚙️',
-    bgColor: 'qt-bg-muted border qt-border-default',
   }
 
   // Copy handlers
@@ -524,13 +534,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   }, [toolData])
 
   const handleCopyImage = useCallback(async (filepath: string) => {
-    const imageUrl = filepath.startsWith('/') ? filepath : `/${filepath}`
-    const success = await copyImageToClipboardLocal(imageUrl)
+    const success = await copyImageToClipboardLocal(normalizePath(filepath))
     if (success) {
       showSuccessToast('Image copied to clipboard')
     } else {
       showErrorToast('Failed to copy image')
     }
+  }, [])
+
+  const markMissing = useCallback((attachmentId: string) => {
+    setMissingImages((prev) => new Set(prev).add(attachmentId))
   }, [])
 
   // Display is delegated to another message (the Pascal bubble for run_custom):
@@ -595,7 +608,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             </div>
           </div>
         )}
-        <div className={`qt-chat-tool-call px-4 py-3 rounded-lg ${info.bgColor}`} data-tool={toolData.toolName || undefined}>
+        <div className="qt-chat-tool-call px-4 py-3 rounded-lg qt-bg-muted border qt-border-default" data-tool={toolData.toolName || undefined}>
           {/* Tool header */}
           <div className="flex items-center gap-2 mb-2">
             <div className="flex flex-col gap-1">
@@ -752,30 +765,12 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                             </div>
                           ) : (
                             <div className="relative">
-                              <button
-                                onClick={() => {
-                                  const normalizedPath = attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`
-                                  onImageClick?.(normalizedPath, attachment.filename, attachment.id)
-                                }}
-                                className="relative group/thumb overflow-hidden rounded cursor-pointer block"
-                                type="button"
-                              >
-                                <div className="relative w-20 h-20 qt-bg-muted">
-                                  {imagesHidden ? (
-                                    <HiddenImageTile label={attachment.filename} />
-                                  ) : (
-                                    <img
-                                      src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
-                                      alt={attachment.filename}
-                                      className="w-full h-full object-cover"
-                                      onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
-                                    />
-                                  )}
-                                </div>
-                                <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
-                                  <Icon name="zoom-in" className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />
-                                </div>
-                              </button>
+                              <ToolThumbnail
+                                attachment={attachment}
+                                imagesHidden={imagesHidden}
+                                onOpen={onImageClick}
+                                onMissing={markMissing}
+                              />
                               <button
                                 onClick={() => handleCopyImage(attachment.filepath)}
                                 className="absolute -top-1 -right-1 p-1 qt-bg-default border qt-border-default rounded qt-shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity z-10"
@@ -807,14 +802,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
               {imageAttachments.map((attachment) => {
                 const handleDeletedAttachmentCleanup = async () => {
                   try {
-                    const response = await fetch(`/api/v1/chat-files/${attachment.id}`, {
-                      method: 'DELETE',
-                    })
-
-                    if (!response.ok) {
-                      const data = await response.json()
-                      throw new Error(data.error || 'Failed to delete attachment')
-                    }
+                    await apiFetch(`/api/v1/chat-files/${attachment.id}`, { method: 'DELETE' })
 
                     setMissingImages((prev) => {
                       const next = new Set(prev)
@@ -824,9 +812,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
 
                     onAttachmentDeleted?.(attachment.id)
                   } catch (error) {
-                    showErrorToast(
-                      error instanceof Error ? error.message : 'Failed to delete attachment'
-                    )
+                    showErrorToast(apiErrorMessage(error, 'Failed to delete attachment'))
                   }
                 }
 
@@ -840,30 +826,12 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                         className="w-20 h-20 !p-2"
                       />
                     ) : (
-                      <button
-                        onClick={() => {
-                          const normalizedPath = attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`
-                          onImageClick?.(normalizedPath, attachment.filename, attachment.id)
-                        }}
-                        className="relative group/thumb overflow-hidden rounded cursor-pointer block"
-                        type="button"
-                      >
-                        <div className="relative w-20 h-20 qt-bg-muted">
-                          {imagesHidden ? (
-                            <HiddenImageTile label={attachment.filename} />
-                          ) : (
-                            <img
-                              src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
-                              alt={attachment.filename}
-                              className="w-full h-full object-cover"
-                              onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
-                            />
-                          )}
-                        </div>
-                        <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
-                          <Icon name="zoom-in" className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />
-                        </div>
-                      </button>
+                      <ToolThumbnail
+                        attachment={attachment}
+                        imagesHidden={imagesHidden}
+                        onOpen={onImageClick}
+                        onMissing={markMissing}
+                      />
                     )}
                   </div>
                 )

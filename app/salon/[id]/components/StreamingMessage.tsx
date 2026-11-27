@@ -147,7 +147,7 @@ export function StreamingMessage({
               const next = parts[idx + 1]
               const beforeProse = next?.kind === 'text' && next.text.length > 0
               return (
-                <PendingToolCalls key={`tools-${idx}`} embedded beforeProse={beforeProse} pendingToolCalls={part.batch.calls} />
+                <PendingToolCalls key={`tools-${idx}`} beforeProse={beforeProse} pendingToolCalls={part.batch.calls} />
               )
             })}
           </div>

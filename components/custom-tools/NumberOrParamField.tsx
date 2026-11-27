@@ -12,6 +12,7 @@
 
 import { Icon } from '@/components/ui/icon'
 import type { NumberOrParamValue } from '@/lib/pascal/tool-draft'
+import { ParamRefSelect, RawRefBadge } from './chip-parts'
 
 interface NumberOrParamFieldProps {
   value: NumberOrParamValue
@@ -50,34 +51,28 @@ export function NumberOrParamField({
           step="any"
         />
       ) : value.kind === 'state' ? (
-        <span
-          className={`qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1 ${hasError ? 'qt-input-error' : ''}`}
+        <RawRefBadge
+          hasError={hasError}
           title="This field draws from persistent state. Edit $state references in the raw JSON, or swap to a literal."
         >
           $state: {value.path} → {value.fallback}
-        </span>
+        </RawRefBadge>
       ) : value.kind === 'inventory' ? (
-        <span
-          className={`qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1 ${hasError ? 'qt-input-error' : ''}`}
+        <RawRefBadge
+          hasError={hasError}
           title="This field draws from an object the rolling character carries. Edit $inventory references in the raw JSON, or swap to a literal."
         >
           $inventory: {value.path} → {value.fallback}
-        </span>
+        </RawRefBadge>
       ) : (
-        <select
+        <ParamRefSelect
           value={value.name}
-          onChange={(e) => onChange({ kind: 'param', name: e.target.value })}
+          names={paramNames}
+          onChange={(name) => onChange({ kind: 'param', name })}
           disabled={disabled}
-          className={`qt-select qt-select-sm w-28 ${hasError ? 'qt-input-error' : ''}`}
-          aria-label={`${label} parameter`}
-        >
-          {!paramNames.includes(value.name) && <option value={value.name}>{value.name || '—'}</option>}
-          {paramNames.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
+          ariaLabel={`${label} parameter`}
+          hasError={hasError}
+        />
       )}
       <button
         type="button"

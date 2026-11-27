@@ -1,6 +1,6 @@
 'use client'
 
-import { LoadingSpinner } from './LoadingSpinner'
+import { Spinner } from '@/components/ui/Spinner'
 
 interface WizardLoadingStepProps {
   message: string
@@ -12,7 +12,7 @@ interface WizardLoadingStepProps {
 export function WizardLoadingStep({ message }: WizardLoadingStepProps) {
   return (
     <div className="flex flex-col items-center justify-center py-12">
-      <LoadingSpinner />
+      <Spinner className="w-6 h-6" />
       <p className="mt-4 qt-text font-medium">{message}</p>
     </div>
   )

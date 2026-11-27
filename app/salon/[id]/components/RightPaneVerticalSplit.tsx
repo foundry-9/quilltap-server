@@ -7,14 +7,16 @@
  * Mode and Terminal Mode are active. Top child is the document pane, bottom is
  * the terminal pane, with a draggable horizontal divider between them.
  *
- * Mirrors SplitLayout's drag/keyboard logic on the height axis instead of width.
+ * Shares SplitLayout's drag/keyboard logic (useResizableDivider) on the height axis.
  */
 
-import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
+import { useResizableDivider } from './useResizableDivider'
 
 const MIN_PANE_PX = 200
 const ABSOLUTE_MIN_PCT = 20
 const ABSOLUTE_MAX_PCT = 80
+const VERTICAL_BOUNDS = { min: ABSOLUTE_MIN_PCT, max: ABSOLUTE_MAX_PCT }
 
 interface RightPaneVerticalSplitProps {
   /** Top pane height as a percentage of the right-pane height (20-80). */
@@ -43,75 +45,13 @@ export default function RightPaneVerticalSplit({
   topContent,
   bottomContent,
 }: RightPaneVerticalSplitProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [currentPosition, setCurrentPosition] = useState(position)
-  const positionRef = useRef(position)
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    positionRef.current = position
-    setCurrentPosition(position)
-    setIsDragging(true)
-
-    const container = containerRef.current
-    if (!container) return
-
-    const containerRect = container.getBoundingClientRect()
-    const containerHeight = containerRect.height
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const relativeY = moveEvent.clientY - containerRect.top
-      const percentage = (relativeY / containerHeight) * 100
-      positionRef.current = clampPercentage(percentage, containerHeight)
-      setCurrentPosition(positionRef.current)
-    }
-
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      setIsDragging(false)
-      onPositionChange(positionRef.current)
-    }
-
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-    document.body.style.cursor = 'row-resize'
-    document.body.style.userSelect = 'none'
-  }, [position, onPositionChange])
-
-  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    const containerHeight = containerRef.current?.getBoundingClientRect().height ?? 0
-    const basePosition = isDragging ? currentPosition : position
-    let nextPosition: number | null = null
-
-    switch (event.key) {
-      case 'ArrowUp':
-        nextPosition = basePosition - 5
-        break
-      case 'ArrowDown':
-        nextPosition = basePosition + 5
-        break
-      case 'Home':
-        nextPosition = ABSOLUTE_MIN_PCT
-        break
-      case 'End':
-        nextPosition = ABSOLUTE_MAX_PCT
-        break
-      default:
-        return
-    }
-
-    event.preventDefault()
-    const clamped = clampPercentage(nextPosition, containerHeight)
-    positionRef.current = clamped
-    setCurrentPosition(clamped)
-    onPositionChange(clamped)
-  }, [isDragging, currentPosition, position, onPositionChange])
-
-  const splitPos = isDragging ? currentPosition : position
+  const { containerRef, isDragging, splitPos, handleMouseDown, handleKeyDown } = useResizableDivider({
+    axis: 'y',
+    position,
+    onPositionChange,
+    clamp: clampPercentage,
+    bounds: VERTICAL_BOUNDS,
+  })
 
   return (
     <div ref={containerRef} className="qt-doc-vertical-split-layout">

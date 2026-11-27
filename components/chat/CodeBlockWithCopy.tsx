@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 
@@ -8,17 +9,11 @@ import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
  * Code block with copy button component
  */
 export function CodeBlockWithCopy({ code, language }: { code: string; language: string }) {
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
 
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy code block', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [code])
+  const handleCopy = useCallback(() => {
+    void copy(code)
+  }, [copy, code])
 
   return (
     <div

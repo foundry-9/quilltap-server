@@ -7,25 +7,19 @@ import {
   findUserParticipant,
   isMultiCharacterChat,
   isAllLLMChat,
-  selectNextSpeaker,
 } from '@/lib/chat/turn-manager'
-import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import type { Chat, Participant, CharacterData, Message } from '../types'
 
 interface UseParticipantsParams {
   chat: Chat | null
   messages: Message[]
   impersonatingParticipantIds: string[]
-  turnState: TurnState
-  turnSelectionResult: TurnSelectionResult | null
 }
 
 export function useParticipants({
   chat,
   messages,
   impersonatingParticipantIds,
-  turnState,
-  turnSelectionResult,
 }: UseParticipantsParams) {
   // Extract participants once to satisfy React Compiler's dependency inference
   const chatParticipants = chat?.participants ?? null
@@ -198,30 +192,6 @@ export function useParticipants({
     return !messages.some(m => m.role === 'USER')
   }, [participantsAsBase, messages])
 
-  // Count turns since last user message (for all-LLM pause logic)
-  const allLLMTurnCount = useMemo(() => {
-    if (!isAllLLM) return 0
-    let count = 0
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'USER') break
-      if (messages[i].role === 'ASSISTANT') count++
-    }
-    return count
-  }, [isAllLLM, messages])
-
-  // Compute effective next speaker for all-LLM chats
-  const effectiveNextSpeakerId = useMemo(() => {
-    if (!turnSelectionResult) return null
-    if (turnSelectionResult.nextSpeakerId !== null) {
-      return turnSelectionResult.nextSpeakerId
-    }
-    if (isAllLLM && participantsAsBase.length > 0 && charactersMap.size > 0) {
-      const freshResult = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
-      return freshResult.nextSpeakerId
-    }
-    return null
-  }, [turnSelectionResult, isAllLLM, participantsAsBase, charactersMap, turnState, userParticipantId])
-
   const getParticipantById = useCallback((participantId: string | null | undefined) => {
     if (!participantId || !chatParticipants) return null
     return chatParticipants.find(p => p.id === participantId) ?? null
@@ -238,7 +208,6 @@ export function useParticipants({
 
   const getFirstCharacter = useCallback(() => getFirstCharacterParticipant()?.character, [getFirstCharacterParticipant])
   const getFirstUserCharacter = useCallback(() => getFirstUserCharacterParticipant()?.character, [getFirstUserCharacterParticipant])
-  const getFirstConnectionProfile = useCallback(() => getFirstCharacterParticipant()?.connectionProfile, [getFirstCharacterParticipant])
 
   return {
     participantsAsBase,
@@ -252,13 +221,10 @@ export function useParticipants({
     controlledCharacters,
     llmParticipants,
     isAllLLM,
-    allLLMTurnCount,
-    effectiveNextSpeakerId,
     getParticipantById,
     getFirstCharacterParticipant,
     getFirstUserCharacterParticipant,
     getFirstCharacter,
     getFirstUserCharacter,
-    getFirstConnectionProfile,
   }
 }

@@ -16,6 +16,7 @@ import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { SlashCustomToolRef } from './lexical/slash-commands/context'
+import { runBuiltInTool } from './run-tool-request'
 
 export interface SlashCommandRunnerOptions {
   chatId: string
@@ -31,25 +32,16 @@ export function useSlashCommandRunner({ chatId, defaultCharacterId, onRan }: Sla
   const runBuiltInNow = useCallback(
     async (toolId: string) => {
       try {
-        const res = await fetch(`/api/v1/chats/${chatId}?action=run-tool`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            toolName: toolId,
-            arguments: {},
-            characterId: defaultCharacterId || undefined,
-            private: false,
-          }),
+        await runBuiltInTool(chatId, {
+          toolName: toolId,
+          arguments: {},
+          characterId: defaultCharacterId,
+          private: false,
         })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok || !data.success) {
-          showErrorToast(data.error || data.message || `${toolId} could not be run`)
-          return
-        }
         showSuccessToast(`Prospero has run ${toolId}.`)
         onRan?.()
       } catch (err) {
-        showErrorToast(err instanceof Error ? err.message : `${toolId} could not be run`)
+        showErrorToast(apiErrorMessage(err, '') || `${toolId} could not be run`)
       }
     },
     [chatId, defaultCharacterId, onRan],

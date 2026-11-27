@@ -3,8 +3,8 @@
 /**
  * Row actions for a wardrobe list — star, archive, draw a picture, delete,
  * duplicate (into the same folder) — plus the open/closed state of the overlays they summon (the
- * item editor, the move/copy dialog and the move/copy-to-folder picker from the shared
- * `useItemOverlays`; the full-screen picture here).
+ * item editor, the move/copy dialog, the move/copy-to-folder picker and the
+ * full-screen picture, all from the shared `useItemOverlays`).
  *
  * Every item is addressed through `containerForListedItem` when the browsed
  * wardrobe is a character's merged view (so a borrowed group or project item
@@ -42,12 +42,6 @@ export type EditorRequest =
       folder?: string
     }
 
-
-export interface ImageViewRequest {
-  item: ListedWardrobeItem
-  container: WardrobeContainer
-}
-
 export interface UseWardrobeItemActionsOptions {
   /** The wardrobe being browsed (null while nothing is selected). */
   container: WardrobeContainer | null
@@ -70,11 +64,9 @@ export function useWardrobeItemActions({
   const queryClient = useQueryClient()
   const isCharacterScope = container?.scope === 'character'
 
-  const [imageView, setImageView] = useState<ImageViewRequest | null>(null)
-  // The editor, the folder picker and the transfer dialog; the picture viewer
-  // is the wardrobe's own overlay.
-  const overlays = useItemOverlays<ListedWardrobeItem, EditorRequest>(imageView !== null)
-  const { openEditorWith, openTransfer } = overlays
+  // The editor, the folder picker, the transfer dialog and the picture viewer.
+  const overlays = useItemOverlays<ListedWardrobeItem, EditorRequest>()
+  const { openEditorWith, openTransfer, openImageView } = overlays
   const [updatingDefaultId, setUpdatingDefaultId] = useState<string | null>(null)
   // Every item whose picture is being drawn right now. A set, not one id: two
   // rows may each have a commission out.
@@ -229,9 +221,9 @@ export function useWardrobeItemActions({
     (item: ListedWardrobeItem) => {
       const home = addressOf(item)
       if (!home || !item.imageFileId) return
-      setImageView({ item, container: home })
+      openImageView({ item, container: home })
     },
-    [addressOf],
+    [addressOf, openImageView],
   )
 
   const openEditor = useCallback((item: WardrobeItem) => openEditorWith({ kind: 'edit', item }), [openEditorWith])
@@ -242,13 +234,11 @@ export function useWardrobeItemActions({
   )
   const move = useCallback((item: ListedWardrobeItem) => openTransfer(item, 'move'), [openTransfer])
   const copy = useCallback((item: ListedWardrobeItem) => openTransfer(item, 'copy'), [openTransfer])
-  const closeImage = useCallback(() => setImageView(null), [])
 
   return {
-    // overlay state: editor, folderPicker, transfer, overlayOpen and their
-    // open / close handlers
+    // overlay state: editor, folderPicker, transfer, imageView, overlayOpen
+    // and their open / close handlers
     ...overlays,
-    imageView,
     // row state
     updatingDefaultId,
     generatingImageIds,
@@ -263,7 +253,6 @@ export function useWardrobeItemActions({
     openCreate,
     move,
     copy,
-    closeImage,
     addressOf,
     refresh,
     /** Ask the operator to confirm (the folder delete uses it too). */

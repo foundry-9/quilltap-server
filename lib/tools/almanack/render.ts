@@ -15,6 +15,7 @@
  * @module lib/tools/almanack/render
  */
 
+import { tallyTokens } from '@/lib/llm/profile-usage';
 import { formatBytes } from '@/lib/utils/format-bytes';
 import { ALMANACK_TITLE } from './phases';
 import type { AlmanackReportData, CacheRow, ProfileWindowRow } from './types';
@@ -1147,21 +1148,23 @@ function renderWireRecords(push: Push, data: AlmanackReportData): void {
   } else {
     table(
       push,
-      ['Profile', 'Provider / Model', 'Messages', 'Prompt', 'Completion', 'Total', 'Last Touched'],
+      ['Profile', 'Provider / Model', 'Chat Calls', 'Chat Tokens', 'Automatic Calls', 'Automatic Tokens', 'Cache Read', 'Cache Written'],
       data.wireRecords.connectionProfileLifetime.map(row => [
         cell(row.name),
         cell(`${row.provider} / ${row.modelName}`),
-        row.messageCount.toLocaleString(),
-        row.totalPromptTokens.toLocaleString(),
-        row.totalCompletionTokens.toLocaleString(),
-        row.totalTokens.toLocaleString(),
-        formatDate(row.lastTouchedAt),
+        row.chat.calls.toLocaleString(),
+        tallyTokens(row.chat).toLocaleString(),
+        row.automatic.calls.toLocaleString(),
+        tallyTokens(row.automatic).toLocaleString(),
+        (row.chat.cacheReadTokens + row.automatic.cacheReadTokens).toLocaleString(),
+        (row.chat.cacheWriteTokens + row.automatic.cacheWriteTokens).toLocaleString(),
       ]),
     );
     push('');
     push(
-      'These counters live on the profile rows and cover the profile\'s whole life, not the log retention',
-      'window. There is no last-used column, so "Last Touched" is the row\'s `updatedAt` — a proxy.',
+      'These counters live on the profile rows and cover the profile\'s whole life (counted per provider',
+      'call since 4.14.2), not the log retention window. Chat is a conversation\'s own replies and their',
+      'tool round-trips; Automatic is every background task. Tokens include cache reads and writes.',
       '',
     );
   }

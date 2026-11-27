@@ -35,7 +35,7 @@ export interface OwnerStoresResponse<S> {
   officialMountPointId: string | null
 }
 
-export function ownerStoresKey(owner: StoreOwner) {
+function ownerStoresKey(owner: StoreOwner) {
   return owner.kind === 'project' ? queryKeys.projects.stores(owner.id) : queryKeys.groups.stores(owner.id)
 }
 

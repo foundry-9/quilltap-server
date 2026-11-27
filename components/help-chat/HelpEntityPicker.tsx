@@ -12,6 +12,8 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
+import { useProjectsQuery } from '@/lib/hooks/use-projects'
 import { Icon } from '@/components/ui/icon'
 
 /** Maps URL param patterns to their entity type and API source */
@@ -20,10 +22,8 @@ interface ParamRoute {
   pattern: RegExp
   /** Human-readable entity type for the picker title */
   entityLabel: string
-  /** API endpoint to fetch the list */
-  apiUrl: string
-  /** Key in the API response that holds the array */
-  responseKey: string
+  /** Which list the picker offers (characters and projects ride their entity hooks) */
+  source: 'characters' | 'chats' | 'projects'
   /** How to extract label + id from each item */
   getLabel: (item: Record<string, unknown>) => string
   getId: (item: Record<string, unknown>) => string
@@ -35,8 +35,7 @@ const PARAM_ROUTES: ParamRoute[] = [
   {
     pattern: /^\/aurora\/:id(\/|\?|$)/,
     entityLabel: 'Character',
-    apiUrl: '/api/v1/characters',
-    responseKey: 'characters',
+    source: 'characters',
     getLabel: (item) => (item.name as string) || 'Unnamed',
     getId: (item) => item.id as string,
     buildUrl: (tpl, id) => tpl.replace(':id', id),
@@ -44,8 +43,7 @@ const PARAM_ROUTES: ParamRoute[] = [
   {
     pattern: /^\/salon\/:id(\/|\?|$)/,
     entityLabel: 'Chat',
-    apiUrl: '/api/v1/chats',
-    responseKey: 'chats',
+    source: 'chats',
     getLabel: (item) => (item.title as string) || 'Untitled chat',
     getId: (item) => item.id as string,
     buildUrl: (tpl, id) => tpl.replace(':id', id),
@@ -53,8 +51,7 @@ const PARAM_ROUTES: ParamRoute[] = [
   {
     pattern: /^\/prospero\/:id(\/|\?|$)/,
     entityLabel: 'Project',
-    apiUrl: '/api/v1/projects',
-    responseKey: 'projects',
+    source: 'projects',
     getLabel: (item) => (item.name as string) || 'Unnamed project',
     getId: (item) => item.id as string,
     buildUrl: (tpl, id) => tpl.replace(':id', id),
@@ -75,6 +72,8 @@ export function findParamRoute(url: string): ParamRoute | null {
   return PARAM_ROUTES.find(r => r.pattern.test(url)) || null
 }
 
+const CHATS_URL = '/api/v1/chats'
+
 interface EntityItem {
   id: string
   label: string
@@ -93,20 +92,26 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
   const route = useMemo(() => findParamRoute(urlTemplate), [urlTemplate])
   const [filter, setFilter] = useState('')
 
-  const { data: fetchedData, isLoading, error: loadError } = useQuery({
-    queryKey: queryKeys.helpChat.entity(route?.apiUrl ?? ''),
-    queryFn: ({ signal }) => apiFetch<Record<string, unknown>>(route!.apiUrl, { signal }),
-    enabled: !!route,
+  type Row = Record<string, unknown>
+  const source = route?.source
+  const charactersQuery = useCharactersList<Row>(undefined, { enabled: source === 'characters' })
+  const projectsQuery = useProjectsQuery<Row>({ enabled: source === 'projects' })
+  const chatsQuery = useQuery({
+    queryKey: queryKeys.helpChat.entity(CHATS_URL),
+    queryFn: ({ signal }) => apiFetch<{ chats?: Row[] }>(CHATS_URL, { signal }),
+    select: (data) => data.chats ?? [],
+    enabled: source === 'chats',
   })
+  const active = source === 'characters' ? charactersQuery : source === 'projects' ? projectsQuery : chatsQuery
+  const { data: rows, isLoading, error: loadError } = active
 
   const items = useMemo(() => {
-    if (!route || !fetchedData) return []
-    const list = (fetchedData[route.responseKey] as Record<string, unknown>[]) || []
-    return list.map((item: Record<string, unknown>) => ({
+    if (!route || !rows) return []
+    return rows.map((item: Row) => ({
       id: route.getId(item),
       label: route.getLabel(item),
     }))
-  }, [route, fetchedData])
+  }, [route, rows])
 
   const error = !route ? 'Unknown entity type' : (loadError ? ((loadError as ApiFetchError | null)?.message ?? 'Failed to load') : null)
   const loading = isLoading

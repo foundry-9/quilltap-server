@@ -192,15 +192,23 @@ export const ConnectionProfileSchema = z.object({
   /** Custom sort order for display (lower numbers appear first) */
   sortIndex: z.number().default(0),
 
-  // Token usage tracking (persisted, incremented after each message)
-  /** Total tokens used through this profile */
-  totalTokens: z.number().default(0),
-  /** Total prompt/input tokens used through this profile */
-  totalPromptTokens: z.number().default(0),
-  /** Total completion/output tokens used through this profile */
-  totalCompletionTokens: z.number().default(0),
-  /** Total messages sent through this profile */
-  messageCount: z.number().default(0),
+  // Usage counters — two ledgers, split by `usageCategoryOf` (chat answers vs
+  // automatic work). One call is one provider request. Prompt tokens are the
+  // uncached input; cache reads and cache writes are counted on their own.
+  // Written only by `accountLLMCall` (lib/services/usage-accounting.service.ts)
+  // through `ConnectionProfilesRepository.incrementUsage`, and patch-only, so
+  // a whole-row update can never carry a stale copy back. The field list is
+  // `PROFILE_USAGE_COUNTER_FIELDS` (lib/llm/profile-usage.ts).
+  chatCallCount: z.number().int().nonnegative().default(0),
+  chatPromptTokens: z.number().int().nonnegative().default(0),
+  chatCompletionTokens: z.number().int().nonnegative().default(0),
+  chatCacheReadTokens: z.number().int().nonnegative().default(0),
+  chatCacheWriteTokens: z.number().int().nonnegative().default(0),
+  automaticCallCount: z.number().int().nonnegative().default(0),
+  automaticPromptTokens: z.number().int().nonnegative().default(0),
+  automaticCompletionTokens: z.number().int().nonnegative().default(0),
+  automaticCacheReadTokens: z.number().int().nonnegative().default(0),
+  automaticCacheWriteTokens: z.number().int().nonnegative().default(0),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

@@ -1,6 +1,5 @@
 import { createSystemEvent } from '@/lib/services/system-events.service'
 import { getRepositories } from '@/lib/repositories/factory'
-import { updateChatTokenAggregates } from '@/lib/services/token-tracking.service'
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
@@ -15,17 +14,14 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
-jest.mock('@/lib/services/token-tracking.service', () => ({
-  updateChatTokenAggregates: jest.fn(),
-}))
-
 const mockGetRepositories = jest.mocked(getRepositories)
-const mockUpdateChatTokenAggregates = jest.mocked(updateChatTokenAggregates)
 
 function createMockRepos() {
   return {
     chats: {
       addMessage: jest.fn(),
+      addCallUsage: jest.fn(),
+      addEstimatedCost: jest.fn(),
     },
   } as any
 }
@@ -39,37 +35,31 @@ describe('system-events.service', () => {
     mockGetRepositories.mockReturnValue(mockRepos)
   })
 
-  it('updates token aggregates when token usage values are explicitly zero', async () => {
+  it('records the event with its token figures for display', async () => {
     const result = await createSystemEvent('chat-1', {
       systemEventType: 'MEMORY_EXTRACTION',
       description: 'Extracted memories',
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
-      estimatedCostUSD: 0,
+      promptTokens: 40,
+      completionTokens: 10,
+      totalTokens: 50,
+      estimatedCostUSD: 0.01,
     })
 
-    expect(result).not.toBeNull()
+    expect(result).toEqual(expect.objectContaining({ promptTokens: 40, completionTokens: 10, totalTokens: 50 }))
     expect(mockRepos.chats.addMessage).toHaveBeenCalledTimes(1)
-    expect(mockUpdateChatTokenAggregates).toHaveBeenCalledWith(
-      'chat-1',
-      {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-      },
-      0
-    )
   })
 
-  it('does not update token aggregates when token usage is omitted', async () => {
-    const result = await createSystemEvent('chat-1', {
-      systemEventType: 'SUMMARIZATION',
-      description: 'Summarized chat',
+  it('never touches the chat usage totals: the call was already accounted in logLLMCall', async () => {
+    await createSystemEvent('chat-1', {
+      systemEventType: 'TITLE_GENERATION',
+      description: 'Generated chat title',
+      promptTokens: 40,
+      completionTokens: 10,
+      totalTokens: 50,
+      estimatedCostUSD: 0.01,
     })
 
-    expect(result).not.toBeNull()
-    expect(mockRepos.chats.addMessage).toHaveBeenCalledTimes(1)
-    expect(mockUpdateChatTokenAggregates).not.toHaveBeenCalled()
+    expect(mockRepos.chats.addCallUsage).not.toHaveBeenCalled()
+    expect(mockRepos.chats.addEstimatedCost).not.toHaveBeenCalled()
   })
 })

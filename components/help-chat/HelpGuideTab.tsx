@@ -8,6 +8,9 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useHelpChat } from '@/components/providers/help-chat-provider'
 import { HELP_CATEGORIES, EXCLUDED_DOCUMENTS, getCategoryForUrl } from '@/lib/help-guide/categories'
@@ -37,24 +40,34 @@ export function HelpGuideTab() {
   // Keep-alive-safe page navigation (opens tab-equivalent routes in place).
   const navigate = useWorkspaceNavigate()
 
-  // Document index from API
-  const [documents, setDocuments] = useState<Map<string, DocumentInfo>>(new Map())
-  const [chatCount, setChatCount] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Document index and chat count from the API
+  const indexQuery = useQuery({
+    queryKey: queryKeys.helpDocs.index,
+    queryFn: ({ signal }) =>
+      apiFetch<{ documents?: Array<{ slug: string; title: string; url: string }> }>('/api/v1/help-docs', { signal }),
+  })
+  const countQuery = useQuery({
+    queryKey: queryKeys.helpDocs.chatCount,
+    queryFn: ({ signal }) => apiFetch<{ count?: number | null }>('/api/v1/help-docs?action=chat-count', { signal }),
+  })
+  const documents = useMemo(() => {
+    const docMap = new Map<string, DocumentInfo>()
+    for (const doc of indexQuery.data?.documents || []) {
+      if (!EXCLUDED_DOCUMENTS.includes(doc.slug)) {
+        docMap.set(doc.slug, { id: doc.slug, title: doc.title, url: doc.url })
+      }
+    }
+    return docMap
+  }, [indexQuery.data])
+  const chatCount = countQuery.data?.count ?? null
+  const loading = indexQuery.isPending || countQuery.isPending
 
   // Navigation state
   const [activeDocId, setActiveDocId] = useState<string | null>(null)
   const [activeCategoryLabel, setActiveCategoryLabel] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
-  /**
-   * Text-search hits, tagged with the query that produced them. Tagging (rather
-   * than clearing on every keystroke) keeps stale results from a previous query
-   * from leaking into the current filter, and keeps this effect free of a
-   * synchronous setState.
-   */
-  const [contentMatches, setContentMatches] = useState<
-    { query: string; bySlug: Map<string, string | null> } | null
-  >(null)
+  /** The query the text search was last asked, once typing settles. */
+  const [settledQuery, setSettledQuery] = useState('')
 
   // Navigation history for scroll position restoration
   const navHistoryRef = useRef<NavHistoryEntry[]>([])
@@ -66,45 +79,6 @@ export function HelpGuideTab() {
     () => getCategoryForUrl(currentPageUrl),
     [currentPageUrl]
   )
-
-  // Fetch document index and chat count on mount
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchData() {
-      try {
-        const [docsRes, countRes] = await Promise.all([
-          fetch('/api/v1/help-docs'),
-          fetch('/api/v1/help-docs?action=chat-count'),
-        ])
-
-        if (!cancelled) {
-          if (docsRes.ok) {
-            const docsData = await docsRes.json()
-            const docMap = new Map<string, DocumentInfo>()
-            for (const doc of docsData.documents || []) {
-              if (!EXCLUDED_DOCUMENTS.includes(doc.slug)) {
-                docMap.set(doc.slug, { id: doc.slug, title: doc.title, url: doc.url })
-              }
-            }
-            setDocuments(docMap)
-          }
-
-          if (countRes.ok) {
-            const countData = await countRes.json()
-            setChatCount(countData.count ?? null)
-          }
-
-          setLoading(false)
-        }
-      } catch {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchData()
-    return () => { cancelled = true }
-  }, [])
 
   // Build category data with resolved document info
   const categories = useMemo(() => {
@@ -122,33 +96,33 @@ export function HelpGuideTab() {
   // narrows on the first keystroke rather than waiting on a round trip.
   useEffect(() => {
     const query = searchQuery.trim()
-
-    if (query.length < 2) {
-      return
-    }
-
-    let cancelled = false
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/v1/help-docs?action=search&q=${encodeURIComponent(query)}`)
-        if (!res.ok || cancelled) return
-
-        const data = await res.json()
-        const bySlug = new Map<string, string | null>()
-        for (const match of data.matches || []) {
-          bySlug.set(match.slug, match.snippet ?? null)
-        }
-        setContentMatches({ query, bySlug })
-      } catch {
-        // Leave the title-only filter in place; the box still works.
-      }
-    }, SEARCH_DEBOUNCE_MS)
-
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
+    if (query.length < 2) return
+    const timer = setTimeout(() => setSettledQuery(query), SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
   }, [searchQuery])
+
+  const textSearch = useQuery({
+    queryKey: queryKeys.helpDocs.search(settledQuery),
+    queryFn: ({ signal }) =>
+      apiFetch<{ matches?: Array<{ slug: string; snippet?: string | null }> }>(
+        `/api/v1/help-docs?action=search&q=${encodeURIComponent(settledQuery)}`,
+        { signal },
+      ),
+    enabled: settledQuery.length >= 2,
+  })
+  /**
+   * Text-search hits, tagged with the query that produced them, so stale
+   * results from a previous query never leak into the current filter. A
+   * failed search leaves the title-only filter in place.
+   */
+  const contentMatches = useMemo(() => {
+    if (!textSearch.data) return null
+    const bySlug = new Map<string, string | null>()
+    for (const match of textSearch.data.matches || []) {
+      bySlug.set(match.slug, match.snippet ?? null)
+    }
+    return { query: settledQuery, bySlug }
+  }, [textSearch.data, settledQuery])
 
   /** Text hits for the query currently in the box, or null if they're stale. */
   const currentTextHits = useMemo(

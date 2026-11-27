@@ -13,24 +13,13 @@
  * save cannot race this one.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { parseProgressions } from '@/lib/progressions/engine'
 import { PROGRESSIONS_METADATA_KEY, type Progression } from '@/lib/progressions/schema'
-
-interface CharacterWithMetadata {
-  id: string
-  name?: string
-  archivedAt?: string | null
-  metadata?: unknown
-}
-
-/** The character GET's envelope: `{ character }`, not the bare row. */
-interface CharacterResponse {
-  character?: CharacterWithMetadata
-}
+import { useCharacter } from '@/app/aurora/[id]/hooks/useCharacter'
 
 export interface UseCharacterProgressionsResult {
   /** The character's valid progressions, keyed by id. Malformed entries are dropped. */
@@ -69,13 +58,11 @@ function useSaveProgressions(characterId: string) {
 }
 
 export function useCharacterProgressions(characterId: string): UseCharacterProgressionsResult {
-  const { data, isLoading } = useQuery({
-    queryKey: queryKeys.characters.detail(characterId),
-    queryFn: ({ signal }) => apiFetch<CharacterResponse>(`/api/v1/characters/${characterId}`, { signal }),
-  })
+  // The character page's own read: one cache entry, one fetch.
+  const { character, isLoading } = useCharacter(characterId)
 
   const invalidIds: string[] = []
-  const progressions = parseProgressions(data?.character?.metadata, (id) => {
+  const progressions = parseProgressions(character?.metadata, (id) => {
     invalidIds.push(id)
   })
 
@@ -85,7 +72,7 @@ export function useCharacterProgressions(characterId: string): UseCharacterProgr
   return {
     progressions,
     invalidIds,
-    isArchived: Boolean(data?.character?.archivedAt),
+    isArchived: Boolean(character?.archivedAt),
     isLoading,
     save,
     remove,

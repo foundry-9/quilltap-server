@@ -89,7 +89,7 @@ export function chatProjectIdQuery(chatId: string) {
  * The project a chat belongs to — the one field the wardrobe needs from it.
  * Null while unknown or when the chat has no project.
  */
-export function useChatProjectId(chatId: string | null | undefined, enabled = true): {
+function useChatProjectId(chatId: string | null | undefined, enabled = true): {
   projectId: string | null
   settled: boolean
 } {

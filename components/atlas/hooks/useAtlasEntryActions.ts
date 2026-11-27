@@ -2,8 +2,8 @@
 
 /**
  * The Atlas browser's row actions and the overlays they open: the editor,
- * the folder picker and the cross-tier transfer (the shared
- * `useItemOverlays`), a row's picture full screen, plus archive, duplicate and delete. Every confirmation
+ * the folder picker, the cross-tier transfer and a row's picture full screen
+ * (the shared `useItemOverlays`), plus archive, duplicate and delete. Every confirmation
  * goes through `requestConfirmation` so the dialog that hosts the browser can
  * keep itself open while one is up.
  *
@@ -22,12 +22,6 @@ export type AtlasEditorState =
   /** `draft`: a new entry prefilled from the lore wizard. */
   | { kind: 'create'; folder: string; draft?: AtlasLoreDraft }
   | { kind: 'edit'; entry: AtlasEntryWithOrigin }
-
-/** A row's current picture on show, addressed through the tier it lives in. */
-export interface AtlasImageView {
-  entry: AtlasEntryWithOrigin
-  container: AtlasContainer
-}
 
 export interface AtlasEntryActionsOptions {
   /** The tier being browsed. */
@@ -50,10 +44,10 @@ export function describeAtlasRefusal(error: unknown, fallback: string): string {
 
 export function useAtlasEntryActions({ container, requestConfirmation, requestAlert }: AtlasEntryActionsOptions) {
   const mutations = useAtlasMutations()
-  const [imageView, setImageView] = useState<AtlasImageView | null>(null)
   /** The lore wizard, open on the folder a drafted entry will be filed in. */
   const [loreWizard, setLoreWizard] = useState<{ folder: string } | null>(null)
-  const overlays = useItemOverlays<AtlasEntryWithOrigin, AtlasEditorState>(imageView !== null || loreWizard !== null)
+  const overlays = useItemOverlays<AtlasEntryWithOrigin, AtlasEditorState>(loreWizard !== null)
+  const { openEditorWith, openImageView } = overlays
 
   /** The tier an entry lives in. */
   const addressOf = useCallback(
@@ -64,11 +58,10 @@ export function useAtlasEntryActions({ container, requestConfirmation, requestAl
   /** Open a row's current picture full screen. */
   const openImage = useCallback(
     (entry: AtlasEntryWithOrigin) => {
-      if (entry.imageFileId) setImageView({ entry, container: addressOf(entry) })
+      if (entry.imageFileId) openImageView({ item: entry, container: addressOf(entry) })
     },
-    [addressOf],
+    [addressOf, openImageView],
   )
-  const closeImage = useCallback(() => setImageView(null), [])
 
   const remove = useCallback(
     async (entry: AtlasEntryWithOrigin) => {
@@ -107,13 +100,10 @@ export function useAtlasEntryActions({ container, requestConfirmation, requestAl
     [mutations, addressOf],
   )
 
-  const { openEditorWith } = overlays
   return useMemo(
     () => ({
       ...overlays,
-      imageView,
       openImage,
-      closeImage,
       mutations,
       addressOf,
       requestConfirmation,
@@ -133,7 +123,7 @@ export function useAtlasEntryActions({ container, requestConfirmation, requestAl
       toggleArchived,
       duplicate,
     }),
-    [overlays, imageView, loreWizard, openImage, closeImage, openEditorWith, mutations, addressOf, requestConfirmation, requestAlert, remove, toggleArchived, duplicate],
+    [overlays, loreWizard, openImage, openEditorWith, mutations, addressOf, requestConfirmation, requestAlert, remove, toggleArchived, duplicate],
   )
 }
 

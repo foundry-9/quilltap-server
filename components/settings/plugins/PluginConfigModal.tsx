@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDraft } from '@/lib/hooks/use-draft'
-import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { apiErrorMessage, apiFetch, ApiFetchError } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
@@ -56,7 +56,6 @@ export function PluginConfigModal({
   onSuccess,
 }: PluginConfigModalProps) {
   const queryClient = useQueryClient()
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Load current configuration via TanStack Query (gated by isOpen && pluginName)
@@ -86,24 +85,22 @@ export function PluginConfigModal({
     }))
   }
 
+  const saveMutation = useMutation({
+    mutationFn: (config: Record<string, unknown>) =>
+      apiFetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}?action=set-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config }),
+      }),
+  })
+  const saving = saveMutation.isPending
+
   // Save configuration
   const handleSubmit = async () => {
-    setSaving(true)
     setError(null)
 
     try {
-
-      const response = await fetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}?action=set-config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: formData }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to save configuration')
-      }
+      await saveMutation.mutateAsync(formData)
 
       // Re-seed the cached config, so reopening within the stale time shows
       // (and could re-save) what was saved, not the pre-save values.
@@ -116,12 +113,10 @@ export function PluginConfigModal({
       onSuccess?.()
       onClose()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to save configuration'
+      const message = apiErrorMessage(err, 'Failed to save configuration')
       console.error('Failed to save plugin config', { pluginName, error: message })
       setError(message)
       showErrorToast(message)
-    } finally {
-      setSaving(false)
     }
   }
 

@@ -14,9 +14,10 @@
  * @module components/settings/chat-settings/hooks/useChatSettings
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
+import { apiErrorMessage } from '@/lib/query/fetcher'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { readChatSettings, useChatSettingsMutation, type ChatSettingsPatch } from '@/hooks/useChatSettingsMutation'
 import { useConnectionProfilesQuery, useEmbeddingProfilesQuery, useImageProfilesQuery } from '@/lib/hooks/use-profiles'
@@ -59,14 +60,14 @@ import {
 interface UseChatSettingsReturn {
   settings: ChatSettings | null
   loading: boolean
-  error: string | null
   saving: boolean
-  success: boolean
   connectionProfiles: ConnectionProfile[]
   embeddingProfiles: EmbeddingProfile[]
   imageProfiles: ImageProfile[]
+  /** True until all three profile lists have settled (loaded or failed). */
   loadingProfiles: boolean
-  fetchSettings: () => Promise<void>
+  /** What failed, when one of the profile lists could not load (#293). */
+  profilesError: string | null
   handleAvatarModeChange: (mode: AvatarDisplayMode) => Promise<void>
   handleAvatarStyleChange: (style: AvatarDisplayStyle) => Promise<void>
   handleCheapLLMUpdate: (updates: Partial<CheapLLMSettings>) => Promise<void>
@@ -104,25 +105,26 @@ interface UseChatSettingsReturn {
 
 export function useChatSettings(): UseChatSettingsReturn {
   const queryClient = useQueryClient()
-  const { data: settingsData, isLoading, error: loadError, refetch } = useChatSettingsQuery()
-  const { data: connectionProfiles } = useConnectionProfilesQuery<ConnectionProfile>()
-  const { data: embeddingProfiles } = useEmbeddingProfilesQuery<EmbeddingProfile>()
-  const { data: imageProfiles } = useImageProfilesQuery<ImageProfile>()
+  const { data: settingsData, isLoading } = useChatSettingsQuery()
+  const connectionQuery = useConnectionProfilesQuery<ConnectionProfile>()
+  const embeddingQuery = useEmbeddingProfilesQuery<EmbeddingProfile>()
+  const imageQuery = useImageProfilesQuery<ImageProfile>()
+  const connectionProfiles = connectionQuery.data
+  const embeddingProfiles = embeddingQuery.data
+  const imageProfiles = imageQuery.data
+  // Pending, not "no data": a list that failed has settled, and must not hold
+  // every picker in its loading state forever (#293).
+  const loadingProfiles = connectionQuery.isPending || embeddingQuery.isPending || imageQuery.isPending
+  const profilesError = useMemo(() => {
+    const failures = [
+      connectionQuery.error && apiErrorMessage(connectionQuery.error, 'Connection profiles could not be loaded'),
+      embeddingQuery.error && apiErrorMessage(embeddingQuery.error, 'Embedding profiles could not be loaded'),
+      imageQuery.error && apiErrorMessage(imageQuery.error, 'Image profiles could not be loaded'),
+    ].filter((m): m is string => !!m)
+    return failures.length > 0 ? failures.join(' · ') : null
+  }, [connectionQuery.error, embeddingQuery.error, imageQuery.error])
 
-  // The "Saved" flash beside the tab's heading.
-  const [success, setSuccess] = useState(false)
-  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const flashSuccess = useCallback(() => {
-    setSuccess(true)
-    if (successTimer.current) clearTimeout(successTimer.current)
-    successTimer.current = setTimeout(() => setSuccess(false), 2000)
-  }, [])
-
-  const { save, saving } = useChatSettingsMutation({ onSaved: flashSuccess })
-
-  const fetchSettings = useCallback(async () => {
-    await refetch()
-  }, [refetch])
+  const { save, saving } = useChatSettingsMutation()
 
   const handlers = useMemo(() => {
     /** Write a patch once the row is loaded (a merge needs the current value). */
@@ -228,14 +230,12 @@ export function useChatSettings(): UseChatSettingsReturn {
   return {
     settings: settingsData ?? null,
     loading: isLoading,
-    error: loadError ? (loadError instanceof Error ? loadError.message : 'An error occurred') : null,
     saving,
-    success,
     connectionProfiles: connectionProfiles ?? [],
     embeddingProfiles: embeddingProfiles ?? [],
     imageProfiles: imageProfiles ?? [],
-    loadingProfiles: !connectionProfiles || !embeddingProfiles || !imageProfiles,
-    fetchSettings,
+    loadingProfiles,
+    profilesError,
     ...handlers,
   }
 }

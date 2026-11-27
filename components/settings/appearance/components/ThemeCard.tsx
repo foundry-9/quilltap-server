@@ -26,11 +26,8 @@ export function ThemeCard({
   onSelect,
   disabled,
   onToggleExpand,
-  onUninstall,
-  onExport,
 }: ThemeCardProps) {
   const isDefault = theme === null
-  const themeId = isDefault ? 'default' : theme.id
   const name = isDefault ? 'Default' : theme.name
   const description = isDefault
     ? <>The default <BrandName /> theme with a clean, professional appearance</>

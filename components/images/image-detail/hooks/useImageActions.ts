@@ -18,20 +18,18 @@ interface UseImageActionsReturn {
   handleSaveToGallery: () => Promise<void>
   savingToGallery: boolean
   updateCharacterGalleryLinks: (links: CharacterGalleryLink[]) => void
-  setCharacters: (characters: Character[]) => void
 }
 
 export function useImageActions(
   image: ImageData,
   characters: Character[],
   onAvatarSet?: () => void
-): Omit<UseImageActionsReturn, 'setCharacters'> & {
-  setCharacters: (fn: (prev: Character[]) => Character[]) => void
-} {
+): UseImageActionsReturn {
   const [characterGalleryLinks, setCharacterGalleryLinks] = useState<CharacterGalleryLink[]>([])
   const [savingToGalleryFor, setSavingToGalleryFor] = useState<Set<string>>(new Set())
   const [settingAvatar, setSettingAvatar] = useState<Set<string>>(new Set())
-  const [internalCharacters, setInternalCharacters] = useState<Character[]>(characters)
+  // The names a new album link is labelled with: the list as first handed in.
+  const [internalCharacters] = useState<Character[]>(characters)
   const [savingToGallery, setSavingToGallery] = useState(false)
 
   const updateCharacterGalleryLinks = useCallback((links: CharacterGalleryLink[]) => {
@@ -140,13 +138,6 @@ export function useImageActions(
           throw new Error(data.error || 'Failed to set avatar')
         }
 
-        // Update local state
-        setInternalCharacters((prev) =>
-          prev.map((char) =>
-            char.id === entityId ? { ...char, defaultImageId: image.id } : char
-          )
-        )
-
         showSuccessToast('Set as avatar for character')
         onAvatarSet?.()
       } catch (error) {
@@ -224,6 +215,5 @@ export function useImageActions(
     handleSaveToGallery,
     savingToGallery,
     updateCharacterGalleryLinks,
-    setCharacters: setInternalCharacters,
   }
 }

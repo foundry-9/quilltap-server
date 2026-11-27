@@ -15,8 +15,9 @@
  * @module app/salon/[id]/components/SplitLayout
  */
 
-import { useCallback, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { type CSSProperties, type ReactNode } from 'react'
 import RightPaneVerticalSplit from './RightPaneVerticalSplit'
+import { useResizableDivider } from './useResizableDivider'
 
 interface SplitLayoutProps {
   /** Combined mode derived from documentMode + terminalMode. */
@@ -35,6 +36,8 @@ interface SplitLayoutProps {
   /** Terminal pane content. Null when Terminal Mode is off. */
   terminalContent: ReactNode | null
 }
+
+const DIVIDER_BOUNDS = { min: 20, max: 80 }
 
 function clampDividerPosition(rawPercentage: number, containerWidth: number): number {
   if (containerWidth <= 0) {
@@ -58,80 +61,14 @@ export default function SplitLayout({
   documentContent,
   terminalContent,
 }: SplitLayoutProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [currentPosition, setCurrentPosition] = useState(dividerPosition)
-
-  // Track position during drag without persisting until mouseup
-  const positionRef = useRef(dividerPosition)
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    positionRef.current = dividerPosition
-    setCurrentPosition(dividerPosition)
-    setIsDragging(true)
-
-    const container = containerRef.current
-    if (!container) return
-
-    const containerRect = container.getBoundingClientRect()
-    const containerWidth = containerRect.width
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const relativeX = moveEvent.clientX - containerRect.left
-      const percentage = (relativeX / containerWidth) * 100
-
-      positionRef.current = clampDividerPosition(percentage, containerWidth)
-      setCurrentPosition(positionRef.current)
-    }
-
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      setIsDragging(false)
-      onDividerPositionChange(positionRef.current)
-    }
-
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-  }, [dividerPosition, onDividerPositionChange])
-
-  const handleDividerKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (mode !== 'split') {
-      return
-    }
-
-    const containerWidth = containerRef.current?.getBoundingClientRect().width ?? 0
-    const basePosition = isDragging ? currentPosition : dividerPosition
-    let nextPosition: number | null = null
-
-    switch (event.key) {
-      case 'ArrowLeft':
-        nextPosition = basePosition - 5
-        break
-      case 'ArrowRight':
-        nextPosition = basePosition + 5
-        break
-      case 'Home':
-        nextPosition = 20
-        break
-      case 'End':
-        nextPosition = 80
-        break
-      default:
-        return
-    }
-
-    event.preventDefault()
-    const clamped = clampDividerPosition(nextPosition, containerWidth)
-    positionRef.current = clamped
-    setCurrentPosition(clamped)
-    onDividerPositionChange(clamped)
-  }, [mode, isDragging, currentPosition, dividerPosition, onDividerPositionChange])
+  const { containerRef, isDragging, splitPos, handleMouseDown, handleKeyDown: handleDividerKeyDown } = useResizableDivider({
+    axis: 'x',
+    position: dividerPosition,
+    onPositionChange: onDividerPositionChange,
+    clamp: clampDividerPosition,
+    bounds: DIVIDER_BOUNDS,
+    keyboardEnabled: mode === 'split',
+  })
 
   const rightPane: ReactNode = (() => {
     if (documentContent && terminalContent) {
@@ -151,7 +88,6 @@ export default function SplitLayout({
   // width regardless of the requested mode (e.g. Document Mode is "split" but the
   // active document hasn't loaded yet).
   const layoutMode: 'normal' | 'split' | 'focus' = rightPane ? mode : 'normal'
-  const splitPos = isDragging ? currentPosition : dividerPosition
 
   // The chat pane — and therefore the Lexical composer inside it — must stay
   // mounted in a stable position across every mode change. Unmounting it (as the

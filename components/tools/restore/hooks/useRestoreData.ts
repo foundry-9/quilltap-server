@@ -1,31 +1,32 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useCallback } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { useDialogState } from '@/hooks/useDialogState'
 import type {
-  RestoreStep,
   RestoreMode,
   RestoreState,
 } from '../types'
 
+const initialState: RestoreState = {
+  step: 'source',
+  selectedFile: null,
+  preview: null,
+  loadingPreview: false,
+  restoreMode: 'import',
+  confirmReplace: false,
+  keepArchiveBundles: true,
+  restoring: false,
+  restoreSummary: null,
+  error: null,
+  uploadId: null,
+  uploadProgress: 0,
+  uploading: false,
+}
+
 export function useRestoreData(isOpen: boolean) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [state, setState] = useState<RestoreState>({
-    step: 'source',
-    selectedFile: null,
-    preview: null,
-    loadingPreview: false,
-    restoreMode: 'import',
-    confirmReplace: false,
-    keepArchiveBundles: true,
-    restoring: false,
-    restoreSummary: null,
-    error: null,
-    uploadId: null,
-    uploadProgress: 0,
-    uploading: false,
-  })
+  const { state, setState, reset } = useDialogState({ isOpen, initialState })
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setState((prev) => ({
@@ -36,7 +37,7 @@ export function useRestoreData(isOpen: boolean) {
       uploadId: null,
       uploadProgress: 0,
     }))
-  }, [])
+  }, [setState])
 
   /**
    * Upload the file as raw binary via XMLHttpRequest (for progress events),
@@ -118,7 +119,7 @@ export function useRestoreData(isOpen: boolean) {
     } finally {
       setState((prev) => ({ ...prev, loadingPreview: false }))
     }
-  }, [state.selectedFile])
+  }, [state.selectedFile, setState])
 
   const handleNext = useCallback(async () => {
     if (state.step === 'source') {
@@ -133,7 +134,7 @@ export function useRestoreData(isOpen: boolean) {
     } else if (state.step === 'preview') {
       setState((prev) => ({ ...prev, step: 'mode' }))
     }
-  }, [state.step, state.selectedFile, uploadAndPreview])
+  }, [state.step, state.selectedFile, uploadAndPreview, setState])
 
   const handleBack = useCallback(() => {
     if (state.step === 'preview') {
@@ -151,7 +152,7 @@ export function useRestoreData(isOpen: boolean) {
         restoreSummary: null,
       }))
     }
-  }, [state.step])
+  }, [state.step, setState])
 
   const handleStartRestore = useCallback(
     async () => {
@@ -208,38 +209,17 @@ export function useRestoreData(isOpen: boolean) {
         setState((prev) => ({ ...prev, restoring: false }))
       }
     },
-    [state.restoreMode, state.confirmReplace, state.keepArchiveBundles, state.uploadId]
+    [state.restoreMode, state.confirmReplace, state.keepArchiveBundles, state.uploadId, setState]
   )
-
-  const resetDialog = useCallback(() => {
-    setState({
-      step: 'source',
-      selectedFile: null,
-      preview: null,
-      loadingPreview: false,
-      restoreMode: 'import',
-      confirmReplace: false,
-      keepArchiveBundles: true,
-      restoring: false,
-      restoreSummary: null,
-      error: null,
-      uploadId: null,
-      uploadProgress: 0,
-      uploading: false,
-    })
-  }, [])
 
   return {
     state,
-    fileInputRef,
     actions: {
       handleFileSelect,
       handleNext,
       handleBack,
-      fetchPreview: uploadAndPreview,
       handleStartRestore,
-      resetDialog,
-      setStep: (step: RestoreStep) => setState((prev) => ({ ...prev, step })),
+      resetDialog: reset,
       setRestoreMode: (mode: RestoreMode) =>
         setState((prev) => ({ ...prev, restoreMode: mode, confirmReplace: false })),
       setConfirmReplace: (confirm: boolean) =>

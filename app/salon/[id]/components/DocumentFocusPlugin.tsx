@@ -22,7 +22,6 @@ interface DocumentFocusPluginProps {
   focusRequest: FocusRequest | null
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   onFocusResolved: (pixelTop: number) => void
-  onFocusCleared: () => void
   onFocusProcessed: () => void
 }
 
@@ -123,20 +122,14 @@ export default function DocumentFocusPlugin({
   focusRequest,
   scrollContainerRef,
   onFocusResolved,
-  onFocusCleared,
   onFocusProcessed,
 }: DocumentFocusPluginProps) {
   const [editor] = useLexicalComposerContext()
 
   useEffect(() => {
+    // A clear_focus never arrives here: useDocumentMode clears the attention
+    // line itself and sends no request.
     if (!focusRequest) return
-
-    // Handle clear_focus — reset attention line and clear the request
-    if (focusRequest.clear_focus) {
-      onFocusCleared()
-      onFocusProcessed()
-      return
-    }
 
     const { anchor, highlight, line } = focusRequest
 
@@ -309,7 +302,7 @@ export default function DocumentFocusPlugin({
         applyHighlightAndResolve()
       }
     })
-  }, [focusRequest, editor, scrollContainerRef, onFocusResolved, onFocusCleared, onFocusProcessed])
+  }, [focusRequest, editor, scrollContainerRef, onFocusResolved, onFocusProcessed])
 
   return null
 }

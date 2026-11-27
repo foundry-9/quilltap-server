@@ -33,6 +33,7 @@ jest.mock('next/link', () => ({
 
 jest.mock('@/hooks/useAutoAssociate', () => ({
   useAutoAssociate: () => () => undefined,
+  useAnnounceAssociations: () => () => undefined,
 }))
 
 jest.mock('@/components/settings/cards/connections-cards', () => ({
@@ -298,7 +299,8 @@ describe('Providers → By kind', () => {
 
     expect(screen.getByRole('button', { name: 'By kind' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /Image Profiles/ })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByTestId('kind-image-profiles')).toBeInTheDocument()
+    // Hosted bodies come from the lazy card map, so the body arrives a tick later.
+    expect(await screen.findByTestId('kind-image-profiles')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Connection Profiles/ })).toHaveAttribute('aria-expanded', 'false')
   })
 
@@ -318,7 +320,7 @@ describe('Providers → By kind', () => {
 describe('ApiKeyModal preselection', () => {
   it('opens with the provider picker set to the preselected provider', async () => {
     const { ApiKeyModal } = jest.requireActual('@/components/settings/api-keys/ApiKeyModal')
-    render(<ApiKeyModal isOpen onClose={() => undefined} onSuccess={() => undefined} initialProvider="OPENAI" />)
+    renderWithQuery(<ApiKeyModal isOpen onClose={() => undefined} onSuccess={() => undefined} initialProvider="OPENAI" />)
 
     const select = screen.getByLabelText(/Provider/) as HTMLSelectElement
     await waitFor(() => expect(select).not.toBeDisabled())

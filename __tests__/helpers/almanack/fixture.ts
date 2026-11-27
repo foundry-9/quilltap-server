@@ -555,11 +555,8 @@ export function makeAlmanackFixture(
           name: 'Opus (household)',
           provider: 'anthropic',
           modelName: 'claude-opus-5',
-          totalTokens: 8_000_000,
-          totalPromptTokens: 7_000_000,
-          totalCompletionTokens: 1_000_000,
-          messageCount: 20_000,
-          lastTouchedAt: '2026-08-05T10:00:00.000Z',
+          chat: { calls: 20_000, promptTokens: 7_000_000, completionTokens: 1_000_000, cacheReadTokens: 30_000_000, cacheWriteTokens: 2_000_000 },
+          automatic: { calls: 4_100, promptTokens: 900_000, completionTokens: 120_000, cacheReadTokens: 0, cacheWriteTokens: 0 },
         },
       ],
       connectionProfileWindow: [

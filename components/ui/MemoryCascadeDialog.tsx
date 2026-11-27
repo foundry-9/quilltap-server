@@ -43,7 +43,7 @@ export function MemoryCascadeDialog({
   if (!isOpen) return null
 
   const messageText = isSwipeGroup
-    ? `This message has ${swipeCount} swipes with a total of ${memoryCount} associated ${memoryCount === 1 ? 'memory' : 'memories'}.`
+    ? `This message has ${swipeCount} ${swipeCount === 1 ? 'swipe' : 'swipes'} with a total of ${memoryCount} associated ${memoryCount === 1 ? 'memory' : 'memories'}.`
     : `This message has ${memoryCount} associated ${memoryCount === 1 ? 'memory' : 'memories'}.`
 
   const handleConfirm = () => {

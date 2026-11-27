@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useState } from 'react'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { Icon } from '@/components/ui/icon'
 import MessageContent from '@/components/chat/MessageContent'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
@@ -41,22 +42,16 @@ interface SaveResponse {
 
 export function WritingOutputCard({ chatId, messageId, content, filename, reasoningContent, draft }: WritingOutputCardProps) {
   const [view, setView] = useState<'rendered' | 'source'>('rendered')
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
   const [saveOpen, setSaveOpen] = useState(false)
   const [saveName, setSaveName] = useState(filename)
   const [saving, setSaving] = useState(false)
   const [conflict, setConflict] = useState<DocumentDestination | null>(null)
   const [savedAddress, setSavedAddress] = useState<string | null>(null)
 
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(content)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy output', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [content])
+  const handleCopy = useCallback(() => {
+    void copy(content)
+  }, [copy, content])
 
   const handleDownload = useCallback(() => {
     const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })

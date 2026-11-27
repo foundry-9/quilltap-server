@@ -32,7 +32,7 @@
  * by id, on request).
  */
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { SlotBadge } from '@/components/wardrobe/slot-ui'
 import { WardrobeItemThumbnail } from '@/components/wardrobe/wardrobe-item-thumbnail'
@@ -55,6 +55,7 @@ import {
   type WardrobeEffectMode,
 } from '@/lib/pascal/custom-tool.types'
 import {
+  issuesAt,
   newDraftEffect,
   type DraftEffect,
   type DraftIssue,
@@ -81,6 +82,9 @@ import {
 import { useInventoryVantageItems } from '@/lib/hooks/use-inventory-vantage-items'
 import { inventoryLabel } from '@/lib/inventory/resolve'
 import { InterventionToggle } from './InterventionToggle'
+import { IssueLines } from './IssueLines'
+import { RawRefBadge } from './chip-parts'
+import { ReferenceRows, withRefAt } from './ReferenceRows'
 
 interface SideEffectsSectionProps {
   draft: ToolDraft
@@ -152,14 +156,10 @@ export function SideEffectsSection({
 
   const removeEffect = (id: string) => update({ effects: draft.effects.filter((effect) => effect.id !== id) })
 
-  const effectErrors = (id: string): string[] =>
-    issues
-      .filter((issue) => issue.severity === 'error' && issue.where.section === 'effect' && issue.where.id === id)
-      .map((issue) => issue.message)
+  const atEffect = (id: string) => (where: DraftIssue['where']) => where.section === 'effect' && where.id === id
+  const effectErrors = (id: string): string[] => issuesAt(issues, 'error', atEffect(id)).map((issue) => issue.message)
   const effectWarnings = (id: string): string[] =>
-    issues
-      .filter((issue) => issue.severity === 'warning' && issue.where.section === 'effect' && issue.where.id === id)
-      .map((issue) => issue.message)
+    issuesAt(issues, 'warning', atEffect(id)).map((issue) => issue.message)
 
   return (
     <section className="qt-card p-4 space-y-3">
@@ -224,12 +224,9 @@ export function SideEffectsSection({
               <label className="flex items-center gap-2">
                 When
                 {choice === 'verbatim' ? (
-                  <span
-                    className="qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1"
-                    title="This condition is richer than the form authors. Edit it in the raw JSON."
-                  >
+                  <RawRefBadge title="This condition is richer than the form authors. Edit it in the raw JSON.">
                     {effect.when.kind === 'verbatim' ? JSON.stringify(effect.when.when) : ''}
-                  </span>
+                  </RawRefBadge>
                 ) : (
                   <select
                     value={choice}
@@ -266,6 +263,7 @@ export function SideEffectsSection({
                 onClick={() => removeEffect(effect.id)}
                 disabled={disabled}
                 title="Delete this effect"
+                aria-label="Delete this effect"
               >
                 <Icon name="trash" className="w-4 h-4" />
               </button>
@@ -406,16 +404,7 @@ export function SideEffectsSection({
             </>
             )}
 
-            {errors.map((message) => (
-              <p key={message} className="text-xs qt-text-destructive">
-                {message}
-              </p>
-            ))}
-            {warnings.map((message) => (
-              <p key={message} className="text-xs qt-text-secondary">
-                ⚠ {message}
-              </p>
-            ))}
+            <IssueLines errors={errors} warnings={warnings} />
           </div>
         )
       })}
@@ -452,10 +441,9 @@ export function SideEffectsSection({
         onPick={(item, { reference }) => {
           if (!picking || !pickingEffect) return
           const gesture = pickingEffect.inventory
-          const rows = gesture.items.length > 0 ? gesture.items : ['']
           const value = reference === 'id' ? item.id : inventoryLabel(item)
           updateEffect(pickingEffect.id, {
-            inventory: { ...gesture, items: rows.map((ref, i) => (i === picking.index ? value : ref)) },
+            inventory: { ...gesture, items: withRefAt(gesture.items, picking.index, value) },
           })
         }}
       />
@@ -489,10 +477,9 @@ export function SideEffectsSection({
         onPick={(item, { reference }) => {
           if (!picking || !pickingEffect) return
           const gesture = pickingEffect.wardrobe
-          const items = gesture.items.length > 0 ? gesture.items : ['']
           const value = reference === 'id' ? item.id : item.title
           updateEffect(pickingEffect.id, {
-            wardrobe: { ...gesture, items: items.map((ref, i) => (i === picking.index ? value : ref)) },
+            wardrobe: { ...gesture, items: withRefAt(gesture.items, picking.index, value) },
           })
         }}
       />
@@ -558,12 +545,6 @@ function WardrobeFields({
   const slotOptional = gesture.action === 'take_off'
   const items = gesture.items.length > 0 ? gesture.items : ['']
 
-  const setItem = (index: number, value: string) => set({ items: items.map((item, i) => (i === index ? value : item)) })
-  const removeItem = (index: number) => {
-    const next = items.filter((_, i) => i !== index)
-    set({ items: next.length > 0 ? next : [''] })
-  }
-
   // Each row's resolution, by the one rule the applier uses.
   const resolved = items.map((ref) => (vantage.kind === 'none' ? undefined : resolveWearableRef(pool, ref)))
 
@@ -587,110 +568,64 @@ function WardrobeFields({
       ? `not in ${vantageName ?? 'this character'}\u2019s reach`
       : `not in ${vantageName ?? 'this wardrobe'}`
 
-  const chooseButton = (index: number) => (
-    <button
-      type="button"
-      className="qt-button qt-button-secondary qt-button-sm"
-      onClick={() => onChoose(index, null)}
-      disabled={disabled}
-      title="Browse the wardrobe and pick a garment or outfit"
-    >
-      Choose…
-    </button>
-  )
-
-  const trashButton = (index: number) => (
-    <button
-      type="button"
-      className="qt-button qt-button-ghost qt-button-sm"
-      onClick={() => removeItem(index)}
-      disabled={disabled || items.length <= 1}
-      title="Remove this item"
-    >
-      <Icon name="trash" className="w-4 h-4" />
-    </button>
-  )
-
-  const textInput = (item: string, index: number) => (
-    <input
-      type="text"
-      value={item}
-      maxLength={MAX_WARDROBE_ITEM_REF_LENGTH}
-      onChange={(e) => setItem(index, e.target.value)}
-      placeholder={index === 0 ? 'Cloak of Night' : '{{params.garment}}'}
-      disabled={disabled}
-      className={`qt-input flex-1 min-w-48 ${hasErrors ? 'qt-input-error' : ''}`}
-      aria-label={`Item ${index + 1}`}
-    />
-  )
-
-  const renderItemRow = (ref: string, index: number) => {
-    const item = resolved[index]
-    if (item) {
-      const byId = ref.trim() === item.id
-      const originLabel = wardrobeOriginLabel(item.origin) ?? `${characterName ?? 'Their'}${characterName ? '\u2019s' : ''} own`
-      const reach = wardrobeReachLabel(item.origin, characterName)
-      return (
-        <div key={index} className="space-y-1">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="flex flex-1 min-w-48 items-start gap-2 rounded border qt-border-default px-2 py-1 text-left hover:opacity-80"
-              onClick={() => onChoose(index, item.id)}
-              disabled={disabled}
-              aria-label={`Item ${index + 1}: ${item.title} — choose another`}
-              data-testid="wardrobe-reference-chip"
-            >
-              <WardrobeItemThumbnail fileId={item.imageFileId} size={28} />
-              <span className="min-w-0 flex-1 space-y-0.5">
-                <span className="block break-words text-sm qt-text">
-                  {item.title}
-                  {isComposite(item) && <span className="qt-text-secondary"> · outfit</span>}
-                </span>
-                <span className="flex flex-wrap items-center gap-1">
-                  {item.types.map((slot) => (
-                    <SlotBadge key={slot} slot={slot} />
-                  ))}
-                  <span className="qt-badge qt-badge-wardrobe-shared">{originLabel}</span>
-                  {reach && <span className="qt-text-xs qt-text-secondary">{reach}</span>}
-                  {item.archivedAt && <span className="qt-badge qt-badge-secondary">archived</span>}
-                </span>
-              </span>
-            </button>
-            <button
-              type="button"
-              className="qt-button qt-button-ghost qt-button-sm"
-              onClick={() => setItem(index, byId ? item.title : item.id)}
-              disabled={disabled}
-              title={`${byId ? 'Referenced by id' : 'Referenced by title'} — click to switch. ${REFERENCE_FORM_HINT}`}
-              aria-label={byId ? 'Reference by title instead' : 'Reference by id instead'}
-            >
-              {byId ? 'by id' : 'by title'}
-            </button>
-            {trashButton(index)}
-          </div>
-          {item.archivedAt && gesture.action === 'wear' && (
-            <p className="text-xs qt-text-secondary">⚠ {archivedWearMessage(item.title)}</p>
-          )}
-        </div>
-      )
-    }
-
-    const templated = isTemplatedWearableRef(ref)
-    const unresolved = !templated && vantage.kind !== 'none' && poolFetched && ref.trim() !== ''
+  const renderResolved = ({
+    item,
+    ref,
+    index,
+    trash,
+    setRef,
+  }: {
+    item: TierItem
+    ref: string
+    index: number
+    trash: ReactNode
+    setRef: (value: string) => void
+  }) => {
+    const byId = ref.trim() === item.id
+    const originLabel = wardrobeOriginLabel(item.origin) ?? `${characterName ?? 'Their'}${characterName ? '\u2019s' : ''} own`
+    const reach = wardrobeReachLabel(item.origin, characterName)
     return (
       <div key={index} className="space-y-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          {textInput(ref, index)}
-          {unresolved && (
-            <span className="qt-badge qt-badge-secondary" data-testid="wardrobe-reference-unresolved">
-              {unreachableNote}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="flex flex-1 min-w-48 items-start gap-2 rounded border qt-border-default px-2 py-1 text-left hover:opacity-80"
+            onClick={() => onChoose(index, item.id)}
+            disabled={disabled}
+            aria-label={`Item ${index + 1}: ${item.title} — choose another`}
+            data-testid="wardrobe-reference-chip"
+          >
+            <WardrobeItemThumbnail fileId={item.imageFileId} size={28} />
+            <span className="min-w-0 flex-1 space-y-0.5">
+              <span className="block break-words text-sm qt-text">
+                {item.title}
+                {isComposite(item) && <span className="qt-text-secondary"> · outfit</span>}
+              </span>
+              <span className="flex flex-wrap items-center gap-1">
+                {item.types.map((slot) => (
+                  <SlotBadge key={slot} slot={slot} />
+                ))}
+                <span className="qt-badge qt-badge-wardrobe-shared">{originLabel}</span>
+                {reach && <span className="qt-text-xs qt-text-secondary">{reach}</span>}
+                {item.archivedAt && <span className="qt-badge qt-badge-secondary">archived</span>}
+              </span>
             </span>
-          )}
-          {chooseButton(index)}
-          {trashButton(index)}
+          </button>
+          <button
+            type="button"
+            className="qt-button qt-button-ghost qt-button-sm"
+            onClick={() => setRef(byId ? item.title : item.id)}
+            disabled={disabled}
+            title={`${byId ? 'Referenced by id' : 'Referenced by title'} — click to switch. ${REFERENCE_FORM_HINT}`}
+            aria-label={byId ? 'Reference by title instead' : 'Reference by id instead'}
+          >
+            {byId ? 'by id' : 'by title'}
+          </button>
+          {trash}
         </div>
-        {templated && <p className="qt-hint">chosen at run time</p>}
+        {item.archivedAt && gesture.action === 'wear' && (
+          <p className="text-xs qt-text-secondary">⚠ {archivedWearMessage(item.title)}</p>
+        )}
       </div>
     )
   }
@@ -764,24 +699,28 @@ function WardrobeFields({
       )}
 
       {wantsItems && (
-        <div className="space-y-1">
-          {items.map((item, index) => renderItemRow(item, index))}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="qt-button qt-button-ghost qt-button-sm"
-              onClick={() => set({ items: [...items, ''] })}
-              disabled={disabled || items.length >= MAX_WARDROBE_EFFECT_ITEMS}
-              title={items.length >= MAX_WARDROBE_EFFECT_ITEMS ? `At most ${MAX_WARDROBE_EFFECT_ITEMS} items` : undefined}
-            >
-              <Icon name="plus" className="w-3.5 h-3.5" />
-              Add item
-            </button>
-            <span className="qt-hint">
-              a title or id — <code className="font-mono">{'{{params.x}}'}</code> lets a parameter choose
-            </span>
-          </div>
-        </div>
+        <ReferenceRows
+          refs={gesture.items}
+          onChange={(next) => set({ items: next })}
+          resolve={(_ref, index) => resolved[index]}
+          isTemplated={isTemplatedWearableRef}
+          renderResolved={renderResolved}
+          canFlagUnresolved={vantage.kind !== 'none' && poolFetched}
+          unresolvedText={unreachableNote}
+          unresolvedTestId="wardrobe-reference-unresolved"
+          onChoose={(index) => onChoose(index, null)}
+          max={MAX_WARDROBE_EFFECT_ITEMS}
+          maxLength={MAX_WARDROBE_ITEM_REF_LENGTH}
+          hasErrors={hasErrors}
+          disabled={disabled}
+          placeholder={(index) => (index === 0 ? 'Cloak of Night' : '{{params.garment}}')}
+          inputLabel={(index) => `Item ${index + 1}`}
+          removeTitle="Remove this item"
+          chooseTitle="Browse the wardrobe and pick a garment or outfit"
+          addLabel="Add item"
+          atMaxTitle={`At most ${MAX_WARDROBE_EFFECT_ITEMS} items`}
+          hintLead="a title or id"
+        />
       )}
     </div>
   )

@@ -15,6 +15,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 
 import { useWardrobeInstructions } from '@/lib/hooks/use-wardrobe-instructions'
+import { createQueryWrapper } from '../../../helpers/renderWithQuery'
 
 const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>
 
@@ -36,12 +37,10 @@ describe('loading', () => {
   it('asks the container\'s own ?action=instructions endpoint', async () => {
     mockFetch.mockResolvedValue(ok({ instructions: 'Dress for the season.' }))
 
-    const { result } = renderHook(() =>
-      useWardrobeInstructions({ scope: 'project', id: 'proj-1' })
-    )
+    const { result } = renderHook(() => useWardrobeInstructions({ scope: 'project', id: 'proj-1' }), { wrapper: createQueryWrapper().wrapper })
 
     await waitFor(() => expect(result.current.fetched).toBe(true))
-    expect(mockFetch).toHaveBeenCalledWith('/api/v1/projects/proj-1/wardrobe?action=instructions')
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/v1/projects/proj-1/wardrobe?action=instructions')
     expect(result.current.instructions).toBe('Dress for the season.')
     expect(result.current.loading).toBe(false)
   })
@@ -49,25 +48,23 @@ describe('loading', () => {
   it('addresses the singleton General container', async () => {
     mockFetch.mockResolvedValue(ok({ instructions: null }))
 
-    const { result } = renderHook(() => useWardrobeInstructions({ scope: 'general', id: null }))
+    const { result } = renderHook(() => useWardrobeInstructions({ scope: 'general', id: null }), { wrapper: createQueryWrapper().wrapper })
 
     await waitFor(() => expect(result.current.fetched).toBe(true))
-    expect(mockFetch).toHaveBeenCalledWith('/api/v1/wardrobe?action=instructions')
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/v1/wardrobe?action=instructions')
   })
 
   it('reads an absent file as null', async () => {
     mockFetch.mockResolvedValue(ok({ instructions: null }))
 
-    const { result } = renderHook(() =>
-      useWardrobeInstructions({ scope: 'character', id: 'char-1' })
-    )
+    const { result } = renderHook(() => useWardrobeInstructions({ scope: 'character', id: 'char-1' }), { wrapper: createQueryWrapper().wrapper })
 
     await waitFor(() => expect(result.current.fetched).toBe(true))
     expect(result.current.instructions).toBeNull()
   })
 
   it('fetches nothing at all with no container', async () => {
-    const { result } = renderHook(() => useWardrobeInstructions(null))
+    const { result } = renderHook(() => useWardrobeInstructions(null), { wrapper: createQueryWrapper().wrapper })
 
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(mockFetch).not.toHaveBeenCalled()
@@ -78,9 +75,7 @@ describe('loading', () => {
   it('settles rather than hanging when the store is unreachable', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500 } as Response)
 
-    const { result } = renderHook(() =>
-      useWardrobeInstructions({ scope: 'group', id: 'group-1' })
-    )
+    const { result } = renderHook(() => useWardrobeInstructions({ scope: 'group', id: 'group-1' }), { wrapper: createQueryWrapper().wrapper })
 
     await waitFor(() => expect(result.current.fetched).toBe(true))
     expect(result.current.instructions).toBeNull()
@@ -94,7 +89,7 @@ describe('loading', () => {
 
     const { result, rerender } = renderHook(
       ({ container }) => useWardrobeInstructions(container),
-      { initialProps: { container: { scope: 'project' as const, id: 'proj-1' } } }
+      { initialProps: { container: { scope: 'project' as const, id: 'proj-1' } }, wrapper: createQueryWrapper().wrapper }
     )
 
     await waitFor(() => expect(result.current.instructions).toBe('project text'))
@@ -102,7 +97,7 @@ describe('loading', () => {
     rerender({ container: { scope: 'group' as never, id: 'group-1' } })
 
     await waitFor(() => expect(result.current.instructions).toBe('group text'))
-    expect(mockFetch).toHaveBeenLastCalledWith('/api/v1/groups/group-1/wardrobe?action=instructions')
+    expect(mockFetch.mock.lastCall?.[0]).toBe('/api/v1/groups/group-1/wardrobe?action=instructions')
   })
 })
 
@@ -112,9 +107,7 @@ describe('saving', () => {
       .mockResolvedValueOnce(ok({ instructions: null }))
       .mockResolvedValueOnce(ok({ instructions: 'Wear the greatcoat.' }))
 
-    const { result } = renderHook(() =>
-      useWardrobeInstructions({ scope: 'project', id: 'proj-1' })
-    )
+    const { result } = renderHook(() => useWardrobeInstructions({ scope: 'project', id: 'proj-1' }), { wrapper: createQueryWrapper().wrapper })
     await waitFor(() => expect(result.current.fetched).toBe(true))
 
     let saved: boolean | undefined
@@ -138,9 +131,7 @@ describe('saving', () => {
       .mockResolvedValueOnce(ok({ instructions: 'old text' }))
       .mockResolvedValueOnce(ok({ instructions: null }))
 
-    const { result } = renderHook(() =>
-      useWardrobeInstructions({ scope: 'general', id: null })
-    )
+    const { result } = renderHook(() => useWardrobeInstructions({ scope: 'general', id: null }), { wrapper: createQueryWrapper().wrapper })
     await waitFor(() => expect(result.current.instructions).toBe('old text'))
 
     await act(async () => {
@@ -155,9 +146,7 @@ describe('saving', () => {
       .mockResolvedValueOnce(ok({ instructions: 'old text' }))
       .mockResolvedValueOnce({ ok: false, status: 409 } as Response)
 
-    const { result } = renderHook(() =>
-      useWardrobeInstructions({ scope: 'character', id: 'char-1' })
-    )
+    const { result } = renderHook(() => useWardrobeInstructions({ scope: 'character', id: 'char-1' }), { wrapper: createQueryWrapper().wrapper })
     await waitFor(() => expect(result.current.instructions).toBe('old text'))
 
     let saved: boolean | undefined
@@ -171,7 +160,7 @@ describe('saving', () => {
   })
 
   it('refuses with no container rather than posting to a guessed URL', async () => {
-    const { result } = renderHook(() => useWardrobeInstructions(null))
+    const { result } = renderHook(() => useWardrobeInstructions(null), { wrapper: createQueryWrapper().wrapper })
 
     let saved: boolean | undefined
     await act(async () => {

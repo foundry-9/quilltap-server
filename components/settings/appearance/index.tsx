@@ -16,42 +16,11 @@
  */
 
 import { useAppearanceSettings } from './hooks/useAppearanceSettings'
+import { LoadingState } from '@/components/ui/LoadingState'
 import { DisplayOptions } from './DisplayOptions'
 import { ThemeSelector } from './ThemeSelector'
 import { ThemeBrowser } from './components/ThemeBrowser'
 import { DebugThemeInfo } from './components/DebugThemeInfo'
-
-/**
- * Renders a loading spinner
- */
-function LoadingSpinner() {
-  return (
-    <div className="qt-loading-state">
-      <div className="flex items-center gap-2 qt-text-secondary">
-        <svg
-          className="animate-spin h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-          />
-        </svg>
-        <span>Loading appearance settings...</span>
-      </div>
-    </div>
-  )
-}
 
 /**
  * Main appearance settings tab component
@@ -71,7 +40,7 @@ export default function AppearanceTab() {
 
   // Loading state
   if (isLoading) {
-    return <LoadingSpinner />
+    return <LoadingState message="Loading appearance settings..." />
   }
 
   return (
@@ -80,7 +49,6 @@ export default function AppearanceTab() {
       <DisplayOptions
         colorMode={colorMode}
         resolvedColorMode={resolvedColorMode}
-        isLoading={isLoading}
         error={error}
         onColorModeChange={handleColorModeChange}
       />
@@ -89,7 +57,6 @@ export default function AppearanceTab() {
       <ThemeSelector
         activeThemeId={activeThemeId}
         availableThemes={availableThemes}
-        isLoading={isLoading}
         onThemeSelect={handleThemeSelect}
         onRefreshThemes={refreshThemes}
       />

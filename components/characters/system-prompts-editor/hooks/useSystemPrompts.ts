@@ -4,12 +4,15 @@ import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { usePromptTemplatesQuery } from '@/lib/hooks/use-profiles'
 import {
   CharacterSystemPrompt,
   PromptTemplate,
   PromptFormData,
   INITIAL_FORM_DATA,
 } from '../types'
+
+const EMPTY_TEMPLATES: PromptTemplate[] = []
 
 export interface UseSystemPromptsReturn {
   // Data
@@ -67,7 +70,6 @@ export function useSystemPrompts(
 
   // Import modal state
   const [showImportModal, setShowImportModal] = useState(false)
-  const [loadingTemplates, setLoadingTemplates] = useState(false)
 
   // Preview modal state
   const [previewPrompt, setPreviewPrompt] = useState<CharacterSystemPrompt | null>(null)
@@ -84,29 +86,26 @@ export function useSystemPrompts(
   })
   const prompts = promptsData?.prompts ?? []
 
-  const [templates, setTemplates] = useState<PromptTemplate[]>([])
+  // The template list is read only once the import modal has been asked for;
+  // each later open re-reads it.
+  const [templatesWanted, setTemplatesWanted] = useState(false)
+  const {
+    data: templates = EMPTY_TEMPLATES,
+    isLoading: loadingTemplates,
+    refetch: refetchTemplates,
+  } = usePromptTemplatesQuery<PromptTemplate>({ enabled: templatesWanted })
 
   const fetchPrompts = useCallback(async () => {
     await mutatePrompts()
   }, [mutatePrompts])
 
   const fetchTemplates = useCallback(async () => {
-    try {
-      setLoadingTemplates(true)
-      const res = await fetch('/api/v1/prompt-templates')
-
-      if (res.ok) {
-        const data = await res.json()
-        setTemplates(data.templates || [])
-      }
-    } catch (err) {
-      console.error('Error fetching templates', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    } finally {
-      setLoadingTemplates(false)
+    if (!templatesWanted) {
+      setTemplatesWanted(true)
+      return
     }
-  }, [])
+    await refetchTemplates()
+  }, [templatesWanted, refetchTemplates])
 
   const openCreateModal = () => {
     setEditingPrompt(null)
@@ -281,7 +280,7 @@ export function useSystemPrompts(
     openCreateModal,
     openEditModal,
     openImportModal: () => {
-      fetchTemplates()
+      void fetchTemplates()
       setShowImportModal(true)
     },
     closeModal,

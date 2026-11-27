@@ -20,7 +20,6 @@
  */
 
 import { useId, useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { BaseModal } from '@/components/ui/BaseModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
@@ -41,7 +40,7 @@ import {
   type AtlasEntryBody,
 } from '@/lib/hooks/use-atlas'
 import { ItemFolderField } from '@/components/item-browser/ItemFolderField'
-import { ItemImageViewer } from '@/components/item-browser/ItemImageViewer'
+import { ItemPicturesSection, type ItemPicturesSpec } from '@/components/item-browser/ItemPicturesSection'
 import type { AtlasEntryActions } from './hooks/useAtlasEntryActions'
 import { describeAtlasRefusal } from './hooks/useAtlasEntryActions'
 import { AtlasAliasInput } from './atlas-alias-input'
@@ -199,7 +198,6 @@ export function AtlasEntryEditor({
       onClose={onClose}
       title={entry ? `Edit ${entry.name}` : 'New Atlas entry'}
       maxWidth="2xl"
-      overlayClassName="z-[70]"
       closeOnClickOutside={!saving}
       footer={(
         <div className="flex items-center justify-end gap-2">
@@ -291,120 +289,29 @@ export function AtlasEntryEditor({
           selectClassName="qt-select qt-select-sm w-full"
         />
 
-        {entry && <AtlasPicturesSection container={container} entry={entry} />}
+        {entry && <ItemPicturesSection spec={ATLAS_PICTURES} container={container} itemId={entry.id} itemTitle={entry.name} />}
       </div>
     </BaseModal>
   )
 }
 
-/** An existing entry's pictures: upload, generate, choose, delete, view full screen. */
-function AtlasPicturesSection({ container, entry }: { container: AtlasContainer; entry: AtlasEntryWithOrigin }) {
-  const queryClient = useQueryClient()
-  const { images, current, loading } = useAtlasImages(container, entry.id)
-  const [busy, setBusy] = useState<string | null>(null)
-  const [viewing, setViewing] = useState<number | null>(null)
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.atlas.images(entry.id) }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.atlas.lists }),
-    ])
-  const run = async (label: string, fn: () => Promise<unknown>) => {
-    setBusy(label)
-    try {
-      await fn()
-      await refresh()
-    } catch (error) {
-      showErrorToast(describeAtlasRefusal(error, 'The picture would not oblige'))
-    } finally {
-      setBusy(null)
-    }
-  }
-  const upload = (file: File) =>
-    run('upload', async () => {
-      const form = new FormData()
-      form.set('file', file)
-      const res = await fetch(atlasImagesUrl(container, entry.id, 'upload'), { method: 'POST', body: form })
-      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'Upload failed')
-    })
-
-  return (
-    <section className="space-y-2 border-t qt-border-default pt-3" aria-labelledby={`atlas-pictures-${entry.id}`}>
-      <div className="flex items-center justify-between gap-2">
-        <h3 id={`atlas-pictures-${entry.id}`} className="text-sm qt-text">Pictures</h3>
-        <div className="flex items-center gap-2">
-          <label className="qt-button-ghost qt-button-sm cursor-pointer">
-            Upload…
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              aria-label={`Upload a picture of ${entry.name}`}
-              onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])}
-            />
-          </label>
-          <button
-            type="button"
-            className="qt-button-secondary qt-button-sm"
-            disabled={busy !== null}
-            onClick={() => void run('generate', () => atlasRequest(atlasImagesUrl(container, entry.id, 'generate'), 'POST', {}))}
-          >
-            {busy === 'generate' ? 'Sketching…' : 'Generate'}
-          </button>
-        </div>
-      </div>
-      {loading ? (
-        <div className="qt-text-xs qt-text-secondary">Loading pictures…</div>
-      ) : images.length === 0 ? (
-        <div className="qt-text-xs qt-text-secondary">
-          No pictures yet. A picture is for you — it shows in the browser and in the chip&rsquo;s card, and is never shown to a
-          painter. Generate draws from the graphic prompt (or the name, when there is none).
-        </div>
-      ) : (
-        <ul className="flex flex-wrap gap-2">
-          {images.map((image, index) => (
-            <li key={image.fileId} className="flex flex-col items-center gap-1">
-              <button type="button" onClick={() => setViewing(index)} aria-label={`View picture ${index + 1} of ${entry.name} full screen`}>
-                <img
-                  src={image.thumbnailUrl}
-                  alt=""
-                  className={`w-20 h-20 rounded object-cover border ${image.fileId === current ? 'qt-border-primary' : 'qt-border-default'}`}
-                />
-              </button>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  className="qt-button-ghost qt-button-sm"
-                  disabled={image.fileId === current || busy !== null}
-                  onClick={() => void run('current', () => atlasRequest(atlasImagesUrl(container, entry.id, 'set-current'), 'POST', { fileId: image.fileId }))}
-                >
-                  {image.fileId === current ? 'Current' : 'Use'}
-                </button>
-                <button
-                  type="button"
-                  className="qt-button-ghost qt-button-sm qt-text-destructive"
-                  disabled={busy !== null}
-                  onClick={() => void run('delete', () => atlasRequest(atlasImagesUrl(container, entry.id, 'delete-image'), 'POST', { fileId: image.fileId }))}
-                >
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      {viewing !== null && images[viewing] && (
-        <ItemImageViewer
-          kind="atlas"
-          onClose={() => setViewing(null)}
-          itemId={entry.id}
-          itemTitle={entry.name}
-          container={container}
-          fileId={images[viewing].fileId}
-          note={images[viewing].fileId === current ? 'Current picture' : null}
-          onPrev={images.length > 1 ? () => setViewing((viewing - 1 + images.length) % images.length) : undefined}
-          onNext={images.length > 1 ? () => setViewing((viewing + 1) % images.length) : undefined}
-        />
-      )}
-    </section>
-  )
+/** An existing entry's pictures: the shared section, with the Atlas's wording. */
+const ATLAS_PICTURES: ItemPicturesSpec = {
+  kind: 'atlas',
+  useImages: useAtlasImages,
+  imagesUrl: atlasImagesUrl,
+  request: atlasRequest,
+  refreshKeys: (entryId) => [queryKeys.atlas.images(entryId), queryKeys.atlas.lists],
+  describeError: describeAtlasRefusal,
+  generatingLabel: 'Sketching…',
+  emptyText: (
+    <>
+      No pictures yet. A picture is for you — it shows in the browser and in the chip&rsquo;s card, and is never shown to a
+      painter. Generate draws from the graphic prompt (or the name, when there is none).
+    </>
+  ),
+  viewLabel: (index, name) => `View picture ${index + 1} of ${name} full screen`,
+  uploadLabel: (name) => `Upload a picture of ${name}`,
+  headingIdPrefix: 'atlas-pictures',
+  noteCurrent: true,
 }

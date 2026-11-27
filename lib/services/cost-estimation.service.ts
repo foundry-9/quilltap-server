@@ -47,17 +47,85 @@ export interface SystemEventCostBreakdown {
 }
 
 export interface ChatCostBreakdown {
+  /** Every token: uncached input, output, cache reads and cache writes. */
   totalTokens: number;
+  /** Uncached input tokens. */
   promptTokens: number;
   completionTokens: number;
+  /** Input tokens served from a provider's prompt cache. */
+  cacheReadTokens?: number;
+  /** Input tokens written into a provider's prompt cache. */
+  cacheWriteTokens?: number;
   estimatedCostUSD: number | null;
   priceSource: PriceSource;
   messageBreakdown?: MessageCostBreakdown[];
   systemEventBreakdown?: SystemEventCostBreakdown[];
 }
 
+/** A model's pricing and where it came from. */
+interface ResolvedPricing {
+  pricing: ModelPricing;
+  source: Exclude<PriceSource, 'unavailable'>;
+}
+
+/**
+ * Find a model's pricing: OpenRouter's own for an OpenRouter model, then the
+ * provider plugin's table, then the provider's fetched price list, then
+ * OpenRouter's public data as an estimate. Null when nothing prices it.
+ */
+async function resolvePricing(
+  provider: Provider,
+  modelName: string,
+  userId: string
+): Promise<ResolvedPricing | null> {
+  if (provider === 'OPENROUTER') {
+    const openRouterPricing = await fetchModelPricing('OPENROUTER', modelName, userId);
+    if (openRouterPricing) return { pricing: openRouterPricing, source: 'openrouter' };
+  }
+
+  const registryPricing = getModelPricingFromRegistry(provider, modelName);
+  if (registryPricing) return { pricing: registryPricing, source: 'registry' };
+
+  const fetchedPricing = await fetchModelPricing(provider, modelName, userId);
+  if (fetchedPricing) return { pricing: fetchedPricing, source: 'fallback' };
+
+  // OpenRouter public pricing as final fallback for providers without pricing
+  // APIs (may differ from direct pricing).
+  if (provider !== 'OPENROUTER') {
+    const openRouterEstimate = await getOpenRouterPricingForModel(provider, modelName);
+    if (openRouterEstimate) return { pricing: openRouterEstimate, source: 'openrouter-estimate' };
+  }
+
+  return null;
+}
+
+/**
+ * Fill in cache rates the chosen pricing does not publish (a plugin's table
+ * carries input and output only) from OpenRouter's public data for the same
+ * model, which lists them for most cached models. Whatever is still unknown
+ * is priced at the input rate by `estimateCost`.
+ */
+async function withCacheRates(
+  resolved: ResolvedPricing,
+  provider: Provider,
+  modelName: string
+): Promise<ModelPricing> {
+  const { pricing } = resolved;
+  if (pricing.cacheReadCostPer1M != null && pricing.cacheWriteCostPer1M != null) return pricing;
+  if (provider === 'OPENROUTER') return pricing;
+  const public_ = await getOpenRouterPricingForModel(provider, modelName);
+  if (!public_) return pricing;
+  return {
+    ...pricing,
+    cacheReadCostPer1M: pricing.cacheReadCostPer1M ?? public_.cacheReadCostPer1M ?? null,
+    cacheWriteCostPer1M: pricing.cacheWriteCostPer1M ?? public_.cacheWriteCostPer1M ?? null,
+  };
+}
+
 /**
  * Estimate the cost of a message given provider, model, and token counts
+ * (uncached input and output only — see {@link estimateCallCost} for a call
+ * with prompt-cache traffic).
  */
 export async function estimateMessageCost(
   provider: Provider,
@@ -66,63 +134,32 @@ export async function estimateMessageCost(
   completionTokens: number,
   userId: string
 ): Promise<CostEstimateResult> {
+  return estimateCallCost(provider, modelName, { promptTokens, completionTokens }, userId);
+}
+
+/**
+ * Estimate the cost of one provider call: uncached input, output, and the
+ * prompt-cache reads and writes at their own rates.
+ */
+export async function estimateCallCost(
+  provider: Provider,
+  modelName: string,
+  tokens: { promptTokens: number; completionTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number },
+  userId: string
+): Promise<CostEstimateResult> {
   try {
-    // First try OpenRouter pricing if the provider is OpenRouter
-    if (provider === 'OPENROUTER') {
-      const openRouterPricing = await fetchModelPricing('OPENROUTER', modelName, userId);
-      if (openRouterPricing) {
-        const cost = estimateCost(openRouterPricing, promptTokens, completionTokens);
-        return {
-          cost,
-          source: 'openrouter',
-          modelPricing: openRouterPricing,
-        };
-      }
-    }
+    const resolved = await resolvePricing(provider, modelName, userId);
+    if (!resolved) return { cost: null, source: 'unavailable' };
 
-    // Try the provider registry (plugin pricing)
-    const registryPricing = getModelPricingFromRegistry(provider, modelName);
-    if (registryPricing) {
-      const cost = estimateCost(registryPricing, promptTokens, completionTokens);
-      return {
-        cost,
-        source: 'registry',
-        modelPricing: registryPricing,
-      };
-    }
-
-    // Try fetching from pricing cache for the provider
-    const fetchedPricing = await fetchModelPricing(provider, modelName, userId);
-    if (fetchedPricing) {
-      const cost = estimateCost(fetchedPricing, promptTokens, completionTokens);
-      return {
-        cost,
-        source: 'fallback',
-        modelPricing: fetchedPricing,
-      };
-    }
-
-    // Try OpenRouter public pricing as final fallback for providers without pricing APIs
-    // This provides an estimate based on OpenRouter's pricing data (may differ from direct pricing)
-    if (provider !== 'OPENROUTER') {
-      const openRouterEstimate = await getOpenRouterPricingForModel(provider, modelName);
-      if (openRouterEstimate) {
-        const cost = estimateCost(openRouterEstimate, promptTokens, completionTokens);
-        return {
-          cost,
-          source: 'openrouter-estimate',
-          modelPricing: openRouterEstimate,
-        };
-      }
-    }
-
-    // No pricing available
-    return {
-      cost: null,
-      source: 'unavailable',
-    };
+    const hasCache = (tokens.cacheReadTokens ?? 0) > 0 || (tokens.cacheWriteTokens ?? 0) > 0;
+    const pricing = hasCache ? await withCacheRates(resolved, provider, modelName) : resolved.pricing;
+    const cost = estimateCost(pricing, tokens.promptTokens, tokens.completionTokens, {
+      cacheReadTokens: tokens.cacheReadTokens,
+      cacheWriteTokens: tokens.cacheWriteTokens,
+    });
+    return { cost, source: resolved.source, modelPricing: pricing };
   } catch (error) {
-    logger.error('Failed to estimate message cost', {
+    logger.error('Failed to estimate call cost', {
       provider,
       modelName,
     }, error as Error);
@@ -159,7 +196,9 @@ export async function getChatCostBreakdown(
     // Use stored aggregates if available
     const totalPromptTokens = chat.totalPromptTokens || 0;
     const totalCompletionTokens = chat.totalCompletionTokens || 0;
-    const totalTokens = totalPromptTokens + totalCompletionTokens;
+    const cacheReadTokens = chat.totalCacheReadTokens || 0;
+    const cacheWriteTokens = chat.totalCacheWriteTokens || 0;
+    const totalTokens = totalPromptTokens + totalCompletionTokens + cacheReadTokens + cacheWriteTokens;
     const estimatedCostUSD = chat.estimatedCostUSD ?? null;
 
     // Use stored price source, or infer from whether we have a cost estimate
@@ -174,6 +213,8 @@ export async function getChatCostBreakdown(
       totalTokens,
       promptTokens: totalPromptTokens,
       completionTokens: totalCompletionTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
       estimatedCostUSD,
       priceSource,
     };

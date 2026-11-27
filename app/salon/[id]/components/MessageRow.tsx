@@ -15,8 +15,7 @@ import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse
 import { resolveWhisperTargetLabel } from '../whisper-visibility'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import MessageContent from '@/components/chat/MessageContent'
-import { useAbsentMentions } from '@/hooks/useAbsentMentions'
-import { useAtlasMentions } from '@/hooks/useAtlasMentions'
+import { useChatMentions } from '@/hooks/useChatMentions'
 import type { MentionChipData } from '@/components/chat/MentionChip'
 import { assignMentionsToRuns } from '@/lib/chat/mention-markers'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
@@ -56,6 +55,11 @@ function messageRowRole(message: Pick<Message, 'role' | 'systemSender'>): SalonR
 
 interface MessageRowProps {
   message: Message
+  /**
+   * Read only by the memo comparator below, as are `isMultiChar`, `turnState`,
+   * `streaming` and `waitingForResponse`: the row draws none of them, but a
+   * change in any re-renders it (see the comparator's note).
+   */
   messageIndex: number
   isEditing: boolean
   editContent: string
@@ -79,7 +83,6 @@ interface MessageRowProps {
   turnState: TurnState
   streaming: boolean
   waitingForResponse: boolean
-  userParticipantId: string | null
   /** Token display settings */
   tokenDisplaySettings?: TokenDisplaySettings
   /**
@@ -122,12 +125,6 @@ interface MessageRowProps {
    * is hidden.
    */
   onSaveImage?: (messageId: string, attachmentId: string) => void
-  onHandleNudge: (participantId: string) => void
-  onHandleQueue: (participantId: string) => void
-  onHandleDequeue: (participantId: string) => void
-  onHandleTalkativenessChange: (participantId: string, value: number) => void
-  onHandleRemoveCharacter: (participantId: string) => void
-  onHandleContinue: () => void
   onReattribute?: (messageId: string) => void
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
@@ -164,7 +161,6 @@ interface MessageRowProps {
 
 function MessageRowInner({
   message,
-  messageIndex,
   isEditing,
   editContent,
   editImpact = null,
@@ -177,12 +173,7 @@ function MessageRowInner({
   renderingPatterns,
   dialogueDetection,
   forceRender = false,
-  isMultiChar,
   participantData,
-  turnState,
-  streaming,
-  waitingForResponse,
-  userParticipantId,
   tokenDisplaySettings,
   conciergeDisplay,
   onOverrideDangerFlag,
@@ -204,12 +195,6 @@ function MessageRowInner({
   onResend,
   onImageClick,
   onSaveImage,
-  onHandleNudge,
-  onHandleQueue,
-  onHandleDequeue,
-  onHandleTalkativenessChange,
-  onHandleRemoveCharacter,
-  onHandleContinue,
   onReattribute,
   participantNames,
   announcerNames,
@@ -228,8 +213,8 @@ function MessageRowInner({
   // Name chips: absent characters whose first mention in the chat is here,
   // then Atlas things. People come first, so a person's chip wins a run the
   // two would share (the marker pass never marks inside a marked run).
-  const personMentions = useAbsentMentions(chatId, message.id)
-  const thingMentions = useAtlasMentions(chatId, message.id)
+  const personMentions = useChatMentions('absent', chatId, message.id)
+  const thingMentions = useChatMentions('atlas', chatId, message.id)
   const mentions = useMemo<ReadonlyArray<MentionChipData>>(
     () => (thingMentions.length === 0 ? personMentions : [...personMentions, ...thingMentions]),
     [personMentions, thingMentions],
@@ -305,7 +290,6 @@ function MessageRowInner({
       <div
         id={`message-${message.id}`}
         data-message-id={message.id}
-        key={message.id}
         className={messageRowClasses.concat(['qt-chat-message-row-courier']).join(' ')}
         {...rowHookAttributes}
       >
@@ -339,7 +323,7 @@ function MessageRowInner({
     // The chip itself owns the id/data-message-id scroll anchor, so the wrapper
     // omits them to avoid a duplicate id.
     return (
-      <div key={message.id} className={messageRowClasses.join(' ')} {...rowHookAttributes}>
+      <div className={messageRowClasses.join(' ')} {...rowHookAttributes}>
         <AnnouncementChip
           message={message}
           chatId={chatId}
@@ -355,7 +339,6 @@ function MessageRowInner({
     <div
       id={`message-${message.id}`}
       data-message-id={message.id}
-      key={message.id}
       className={messageRowClasses.join(' ')}
       {...rowHookAttributes}
     >
@@ -677,11 +660,14 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   if (prev.showResendButton !== next.showResendButton) return false
   if (prev.shouldShowAvatars !== next.shouldShowAvatars) return false
 
-  // Streaming/generation state
+  // Streaming/generation and turn state. The row draws none of these, but the
+  // re-render they force on every stream and turn tick refreshes the callbacks
+  // this comparator never compares — which today masks their stale closures
+  // (see the stale-closure issue). Remove them only with that fix.
   if (prev.streaming !== next.streaming) return false
   if (prev.waitingForResponse !== next.waitingForResponse) return false
 
-  // Multi-char specific state
+  // Multi-char specific state (kept for the same reason as above)
   if (prev.isMultiChar !== next.isMultiChar) return false
   if (prev.turnState.currentTurnParticipantId !== next.turnState.currentTurnParticipantId) return false
 

@@ -49,8 +49,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
 
   const { loading: saving, error, execute, clearError } = useAsyncOperation<void>()
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const saveMemory = async () => {
     clearError()
 
     await execute(async () => {
@@ -100,8 +99,13 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
     })
   }
 
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    void saveMemory()
+  }
+
   const handleSubmitClick = () => {
-    handleFormSubmit(new Event('submit') as any)
+    void saveMemory()
   }
 
   const band = importanceBand(form.formData.importance)

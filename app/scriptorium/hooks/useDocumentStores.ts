@@ -5,8 +5,8 @@
  *
  * The Scriptorium's store list and its writes. The list is the shared
  * `useDocumentStoresQuery` read, so the `mountPoints` realtime topic refreshes
- * it; the writes edit the cached entry for their optimistic status and then
- * invalidate it.
+ * it; the writes (`document-store-requests`, shared with the store page) edit
+ * the cached entry for their optimistic status and then invalidate it.
  *
  * @module app/scriptorium/hooks/useDocumentStores
  */
@@ -18,11 +18,20 @@ import { queryKeys } from '@/lib/query/keys'
 import { useDocumentStoresQuery, type DocumentStoresResponse } from '@/lib/hooks/use-document-stores'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
+import {
+  convertDocumentStore,
+  createDocumentStore,
+  deconvertDocumentStore,
+  deleteDocumentStore,
+  scanCompleteMessage,
+  scanDocumentStore,
+  updateDocumentStore,
+  type ScanResponse,
+} from '../document-store-requests'
 import type {
   DocumentStore,
   CreateDocumentStoreData,
   UpdateDocumentStoreData,
-  ScanResult,
   ConvertResult,
   DeconvertResult,
   UseDocumentStoresReturn,
@@ -62,15 +71,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
   const createStore = useCallback(async (data: CreateDocumentStoreData): Promise<DocumentStore | null> => {
     try {
-      const res = await fetch('/api/v1/mount-points', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-
-      if (!res.ok) throw new Error('Failed to create document store')
-
-      const result = await res.json()
+      const result = await createDocumentStore(data)
       await refresh()
 
       if (result.warning) {
@@ -81,7 +82,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
       return result.mountPoint
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to create document store'
+      const errorMsg = apiErrorMessage(err, 'Failed to create document store')
       console.error('useDocumentStores: create error', { error: errorMsg })
       showErrorToast(errorMsg)
       return null
@@ -90,22 +91,14 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
   const updateStore = useCallback(async (id: string, data: UpdateDocumentStoreData): Promise<DocumentStore | null> => {
     try {
-      const res = await fetch(`/api/v1/mount-points/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-
-      if (!res.ok) throw new Error('Failed to update document store')
-
-      const result = await res.json()
+      const result = await updateDocumentStore(id, data)
       setStores(prev => prev.map(s => s.id === id ? result.mountPoint : s))
       await refresh(id)
       showSuccessToast('Document store updated successfully!')
 
       return result.mountPoint
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update document store'
+      const errorMsg = apiErrorMessage(err, 'Failed to update document store')
       console.error('useDocumentStores: update error', { error: errorMsg, storeId: id })
       showErrorToast(errorMsg)
       return null
@@ -114,8 +107,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
   const deleteStore = useCallback(async (id: string): Promise<boolean> => {
     try {
-      const res = await fetch(`/api/v1/mount-points/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete document store')
+      await deleteDocumentStore(id)
 
       setStores(prev => prev.filter(s => s.id !== id))
       await queryClient.invalidateQueries({ queryKey: queryKeys.mountPoints.all })
@@ -123,32 +115,24 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
       return true
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to delete document store'
+      const errorMsg = apiErrorMessage(err, 'Failed to delete document store')
       console.error('useDocumentStores: delete error', { error: errorMsg, storeId: id })
       showErrorToast(errorMsg)
       return false
     }
   }, [setStores, queryClient])
 
-  const scanStore = useCallback(async (id: string): Promise<{ scanResult: ScanResult; embeddingJobsEnqueued: number } | null> => {
+  const scanStore = useCallback(async (id: string): Promise<ScanResponse | null> => {
     try {
       // Optimistically update scan status
       setStores(prev => prev.map(s => s.id === id ? { ...s, scanStatus: 'scanning' as const } : s))
 
-      const res = await fetch(`/api/v1/mount-points/${id}?action=scan`, {
-        method: 'POST',
-      })
-
-      if (!res.ok) throw new Error('Failed to scan document store')
-
-      const result = await res.json()
+      const result = await scanDocumentStore(id)
 
       // Re-read the store for its updated counts.
       await refresh(id)
 
-      showSuccessToast(
-        `Scan complete: ${result.scanResult.filesScanned} files scanned, ${result.embeddingJobsEnqueued} embedding jobs queued`
-      )
+      showSuccessToast(scanCompleteMessage(result))
 
       if (result.embeddingJobsEnqueued > 0) {
         notifyQueueChange()
@@ -156,7 +140,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
       return result
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to scan document store'
+      const errorMsg = apiErrorMessage(err, 'Failed to scan document store')
       console.error('useDocumentStores: scan error', { error: errorMsg, storeId: id })
       showErrorToast(errorMsg)
 
@@ -176,23 +160,12 @@ export function useDocumentStores(): UseDocumentStoresReturn {
         : s
       ))
 
-      const res = await fetch(`/api/v1/mount-points/${id}?action=convert`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}))
-        throw new Error(errBody.error || errBody.message || 'Failed to convert document store')
-      }
-
-      const result = await res.json()
+      const result = await convertDocumentStore(id)
 
       await refresh(id)
 
-      const cr = result.convertResult as ConvertResult
-      const previousBasePath = result.previousBasePath as string | undefined
+      const cr = result.convertResult
+      const previousBasePath = result.previousBasePath
       const partsA = [
         `${cr.filesMigrated} file${cr.filesMigrated === 1 ? '' : 's'} migrated`,
       ]
@@ -206,7 +179,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
       return cr
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to convert document store'
+      const errorMsg = apiErrorMessage(err, 'Failed to convert document store')
       console.error('useDocumentStores: convert error', { error: errorMsg, storeId: id })
       showErrorToast(errorMsg)
       setStores(prev => prev.map(s => s.id === id
@@ -224,22 +197,11 @@ export function useDocumentStores(): UseDocumentStoresReturn {
         : s
       ))
 
-      const res = await fetch(`/api/v1/mount-points/${id}?action=deconvert`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetPath }),
-      })
-
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}))
-        throw new Error(errBody.error || errBody.message || 'Failed to deconvert document store')
-      }
-
-      const result = await res.json()
+      const result = await deconvertDocumentStore(id, targetPath)
 
       await refresh(id)
 
-      const dr = result.deconvertResult as DeconvertResult
+      const dr = result.deconvertResult
       const parts = [`${dr.filesWritten} document${dr.filesWritten === 1 ? '' : 's'}`]
       if (dr.blobsWritten > 0) parts.push(`${dr.blobsWritten} blob${dr.blobsWritten === 1 ? '' : 's'}`)
       if (dr.errors.length > 0) parts.push(`${dr.errors.length} error${dr.errors.length === 1 ? '' : 's'}`)
@@ -247,7 +209,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
 
       return dr
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to deconvert document store'
+      const errorMsg = apiErrorMessage(err, 'Failed to deconvert document store')
       console.error('useDocumentStores: deconvert error', { error: errorMsg, storeId: id })
       showErrorToast(errorMsg)
       setStores(prev => prev.map(s => s.id === id

@@ -243,7 +243,6 @@ export function AtlasLoreWizard({ container, containerLabel, onClose, onDraft }:
       onClose={handleClose}
       title="Draft an entry from the lore"
       maxWidth="2xl"
-      overlayClassName="z-[70]"
       closeOnClickOutside={false}
       closeOnEscape={!running}
       footer={footer}

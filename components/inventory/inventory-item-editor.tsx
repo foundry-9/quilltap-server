@@ -9,7 +9,8 @@
  * with a live preview and a size counter), the folder and free-form
  * metadata. A kit edits its members with a picker over what the tier can
  * reach — pictures shown, archetypes allowed, kits excluded. An existing
- * object has a Pictures section (generate, upload, choose, delete).
+ * object has a Pictures section (generate, upload, choose, delete — the shared
+ * `ItemPicturesSection`).
  *
  * **An instance inherits.** Each inheritable field shows the archetype's
  * value greyed with an *Inherit* toggle; turning it on clears the override
@@ -19,7 +20,6 @@
  */
 
 import { useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { queryKeys } from '@/lib/query/keys'
@@ -39,7 +39,7 @@ import { ItemFolderField } from '@/components/item-browser/ItemFolderField'
 import type { InventoryItemActions } from './hooks/useInventoryItemActions'
 import { describeInventoryRefusal } from './hooks/useInventoryItemActions'
 import { InventoryPicture } from './inventory-glyph'
-import { ItemImageViewer } from '@/components/item-browser/ItemImageViewer'
+import { ItemPicturesSection, type ItemPicturesSpec } from '@/components/item-browser/ItemPicturesSection'
 
 interface InventoryItemEditorProps {
   /** The tier a new object is created in; an edited one's own tier. */
@@ -338,7 +338,6 @@ export function InventoryItemEditor({
       onClose={onClose}
       title={title}
       maxWidth="2xl"
-      overlayClassName="z-[70]"
       closeOnClickOutside={!saving}
       footer={(
         <div className="flex items-center justify-end gap-2">
@@ -455,114 +454,22 @@ export function InventoryItemEditor({
           </div>
         </div>
         {areaField('metadataText', 'Metadata', 'Free-form JSON object for anything else (weight, value, charges…).', 3)}
-        {item && <InventoryPicturesSection container={container} item={item} />}
+        {item && <ItemPicturesSection spec={INVENTORY_PICTURES} container={container} itemId={item.id} itemTitle={item.title || item.name} />}
       </div>
     </BaseModal>
   )
 }
 
-/** An existing object's pictures: generate, upload, choose, delete. */
-function InventoryPicturesSection({ container, item }: { container: InventoryContainer; item: ResolvedInventoryItem }) {
-  const queryClient = useQueryClient()
-  const { images, current, loading } = useInventoryImages(container, item.id)
-  const [busy, setBusy] = useState<string | null>(null)
-  const [viewing, setViewing] = useState<number | null>(null)
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.images(item.id) }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists }),
-    ])
-  const run = async (label: string, fn: () => Promise<unknown>) => {
-    setBusy(label)
-    try {
-      await fn()
-      await refresh()
-    } catch (error) {
-      showErrorToast(describeInventoryRefusal(error, 'The picture would not oblige'))
-    } finally {
-      setBusy(null)
-    }
-  }
-  const upload = (file: File) =>
-    run('upload', async () => {
-      const form = new FormData()
-      form.set('file', file)
-      const res = await fetch(inventoryImagesUrl(container, item.id, 'upload'), { method: 'POST', body: form })
-      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'Upload failed')
-    })
-  const inherited = images.some((image) => image.inherited)
-
-  return (
-    <section className="space-y-2 border-t qt-border-default pt-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm qt-text">Pictures</h3>
-        <div className="flex items-center gap-2">
-          <label className="qt-button-ghost qt-button-sm cursor-pointer">
-            Upload…
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
-          </label>
-          <button
-            type="button"
-            className="qt-button-secondary qt-button-sm"
-            disabled={busy !== null}
-            onClick={() => void run('generate', () => inventoryRequest(inventoryImagesUrl(container, item.id, 'generate'), 'POST', {}))}
-          >
-            {busy === 'generate' ? 'Drawing…' : 'Generate'}
-          </button>
-        </div>
-      </div>
-      {inherited && <p className="qt-text-xs qt-text-secondary">Showing the archetype&apos;s pictures; upload or generate one to give this object its own.</p>}
-      {loading ? (
-        <div className="qt-text-xs qt-text-secondary">Loading pictures…</div>
-      ) : images.length === 0 ? (
-        <div className="qt-text-xs qt-text-secondary">No pictures yet. A picture is for choosing the object in pickers; rows show its glyph.</div>
-      ) : (
-        <ul className="flex flex-wrap gap-2">
-          {images.map((image, index) => (
-            <li key={image.fileId} className="flex flex-col items-center gap-1">
-              <button type="button" onClick={() => setViewing(index)} aria-label="View picture full screen">
-                <img
-                  src={image.thumbnailUrl}
-                  alt=""
-                  className={`w-20 h-20 rounded object-cover border ${image.fileId === current ? 'qt-border-primary' : 'qt-border-default'}`}
-                />
-              </button>
-              {!image.inherited && (
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    className="qt-button-ghost qt-button-sm"
-                    disabled={image.fileId === current || busy !== null}
-                    onClick={() => void run('current', () => inventoryRequest(inventoryImagesUrl(container, item.id, 'set-current'), 'POST', { fileId: image.fileId }))}
-                  >
-                    {image.fileId === current ? 'Current' : 'Use'}
-                  </button>
-                  <button
-                    type="button"
-                    className="qt-button-ghost qt-button-sm qt-text-destructive"
-                    disabled={busy !== null}
-                    onClick={() => void run('delete', () => inventoryRequest(inventoryImagesUrl(container, item.id, 'delete-image'), 'POST', { fileId: image.fileId }))}
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {viewing !== null && images[viewing] && (
-        <ItemImageViewer
-          kind="inventory"
-          onClose={() => setViewing(null)}
-          itemId={item.id}
-          itemTitle={item.title || item.name}
-          container={container}
-          fileId={images[viewing].fileId}
-          onPrev={images.length > 1 ? () => setViewing((viewing - 1 + images.length) % images.length) : undefined}
-          onNext={images.length > 1 ? () => setViewing((viewing + 1) % images.length) : undefined}
-        />
-      )}
-    </section>
-  )
+/** An existing object's pictures: the shared section, with the Inventory's wording. */
+const INVENTORY_PICTURES: ItemPicturesSpec = {
+  kind: 'inventory',
+  useImages: useInventoryImages,
+  imagesUrl: inventoryImagesUrl,
+  request: inventoryRequest,
+  refreshKeys: (itemId) => [queryKeys.inventory.images(itemId), queryKeys.inventory.lists],
+  describeError: describeInventoryRefusal,
+  generatingLabel: 'Drawing…',
+  emptyText: 'No pictures yet. A picture is for choosing the object in pickers; rows show its glyph.',
+  inheritedNote: <>Showing the archetype&apos;s pictures; upload or generate one to give this object its own.</>,
+  viewLabel: () => 'View picture full screen',
 }

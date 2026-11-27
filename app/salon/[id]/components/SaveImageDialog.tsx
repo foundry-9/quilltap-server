@@ -25,7 +25,8 @@
  * `lib/photos/save-image-to-album.ts`.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { wardrobeItemImagesUrl } from '@/lib/wardrobe/item-images-client'
@@ -33,6 +34,8 @@ import { inventoryImagesUrl } from '@/lib/inventory/container'
 import { atlasImagesUrl } from '@/lib/atlas/container'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 import type { MessageAttachment } from '../types'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 type AlbumKind = 'character' | 'project' | 'document-store' | 'general'
 
@@ -75,10 +78,16 @@ function itemImagesUrl(target: Extract<SaveImageTarget, { itemId: string }>, act
   }
 }
 
-/** Where the album list for a door is read from. */
-function albumsUrlFor(target: SaveImageTarget): string {
-  if (isItemTarget(target)) return itemImagesUrl(target, 'save-targets')
-  return `/api/v1/chats/${target.chatId}?action=photo-albums`
+/** Where the album list for a door is read from, and the cache entry it lands in. */
+function albumsSourceFor(target: SaveImageTarget): { url: string; queryKey: readonly unknown[] } {
+  if (isItemTarget(target)) {
+    const url = itemImagesUrl(target, 'save-targets')
+    return { url, queryKey: queryKeys.photos.saveTargets(url) }
+  }
+  return {
+    url: `/api/v1/chats/${target.chatId}?action=photo-albums`,
+    queryKey: queryKeys.chats.photoAlbums(target.chatId),
+  }
 }
 
 /** Where a door posts the save. */
@@ -135,49 +144,34 @@ export function SaveImageDialog({
   const [selectedAttachmentId, setSelectedAttachmentId] = useState<string>(() =>
     target.fileId || imageAttachments[0]?.id || ''
   )
-  const [albums, setAlbums] = useState<AlbumOption[] | null>(null)
-  const [selectedMountPointId, setSelectedMountPointId] = useState<string>('')
+  // The operator's pick; empty means "the default album" until they choose.
+  const [pickedMountPointId, setPickedMountPointId] = useState<string>('')
   const [caption, setCaption] = useState('')
-  // The dialog is mounted fresh each open by the parent (it conditionally
-  // renders only when there's a save target), so `loadingAlbums` can start
-  // true — the fetch fires from mount.
-  const [loadingAlbums, setLoadingAlbums] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const albumsUrl = albumsUrlFor(target)
-
-  // Fetch the album options on mount. The parent unmounts the dialog when
-  // closed, so this runs exactly once per open. setState calls live inside
-  // the async callbacks (after a microtask), not synchronously in the
-  // effect body.
-  useEffect(() => {
-    let cancelled = false
-    fetch(albumsUrl)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`Failed to load photo albums (${res.status})`)
-        const body = (await res.json()) as { albums?: AlbumOption[] }
-        return body.albums ?? []
-      })
-      .then((list) => {
-        if (cancelled) return
-        setAlbums(list)
-        const defaultOption = list.find(a => a.isDefault) ?? list[0]
-        if (defaultOption) {
-          setSelectedMountPointId(defaultOption.mountPointId)
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : String(err))
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingAlbums(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [albumsUrl])
+  // The album options, read afresh each time the dialog opens (the parent
+  // mounts it per open; staleTime 0 refetches on that mount).
+  const albumsSource = albumsSourceFor(target)
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- the key names what the URL is built from (the item URL itself, or the chat id)
+  const albumsQuery = useQuery({
+    queryKey: albumsSource.queryKey,
+    queryFn: async ({ signal }) => {
+      try {
+        return await apiFetch<{ albums?: AlbumOption[] }>(albumsSource.url, { signal })
+      } catch (err) {
+        const status = (err as { status?: number }).status
+        throw new Error(status ? `Failed to load photo albums (${status})` : err instanceof Error ? err.message : String(err))
+      }
+    },
+    staleTime: 0,
+    retry: false,
+  })
+  const albums = useMemo(() => (albumsQuery.data ? albumsQuery.data.albums ?? [] : null), [albumsQuery.data])
+  const loadingAlbums = albumsQuery.isPending
+  const defaultMountPointId = (albums?.find(a => a.isDefault) ?? albums?.[0])?.mountPointId ?? ''
+  const selectedMountPointId = pickedMountPointId || defaultMountPointId
+  const error = submitError ?? (albumsQuery.error ? albumsQuery.error.message : null)
 
   const selectedAttachment = useMemo(
     () => imageAttachments.find(a => a.id === selectedAttachmentId) ?? imageAttachments[0] ?? null,
@@ -187,7 +181,7 @@ export function SaveImageDialog({
   const handleSubmit = useCallback(async () => {
     if (!selectedAttachment || !selectedMountPointId) return
     setSubmitting(true)
-    setError(null)
+    setSubmitError(null)
     try {
       const res = await fetch(saveUrlFor(target), {
         method: 'POST',
@@ -226,7 +220,7 @@ export function SaveImageDialog({
       onSaved?.(info)
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setSubmitError(err instanceof Error ? err.message : String(err))
     } finally {
       setSubmitting(false)
     }
@@ -284,7 +278,6 @@ export function SaveImageDialog({
                   }
                   title={attachment.filename}
                 >
-                  { }
                   <img
                     src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
                     alt={attachment.filename}
@@ -300,7 +293,6 @@ export function SaveImageDialog({
 
         {selectedAttachment && (
           <div className="flex items-start gap-3">
-            { }
             <img
               src={selectedAttachment.filepath.startsWith('/') ? selectedAttachment.filepath : `/${selectedAttachment.filepath}`}
               alt={selectedAttachment.filename}
@@ -331,7 +323,7 @@ export function SaveImageDialog({
               id="save-image-album"
               className="qt-input w-full"
               value={selectedMountPointId}
-              onChange={(e) => setSelectedMountPointId(e.target.value)}
+              onChange={(e) => setPickedMountPointId(e.target.value)}
             >
               {groupedAlbums.map(group => (
                 <optgroup key={group.kind} label={ALBUM_KIND_LABEL[group.kind]}>

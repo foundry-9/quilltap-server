@@ -56,7 +56,6 @@ export default function BackupRestoreCard() {
       <BackupDialog
         isOpen={showBackupDialog}
         onClose={() => setShowBackupDialog(false)}
-        onBackupComplete={() => {}}
       />
 
       {/* Restore Dialog */}

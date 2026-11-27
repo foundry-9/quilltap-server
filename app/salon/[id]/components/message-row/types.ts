@@ -7,6 +7,6 @@ export interface MessageAvatarInfo {
   /** The character behind the avatar, when there is one — keys what they carry. */
   characterId?: string | null
   title: string | null | undefined
-  avatarUrl?: string
+  avatarUrl?: string | null
   defaultImage?: { id: string; filepath: string; url?: string } | null | undefined
 }

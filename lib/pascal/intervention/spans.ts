@@ -5,15 +5,11 @@
  * modifiers; the hold dialog prints them beside the fields, and recompute warns
  * when a pin lands outside one. One phrasing for both, here.
  *
- * Client-safe: no imports beyond types.
+ * Client-safe: types, and Pascal's own pure number format.
  */
 
 import type { RunSpan } from '../custom-tools';
-
-/** Integers plain, floats to 4 significant digits — the way Pascal prints numbers. */
-function formatSpanNumber(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(Number(n.toPrecision(4)));
-}
+import { formatValue } from '../expressions';
 
 /** Whether a number falls inside a span, honouring its open ends. */
 export function withinSpan(n: number, span: RunSpan): boolean {
@@ -27,8 +23,8 @@ export function withinSpan(n: number, span: RunSpan): boolean {
  * "more than -42, up to -2".
  */
 export function describeSpan(span: RunSpan): string {
-  const min = formatSpanNumber(span.min);
-  const max = formatSpanNumber(span.max);
+  const min = formatValue(span.min);
+  const max = formatValue(span.max);
   if (span.min === span.max && !span.minExclusive && !span.maxExclusive) return `exactly ${min}`;
   if (span.minExclusive) return `more than ${min}, up to ${span.maxExclusive ? `(not including) ${max}` : max}`;
   if (span.maxExclusive) return `${min} up to (not including) ${max}`;

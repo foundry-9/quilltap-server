@@ -1,6 +1,7 @@
 'use client'
 
 import { useReducer, useCallback } from 'react'
+import type { ExistingProfileRef } from './profile-plan'
 
 // ============================================================================
 // Types
@@ -80,12 +81,6 @@ export interface ImageConfig {
 
 export type TestStatus = 'pending' | 'testing' | 'success' | 'error'
 
-export interface CreatedProfileIds {
-  connectionProfileId?: string
-  embeddingProfileId?: string
-  imageProfileId?: string
-}
-
 export interface WizardState {
   currentStep: WizardStep
   availableProviders: ProviderInfo[]
@@ -98,9 +93,24 @@ export interface WizardState {
   embeddingConfig: EmbeddingConfig | null
   imageConfig: ImageConfig | null
   testResults: Record<string, TestStatus>
-  createdProfileIds: CreatedProfileIds
   saving: boolean
   error: string | null
+  /**
+   * Settings mode only: the profiles each part was preloaded from, so Save can
+   * keep or update them instead of creating duplicates (#268).
+   */
+  existingProfiles: {
+    chat?: ExistingProfileRef
+    cheap?: ExistingProfileRef
+    embedding?: ExistingProfileRef
+    image?: ExistingProfileRef
+  }
+  /** Settings mode only: names already taken, per profile kind. */
+  takenProfileNames: {
+    connection: string[]
+    embedding: string[]
+    image: string[]
+  }
 }
 
 // ============================================================================
@@ -119,7 +129,6 @@ export type WizardAction =
   | { type: 'SET_EMBEDDING_CONFIG'; config: EmbeddingConfig | null }
   | { type: 'SET_IMAGE_CONFIG'; config: ImageConfig | null }
   | { type: 'SET_TEST_RESULT'; key: string; status: TestStatus }
-  | { type: 'SET_CREATED_PROFILE_IDS'; ids: Partial<CreatedProfileIds> }
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'LOAD_EXISTING_CONFIG'; state: Partial<WizardState> }
@@ -140,9 +149,10 @@ export const INITIAL_WIZARD_STATE: WizardState = {
   embeddingConfig: null,
   imageConfig: null,
   testResults: {},
-  createdProfileIds: {},
   saving: false,
   error: null,
+  existingProfiles: {},
+  takenProfileNames: { connection: [], embedding: [], image: [] },
 }
 
 // ============================================================================
@@ -223,12 +233,6 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
         testResults: { ...state.testResults, [action.key]: action.status },
       }
 
-    case 'SET_CREATED_PROFILE_IDS':
-      return {
-        ...state,
-        createdProfileIds: { ...state.createdProfileIds, ...action.ids },
-      }
-
     case 'SET_SAVING':
       return { ...state, saving: action.saving }
 
@@ -241,6 +245,20 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     default:
       return state
   }
+}
+
+// ============================================================================
+// Derived state
+// ============================================================================
+
+/** The selected providers that have a capability, in selection order. */
+export function providersWithCapability(
+  state: Pick<WizardState, 'selectedProviders' | 'availableProviders'>,
+  capability: 'chat' | 'embeddings' | 'imageGeneration',
+): ProviderInfo[] {
+  return state.selectedProviders
+    .map((id) => state.availableProviders.find((p) => p.id === id))
+    .filter((p): p is ProviderInfo => p !== undefined && p.capabilities[capability])
 }
 
 // ============================================================================
@@ -266,33 +284,11 @@ export function useProviderWizardState() {
     }
   }, [currentStepIndex])
 
-  const goTo = useCallback((step: WizardStep) => {
-    dispatch({ type: 'SET_STEP', step })
-  }, [])
-
   const canGoBack = currentStepIndex > 0
-  const canGoNext = currentStepIndex < WIZARD_STEPS.length - 1
-  const isFirstStep = currentStepIndex === 0
   const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1
 
   /** Check if at least one selected provider has chat capability */
-  const hasValidChatProvider = state.selectedProviders.some((id) => {
-    const provider = state.availableProviders.find((p) => p.id === id)
-    return provider?.capabilities.chat
-  })
-
-  /** Get providers filtered by capability */
-  const getProvidersWithCapability = useCallback(
-    (capability: 'chat' | 'embeddings' | 'imageGeneration') => {
-      return state.selectedProviders
-        .map((id) => state.availableProviders.find((p) => p.id === id))
-        .filter(
-          (p): p is ProviderInfo =>
-            p !== undefined && p.capabilities[capability]
-        )
-    },
-    [state.selectedProviders, state.availableProviders]
-  )
+  const hasValidChatProvider = providersWithCapability(state, 'chat').length > 0
 
   /** Check if all selected providers have validated API keys (or don't need them) */
   const allKeysValidated = state.selectedProviders.every((id) => {
@@ -306,14 +302,10 @@ export function useProviderWizardState() {
     dispatch,
     goNext,
     goBack,
-    goTo,
     canGoBack,
-    canGoNext,
-    isFirstStep,
     isLastStep,
     currentStepIndex,
     hasValidChatProvider,
-    getProvidersWithCapability,
     allKeysValidated,
   }
 }

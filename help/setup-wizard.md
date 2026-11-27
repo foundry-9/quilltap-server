@@ -16,7 +16,7 @@ The wizard appears in two circumstances:
 
 **First Run** — After you've set up your encryption and created your profile, the wizard materialises automatically at `/setup/providers`. It shan't let you pass without at least one working chat connection, which is really quite reasonable of it.
 
-**Return Visit** — Should you wish to add new providers, adjust your AI stack, or simply revisit your arrangements, you'll find a link to the wizard at the top of [The Forge](/settings). It pre-fills your existing configuration so you needn't start from scratch, which would be tedious beyond endurance.
+**Return Visit** — Should you wish to add new providers, adjust your AI stack, or simply revisit your arrangements, you'll find a link to the wizard at the top of [The Forge](/settings). It pre-fills your existing configuration so you needn't start from scratch, which would be tedious beyond endurance. On saving, whatever you left alone is left alone; a profile whose model you changed is amended in place rather than duplicated; and only a provider you had no profile for gets a new one.
 
 ## The Six Steps
 

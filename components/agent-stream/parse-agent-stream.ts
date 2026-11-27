@@ -3,7 +3,8 @@
  * agent loop stream (the Brahma Console, the Scenario Builder).
  *
  * Pure functions, no React: `parseAgentSseLine` turns one `data:` line into an
- * event object, `splitSseBuffer` handles partial lines across reads, and
+ * event object, `splitSseBuffer` handles partial lines across reads,
+ * `readAgentSse` drives both over a response body, and
  * `applyAgentStreamEvent` folds the tool-call events (`toolsDetected` →
  * pending entries, `toolResult` → settled by batch + index) into an immutable
  * tool-call state. Hooks keep the rest (content, reasoning, done, error) since
@@ -109,4 +110,32 @@ export function applyAgentStreamEvent(
   }
 
   return next
+}
+
+/**
+ * Read an SSE response body to its end, handing each parsed event to
+ * `onEvent` in order. `onEvent` returns true to stop reading (a terminal
+ * `error` or `done` the surface treats as the end). Resolves `'stopped'` when
+ * it did, `'ended'` when the stream closed. Throws when the response has no
+ * body; an aborted request rejects with the fetch's `AbortError`.
+ */
+export async function readAgentSse(
+  res: Response,
+  onEvent: (event: AgentStreamEvent) => boolean | void,
+): Promise<'ended' | 'stopped'> {
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('No response body')
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) return 'ended'
+    const split = splitSseBuffer(buffer, decoder.decode(value, { stream: true }))
+    buffer = split.rest
+    for (const line of split.lines) {
+      const event = parseAgentSseLine(line)
+      if (event && onEvent(event) === true) return 'stopped'
+    }
+  }
 }

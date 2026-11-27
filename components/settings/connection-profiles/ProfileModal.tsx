@@ -9,6 +9,12 @@ import { getAttachmentSupportDescription, supportsMimeType } from '@/lib/llm/att
 import { FormActions } from '@/components/ui/FormActions'
 import { MODEL_CLASSES, getModelClass } from '@/lib/llm/model-classes'
 import type { ApiKey, ProviderConfig, ProfileFormData, ConnectionProfile } from './types'
+import type {
+  AutoConfigureResponse,
+  FetchModelsResult,
+  ProfileCheckResult,
+  ProviderRequirements,
+} from './hooks/useProfileForm'
 import { ProviderOptionsPanel } from './ProviderOptionsPanel'
 import { AutoConfigureSources } from './AutoConfigureSources'
 import type { AutoConfigureResult } from '@/lib/services/auto-configure.service'
@@ -43,23 +49,28 @@ interface ProfileModalProps {
   initialProvider?: string
   form: {
     formData: ProfileFormData
-    setField: (name: keyof ProfileFormData, value: any) => void
+    setField: <K extends keyof ProfileFormData>(name: K, value: ProfileFormData[K]) => void
     handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void
     resetForm: () => void
   }
   operations: {
     saveLoading: boolean
+    /** Each probe's failure, shown in the dialog rather than only logged (#255). */
+    saveError?: string | null
     connectLoading: boolean
     connectError: string | null
     fetchModelsLoading: boolean
+    fetchModelsError?: string | null
     testMessageLoading: boolean
+    testMessageError?: string | null
     autoConfigureLoading: boolean
-    handleConnect: (callback: (data: any) => void) => Promise<any>
-    handleFetchModels: (callback: (data: any) => void) => Promise<any>
-    handleTestMessage: (callback: (data: any) => void) => Promise<any>
-    handleAutoConfigure: (callback: (data: any) => void) => Promise<any>
-    handleSubmit: (editingId: string | null, onSuccess: () => void) => Promise<any>
-    getProviderRequirements: (provider: string) => any
+    autoConfigureError?: string | null
+    handleConnect: (callback: (data: ProfileCheckResult) => void) => Promise<ProfileCheckResult | null | undefined>
+    handleFetchModels: (callback: (data: FetchModelsResult) => void) => Promise<FetchModelsResult | null | undefined>
+    handleTestMessage: (callback: (data: ProfileCheckResult) => void) => Promise<ProfileCheckResult | null | undefined>
+    handleAutoConfigure: (callback: (data: AutoConfigureResponse) => void) => Promise<AutoConfigureResponse | null | undefined>
+    handleSubmit: (editingId: string | null, onSuccess: () => void) => Promise<unknown>
+    getProviderRequirements: (provider: string) => ProviderRequirements
   }
 }
 
@@ -92,7 +103,7 @@ export function ProfileModal({
   const [autoConfigureMessage, setAutoConfigureMessage] = useState<string | null>(null)
   const [autoConfigureResult, setAutoConfigureResult] = useState<AutoConfigureResult | null>(null)
 
-  // Note: No need for state reset effect - modal is keyed by profile.id so it remounts fresh
+  // No state reset effect: the host keys the modal per opening, so it remounts fresh (#294)
 
   // A stored row can carry a base URL its provider does not take — every
   // profile saved before Bug 73 was fixed, and any import. Reading the
@@ -117,7 +128,7 @@ export function ProfileModal({
     if (isOpen && profile?.id) {
       const fetchModelsForEdit = async () => {
         try {
-          const result = await fetchJson<any>('/api/v1/models', {
+          const result = await fetchJson<FetchModelsResult>('/api/v1/models', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -181,7 +192,7 @@ export function ProfileModal({
 
   const handleAutoConfigureClick = useCallback(async () => {
     const result = await operations.handleAutoConfigure((data) => {
-      const suggestions = data.suggestions as AutoConfigureResult
+      const suggestions = data.suggestions
       form.setField('temperature', suggestions.temperature)
       form.setField('maxTokens', suggestions.maxTokens)
       form.setField('topP', suggestions.topP)
@@ -360,7 +371,7 @@ export function ProfileModal({
       form.setField(
         'supportsImageUpload',
         supportsMimeType(
-          newProvider as any,
+          newProvider,
           'image/jpeg',
           (takesBaseUrl && form.formData.baseUrl) || undefined
         )
@@ -415,13 +426,20 @@ export function ProfileModal({
   }
 
   const footer = (
-    <FormActions
-      onCancel={handleClose}
-      onSubmit={handleFormSubmit}
-      submitLabel={operations.saveLoading ? 'Saving...' : profile?.id ? 'Update Profile' : 'Create Profile'}
-      isLoading={operations.saveLoading}
-      isDisabled={!isValid}
-    />
+    <div className="w-full space-y-2">
+      {operations.saveError && (
+        <div role="alert" className="qt-alert-error">
+          <span aria-hidden="true">✗</span> {operations.saveError}
+        </div>
+      )}
+      <FormActions
+        onCancel={handleClose}
+        onSubmit={handleFormSubmit}
+        submitLabel={operations.saveLoading ? 'Saving...' : profile?.id ? 'Update Profile' : 'Create Profile'}
+        isLoading={operations.saveLoading}
+        isDisabled={!isValid}
+      />
+    </div>
   )
 
   return (
@@ -511,7 +529,7 @@ export function ProfileModal({
                     )}
                   </select>
                   <p className="qt-text-xs mt-1">
-                    Non-image attachments: {getAttachmentSupportDescription(form.formData.provider as any, (reqs.requiresBaseUrl && form.formData.baseUrl) || undefined)}
+                    Non-image attachments: {getAttachmentSupportDescription(form.formData.provider, (reqs.requiresBaseUrl && form.formData.baseUrl) || undefined)}
                   </p>
                 </div>
               )}
@@ -709,6 +727,24 @@ export function ProfileModal({
                 </div>
               )}
 
+              {operations.fetchModelsError && (
+                <div role="alert" className="qt-alert-error">
+                  <span aria-hidden="true">✗</span> {operations.fetchModelsError}
+                </div>
+              )}
+
+              {operations.testMessageError && (
+                <div role="alert" className="qt-alert-error">
+                  <span aria-hidden="true">✗</span> {operations.testMessageError}
+                </div>
+              )}
+
+              {operations.autoConfigureError && (
+                <div role="alert" className="qt-alert-error">
+                  <span aria-hidden="true">✗</span> {operations.autoConfigureError}
+                </div>
+              )}
+
               {modelsMessage && (
                 <div className="text-sm qt-alert-info">
                   ✓ {modelsMessage}
@@ -806,7 +842,7 @@ export function ProfileModal({
                 {reqs.supportsSamplingParameters && (
                 <div>
                   <label htmlFor="temperature" className="block qt-text-label mb-2">
-                    Temperature ({form.formData.temperature})
+                    Temperature ({form.formData.temperature ?? 'provider default'})
                   </label>
                   <input
                     type="range"
@@ -814,11 +850,20 @@ export function ProfileModal({
                     min="0"
                     max="2"
                     step="0.1"
-                    value={form.formData.temperature}
+                    value={form.formData.temperature ?? 1}
                     onChange={(e) => form.setField('temperature', parseFloat(e.target.value))}
                     className="qt-range w-full"
                   />
                   <p className="qt-text-xs mt-1">0 = deterministic, 2 = creative</p>
+                  {form.formData.temperature !== null && (
+                    <button
+                      type="button"
+                      onClick={() => form.setField('temperature', null)}
+                      className="qt-button-ghost qt-text-xs mt-1"
+                    >
+                      Use provider default
+                    </button>
+                  )}
                 </div>
                 )}
 
@@ -829,8 +874,13 @@ export function ProfileModal({
                   <input
                     type="number"
                     id="maxTokens"
-                    value={form.formData.maxTokens}
-                    onChange={(e) => form.setField('maxTokens', parseInt(e.target.value))}
+                    value={form.formData.maxTokens ?? ''}
+                    onChange={(e) => {
+                      const parsed = parseInt(e.target.value)
+                      // Emptied means unset: the provider's own ceiling applies (#256).
+                      form.setField('maxTokens', Number.isFinite(parsed) ? parsed : null)
+                    }}
+                    placeholder="Provider default"
                     min="1"
                     max={getMaxTokensLimit()}
                     className="qt-input"
@@ -845,7 +895,7 @@ export function ProfileModal({
                 {reqs.supportsSamplingParameters && (
                 <div>
                   <label htmlFor="topP" className="block qt-text-label mb-2">
-                    Top P ({form.formData.topP})
+                    Top P ({form.formData.topP ?? 'provider default'})
                   </label>
                   <input
                     type="range"
@@ -853,11 +903,20 @@ export function ProfileModal({
                     min="0"
                     max="1"
                     step="0.05"
-                    value={form.formData.topP}
+                    value={form.formData.topP ?? 1}
                     onChange={(e) => form.setField('topP', parseFloat(e.target.value))}
                     className="qt-range w-full"
                   />
                   <p className="qt-text-xs mt-1">Nucleus sampling (0-1)</p>
+                  {form.formData.topP !== null && (
+                    <button
+                      type="button"
+                      onClick={() => form.setField('topP', null)}
+                      className="qt-button-ghost qt-text-xs mt-1"
+                    >
+                      Use provider default
+                    </button>
+                  )}
                 </div>
                 )}
               </div>

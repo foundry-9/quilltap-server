@@ -23,10 +23,11 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { SegmentedRadioGroup, segmentedButtonClass } from '@/components/ui/SegmentedRadioGroup'
+import { useCustomToolDestinations } from './use-custom-tool-destinations'
 import {
   displayTitle,
   isInventoryRef,
@@ -107,21 +108,33 @@ interface MockInventoryDraftRow {
   metadata: string
 }
 
+/** A text parsed as one JSON object, or why it is not one. */
+function parseJsonObject(text: string):
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; reason: 'invalid' | 'not-object' } {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return { ok: false, reason: 'invalid' }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, reason: 'not-object' }
+  }
+  return { ok: true, value: parsed as Record<string, unknown> }
+}
+
 /**
  * A row's metadata, parsed — or why it cannot be. Values must be numbers,
  * strings, booleans, or lists of them, as the mock schema demands.
  */
 function parseMockMetadata(text: string): { ok: true; metadata?: MockInventoryRow['metadata'] } | { ok: false; reason: string } {
   if (text.trim() === '') return { ok: true }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    return { ok: false, reason: 'is not valid JSON' }
+  const object = parseJsonObject(text)
+  if (!object.ok) {
+    return { ok: false, reason: object.reason === 'invalid' ? 'is not valid JSON' : 'must be a JSON object' }
   }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return { ok: false, reason: 'must be a JSON object' }
-  }
+  const parsed = object.value
   const scalar = (v: unknown) =>
     typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))
   for (const [key, value] of Object.entries(parsed)) {
@@ -155,6 +168,12 @@ function mockRowsOf(rows: readonly MockInventoryDraftRow[]): MockInventoryRow[] 
  * beside the roll rather than replacing it.
  */
 type BenchRoll = CustomToolRunResult & {
+  /**
+   * The draft the roll was dealt against. A roll names its outcome by index,
+   * so its bubble reads the row from this, not the live draft — a row deleted
+   * or reordered afterwards must not relabel an old result (#322).
+   */
+  dealtDraft: ToolDraft
   gate?: ToolGateVerdict
   /** With a character in the chair: what each wardrobe gesture would have found. */
   wardrobeResolution?: PreviewWardrobeResolution[]
@@ -221,7 +240,15 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
   const benchInventory = mockRows.length > 0 ? mockRows : undefined
   const [oracle, setOracle] = useState<BenchOracle>({ mode: 'scripted', answer: '' })
   const [rolls, setRolls] = useState<BenchRoll[]>([])
-  const [audit, setAudit] = useState<CustomToolAuditResult | null>(null)
+  /** The last audit, with the draft it was dealt against (#322 — see {@link BenchRoll}). */
+  const [auditRun, setAuditRun] = useState<{ result: CustomToolAuditResult; dealtDraft: ToolDraft } | null>(null)
+  const audit = auditRun?.result ?? null
+  const auditDraft = auditRun?.dealtDraft ?? draft
+  /** The reachable rows a consult reading `{{outcome.brief}}` would find blank. */
+  const missingBrief = useMemo(
+    () => (auditRun ? reachableOutcomesMissingBrief(auditRun.dealtDraft, auditRun.result.outcomes) : []),
+    [auditRun]
+  )
 
   // Merge declared defaults under whatever the user has touched, so a fresh
   // parameter shows up pre-filled without wiping edits to the others.
@@ -248,18 +275,24 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
    * Held in state and advanced by an interval rather than read during render:
    * `Date.now()` in a render body is impure, and React is entitled to re-run a
    * render whenever it likes. The interval runs only while a hand-typed sheet
-   * is in play, so a bench with no progressions on it costs nothing.
+   * carrying a `progressions` key is in play, so a bench with no progressions
+   * on it costs nothing (#320).
    */
   const [benchNowMs, setBenchNowMs] = useState(() => Date.now())
+  const sheetHasProgressions = useMemo(() => {
+    if (sheet.mode !== 'manual') return false
+    const parsed = parseJsonObject(sheet.text)
+    return parsed.ok && Object.prototype.hasOwnProperty.call(parsed.value, 'progressions')
+  }, [sheet])
 
   useEffect(() => {
-    if (sheet.mode !== 'manual') return
+    if (!sheetHasProgressions) return
     // The interval alone, with no priming call: the first tick lands within a
     // second, and setting state straight from an effect body is the render
     // loop nobody wants.
     const timer = setInterval(() => setBenchNowMs(Date.now()), 1000)
     return () => clearInterval(timer)
-  }, [sheet.mode])
+  }, [sheetHasProgressions])
 
   /**
    * The progress sheet a hand-typed fact sheet derives to, at THIS instant.
@@ -298,24 +331,12 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
 
   const manualSheetError = useMemo(() => {
     if (sheet.mode !== 'manual') return null
-    try {
-      const parsed = JSON.parse(sheet.text)
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        return 'The fact sheet must be a single JSON object.'
-      }
-      return null
-    } catch {
-      return 'The fact sheet is not valid JSON.'
-    }
+    const parsed = parseJsonObject(sheet.text)
+    if (parsed.ok) return null
+    return parsed.reason === 'invalid' ? 'The fact sheet is not valid JSON.' : 'The fact sheet must be a single JSON object.'
   }, [sheet])
 
-  const charactersQuery = useQuery({
-    queryKey: queryKeys.customTools.destinations(),
-    queryFn: ({ signal }) =>
-      apiFetch<{ characters: Array<{ characterId: string; characterName: string }> }>(
-        '/api/v1/custom-tools?action=destinations',
-        { signal }
-      ),
+  const charactersQuery = useCustomToolDestinations({
     enabled: sheet.mode === 'character',
     select: (data): BenchCharacter[] =>
       data.characters.map((c) => ({ id: c.characterId, name: c.characterName })),
@@ -323,14 +344,8 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
 
   const benchMetadata = (): Record<string, unknown> | { characterId: string } | undefined => {
     if (sheet.mode === 'character') return chairCharacterId ? { characterId: chairCharacterId } : undefined
-    try {
-      const parsed = JSON.parse(sheet.text)
-      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : undefined
-    } catch {
-      return undefined
-    }
+    const parsed = parseJsonObject(sheet.text)
+    return parsed.ok ? parsed.value : undefined
   }
 
   const testsState =
@@ -341,27 +356,15 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
     draft.outcomes.some((o) => scanPlaceholders(o.message).some((p) => p.ref.kind === 'state'))
 
   const mockStateError = useMemo(() => {
-    try {
-      const parsed = JSON.parse(mockStateText)
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        return 'Mock state must be a single JSON object.'
-      }
-      return null
-    } catch {
-      return 'Mock state is not valid JSON.'
-    }
+    const parsed = parseJsonObject(mockStateText)
+    if (parsed.ok) return null
+    return parsed.reason === 'invalid' ? 'Mock state is not valid JSON.' : 'Mock state must be a single JSON object.'
   }, [mockStateText])
 
   /** The mock merged state a bench roll or audit resolves `$state` against. */
   const benchState = (): Record<string, unknown> | undefined => {
-    try {
-      const parsed = JSON.parse(mockStateText)
-      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : undefined
-    } catch {
-      return undefined
-    }
+    const parsed = parseJsonObject(mockStateText)
+    return parsed.ok ? parsed.value : undefined
   }
 
   /** The oracle input for a single roll; undefined when the tool has no consult. */
@@ -380,8 +383,11 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
   }
 
   const rollMutation = useMutation({
-    mutationFn: () =>
-      apiFetch<BenchRoll>('/api/v1/custom-tools?action=preview', {
+    mutationFn: async (): Promise<BenchRoll> => {
+      // Captured as the deal is sent, so the result is read against the rows
+      // it was dealt from (#322).
+      const dealtDraft = draft
+      const result = await apiFetch<Omit<BenchRoll, 'dealtDraft'>>('/api/v1/custom-tools?action=preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -393,20 +399,23 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           inventory: benchInventory,
           llm: previewOracle(),
         }),
-      }),
+      })
+      return { ...result, dealtDraft }
+    },
     onSuccess: (result) => {
       const chairName =
         sheet.mode === 'character'
           ? (charactersQuery.data ?? []).find((c) => c.id === chairCharacterId)?.name ?? null
           : null
       setRolls((prev) => [{ ...result, chairName }, ...prev].slice(0, 10))
-      onMatched?.(draft.outcomes[result.outcomeIndex]?.id ?? null)
+      onMatched?.(result.dealtDraft.outcomes[result.outcomeIndex]?.id ?? null)
     },
   })
 
   const auditMutation = useMutation({
-    mutationFn: () =>
-      apiFetch<CustomToolAuditResult>('/api/v1/custom-tools?action=audit', {
+    mutationFn: async () => {
+      const dealtDraft = draft
+      const result = await apiFetch<CustomToolAuditResult>('/api/v1/custom-tools?action=audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -417,8 +426,10 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           inventory: benchInventory,
           llm: auditOracle(),
         }),
-      }),
-    onSuccess: setAudit,
+      })
+      return { result, dealtDraft }
+    },
+    onSuccess: setAuditRun,
   })
 
   const benchDisabled =
@@ -466,7 +477,7 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
         </div>
 
         {rolls.map((roll, index) => (
-          <MiniPascalBubble key={`${roll.raw}-${roll.value}-${index}`} roll={roll} draft={draft} faded={index > 0} />
+          <MiniPascalBubble key={`${roll.raw}-${roll.value}-${index}`} roll={roll} draft={roll.dealtDraft} faded={index > 0} />
         ))}
       </section>
 
@@ -478,26 +489,22 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           <code>progress</code> tests read the <code>progressions</code> key inside it. Lend the bench a sheet, or
           it rolls as nobody in particular.
         </p>
-        <div className="flex rounded overflow-hidden border w-fit" role="radiogroup" aria-label="Fact sheet mode">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={sheet.mode === 'character'}
-            className={`px-2 py-1 text-xs ${sheet.mode === 'character' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-            onClick={() => setSheet({ mode: 'character' })}
-          >
-            Pick a character
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={sheet.mode === 'manual'}
-            className={`px-2 py-1 text-xs ${sheet.mode === 'manual' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-            onClick={() => setSheet({ mode: 'manual', text: '{}' })}
-          >
-            Hand-typed sheet
-          </button>
-        </div>
+        <SegmentedRadioGroup
+          className="flex rounded overflow-hidden border w-fit"
+          ariaLabel="Fact sheet mode"
+          options={[
+            { value: 'character', label: 'Pick a character' },
+            { value: 'manual', label: 'Hand-typed sheet' },
+          ]}
+          value={sheet.mode}
+          // Choosing the mode already in force keeps the sheet as typed (#317).
+          onSelect={(mode) =>
+            setSheet((prev) =>
+              prev.mode === mode ? prev : mode === 'character' ? { mode: 'character' } : { mode: 'manual', text: '{}' }
+            )
+          }
+          optionClassName={segmentedButtonClass('xs')}
+        />
 
         {sheet.mode === 'character' ? (
           <select
@@ -700,37 +707,21 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           <p className="qt-hint">
             This tool consults a model mid-run. Script its answer here, or spend a real consult on a single roll.
           </p>
-          <div className="flex rounded overflow-hidden border w-fit" role="radiogroup" aria-label="Oracle mode">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={oracle.mode === 'scripted'}
-              className={`px-2 py-1 text-xs ${oracle.mode === 'scripted' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-              onClick={() => setOracle({ mode: 'scripted', answer: oracle.mode === 'scripted' ? oracle.answer : '' })}
-            >
-              Scripted answer
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={oracle.mode === 'fail'}
-              className={`px-2 py-1 text-xs ${oracle.mode === 'fail' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-              onClick={() => setOracle({ mode: 'fail' })}
-              title="The consult fails; the run shows your error line"
-            >
-              Silence
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={oracle.mode === 'live'}
-              className={`px-2 py-1 text-xs ${oracle.mode === 'live' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-              onClick={() => setOracle({ mode: 'live' })}
-              title="A single roll asks the real model — one paid consult per roll"
-            >
-              Ask it live
-            </button>
-          </div>
+          <SegmentedRadioGroup
+            className="flex rounded overflow-hidden border w-fit"
+            ariaLabel="Oracle mode"
+            options={[
+              { value: 'scripted', label: 'Scripted answer' },
+              { value: 'fail', label: 'Silence', title: 'The consult fails; the run shows your error line' },
+              { value: 'live', label: 'Ask it live', title: 'A single roll asks the real model — one paid consult per roll' },
+            ]}
+            value={oracle.mode}
+            onSelect={(mode) => {
+              if (mode === 'scripted') setOracle({ mode: 'scripted', answer: oracle.mode === 'scripted' ? oracle.answer : '' })
+              else setOracle({ mode })
+            }}
+            optionClassName={segmentedButtonClass('xs')}
+          />
 
           {oracle.mode === 'scripted' && (
             <div>
@@ -768,7 +759,7 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           disabled={benchDisabled || auditMutation.isPending}
           title={benchDisabled ? 'The draft must be valid before the house will audit it' : undefined}
         >
-          {auditMutation.isPending ? 'Dealing…' : 'Deal a thousand hands'}
+          {auditMutation.isPending ? 'Dealing…' : 'Deal ten thousand hands'}
         </button>
         {auditMutation.isError && (
           <p className="text-xs qt-text-destructive">{extractErrorMessage(auditMutation.error)}</p>
@@ -781,8 +772,7 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
               mean {formatValue(audit.valueMean)}
             </p>
             {audit.outcomes.map((entry) => {
-              const missingBrief = reachableOutcomesMissingBrief(draft, audit.outcomes)
-              const outcome = draft.outcomes[entry.index]
+              const outcome = auditDraft.outcomes[entry.index]
               const label = outcome?.catchAll ? 'otherwise' : `row ${entry.index + 1}`
               return (
                 <div key={entry.index} className="space-y-0.5">

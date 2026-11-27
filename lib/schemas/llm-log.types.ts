@@ -58,6 +58,23 @@ export const IMAGE_SPEND_LOG_TYPES = ['IMAGE_GENERATION', 'WARDROBE_ITEM_IMAGE',
 /** An image-provider call's log type. */
 export type ImageSpendLogType = (typeof IMAGE_SPEND_LOG_TYPES)[number];
 
+/**
+ * The log types that are a conversation's own answer — a Salon turn and its
+ * tool round-trips, a console or help-chat reply, a Carina answer. Every other
+ * type is work Quilltap does on its own (memory, titles, summaries, the
+ * classifier, image prompts, wizards…). A connection profile's usage counters
+ * are split on exactly this line; read it only through {@link usageCategoryOf}.
+ */
+export const CHAT_USAGE_LOG_TYPES = ['CHAT_MESSAGE', 'TOOL_CONTINUATION'] as const satisfies readonly LLMLogType[];
+
+/** Which of a profile's two usage ledgers a call lands in. */
+export type UsageCategory = 'chat' | 'automatic';
+
+/** The usage category of a call, from its log type. */
+export function usageCategoryOf(type: LLMLogType): UsageCategory {
+  return (CHAT_USAGE_LOG_TYPES as readonly LLMLogType[]).includes(type) ? 'chat' : 'automatic';
+}
+
 // ============================================================================
 // LLM LOG MESSAGE SUMMARY
 // ============================================================================

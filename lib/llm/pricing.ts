@@ -33,6 +33,16 @@ export interface ModelPricing {
   promptCostPer1M: number
   /** Cost per 1M output/completion tokens (in USD) */
   completionCostPer1M: number
+  /**
+   * Cost per 1M input tokens served from the provider's prompt cache, when
+   * the source publishes it. Absent means unknown, not free.
+   */
+  cacheReadCostPer1M?: number | null
+  /**
+   * Cost per 1M input tokens written into the provider's prompt cache, when
+   * the source publishes it. Absent means unknown.
+   */
+  cacheWriteCostPer1M?: number | null
   /** Context window size */
   contextLength: number | null
   /** Whether this model supports vision/images */
@@ -82,16 +92,50 @@ export function getAverageCostPer1M(pricing: ModelPricing): number {
 }
 
 /**
- * Calculate estimated cost for a given number of tokens
+ * Calculate estimated cost for a given number of tokens.
+ *
+ * `promptTokens` is uncached input. Cache reads and writes are priced at the
+ * pricing's own cache rates; a rate the source does not publish falls back to
+ * the plain input rate (what those tokens would have cost uncached), so a
+ * cached token is never silently priced at zero.
  */
 export function estimateCost(
   pricing: ModelPricing,
   promptTokens: number,
-  completionTokens: number
+  completionTokens: number,
+  cache: { cacheReadTokens?: number; cacheWriteTokens?: number } = {}
 ): number {
-  const promptCost = (promptTokens / 1_000_000) * pricing.promptCostPer1M
-  const completionCost = (completionTokens / 1_000_000) * pricing.completionCostPer1M
-  return promptCost + completionCost
+  const perToken = (per1M: number) => per1M / 1_000_000
+  const readRate = pricing.cacheReadCostPer1M ?? pricing.promptCostPer1M
+  const writeRate = pricing.cacheWriteCostPer1M ?? pricing.promptCostPer1M
+  return (
+    promptTokens * perToken(pricing.promptCostPer1M) +
+    completionTokens * perToken(pricing.completionCostPer1M) +
+    (cache.cacheReadTokens ?? 0) * perToken(readRate) +
+    (cache.cacheWriteTokens ?? 0) * perToken(writeRate)
+  )
+}
+
+/**
+ * Parse an OpenRouter `pricing` object (USD per token, as strings) into
+ * per-1M rates. Reads both the REST spelling (`input_cache_read`) and the
+ * SDK's (`inputCacheRead`). A cache rate absent from the source is `null`.
+ */
+export function parseOpenRouterPricing(pricing: Record<string, unknown> | null | undefined): Pick<
+  ModelPricing,
+  'promptCostPer1M' | 'completionCostPer1M' | 'cacheReadCostPer1M' | 'cacheWriteCostPer1M'
+> {
+  const per1M = (value: unknown): number | null => {
+    if (value === undefined || value === null || value === '') return null
+    const parsed = parseFloat(String(value))
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed * 1_000_000 : null
+  }
+  return {
+    promptCostPer1M: per1M(pricing?.prompt) ?? 0,
+    completionCostPer1M: per1M(pricing?.completion) ?? 0,
+    cacheReadCostPer1M: per1M(pricing?.input_cache_read ?? pricing?.inputCacheRead),
+    cacheWriteCostPer1M: per1M(pricing?.input_cache_write ?? pricing?.inputCacheWrite),
+  }
 }
 
 /**

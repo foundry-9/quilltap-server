@@ -13,6 +13,7 @@ import {
   type BaseSelection,
 } from 'lexical';
 import { $isCodeNode, type CodeNode } from '@lexical/code';
+import { isMacPlatform } from '@/lib/utils/platform';
 
 /**
  * KeyboardPlugin - Handles keyboard behavior for the chat composer
@@ -75,9 +76,7 @@ export default function KeyboardPlugin({
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    const isMac =
-      typeof navigator !== 'undefined' &&
-      navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const isMac = isMacPlatform();
 
     const handleKeyEnter = (event: KeyboardEvent | null) => {
       if (event === null) {

@@ -223,14 +223,11 @@ Centralized state management hook for all chat settings operations. Handles data
 {
   settings: ChatSettings | null
   loading: boolean
-  error: string | null
   saving: boolean
-  success: boolean
   connectionProfiles: ConnectionProfile[]
   embeddingProfiles: EmbeddingProfile[]
   imageProfiles: ImageProfile[]
   loadingProfiles: boolean
-  fetchSettings: () => Promise<void>
   handleAvatarModeChange: (mode: AvatarDisplayMode) => Promise<void>
   handleAvatarStyleChange: (style: AvatarDisplayStyle) => Promise<void>
   handleCheapLLMUpdate: (updates: Partial<CheapLLMSettings>) => Promise<void>

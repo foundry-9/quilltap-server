@@ -13,6 +13,8 @@
 
 import { useMemo, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { SegmentedRadioGroup, segmentedButtonClass } from '@/components/ui/SegmentedRadioGroup'
+import { showConfirmation } from '@/lib/alert'
 import {
   IDENTIFIER_PATTERN,
   MAX_CHIP_LABEL_LENGTH,
@@ -34,6 +36,7 @@ import {
 } from '@/lib/pascal/dice-notation'
 import {
   findParameterReferences,
+  issuesAt,
   nextDraftId,
   numericParamNames,
   parseNumberText,
@@ -47,6 +50,8 @@ import {
 import type { InterventionFieldKey } from '@/lib/pascal/custom-tool.types'
 import { GateSection } from './GateSection'
 import { InterventionToggle, ToolFieldInterventionToggle } from './InterventionToggle'
+import { IssueLines } from './IssueLines'
+import { RawRefBadge } from './chip-parts'
 import { NumberOrParamField } from './NumberOrParamField'
 import { TriggerPhrasesField } from './TriggerPhrasesField'
 
@@ -73,22 +78,20 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
 
   const numericNames = numericParamNames(draft)
 
-  const fieldError = (predicate: (issue: DraftIssue) => boolean): string | null =>
-    issues.find((issue) => issue.severity === 'error' && predicate(issue))?.message ?? null
+  const fieldError = (where: (place: DraftIssue['where']) => boolean): string | null =>
+    issuesAt(issues, 'error', where)[0]?.message ?? null
 
-  const nameError = fieldError((i) => i.where.section === 'identity' && i.where.field === 'name')
-  const chipLabelError = fieldError((i) => i.where.section === 'identity' && i.where.field === 'chipLabel')
-  const chipLabelWarnings = issues
-    .filter(
-      (i) => i.severity === 'warning' && i.where.section === 'identity' && i.where.field === 'chipLabel'
-    )
-    .map((i) => i.message)
-  const descriptionError = fieldError((i) => i.where.section === 'identity' && i.where.field === 'description')
+  const nameError = fieldError((w) => w.section === 'identity' && w.field === 'name')
+  const chipLabelError = fieldError((w) => w.section === 'identity' && w.field === 'chipLabel')
+  const chipLabelWarnings = issuesAt(
+    issues,
+    'warning',
+    (w) => w.section === 'identity' && w.field === 'chipLabel'
+  ).map((i) => i.message)
+  const descriptionError = fieldError((w) => w.section === 'identity' && w.field === 'description')
   const llmError = (field: 'prompt' | 'errorMessage' | 'maxOutput') =>
-    fieldError((i) => i.where.section === 'llm' && i.where.field === field)
-  const llmWarnings = issues
-    .filter((i) => i.severity === 'warning' && i.where.section === 'llm')
-    .map((i) => i.message)
+    fieldError((w) => w.section === 'llm' && w.field === field)
+  const llmWarnings = issuesAt(issues, 'warning', (w) => w.section === 'llm').map((i) => i.message)
 
   const update = (partial: Partial<ToolDraft>) => onChange({ ...draft, ...partial })
 
@@ -161,12 +164,11 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
   }
 
   /** Deleting a referenced parameter breaks loudly, never rewrites (§4.2). */
-  const deleteParam = (param: DraftParameter) => {
+  const deleteParam = async (param: DraftParameter) => {
     const references = param.name ? findParameterReferences(draft, param.name) : []
     if (references.length > 0) {
       const listing = references.map((site) => `  • ${site}`).join('\n')
-       
-      const confirmed = window.confirm(
+      const confirmed = await showConfirmation(
         `"${param.name}" is referenced here:\n${listing}\n\n` +
           'Deleting it will NOT rewrite those references — each flips to an error for you to resolve. Delete anyway?'
       )
@@ -178,10 +180,10 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
   // -- Roll -----------------------------------------------------------------
 
   const parsedDice = parseDiceNotation(draft.rollDice.trim())
-  const diceError = fieldError((i) => i.where.section === 'roll' && i.where.field === 'dice')
-  const inventoryRollError = fieldError((i) => i.where.section === 'roll' && i.where.field === 'inventory')
+  const diceError = fieldError((w) => w.section === 'roll' && w.field === 'dice')
+  const inventoryRollError = fieldError((w) => w.section === 'roll' && w.field === 'inventory')
   const rollFieldError = (field: 'min' | 'max' | 'multiplier' | 'offset') =>
-    fieldError((i) => i.where.section === 'roll' && i.where.field === field)
+    fieldError((w) => w.section === 'roll' && w.field === field)
 
   const rangeReadout = useMemo(() => {
     const r = draft.rollRange
@@ -277,11 +279,7 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
                 'takes {{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}}, and {{llm}}. ' +
                 'Blank, and the title labels the chip.'}
           </p>
-          {chipLabelWarnings.map((message) => (
-            <p key={message} className="text-xs qt-text-secondary">
-              ⚠ {message}
-            </p>
-          ))}
+          <IssueLines warnings={chipLabelWarnings} />
         </div>
 
         <div>
@@ -440,7 +438,7 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
         {draft.parameters.map((param) => {
           const numeric = param.type === 'number' || param.type === 'integer'
           const paramError = (field: 'name' | 'default' | 'min' | 'max') =>
-            fieldError((i) => i.where.section === 'parameter' && i.where.id === param.id && i.where.field === field)
+            fieldError((w) => w.section === 'parameter' && w.id === param.id && w.field === field)
 
           return (
             <div key={param.id} className="qt-card p-3 space-y-2">
@@ -488,9 +486,10 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
                 <button
                   type="button"
                   className="qt-button qt-button-ghost qt-button-sm ml-auto"
-                  onClick={() => deleteParam(param)}
+                  onClick={() => void deleteParam(param)}
                   disabled={disabled}
                   title="Delete this parameter"
+                  aria-label="Delete this parameter"
                 >
                   <Icon name="trash" className="w-4 h-4" />
                 </button>
@@ -500,12 +499,9 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
                 <label className="flex items-center gap-2">
                   Default
                   {isStateRef(param.defaultValue) ? (
-                    <span
-                      className="qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1"
-                      title="This default draws from persistent state. Edit $state references in the raw JSON."
-                    >
+                    <RawRefBadge title="This default draws from persistent state. Edit $state references in the raw JSON.">
                       $state: {param.defaultValue.$state} → {String(param.defaultValue.fallback)}
-                    </span>
+                    </RawRefBadge>
                   ) : param.type === 'boolean' ? (
                     <input
                       type="checkbox"
@@ -580,21 +576,19 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
             The roll
             {fieldToggle('roll', 'Show the roll in the hold dialog')}
           </h2>
-          <div className="flex rounded overflow-hidden border" role="radiogroup" aria-label="Roll form">
-            {(['range', 'dice', 'inventory'] as const).map((form) => (
-              <button
-                key={form}
-                type="button"
-                role="radio"
-                aria-checked={draft.rollForm === form}
-                onClick={() => update({ rollForm: form })}
-                disabled={disabled}
-                className={`px-3 py-1 text-sm ${draft.rollForm === form ? 'qt-button-primary qt-button' : 'qt-button qt-button-ghost'}`}
-              >
-                {form === 'range' ? 'Range' : form === 'dice' ? 'Dice' : 'From an object'}
-              </button>
-            ))}
-          </div>
+          <SegmentedRadioGroup
+            ariaLabel="Roll form"
+            className="flex rounded overflow-hidden border"
+            options={[
+              { value: 'range', label: 'Range' },
+              { value: 'dice', label: 'Dice' },
+              { value: 'inventory', label: 'From an object' },
+            ]}
+            value={draft.rollForm}
+            onSelect={(rollForm) => update({ rollForm })}
+            disabled={disabled}
+            optionClassName={segmentedButtonClass('sm')}
+          />
         </div>
 
         {draft.rollForm === 'inventory' ? (
@@ -800,11 +794,7 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
               </p>
             </div>
 
-            {llmWarnings.map((message) => (
-              <p key={message} className="text-xs qt-text-secondary">
-                ⚠ {message}
-              </p>
-            ))}
+            <IssueLines warnings={llmWarnings} />
           </div>
         ) : (
           <p className="text-xs qt-text-secondary">

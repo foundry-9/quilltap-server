@@ -50,6 +50,8 @@ export const queryKeys = {
     chatLists: (id: string) => ['characters', id, 'chats'] as const,
     /** Generated pictures of every wardrobe item the character can reach. */
     wardrobeImages: (id: string) => ['characters', id, 'wardrobe-images'] as const,
+    /** What a delete would take with it (`?action=cascade-preview`), read by the delete dialog. */
+    cascadePreview: (id: string) => ['characters', id, 'cascade-preview'] as const,
   },
   chats: {
     all: ['chats'] as const,
@@ -63,6 +65,10 @@ export const queryKeys = {
     detail: (id: string) => ['chats', 'detail', id] as const,
     state: (id: string) => ['chats', id, 'state'] as const,
     photoAlbums: (id: string) => ['chats', id, 'photo-albums'] as const,
+    /** Document stores this chat can reach (`?action=accessible-stores`); `all` = "Look everywhere". */
+    accessibleStores: (id: string, all: boolean) => ['chats', id, 'accessible-stores', all] as const,
+    /** Documents lately open, this chat's first (`?action=recent-documents`). */
+    recentDocuments: (id: string) => ['chats', id, 'recent-documents'] as const,
     groupStores: (id: string) => ['chats', id, 'group-stores'] as const,
     background: (id: string) => ['chats', id, 'background'] as const,
     /**
@@ -92,6 +98,11 @@ export const queryKeys = {
      * since a new message is what can add one.
      */
     absentMentions: (id: string) => ['chats', id, 'absent-mentions'] as const,
+    /**
+     * The chat's token and cost totals, from `?action=cost`. Rides the `chats`
+     * realtime topic: a new message is what moves them.
+     */
+    cost: (id: string) => ['chats', id, 'cost'] as const,
     /**
      * Prefix of every `atlasMentions(...)` key. Kept outside `['chats', id]`
      * so the `atlas` topic can refresh every chat's chips with one prefix.
@@ -155,6 +166,12 @@ export const queryKeys = {
     /** One scenario, body included, by ref (`?action=read`). */
     ref: (mountPointId: string, path: string) =>
       ['scenarios', 'ref', mountPointId, path] as const,
+    /**
+     * A scenario collection read by its API base path, for a scope with no
+     * key of its own above (a group's store, read by its Scenarios card).
+     */
+    store: (basePath: string, includeArchived = false) =>
+      ['scenarios', 'store', basePath, { includeArchived }] as const,
   },
   groups: {
     all: ['groups'] as const,
@@ -222,6 +239,8 @@ export const queryKeys = {
     /** The per-model options schema + LoRA support flag the profile editor renders from. */
     optionsSchema: (provider: string, model: string) =>
       ['image-profiles', 'options-schema', provider, model] as const,
+    /** The image providers the profile editor offers (`?action=list-providers`). */
+    providers: ['image-profiles', 'providers'] as const,
   },
   providers: {
     all: ['providers'] as const,
@@ -261,6 +280,8 @@ export const queryKeys = {
     conversationSummaryRegenerate: ['system', 'conversation-summary-regenerate'] as const,
     dataDir: ['system', 'data-dir'] as const,
     unlock: ['system', 'unlock'] as const,
+    /** The startup gate and loading screen's poll (`/api/v1/system/startup-status`). */
+    startupStatus: ['system', 'startup-status'] as const,
     /** Whether this install is user-managed or hosted (`/api/v1/system/deployment`). */
     deployment: ['system', 'deployment'] as const,
   },
@@ -348,6 +369,11 @@ export const queryKeys = {
   roleplayTemplates: {
     all: ['roleplay-templates'] as const,
   },
+  /** System-prompt templates (`/api/v1/prompt-templates`): built-ins and the user's own. */
+  promptTemplates: {
+    all: ['prompt-templates'] as const,
+    list: () => ['prompt-templates', 'list'] as const,
+  },
   images: {
     all: ['images'] as const,
     list: (filters?: Filters) => ['images', 'list', filters ?? {}] as const,
@@ -359,6 +385,8 @@ export const queryKeys = {
     all: ['themes'] as const,
     registrySources: ['themes', 'registry-sources'] as const,
     registry: ['themes', 'registry'] as const,
+    /** One theme's compiled CSS, choices, icons and images (`/api/v1/themes/[id]?action=tokens`). */
+    tokens: (themeId: string) => ['themes', 'tokens', themeId] as const,
   },
   /** Theme drafts (`Themes/<id>/` in Quilltap General), the Calliope editor's work. */
   themeDrafts: {
@@ -387,13 +415,13 @@ export const queryKeys = {
   tags: {
     all: ['tags'] as const,
     list: (filters?: Filters) => ['tags', 'list', filters ?? {}] as const,
+    /** One entity's tags (`<entity route>?action=get-tags`), keyed by that route. */
+    ofEntity: (entityPath: string) => ['tags', 'entity', entityPath] as const,
   },
   plugins: {
     all: ['plugins'] as const,
     /** Every loaded plugin with the registry's stats (`GET /api/v1/plugins`). */
     list: () => ['plugins', 'list'] as const,
-    /** The site-installed plugins (`?filter=installed`). */
-    installed: () => ['plugins', 'installed'] as const,
     /** Newer versions on npm (`?action=check-upgrades`). */
     upgrades: () => ['plugins', 'upgrades'] as const,
     config: (pluginName: string) => ['plugins', pluginName, 'config'] as const,
@@ -403,6 +431,14 @@ export const queryKeys = {
     list: (filters?: Filters) => ['photos', 'list', filters ?? {}] as const,
     /** The albums the `/photos` selector offers. */
     albums: () => ['photos', 'albums'] as const,
+    /** The stores an item's picture may be saved to, keyed by the item's `save-targets` URL. */
+    saveTargets: (url: string) => ['photos', 'save-targets', url] as const,
+  },
+  /** The chat-less document surface (`/api/v1/documents`), as the document picker reads it. */
+  documents: {
+    all: ['documents'] as const,
+    accessibleStores: () => ['documents', 'accessible-stores'] as const,
+    recentDocuments: () => ['documents', 'recent-documents'] as const,
   },
   files: {
     all: ['files'] as const,
@@ -432,6 +468,13 @@ export const queryKeys = {
     folderLists: ['wardrobe', 'folders'] as const,
     /** One wardrobe container's folder tree (`?action=folders`), by `wardrobeTierKey`. */
     folders: (tierKey: string) => ['wardrobe', 'folders', tierKey] as const,
+    /**
+     * One wardrobe container's own `Wardrobe/instructions.md`
+     * (`?action=instructions`), by `encodeWardrobeContainer`. Deliberately NOT
+     * under the `wardrobe.all` prefix: the text sits in an open editor, and an
+     * item-list invalidation must not re-read it under the author's hands.
+     */
+    instructions: (containerKey: string) => ['wardrobe-instructions', containerKey] as const,
     /** The vision profiles Import from image may read a photograph with (GET analyze-image). */
     visionProfiles: ['wardrobe', 'vision-profiles'] as const,
     /** The usual model and the web's reach for Import from instructions (GET design-defaults). */
@@ -441,6 +484,11 @@ export const queryKeys = {
      * `wardrobe` so `wardrobe.all` invalidation after an equip refreshes it.
      */
     outfit: (chatId: string) => ['wardrobe', 'outfit', chatId] as const,
+    /**
+     * Each character's equipped outfit in one chat with item titles resolved
+     * (`?action=outfit-summary`) — what Merge In offers as "same as last conversation".
+     */
+    outfitSummary: (chatId: string) => ['wardrobe', 'outfit-summary', chatId] as const,
     /** Prefix of every history read for a chat — the `chats` realtime topic refetches it. */
     histories: (chatId: string) => ['wardrobe', 'history', chatId] as const,
     /** One character's outfit timeline in a chat (`?action=wardrobe-history`). */
@@ -516,6 +564,15 @@ export const queryKeys = {
     byCharacter: (chatId: string, characterId: string) =>
       ['mailbox', chatId, characterId] as const,
   },
+  /** The help library (`/api/v1/help-docs`): the index, one document, a text search. */
+  helpDocs: {
+    all: ['help-docs'] as const,
+    index: ['help-docs', 'index'] as const,
+    /** The help-chat count the Guide tab shows (`?action=chat-count`). */
+    chatCount: ['help-docs', 'chat-count'] as const,
+    doc: (slug: string) => ['help-docs', 'doc', slug] as const,
+    search: (query: string) => ['help-docs', 'search', query] as const,
+  },
   helpChat: {
     all: ['help-chat'] as const,
     entity: (apiUrl: string) => ['help-chat', 'entity', apiUrl] as const,
@@ -524,7 +581,6 @@ export const queryKeys = {
   },
   brahmaConsole: {
     all: ['brahma-console'] as const,
-    entity: (apiUrl: string) => ['brahma-console', 'entity', apiUrl] as const,
     pastChats: ['brahma-console', 'past-chats'] as const,
   },
   /** Calliope's conversations about a theme draft (`/api/v1/calliope`). */
@@ -541,6 +597,8 @@ export const queryKeys = {
   uiSearch: {
     all: ['ui-search'] as const,
     results: (query: string, types: readonly string[]) => ['ui-search', query, [...types].sort()] as const,
+    /** The toolbar's inline dropdown: one page of every type (`limit=20`). */
+    inline: (query: string) => ['ui-search', 'inline', query] as const,
   },
   home: {
     /** Home dashboard payload for the workspace home tab. */

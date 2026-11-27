@@ -4,6 +4,7 @@ import { useCallback, useMemo, useId } from 'react'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { useChatSettingsMutation } from '@/hooks/useChatSettingsMutation'
 import { SettingsCard } from '@/components/ui/SettingsCard'
+import { SettingsToggleRow } from '@/components/settings/chat-settings/components/SettingsToggleRow'
 import {
   DEFAULT_CORE_WHISPER_SETTINGS,
   type CoreWhisperSettings,
@@ -52,23 +53,14 @@ export function CoreWhisperSection() {
         </p>
 
         {/* Master switch */}
-        <div>
-          <label className="qt-settings-toggle-row">
-            <input
-              type="checkbox"
-              checked={current.enabled !== false}
-              onChange={(e) => applyPatch({ enabled: e.target.checked })}
-              disabled={saving}
-              className="qt-checkbox mt-1"
-            />
-            <div className="flex-1">
-              <div className="qt-settings-section-heading">Enable Aurora&apos;s Core whisper</div>
-              <div className="qt-text-small mt-1">
-                The master switch. When off, no Core whispers fire anywhere &mdash; regardless of per-chat or per-character overrides.
-              </div>
-            </div>
-          </label>
-        </div>
+        <SettingsToggleRow
+          checked={current.enabled !== false}
+          disabled={saving}
+          onChange={(value) => applyPatch({ enabled: value })}
+          heading={<>Enable Aurora&apos;s Core whisper</>}
+        >
+          The master switch. When off, no Core whispers fire anywhere &mdash; regardless of per-chat or per-character overrides.
+        </SettingsToggleRow>
 
         {/* Interval */}
         <div className="qt-settings-field-group">
@@ -140,23 +132,14 @@ export function CoreWhisperSection() {
         </div>
 
         {/* Fire on context transition */}
-        <div>
-          <label className="qt-settings-toggle-row">
-            <input
-              type="checkbox"
-              checked={current.fireOnContextTransition !== false}
-              onChange={(e) => applyPatch({ fireOnContextTransition: e.target.checked })}
-              disabled={saving}
-              className="qt-checkbox mt-1"
-            />
-            <div className="flex-1">
-              <div className="qt-settings-section-heading">Offer the packet after major context transitions</div>
-              <div className="qt-text-small mt-1">
-                When the Librarian folds the recent record into a rolling summary, Aurora offers the next-to-speak character their <code className="qt-bg-muted px-1 rounded">Core/</code> packet on the way back in. After memory has been folded, identity is the proper grounding.
-              </div>
-            </div>
-          </label>
-        </div>
+        <SettingsToggleRow
+          checked={current.fireOnContextTransition !== false}
+          disabled={saving}
+          onChange={(value) => applyPatch({ fireOnContextTransition: value })}
+          heading="Offer the packet after major context transitions"
+        >
+          When the Librarian folds the recent record into a rolling summary, Aurora offers the next-to-speak character their <code className="qt-bg-muted px-1 rounded">Core/</code> packet on the way back in. After memory has been folded, identity is the proper grounding.
+        </SettingsToggleRow>
 
         {/* Info box */}
         <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50 qt-text-small space-y-1">

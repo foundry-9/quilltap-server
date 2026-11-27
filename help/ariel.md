@@ -62,7 +62,7 @@ The terminal pane offers two distinct exit ceremonies, located at the right of i
 
 The pane state — whether it is open, which session it shows, where you set the dividers — persists with the chat record, so reloading the page returns you to precisely the arrangement you left.
 
-**Keyboard shortcut:** ⌘⇧T (or Ctrl+Shift+T) toggles Terminal Mode. Escape exits focus mode back to a split.
+**Keyboard shortcut:** ⌘⇧T (or Ctrl+Shift+T) toggles Terminal Mode. Escape exits focus mode back to a split. With several chats open as tabs, the shortcut answers only to the chat you are looking at (or its own terminal and document tabs) — the others are left undisturbed in their drawers — and an Escape pressed inside a dialog closes the dialog alone, leaving your maximized pane quite where it was.
 
 **Leaving the terminal by keyboard:** the shell keeps the Tab key for itself — it has completions to attend to — so press **F6** to step out of the terminal to the next control on the page, or **Shift+F6** to step back to the one before it. Ariel will not detain you.
 

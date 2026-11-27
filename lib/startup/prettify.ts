@@ -231,6 +231,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'retire-prefill-on-thinking-profiles-v1': 'Excusing the doorman where the guest prefers to announce themselves',
   'retire-prefill-on-gateway-claude-profiles-v1': 'Excusing the doorman wherever Claude is the guest, by whichever door',
   'add-character-memory-edit-flag-v1': 'Lending characters a pencil for the margins of their own Commonplace Book',
+  'split-profile-usage-counters-v1': 'Opening two ledgers for every connection — one for conversation, one for the errands run behind the curtain…',
   'add-profile-fallback-fields-v1': 'Teaching each connection the name of its understudy',
   'recompute-chat-last-message-at-v1': 'Re-reading each conversation to find when a soul last actually spoke in it…',
   'collapse-duplicate-folders-v1': 'Sweeping up the duplicate folders that crept into the filing cabinet…',

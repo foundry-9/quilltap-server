@@ -468,7 +468,9 @@ export async function generateField(
   userId?: string,
   characterId?: string,
   profileProvider?: string,
-  profileParameters?: Record<string, unknown>
+  profileParameters?: Record<string, unknown>,
+  /** The connection profile serving the call, for usage accounting. */
+  profileId?: string
 ): Promise<string> {
   const messages = [
     { role: 'system' as const, content: contextPrompt },
@@ -500,14 +502,14 @@ export async function generateField(
     contentLength: response?.content?.length ?? 0,
   });
 
-  const content = requireCompleteWizardAnswer(response, 'field');
-
-  // Log the wizard LLM call if userId is available (fire and forget)
+  // Log the wizard LLM call if userId is available (fire and forget) — before
+  // the completeness check, so a truncated answer is recorded and counted too.
   if (userId && profileProvider) {
     logLLMCall({
       userId,
       type: 'CHARACTER_WIZARD',
       characterId: characterId || undefined,
+      connectionProfileId: profileId ?? null,
       provider: profileProvider,
       modelName,
       request: {
@@ -519,11 +521,12 @@ export async function generateField(
         maxTokens: budget,
       },
       response: {
-        content,
+        content: response?.content ?? '',
         error: undefined,
-        finishReason: response.finishReason ?? null,
+        finishReason: response?.finishReason ?? null,
       },
-      usage: response.usage,
+      usage: response?.usage,
+      cacheUsage: response?.cacheUsage,
       durationMs,
     }).catch(err => {
       logger.warn('Failed to log character wizard LLM call', {
@@ -532,6 +535,7 @@ export async function generateField(
     });
   }
 
+  const content = requireCompleteWizardAnswer(response, 'field');
   return content.trim();
 }
 
@@ -612,13 +616,14 @@ async function runGenerateImageDescription(
 
   const durationMs = Date.now() - startTime;
 
-  const description = requireCompleteWizardAnswer(response, 'image description');
-  // Log the vision LLM call if userId is available (fire and forget)
+  // Log the vision LLM call if userId is available (fire and forget) — before
+  // the completeness check, so a truncated answer is recorded and counted too.
   if (userId) {
     logLLMCall({
       userId,
       type: 'CHARACTER_WIZARD',
       characterId: characterId || undefined,
+      connectionProfileId: visionProfile.id,
       provider: visionProfile.provider,
       modelName: visionProfile.modelName,
       request: {
@@ -634,11 +639,12 @@ async function runGenerateImageDescription(
         maxTokens: wizardCompletionBudget(1000),
       },
       response: {
-        content: description,
+        content: response?.content ?? '',
         error: undefined,
-        finishReason: response.finishReason ?? null,
+        finishReason: response?.finishReason ?? null,
       },
-      usage: response.usage,
+      usage: response?.usage,
+      cacheUsage: response?.cacheUsage,
       durationMs,
     }).catch(err => {
       logger.warn('Failed to log character wizard image description LLM call', {
@@ -647,6 +653,7 @@ async function runGenerateImageDescription(
     });
   }
 
+  const description = requireCompleteWizardAnswer(response, 'image description');
   return description.trim();
 }
 
@@ -661,7 +668,9 @@ export async function generatePhysicalDescriptions(
   userId?: string,
   characterId?: string,
   profileProvider?: string,
-  profileParameters?: Record<string, unknown>
+  profileParameters?: Record<string, unknown>,
+  /** The connection profile serving the call, for usage accounting. */
+  profileId?: string
 ): Promise<GeneratedPhysicalDescription> {
   const results: Partial<GeneratedPhysicalDescription> = {};
 
@@ -677,7 +686,8 @@ export async function generatePhysicalDescriptions(
       userId,
       characterId,
       profileProvider,
-      profileParameters
+      profileParameters,
+      profileId
     );
 
     switch (level) {
@@ -716,7 +726,9 @@ export async function generateWardrobeItems(
   userId?: string,
   characterId?: string,
   profileProvider?: string,
-  profileParameters?: Record<string, unknown>
+  profileParameters?: Record<string, unknown>,
+  /** The connection profile serving the call, for usage accounting. */
+  profileId?: string
 ): Promise<GeneratedWardrobeItem[]> {
   const content = await generateField(
     provider,
@@ -728,7 +740,8 @@ export async function generateWardrobeItems(
     userId,
     characterId,
     profileProvider,
-    profileParameters
+    profileParameters,
+    profileId
   );
 
   const items = parseLLMJson<GeneratedWardrobeItem[]>(content);
@@ -746,7 +759,9 @@ export async function generateProperties(
   userId?: string,
   characterId?: string,
   profileProvider?: string,
-  profileParameters?: Record<string, unknown>
+  profileParameters?: Record<string, unknown>,
+  /** The connection profile serving the call, for usage accounting. */
+  profileId?: string
 ): Promise<GeneratedProperties> {
   const content = await generateField(
     provider,
@@ -758,7 +773,8 @@ export async function generateProperties(
     userId,
     characterId,
     profileProvider,
-    profileParameters
+    profileParameters,
+    profileId
   );
 
   return parseGeneratedProperties(content);
@@ -938,7 +954,8 @@ export async function runCharacterWizard(
         userId,
         request.characterId,
         primaryProfile.provider,
-        profileParams(primaryProfile)
+        profileParams(primaryProfile),
+        primaryProfile.id
       );
       generated.name = generatedName;
       effectiveCharacterName = generatedName;
@@ -976,7 +993,8 @@ export async function runCharacterWizard(
           userId,
           request.characterId,
           primaryProfile.provider,
-          profileParams(primaryProfile)
+          profileParams(primaryProfile),
+          primaryProfile.id
         );
       } else if (field === 'wardrobeItems') {
         generated.wardrobeItems = await generateWardrobeItems(
@@ -987,7 +1005,8 @@ export async function runCharacterWizard(
           userId,
           request.characterId,
           primaryProfile.provider,
-          profileParams(primaryProfile)
+          profileParams(primaryProfile),
+          primaryProfile.id
         );
       } else if (field === 'properties') {
         generated.properties = await generateProperties(
@@ -998,7 +1017,8 @@ export async function runCharacterWizard(
           userId,
           request.characterId,
           primaryProfile.provider,
-          profileParams(primaryProfile)
+          profileParams(primaryProfile),
+          primaryProfile.id
         );
       } else {
         const fieldPrompt = wizardFieldPrompt(field, characterKind);
@@ -1013,7 +1033,8 @@ export async function runCharacterWizard(
           userId,
           request.characterId,
           primaryProfile.provider,
-          profileParams(primaryProfile)
+          profileParams(primaryProfile),
+          primaryProfile.id
         );
         if (field === 'scenarios') {
           try {
@@ -1203,7 +1224,8 @@ export async function runCharacterWizardStreaming(
           userId,
           request.characterId,
           primaryProfile.provider,
-          profileParams(primaryProfile)
+          profileParams(primaryProfile),
+          primaryProfile.id
         );
         generated.name = generatedName;
         effectiveCharacterName = generatedName;
@@ -1244,7 +1266,8 @@ export async function runCharacterWizardStreaming(
             userId,
             request.characterId,
             primaryProfile.provider,
-            profileParams(primaryProfile)
+            profileParams(primaryProfile),
+            primaryProfile.id
           );
           generated.physicalDescription = physDesc;
           onProgress({ type: 'field_complete', field, snippet: getSnippet(physDesc) });
@@ -1257,7 +1280,8 @@ export async function runCharacterWizardStreaming(
             userId,
             request.characterId,
             primaryProfile.provider,
-            profileParams(primaryProfile)
+            profileParams(primaryProfile),
+            primaryProfile.id
           );
           generated.wardrobeItems = items;
           onProgress({ type: 'field_complete', field, snippet: `${items.length} wardrobe item(s) generated` });
@@ -1270,7 +1294,8 @@ export async function runCharacterWizardStreaming(
             userId,
             request.characterId,
             primaryProfile.provider,
-            profileParams(primaryProfile)
+            profileParams(primaryProfile),
+            primaryProfile.id
           );
           generated.properties = props;
           onProgress({
@@ -1291,7 +1316,8 @@ export async function runCharacterWizardStreaming(
             userId,
             request.characterId,
             primaryProfile.provider,
-            profileParams(primaryProfile)
+            profileParams(primaryProfile),
+            primaryProfile.id
           );
           let fieldValue: unknown;
           if (field === 'scenarios') {

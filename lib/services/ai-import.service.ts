@@ -329,6 +329,8 @@ async function callLLM(
     what: string;
     userId?: string;
     profileProvider?: string;
+    /** The connection profile serving the call, for usage accounting. */
+    profileId?: string;
     profileParameters?: Record<string, unknown>;
   }
 ): Promise<string> {
@@ -364,21 +366,13 @@ async function callLLM(
     durationMs,
   });
 
-  if (isTruncatedFinishReason(finishReason)) {
-    throw new Error(
-      `The model ran out of room before finishing the ${options.what} (finish reason: ${finishReason})`
-    );
-  }
-
-  if (!response?.content) {
-    throw new Error(finishReason ? `No response from model (finish reason: ${finishReason})` : 'No response from model');
-  }
-
-  // Log the LLM call (fire and forget)
+  // Log the LLM call (fire and forget) — before the checks below, so a
+  // truncated or empty answer is still recorded and its tokens counted.
   if (options.userId && options.profileProvider) {
     logLLMCall({
       userId: options.userId,
       type: 'AI_IMPORT',
+      connectionProfileId: options.profileId ?? null,
       provider: options.profileProvider,
       modelName,
       request: {
@@ -390,17 +384,28 @@ async function callLLM(
         maxTokens,
       },
       response: {
-        content: response.content.substring(0, 500),
+        content: (response?.content ?? '').substring(0, 500),
         error: undefined,
         finishReason,
       },
-      usage: response.usage,
+      usage: response?.usage,
+      cacheUsage: response?.cacheUsage,
       durationMs,
     }).catch(err => {
       logger.warn('[AIImport] Failed to log LLM call', {
         error: err instanceof Error ? err.message : String(err),
       });
     });
+  }
+
+  if (isTruncatedFinishReason(finishReason)) {
+    throw new Error(
+      `The model ran out of room before finishing the ${options.what} (finish reason: ${finishReason})`
+    );
+  }
+
+  if (!response?.content) {
+    throw new Error(finishReason ? `No response from model (finish reason: ${finishReason})` : 'No response from model');
   }
 
   return response.content.trim();
@@ -948,6 +953,7 @@ export async function runAIImportStreaming(
     const llmOpts = {
       userId,
       profileProvider: profile.provider,
+      profileId: profile.id,
       profileParameters: profileParams(profile),
     };
 

@@ -7,7 +7,7 @@
  * and edit views' Details tabs: roleplay (a person inside a story, the
  * default) or assistant (a character whose job is to do work for you).
  * Presentational: the owning view persists the value (vault
- * `properties.json`) and passes back `saving`.
+ * `properties.json`); the page's save status chip reports the write.
  *
  * The radio group's name and the hint's id come from `useId`: the workspace
  * keeps the view and edit tabs mounted side by side, and two groups sharing
@@ -19,7 +19,6 @@ import type { CharacterKind } from '@/lib/characters/kind'
 
 export interface CharacterKindPickerProps {
   kind: CharacterKind
-  saving: boolean
   disabled: boolean
   onChange: (kind: CharacterKind) => void | Promise<void>
 }
@@ -37,16 +36,14 @@ const KIND_OPTIONS: ReadonlyArray<{ value: CharacterKind; label: string; hint: s
   },
 ]
 
-export function CharacterKindPicker({ kind, saving, disabled, onChange }: CharacterKindPickerProps) {
-  const inert = saving || disabled
+export function CharacterKindPicker({ kind, disabled, onChange }: CharacterKindPickerProps) {
   const groupName = useId()
   const hintId = `${groupName}-hint`
   return (
     <div className="qt-card" data-testid="character-kind">
-      <fieldset disabled={inert} aria-describedby={hintId}>
+      <fieldset disabled={disabled} aria-describedby={hintId}>
         <legend className="qt-text-label flex items-center gap-3">
           Kind of character
-          {saving && <span className="h-4 w-4 animate-spin rounded-full qt-spinner shrink-0" />}
         </legend>
         <p id={hintId} className="qt-text-small qt-text-secondary mt-0.5 mb-2">
           Whether this character is a player in the drama or a member of the
@@ -56,7 +53,7 @@ export function CharacterKindPicker({ kind, saving, disabled, onChange }: Charac
           {KIND_OPTIONS.map((option) => (
             <label
               key={option.value}
-              className={`flex items-center gap-2 text-sm ${inert ? 'cursor-not-allowed qt-text-muted' : 'cursor-pointer'}`}
+              className={`flex items-center gap-2 text-sm ${disabled ? 'cursor-not-allowed qt-text-muted' : 'cursor-pointer'}`}
             >
               <input
                 type="radio"
@@ -65,7 +62,7 @@ export function CharacterKindPicker({ kind, saving, disabled, onChange }: Charac
                 value={option.value}
                 checked={kind === option.value}
                 onChange={() => onChange(option.value)}
-                disabled={inert}
+                disabled={disabled}
               />
               <span>
                 {option.label}

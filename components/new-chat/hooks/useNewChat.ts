@@ -26,6 +26,7 @@ import { queryKeys } from '@/lib/query/keys'
 import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { useProjectsQuery } from '@/lib/hooks/use-projects'
 import { useConnectionProfilesQuery, useImageProfilesQuery, useRoleplayTemplatesQuery } from '@/lib/hooks/use-profiles'
+import { orderProfilesByChatUse, resolveDefaultConnectionProfileId } from '@/lib/llm/profile-usage'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { useRealtimeTopic } from '@/hooks/useRealtime'
 import type {
@@ -234,13 +235,19 @@ function initialOverridesFrom(options: UseNewChatOptions): NewChatOverrides {
   return overrides
 }
 
-function seat(character: Character, controlledBy: 'llm' | 'user', profiles: ConnectionProfile[]): SelectedCharacter {
+/**
+ * A character's seat as it first enters the cast: an LLM seat takes the
+ * character's own connection profile (else the most-used one) and their
+ * default system prompt; the operator's chair takes neither.
+ */
+export function seat(character: Character, controlledBy: 'llm' | 'user', profiles: ConnectionProfile[]): SelectedCharacter {
   if (controlledBy === 'user') {
     return { character, connectionProfileId: '', selectedSystemPromptId: null, controlledBy }
   }
   return {
     character,
-    connectionProfileId: character.defaultConnectionProfileId || profiles[0]?.id || '',
+    // The shared rule: a deleted character default is skipped (#246)
+    connectionProfileId: resolveDefaultConnectionProfileId(character, profiles) || profiles[0]?.id || '',
     selectedSystemPromptId: resolveDefaultSystemPromptId(character) ?? null,
     controlledBy,
   }
@@ -309,7 +316,8 @@ export function useNewChat(options: UseNewChatOptions = {}): UseNewChatReturn {
   // --- Reference data ------------------------------------------------------
 
   const charactersQuery = useCharactersList<Character>()
-  const profilesQuery = useConnectionProfilesQuery<ConnectionProfile>()
+  // Most used for chat first (lib/llm/profile-usage.ts).
+  const profilesQuery = useConnectionProfilesQuery<ConnectionProfile>({ select: orderProfilesByChatUse })
   const imageProfilesQuery = useImageProfilesQuery<ImageProfile>()
   const projectsQuery = useProjectsQuery<Project>()
   const templatesQuery = useRoleplayTemplatesQuery<{ id: string; name: string; description?: string | null; isBuiltIn?: boolean }>()

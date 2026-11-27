@@ -274,11 +274,7 @@ export function WardrobeBrowser({
                   role="tab"
                   aria-selected={kindFilter === k}
                   onClick={() => setKindFilter(k)}
-                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                    kindFilter === k
-                      ? 'qt-bg-default qt-text shadow-sm'
-                      : 'qt-text-secondary hover:qt-text'
-                  }`}
+                  className={`qt-segmented-item px-3 py-1 rounded text-xs font-medium transition-colors ${kindFilter === k ? 'qt-segmented-item-active' : ''}`}
                 >
                   {k === 'items' ? 'Items' : 'Outfits'}
                 </button>

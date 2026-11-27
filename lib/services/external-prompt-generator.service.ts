@@ -216,6 +216,7 @@ export async function generateExternalPrompt(
       userId,
       type: 'EXTERNAL_PROMPT',
       characterId,
+      connectionProfileId: profile.id,
       provider: profile.provider,
       modelName: profile.modelName,
       request: {
@@ -231,6 +232,7 @@ export async function generateExternalPrompt(
         error: undefined,
       },
       usage: response.usage,
+      cacheUsage: response.cacheUsage,
       durationMs,
     }).catch(err => {
       log.warn('Failed to log external prompt LLM call', {

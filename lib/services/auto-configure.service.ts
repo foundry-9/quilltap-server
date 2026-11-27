@@ -318,6 +318,7 @@ async function cleanupWithCheapLLM(
     },
     response: { content: cleanupResponse.content },
     usage: cleanupResponse.usage,
+    cacheUsage: cleanupResponse.cacheUsage,
     durationMs: cleanupDurationMs,
   }).catch(err => {
     logger.warn('[Auto-Configure] Failed to log cheap LLM cleanup call', {
@@ -362,6 +363,7 @@ async function analyzeWithProfile(
     },
     response: { content: response.content },
     usage: response.usage,
+    cacheUsage: response.cacheUsage,
     durationMs,
   }).catch(err => {
     logger.warn('[Auto-Configure] Failed to log LLM call', {

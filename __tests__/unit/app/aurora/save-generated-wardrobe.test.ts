@@ -11,6 +11,9 @@
 
 import { saveGeneratedWardrobeItems } from '@/app/aurora/shared/save-generated-wardrobe'
 import type { GeneratedWardrobeItem } from '@/components/characters/ai-wizard'
+import { showSuccessToast } from '@/lib/toast'
+
+jest.mock('@/lib/toast', () => ({ showSuccessToast: jest.fn() }))
 
 const CHARACTER_ID = 'char-1'
 
@@ -49,6 +52,20 @@ describe('saveGeneratedWardrobeItems', () => {
 
   afterEach(() => {
     jest.restoreAllMocks()
+  })
+
+  it('toasts what it made, outfits counted, and stays quiet when nothing was saved', async () => {
+    mockApi()
+    await saveGeneratedWardrobeItems(CHARACTER_ID, [
+      item({ title: 'Shirt' }),
+      item({ title: 'Suit', components: ['Shirt'] }),
+    ])
+    expect(showSuccessToast).toHaveBeenCalledWith('2 wardrobe items created (including 1 outfit)')
+
+    ;(showSuccessToast as jest.Mock).mockClear()
+    ;(global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 500, json: async () => ({}) })
+    await saveGeneratedWardrobeItems(CHARACTER_ID, [item({ title: 'Hat' })])
+    expect(showSuccessToast).not.toHaveBeenCalled()
   })
 
   it('creates leaves before composites and resolves the components to minted ids', async () => {

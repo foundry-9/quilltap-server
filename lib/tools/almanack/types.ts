@@ -8,6 +8,9 @@
  * @module lib/tools/almanack/types
  */
 
+import type { UsageTally } from '@/lib/llm/profile-usage';
+
+
 // ============================================================================
 // Phase 1 — Taking the measure of the premises
 // ============================================================================
@@ -528,12 +531,9 @@ export interface ProfileLifetimeRow {
   name: string;
   provider: string;
   modelName: string;
-  totalTokens: number;
-  totalPromptTokens: number;
-  totalCompletionTokens: number;
-  messageCount: number;
-  /** `updatedAt` — the closest thing to a last-used stamp the table carries. */
-  lastTouchedAt: string | null;
+  /** The profile's two usage ledgers (`lib/llm/profile-usage.ts`). */
+  chat: UsageTally;
+  automatic: UsageTally;
 }
 
 export interface ProfileWindowRow {

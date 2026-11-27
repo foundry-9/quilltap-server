@@ -13,13 +13,15 @@
  * @module app/prospero/[id]/hooks/useProjectScenarios
  */
 
+import { useCallback } from 'react'
 import { useScenarioMutator } from '@/components/scenarios/use-scenario-mutator'
-import type { Scenario, ScenarioMutator } from '@/components/scenarios/types'
-
-/** Re-exported under the historical names to keep external call sites working. */
-export type ProjectScenario = Scenario
-export type UseProjectScenariosReturn = ScenarioMutator
+import { queryKeys } from '@/lib/query/keys'
+import type { ScenarioMutator } from '@/components/scenarios/types'
 
 export function useProjectScenarios(projectId: string): ScenarioMutator {
-  return useScenarioMutator(`/api/v1/projects/${projectId}/scenarios`)
+  const listKey = useCallback(
+    (includeArchived: boolean) => queryKeys.scenarios.project(projectId, includeArchived),
+    [projectId],
+  )
+  return useScenarioMutator(`/api/v1/projects/${projectId}/scenarios`, listKey)
 }

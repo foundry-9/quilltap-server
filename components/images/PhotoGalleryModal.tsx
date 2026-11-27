@@ -23,6 +23,11 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
 import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
+import { apiErrorMessage } from '@/lib/query/fetcher'
+import {
+  toGalleryImage,
+  useCharacterPhotosQuery,
+} from '@/components/images/embedded-gallery/hooks/useCharacterPhotosQuery'
 import { downloadGalleryEntry } from '@/lib/download-utils'
 import { useChatGallery } from '@/app/salon/[id]/hooks/useChatGallery'
 import type { ChatGalleryEntry, ChatGallerySource } from '@/lib/photos/chat-gallery'
@@ -113,8 +118,6 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
   const characterId = mode === 'character' ? props.characterId : undefined
   const userCharacterId = mode === 'user-character' ? props.userCharacterId : undefined
 
-  const [albumImages, setAlbumImages] = useState<GalleryImage[]>([])
-  const [albumLoading, setAlbumLoading] = useState(true)
   const [thumbnailSizeIndex, setThumbnailSizeIndex] = useState(DEFAULT_THUMBNAIL_INDEX)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
@@ -133,6 +136,42 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     isLoading: galleryLoading,
     invalidate: invalidateGallery,
   } = useChatGallery(chatId, { enabled: isOpen && mode === 'chat' })
+
+  // The album rides the shared album query (the Aurora gallery reads the same
+  // key), so a write through either view refreshes both.
+  const albumTargetId = mode === 'character' ? characterId : mode === 'user-character' ? userCharacterId : undefined
+  const {
+    data: albumData,
+    isLoading: albumLoading,
+    error: albumError,
+    refetch: refetchAlbum,
+  } = useCharacterPhotosQuery(albumTargetId ?? '', {
+    enabled: isOpen && mode !== 'chat',
+    // Each opening reads the album afresh, as the dialog always has.
+    fresh: true,
+  })
+  const albumImages = useMemo<GalleryImage[]>(
+    () =>
+      (albumData?.entries ?? []).map((entry) => {
+        const image = toGalleryImage(entry)
+        return {
+          id: image.id,
+          linkId: image.id,
+          filename: image.filename,
+          filepath: image.filepath,
+          url: image.filepath,
+          mimeType: image.mimeType || 'image/webp',
+          size: image.size || 0,
+          createdAt: image.createdAt,
+          tags: [],
+          generationModeration: image.generationModeration,
+        }
+      }),
+    [albumData],
+  )
+  const loadAlbum = useCallback(() => {
+    void refetchAlbum()
+  }, [refetchAlbum])
 
   const thumbnailSize = THUMBNAIL_SIZES[thumbnailSizeIndex]
 
@@ -165,48 +204,11 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
         : `No ${SOURCE_LABELS[sourceFilter].toLowerCase()} in this chat`
       : 'No photos in this character\'s album'
 
-  const loadAlbum = useCallback(async () => {
-    if (!isOpen || mode === 'chat') return
-    try {
-      setAlbumLoading(true)
-      const targetId = mode === 'character' ? (characterId as string) : (userCharacterId as string)
-      const response = await fetch(`/api/v1/characters/${targetId}/photos?limit=200`)
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to load photos')
-      }
-
-      const albumEntries = data.entries || []
-      setAlbumImages(
-        albumEntries.map((entry: any) => ({
-          id: entry.linkId,
-          linkId: entry.linkId,
-          filename: entry.fileName,
-          filepath: entry.blobUrl,
-          url: entry.blobUrl,
-          mimeType: entry.mimeType || 'image/webp',
-          size: entry.fileSizeBytes || 0,
-          createdAt: entry.keptAt,
-          tags: [],
-          generationModeration: entry.generationModeration ?? null,
-        })),
-      )
-    } catch (error) {
-      console.error('Failed to load gallery items:', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast(error instanceof Error ? error.message : 'Failed to load gallery items')
-    } finally {
-      setAlbumLoading(false)
-    }
-  }, [isOpen, mode, characterId, userCharacterId])
-
-  // Load album items when the modal opens. The chat gallery loads itself.
   useEffect(() => {
-    if (isOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on open; parent renders unconditionally
-      loadAlbum()
-    }
-  }, [isOpen, loadAlbum])
+    if (!albumError) return
+    console.error('Failed to load gallery items:', { error: albumError instanceof Error ? albumError.message : String(albumError) })
+    showErrorToast(apiErrorMessage(albumError, 'Failed to load gallery items'))
+  }, [albumError])
 
   // Reset transient state when the modal closes.
   useEffect(() => {

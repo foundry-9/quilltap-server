@@ -1,6 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 
 interface ExclusiveChat {
@@ -33,36 +36,32 @@ export function CharacterDeleteDialog({
   onClose,
   onConfirm,
 }: CharacterDeleteDialogProps) {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [preview, setPreview] = useState<CascadePreview | null>(null)
   const [deleteChats, setDeleteChats] = useState(true)
   const [deleteImages, setDeleteImages] = useState(true)
 
-  useEffect(() => {
-    const fetchPreview = async () => {
-      try {
-        const res = await fetch(`/api/v1/characters/${characterId}?action=cascade-preview`)
-        if (!res.ok) throw new Error('Failed to load preview')
-        const data = await res.json()
-        setPreview(data)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load preview')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchPreview()
-  }, [characterId])
+  // Read fresh on every opening (no cache kept, no retry): it is the account
+  // of what this delete would take, so it must be current.
+  const previewQuery = useQuery({
+    queryKey: queryKeys.characters.cascadePreview(characterId),
+    queryFn: ({ signal }) =>
+      apiFetch<CascadePreview>(`/api/v1/characters/${characterId}?action=cascade-preview`, { signal }),
+    gcTime: 0,
+    retry: false,
+  })
+  const loading = previewQuery.isPending
+  const preview = previewQuery.data ?? null
+  const error = previewQuery.error ? 'Failed to load preview' : null
 
   const hasExclusiveData = preview &&
     (preview.exclusiveChats.length > 0 || preview.totalExclusiveImageCount > 0 || preview.memoryCount > 0)
 
+  // Cascade only what the preview showed and offered a choice over (#241).
+  // When the preview failed, or showed nothing of a kind, the character goes
+  // alone and its chats and images stay.
   const handleConfirm = () => {
     onConfirm({
-      cascadeChats: deleteChats,
-      cascadeImages: deleteImages,
+      cascadeChats: !!preview && preview.exclusiveChats.length > 0 && deleteChats,
+      cascadeImages: !!preview && preview.totalExclusiveImageCount > 0 && deleteImages,
     })
   }
 
@@ -84,9 +83,14 @@ export function CharacterDeleteDialog({
           Loading...
         </div>
       ) : error ? (
-        <div className="py-4 qt-text-destructive">
-          {error}
-        </div>
+        <>
+          <div className="py-4 qt-text-destructive">
+            {error}
+          </div>
+          <p className="qt-text-small mb-4">
+            Deleting <strong className="qt-text">{characterName}</strong> now removes the character only; its chats and images are kept.
+          </p>
+        </>
       ) : (
         <>
           <p className="qt-text-small mb-4">

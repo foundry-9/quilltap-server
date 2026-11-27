@@ -13,9 +13,9 @@ import { Icon } from '@/components/ui/icon'
 import { WithChatSettings } from './with-chat-settings'
 
 export { default as ApiKeysCard } from '@/components/settings/api-keys-tab'
-export { default as ConnectionProfilesCard } from '@/components/settings/connection-profiles-tab'
+export { default as ConnectionProfilesCard } from '@/components/settings/connection-profiles'
 export { default as ImageProfilesCard } from '@/components/settings/image-profiles-tab'
-export { default as EmbeddingProfilesCard } from '@/components/settings/embedding-profiles-tab'
+export { default as EmbeddingProfilesCard } from '@/components/settings/embedding-profiles'
 
 export function SetupWizardCard() {
   return (

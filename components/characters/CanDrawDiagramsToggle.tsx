@@ -6,7 +6,7 @@
  * The "this character draws diagrams" card shared by the character detail and
  * edit views' Details tabs, with the style choice (hand-drawn / clean)
  * directly beneath it. Presentational: the owning view persists both values
- * (vault `properties.json`) and passes back `saving`.
+ * (vault `properties.json`); the page's save status chip reports the write.
  *
  * The style stays visible — and keeps its value — while the ability is off;
  * it is only disabled, so switching the ability off and on again loses
@@ -18,7 +18,6 @@ import type { DiagramStyle } from '@/lib/markdown/diagrams'
 export interface CanDrawDiagramsToggleProps {
   checked: boolean
   style: DiagramStyle
-  saving: boolean
   disabled: boolean
   onChange: (enabled: boolean) => void | Promise<void>
   onStyleChange: (style: DiagramStyle) => void | Promise<void>
@@ -32,12 +31,11 @@ const STYLE_OPTIONS: ReadonlyArray<{ value: DiagramStyle; label: string; hint: s
 export function CanDrawDiagramsToggle({
   checked,
   style,
-  saving,
   disabled,
   onChange,
   onStyleChange,
 }: CanDrawDiagramsToggleProps) {
-  const styleDisabled = !checked || saving || disabled
+  const styleDisabled = !checked || disabled
   return (
     <div className="qt-card" data-testid="can-draw-diagrams">
       <label className="flex items-start gap-3 cursor-pointer">
@@ -45,7 +43,7 @@ export function CanDrawDiagramsToggle({
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          disabled={saving || disabled}
+          disabled={disabled}
           className="mt-1 accent-[var(--primary)]"
           aria-describedby="can-draw-diagrams-hint"
         />
@@ -57,9 +55,6 @@ export function CanDrawDiagramsToggle({
             pen — to have them reach for it often, say so in their prompt.
           </span>
         </span>
-        {saving && (
-          <span className="h-4 w-4 mt-1 animate-spin rounded-full qt-spinner shrink-0" />
-        )}
       </label>
       <fieldset className="mt-3 ml-7" disabled={styleDisabled} aria-disabled={styleDisabled}>
         <legend className={`qt-text-small mb-1 ${styleDisabled ? 'qt-text-muted' : 'qt-text-secondary'}`}>

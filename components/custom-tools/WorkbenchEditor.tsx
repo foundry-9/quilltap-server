@@ -21,6 +21,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
+import { SegmentedRadioGroup, segmentedButtonClass } from '@/components/ui/SegmentedRadioGroup'
+import { showAlert, showConfirmation } from '@/lib/alert'
 import { apiFetch, apiErrorMessage, ApiFetchError } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
@@ -33,7 +35,6 @@ import {
   displayTitle,
   formatDefinitionIssues,
 } from '@/lib/pascal/custom-tool.types'
-import type { CustomToolDestinations } from '@/lib/pascal/workbench'
 import {
   defaultWardrobeVantage,
   draftFromDefinition,
@@ -50,6 +51,7 @@ import { OutcomesSection } from './OutcomesSection'
 import { SideEffectsSection } from './SideEffectsSection'
 import { ProvingBench } from './ProvingBench'
 import { DestinationPicker, type PickedDestination } from './DestinationPicker'
+import { useCustomToolDestinations } from './use-custom-tool-destinations'
 
 interface WorkbenchEditorProps {
   /** Edit an existing file. */
@@ -74,6 +76,25 @@ function useDebounced<T>(value: T, delayMs: number): T {
     return () => clearTimeout(timer)
   }, [value, delayMs])
   return debounced
+}
+
+/** What the JSON editor's text amounts to: valid, or the issues against it. */
+function assessJsonText(text: string) {
+  const parsed = parseDefinitionText(text)
+  if (!parsed.ok && parsed.stage === 'json') {
+    return { valid: false as const, issues: [`Not valid JSON: ${parsed.reason}`], unknownKeys: [] as string[] }
+  }
+  if (!parsed.ok) {
+    return {
+      valid: false as const,
+      issues: parsed.error.issues.map(
+        (issue) => `${issue.path.length ? `${issue.path.join('.')}: ` : ''}${issue.message}`
+      ),
+      summary: formatDefinitionIssues(parsed.error),
+      unknownKeys: collectUnknownKeys(parsed.raw),
+    }
+  }
+  return { valid: true as const, issues: [] as string[], unknownKeys: collectUnknownKeys(parsed.raw) }
 }
 
 /** {@link apiErrorMessage} with the bench's own fallback. */
@@ -109,7 +130,9 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
   const [loadedName, setLoadedName] = useState<string | null>(null)
   const [benchOpen, setBenchOpen] = useState(true)
   const [pickerOpen, setPickerOpen] = useState<'save' | 'save-as' | null>(null)
-  const [conflictContent, setConflictContent] = useState<string | null>(null)
+  const [conflicted, setConflicted] = useState(false)
+  /** A rename-on-save runs outside `saveMutation`; this keeps Save shut meanwhile (#319). */
+  const [renaming, setRenaming] = useState(false)
   const [flashOutcomeId, setFlashOutcomeId] = useState<string | null>(null)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -173,21 +196,20 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
   // picks one by hand. Same destinations query (and cache) the save dialog
   // and the bench already read.
 
-  const destinationsQuery = useQuery({
-    queryKey: queryKeys.customTools.destinations(),
-    queryFn: ({ signal }) => apiFetch<CustomToolDestinations>('/api/v1/custom-tools?action=destinations', { signal }),
-  })
-  const destinations = destinationsQuery.data
+  const destinations = useCustomToolDestinations().data
   const [vantage, setVantage] = useState<WardrobeVantage>({ kind: 'none' })
   const [vantageChosen, setVantageChosen] = useState(false)
   const [vantageSeed, setVantageSeed] = useState<string | null>(null)
-  const seedKey = destinations ? `loaded|${location?.mountPointId ?? ''}` : null
+  // Before a new draft has a home, a `?mount=` deep link names the store it is
+  // headed for (#316); the vantage opens there as it would on a saved file.
+  const homeMountPointId = location?.mountPointId ?? create?.mountPointId ?? null
+  const seedKey = destinations ? `loaded|${homeMountPointId ?? ''}` : null
   // Derive-from-state during render, latched on the seed key (the same
   // sanctioned pattern as the content initialisation above).
   if (seedKey !== null && seedKey !== vantageSeed) {
     setVantageSeed(seedKey)
     if (!vantageChosen && destinations) {
-      setVantage(defaultWardrobeVantage(location?.mountPointId ?? null, destinations))
+      setVantage(defaultWardrobeVantage(homeMountPointId, destinations))
     }
   }
   const chooseVantage = (next: WardrobeVantage) => {
@@ -204,31 +226,22 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
   const issues = useMemo(() => (draft ? validateDraft(draft) : []), [draft])
   const formValid = useMemo(() => (draft ? draftIsValid(draft) : false), [draft])
 
+  // The on-screen issue list reads a debounced parse so typing stays cheap;
+  // the save path re-assesses the live text (#315), so a quick click after an
+  // edit can never write what the list has not caught up with.
   const debouncedJson = useDebounced(jsonText, 300)
-  const jsonState = useMemo(() => {
-    if (editorMode !== 'json') return null
-    const parsed = parseDefinitionText(debouncedJson)
-    if (!parsed.ok && parsed.stage === 'json') {
-      return { valid: false as const, issues: [`Not valid JSON: ${parsed.reason}`], unknownKeys: [] as string[] }
-    }
-    if (!parsed.ok) {
-      return {
-        valid: false as const,
-        issues: parsed.error.issues.map(
-          (issue) => `${issue.path.length ? `${issue.path.join('.')}: ` : ''}${issue.message}`
-        ),
-        summary: formatDefinitionIssues(parsed.error),
-        unknownKeys: collectUnknownKeys(parsed.raw),
-      }
-    }
-    return { valid: true as const, issues: [], unknownKeys: collectUnknownKeys(parsed.raw) }
-  }, [editorMode, debouncedJson])
+  const jsonState = useMemo(
+    () => (editorMode === 'json' ? assessJsonText(debouncedJson) : null),
+    [editorMode, debouncedJson]
+  )
 
   const unknownKeysInDraft = draft?.unknownKeys.map(([key]) => key) ?? []
 
   // -- Mode switch ----------------------------------------------------------
 
   const switchToJson = () => {
+    // Already in JSON: re-serializing the draft would overwrite the text being edited.
+    if (editorMode === 'json') return
     if (draft) setJsonText(serializeDraft(draft))
     setEditorMode('json')
   }
@@ -304,19 +317,21 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
       setMtime(result.mtime)
       setLoadedName(currentName())
       setDirty(false)
-      setConflictContent(null)
+      setConflicted(false)
       queryClient.invalidateQueries({ queryKey: queryKeys.customTools.all })
       showSuccessToast('Pascal has filed the contrivance.')
     },
     onError: (error) => {
       if (error instanceof ApiFetchError && error.status === 409) {
         // Conflict: someone else edited the file since we read it.
-        setConflictContent(contentToWrite())
+        setConflicted(true)
         return
       }
       showErrorToast(extractErrorMessage(error))
     },
   })
+
+  const saving = saveMutation.isPending || renaming
 
   /**
    * The full save pipeline for a chosen store: figure out the path (create =
@@ -351,12 +366,15 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
   /** Save in place, offering the filename realignment when `name` changed. */
   const handleSave = async () => {
-    if (saveIsBlocked && repairReason === null) return
+    if (saving) return
+    // Judge the live text, not the debounced list (#315).
+    const liveJson = editorMode === 'json' ? assessJsonText(jsonText) : null
+    const blockedNow = editorMode === 'form' ? !formValid : liveJson ? !liveJson.valid && repairReason === null : true
+    if (blockedNow) return
 
     // Repair mode may save an invalid file back only as itself (§6.4).
-    if (editorMode === 'json' && jsonState && !jsonState.valid) {
-       
-      const confirmed = window.confirm('Save it broken? It will stay off the table until it validates.')
+    if (liveJson && !liveJson.valid) {
+      const confirmed = await showConfirmation('Save it broken? It will stay off the table until it validates.')
       if (!confirmed) return
     }
 
@@ -368,18 +386,29 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
     const name = currentName()
     const expectedFileName = name ? `${TOOLS_FOLDER}/${name}${TOOL_FILE_SUFFIX}` : null
     if (name && loadedName && name !== loadedName && expectedFileName && location.path !== expectedFileName) {
-       
-      const renameFile = window.confirm(
-        `The name is now "${name}". Also rename the file to ${expectedFileName}?\n\n` +
-          'OK renames the file to match; Cancel keeps the current filename.'
-      )
+      // The message names its buttons, so they are OK and Cancel.
+      const renameFile =
+        (await showAlert(
+          `The name is now "${name}". Also rename the file to ${expectedFileName}?\n\n` +
+            'OK renames the file to match; Cancel keeps the current filename.',
+          ['Cancel', 'OK']
+        )) === 'OK'
       if (renameFile) {
+        setRenaming(true)
         try {
           if (await fileExists(location.mountPointId, expectedFileName)) {
             showErrorToast(`${expectedFileName} already exists in this store; the file keeps its name.`)
           } else {
             const content = contentToWrite()
             if (content === null) return
+            // The old file is about to be deleted, so it gets the same
+            // conflict check an in-place save would (#319): if it changed
+            // since it was opened, ask before anything is written.
+            const current = await apiFetch<FileEnvelope>(buildMountFileItemUrl(location.mountPointId, location.path))
+            if (mtime !== null && current.mtime !== mtime) {
+              setConflicted(true)
+              return
+            }
             // Write the new path first, delete the old only once that landed —
             // a failure between the two leaves both copies, never neither.
             const result = await putFile(location.mountPointId, expectedFileName, content, {})
@@ -395,6 +424,8 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
         } catch (error) {
           showErrorToast(extractErrorMessage(error))
           return
+        } finally {
+          setRenaming(false)
         }
       }
     }
@@ -407,7 +438,7 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
     try {
       const fresh = await apiFetch<FileEnvelope>(buildMountFileItemUrl(location.mountPointId, location.path))
       initializeFromContent(fresh.content, fresh.mtime)
-      setConflictContent(null)
+      setConflicted(false)
     } catch (error) {
       showErrorToast(extractErrorMessage(error))
     }
@@ -426,9 +457,8 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
     flashTimer.current = setTimeout(() => setFlashOutcomeId(null), 1600)
   }
 
-  const handleBack = () => {
-     
-    if (dirty && !window.confirm('Leave the workbench? Unsaved changes will be lost.')) return
+  const handleBack = async () => {
+    if (dirty && !(await showConfirmation('Leave the workbench? Unsaved changes will be lost.'))) return
     onBack()
   }
 
@@ -461,7 +491,7 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
       <div className="max-w-6xl mx-auto p-4 space-y-3">
         {/* Header */}
         <div className="flex items-center gap-3 flex-wrap">
-          <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={handleBack}>
+          <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={() => void handleBack()}>
             <Icon name="arrow-left" className="w-4 h-4" />
             Library
           </button>
@@ -482,33 +512,27 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
           <div className="ml-auto flex items-center gap-2">
             {/* Form ⇄ JSON switch */}
-            <div className="flex rounded overflow-hidden border" role="radiogroup" aria-label="Editor mode">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={editorMode === 'form'}
-                className={`px-3 py-1 text-sm ${editorMode === 'form' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-                onClick={switchToForm}
-                disabled={editorMode === 'form' ? false : !canSwitchToForm}
-                title={
-                  editorMode === 'json' && !canSwitchToForm
-                    ? (jsonState?.issues[0] ?? 'The JSON must validate before the form can hold it')
-                    : undefined
-                }
-              >
-                Form
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={editorMode === 'json'}
-                className={`px-3 py-1 text-sm ${editorMode === 'json' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-                onClick={switchToJson}
-                disabled={editorMode === 'json' || !draft}
-              >
-                JSON
-              </button>
-            </div>
+            <SegmentedRadioGroup
+              ariaLabel="Editor mode"
+              className="flex rounded overflow-hidden border"
+              options={[
+                {
+                  value: 'form',
+                  label: 'Form',
+                  disabled: editorMode === 'form' ? false : !canSwitchToForm,
+                  title:
+                    editorMode === 'json' && !canSwitchToForm
+                      ? (jsonState?.issues[0] ?? 'The JSON must validate before the form can hold it')
+                      : undefined,
+                },
+                // The chosen option stays enabled: disabling it would drop keyboard
+                // focus to the page the moment the arrow keys chose it.
+                { value: 'json', label: 'JSON', disabled: editorMode === 'form' && !draft },
+              ]}
+              value={editorMode}
+              onSelect={(mode) => (mode === 'form' ? switchToForm() : switchToJson())}
+              optionClassName={segmentedButtonClass('sm')}
+            />
 
             <button
               type="button"
@@ -516,6 +540,7 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
               onClick={() => setBenchOpen(!benchOpen)}
               aria-pressed={benchOpen}
               title={benchOpen ? 'Hide the proving bench' : 'Show the proving bench'}
+              aria-label={benchOpen ? 'Hide the proving bench' : 'Show the proving bench'}
             >
               <Icon name="dice" className="w-4 h-4" />
             </button>
@@ -524,16 +549,16 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
               type="button"
               className="qt-button qt-button-primary qt-button-sm"
               onClick={handleSave}
-              disabled={(saveIsBlocked && repairReason === null) || saveMutation.isPending}
+              disabled={(saveIsBlocked && repairReason === null) || saving}
               title={saveIsBlocked && repairReason === null ? 'The draft has errors to resolve first' : undefined}
             >
-              {saveMutation.isPending ? 'Saving…' : 'Save'}
+              {saving ? 'Saving…' : 'Save'}
             </button>
             <button
               type="button"
               className="qt-button qt-button-secondary qt-button-sm"
               onClick={() => setPickerOpen('save-as')}
-              disabled={saveIsBlocked || saveMutation.isPending}
+              disabled={saveIsBlocked || saving}
               title="Write a copy to another store; the original stays put"
             >
               Save As…
@@ -556,12 +581,12 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
           <div className="flex-1 min-w-0 space-y-4">
             {editorMode === 'form' && draft ? (
               <>
-                <BuilderForm draft={draft} issues={issues} onChange={handleDraftChange} disabled={saveMutation.isPending} />
+                <BuilderForm draft={draft} issues={issues} onChange={handleDraftChange} disabled={saving} />
                 <SideEffectsSection
                   draft={draft}
                   issues={issues}
                   onChange={handleDraftChange}
-                  disabled={saveMutation.isPending}
+                  disabled={saving}
                   vantage={vantage}
                   onVantageChange={chooseVantage}
                   destinations={destinations}
@@ -572,7 +597,7 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
                   issues={issues}
                   onChange={handleDraftChange}
                   flashOutcomeId={flashOutcomeId}
-                  disabled={saveMutation.isPending}
+                  disabled={saving}
                 />
               </>
             ) : (
@@ -631,6 +656,7 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
       {pickerOpen && (
         <DestinationPicker
           toolName={currentName() ?? ''}
+          initialMountPointId={create?.mountPointId ?? null}
           onPick={(store) => void saveToStore(store)}
           onCancel={() => setPickerOpen(null)}
           onOpenExisting={(mountPointId) => {
@@ -642,12 +668,12 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
       )}
 
       {/* Conflict dialog */}
-      {conflictContent !== null && location && (
+      {conflicted && location && (
         // Dismissing (Escape / backdrop) leaves the draft as it stands; the
         // next save meets the same conflict and asks again.
         <BaseModal
           isOpen
-          onClose={() => setConflictContent(null)}
+          onClose={() => setConflicted(false)}
           role="alertdialog"
           headerless
           busy={saveMutation.isPending}

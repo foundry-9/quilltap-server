@@ -34,7 +34,6 @@ describe('useImpersonation — set-active-speaker (bug 170)', () => {
     const { result } = renderHook(() => useImpersonation({
       chatId: 'chat-1',
       chat: null,
-      participantData: [],
       fetchChat: jest.fn().mockResolvedValue(undefined),
       setSelectLLMProfileDialogState: jest.fn(),
     }))

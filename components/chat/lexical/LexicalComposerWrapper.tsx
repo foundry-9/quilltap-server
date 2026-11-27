@@ -27,13 +27,9 @@ import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPl
 import { ListPlugin } from '@lexical/react/LexicalListPlugin'
 import { CheckListPlugin } from '@lexical/react/LexicalCheckListPlugin'
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
-import { HeadingNode, QuoteNode } from '@lexical/rich-text'
-import { ListNode, ListItemNode } from '@lexical/list'
-import { LinkNode } from '@lexical/link'
-import { CodeNode, CodeHighlightNode } from '@lexical/code'
-import { TableNode, TableCellNode, TableRowNode } from '@lexical/table'
 
 import { composerTheme } from './theme'
+import { COMPOSER_NODES } from './nodes'
 import type { ComposerEditorHandle } from './types'
 import { useMarkdownBridge, COMPOSER_TRANSFORMERS } from './plugins/MarkdownBridgePlugin'
 import { ComposerSyncPlugin } from './plugins/ComposerSyncPlugin'
@@ -209,7 +205,7 @@ export const LexicalComposerWrapper = forwardRef<
     () => ({
       namespace: 'ChatComposer',
       theme: composerTheme,
-      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, CodeHighlightNode, TableNode, TableCellNode, TableRowNode],
+      nodes: COMPOSER_NODES,
       editable: !disabled,
       onError: (error: Error) => {
         console.error('[LexicalComposer] Editor error:', error)

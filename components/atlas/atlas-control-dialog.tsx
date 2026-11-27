@@ -98,14 +98,14 @@ function AtlasControlDialogInner({ initialContainer, onClose, asTab = false, fix
   const overlays = (
     <>
       {/* A row's picture, full screen — above the dialog and the editor */}
-      {imageView?.entry.imageFileId && (
+      {imageView?.item.imageFileId && (
         <ItemImageViewer
           kind="atlas"
           onClose={actions.closeImage}
-          itemId={imageView.entry.id}
-          itemTitle={imageView.entry.name}
+          itemId={imageView.item.id}
+          itemTitle={imageView.item.name}
           container={imageView.container}
-          fileId={imageView.entry.imageFileId}
+          fileId={imageView.item.imageFileId}
         />
       )}
       {editor && container && (

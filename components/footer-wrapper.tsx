@@ -1,41 +1,40 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import packageJson from '@/package.json';
+import { apiFetch } from '@/lib/query/fetcher';
+import { queryKeys } from '@/lib/query/keys';
 import { showSuccessToast } from '@/lib/toast';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 
 type BackendMode = 'local' | 'Docker' | 'Electron' | 'Electron+Docker';
 
+/** The fields of `GET /api/v1/system/data-dir` the footer reads. */
+interface FooterDataDirInfo {
+  isDocker?: boolean;
+  isElectronShell?: boolean;
+  shellVersion?: string;
+  hostPath?: string;
+}
+
+function backendModeOf(data: FooterDataDirInfo): BackendMode {
+  const isShell = data.isElectronShell;
+  if (data.isDocker) return isShell ? 'Electron+Docker' : 'Docker';
+  return isShell ? 'Electron' : 'local';
+}
+
 export default function FooterWrapper() {
   const pathname = usePathname();
-  const [backendMode, setBackendMode] = useState<BackendMode | null>(null);
-  const [shellVersion, setShellVersion] = useState<string | null>(null);
-  const [hostPath, setHostPath] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/v1/system/data-dir')
-      .then((res) => res.json())
-      .then((data) => {
-        const isShell = data.isElectronShell;
-        if (data.isDocker) {
-          setBackendMode(isShell ? 'Electron+Docker' : 'Docker');
-        } else if (isShell) {
-          setBackendMode('Electron');
-        } else {
-          setBackendMode('local');
-        }
-        if (isShell && data.shellVersion) {
-          setShellVersion(data.shellVersion);
-        }
-        if (data.hostPath) {
-          setHostPath(data.hostPath);
-        }
-      })
-      .catch(() => {
-        setBackendMode('local');
-      });
-  }, []);
+  const { copy } = useCopyToClipboard();
+  // The same cache entry the Data Directory card reads.
+  const { data, isError } = useQuery({
+    queryKey: queryKeys.system.dataDir,
+    queryFn: ({ signal }) => apiFetch<FooterDataDirInfo>('/api/v1/system/data-dir', { signal }),
+  });
+  const backendMode: BackendMode | null = data ? backendModeOf(data) : isError ? 'local' : null;
+  const shellVersion = data?.isElectronShell && data.shellVersion ? data.shellVersion : null;
+  const hostPath = data?.hostPath || null;
 
   // Hide footer on chat pages - they have their own layout
   const isChatPage = pathname?.match(/^\/salon\/[^/]+$/);
@@ -61,8 +60,8 @@ export default function FooterWrapper() {
                 window.quilltap.openPath(hostPath);
               } else {
                 const copyText = /[\s"'\\$`!#&|;(){}]/.test(hostPath) ? `"${hostPath}"` : hostPath;
-                navigator.clipboard.writeText(copyText).then(() => {
-                  showSuccessToast('Path copied to clipboard');
+                void copy(copyText).then((ok) => {
+                  if (ok) showSuccessToast('Path copied to clipboard');
                 });
               }
             }}

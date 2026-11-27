@@ -3,8 +3,8 @@
 import { memo } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { MentionChip } from '@/components/chat/MentionChip'
-import { useAbsentMentions } from '@/hooks/useAbsentMentions'
-import { useAtlasMentions } from '@/hooks/useAtlasMentions'
+import { useChatMentions } from '@/hooks/useChatMentions'
+import type { AbsentMentionChip, AtlasMentionChip } from '@/components/chat/MentionChip'
 import { formatMessageTime } from '@/lib/format-time'
 import {
   getAnnouncementSenderName,
@@ -113,8 +113,8 @@ function CollapsedMentionChips({
   people,
   things,
 }: {
-  people: ReturnType<typeof useAbsentMentions>
-  things: ReturnType<typeof useAtlasMentions>
+  people: AbsentMentionChip[]
+  things: AtlasMentionChip[]
 }) {
   return (
     <>
@@ -150,8 +150,8 @@ export const AnnouncementChip = memo(function AnnouncementChip({
 }) {
   const accent = getAnnouncementAccentClasses(message)
   const isWhisper = !!message.targetParticipantIds?.length
-  const people = useAbsentMentions(chatId, message.id)
-  const things = useAtlasMentions(chatId, message.id)
+  const people = useChatMentions('absent', chatId, message.id)
+  const things = useChatMentions('atlas', chatId, message.id)
   const bar = (
     <button
       type="button"

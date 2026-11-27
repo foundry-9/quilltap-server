@@ -12,8 +12,9 @@
  */
 
 import { useScenarioMutator } from '@/components/scenarios/use-scenario-mutator'
+import { queryKeys } from '@/lib/query/keys'
 import type { ScenarioMutator } from '@/components/scenarios/types'
 
 export function useGeneralScenarios(): ScenarioMutator {
-  return useScenarioMutator('/api/v1/scenarios')
+  return useScenarioMutator('/api/v1/scenarios', queryKeys.scenarios.general)
 }

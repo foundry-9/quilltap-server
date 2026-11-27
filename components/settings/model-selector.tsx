@@ -130,6 +130,12 @@ export function ModelSelector({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
+      // An open list takes the Escape for itself; a dialog around the
+      // selector must not read it as "close me" and discard the form (#257).
+      // A closed list leaves Escape alone, so it still closes the dialog.
+      if (!isOpen) return
+      e.preventDefault()
+      e.stopPropagation()
       setIsOpen(false)
       setSearchInput('')
     } else if (e.key === 'ArrowDown') {

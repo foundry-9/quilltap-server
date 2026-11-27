@@ -2,9 +2,11 @@
 
 /**
  * Thin wrapper around the Terminals + Chats APIs for the salon Terminal Mode.
+ * A refusal throws an `ApiFetchError`; read it with `apiErrorMessage`.
  */
 
 import { patchChat } from '@/lib/chat/patch-chat'
+import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
@@ -34,24 +36,6 @@ interface SpawnResponse {
   session: TerminalSessionMeta
 }
 
-async function expectOk(response: Response, fallbackMessage: string): Promise<void> {
-  if (!response.ok) {
-    let message = fallbackMessage
-    try {
-      const body = await response.text()
-      if (body) message = body
-    } catch {
-      // swallow
-    }
-    throw new Error(message)
-  }
-}
-
-async function parseJson<T>(response: Response, fallbackMessage: string): Promise<T> {
-  await expectOk(response, fallbackMessage)
-  return response.json() as Promise<T>
-}
-
 export async function persistChatTerminalState(
   chatId: string,
   updates: Partial<{
@@ -64,33 +48,33 @@ export async function persistChatTerminalState(
 }
 
 export async function listTerminalSessions(chatId: string): Promise<TerminalSessionMeta[]> {
-  const response = await fetch(`/api/v1/terminals?chatId=${encodeURIComponent(chatId)}`)
-  const data = await parseJson<SessionListResponse>(response, 'Failed to list terminal sessions')
+  const data = await apiFetch<SessionListResponse>(`/api/v1/terminals?chatId=${encodeURIComponent(chatId)}`)
   return data.sessions ?? []
 }
 
 export async function getTerminalSession(sessionId: string): Promise<TerminalSessionMeta | null> {
-  const response = await fetch(`/api/v1/terminals/${sessionId}`)
-  if (response.status === 404) return null
-  const data = await parseJson<SessionGetResponse>(response, 'Failed to load terminal session')
-  return data.session
+  try {
+    const data = await apiFetch<SessionGetResponse>(`/api/v1/terminals/${sessionId}`)
+    return data.session
+  } catch (error) {
+    if (error instanceof ApiFetchError && error.status === 404) return null
+    throw error
+  }
 }
 
 export async function spawnTerminalSession(chatId: string): Promise<TerminalSessionMeta> {
-  const response = await fetch('/api/v1/terminals', {
+  const data = await apiFetch<SpawnResponse>('/api/v1/terminals', {
     method: 'POST',
     headers: JSON_HEADERS,
     body: JSON.stringify({ chatId }),
   })
-  const data = await parseJson<SpawnResponse>(response, 'Failed to spawn terminal session')
   return data.session
 }
 
 export async function killTerminalSessionApi(sessionId: string): Promise<void> {
-  const response = await fetch(`/api/v1/terminals/${sessionId}?action=kill`, {
+  await apiFetch(`/api/v1/terminals/${sessionId}?action=kill`, {
     method: 'POST',
   })
-  await expectOk(response, 'Failed to terminate session')
 }
 
 export function isLiveSession(meta: TerminalSessionMeta | null): boolean {

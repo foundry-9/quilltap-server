@@ -2,32 +2,15 @@
 
 import { BaseModal } from '@/components/ui/BaseModal'
 import { ImageProfileForm } from './ImageProfileForm'
+import type { ApiKeyRow, ImageProfileRow } from '@/lib/hooks/use-profiles'
 
-interface ApiKey {
-  id: string
-  label: string
-  provider: string
-  isActive: boolean
-}
-
-interface ImageProfile {
-  id: string
-  name: string
-  provider: string
-  apiKeyId?: string
-  baseUrl?: string
-  modelName: string
-  parameters: Record<string, any>
-  isDefault: boolean
-  apiKey?: ApiKey | null
-}
 
 interface ImageProfileModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
-  profile?: ImageProfile
-  apiKeys: ApiKey[]
+  profile?: ImageProfileRow
+  apiKeys: ApiKeyRow[]
   /** Provider to preselect on a new profile (the per-provider card's Add menu). */
   initialProvider?: string
 }

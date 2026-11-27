@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useId } from 'react'
-import type { WizardState, WizardAction, ProviderInfo } from '../useProviderWizardState'
+import { providersWithCapability, type WizardState, type WizardAction, type ProviderInfo } from '../useProviderWizardState'
 import { fetchModels } from '../wizard-api'
 import { ModelSelector } from '@/components/settings/model-selector'
 
@@ -15,9 +15,7 @@ export function ModelSelectionStep({ state, dispatch }: ModelSelectionStepProps)
   const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({})
   const [modelErrors, setModelErrors] = useState<Record<string, string>>({})
 
-  const chatProviders = state.selectedProviders
-    .map((id) => state.availableProviders.find((p) => p.id === id))
-    .filter((p): p is ProviderInfo => p !== undefined && p.capabilities.chat)
+  const chatProviders = providersWithCapability(state, 'chat')
 
   const loadModelsForProvider = useCallback(
     async (provider: ProviderInfo) => {

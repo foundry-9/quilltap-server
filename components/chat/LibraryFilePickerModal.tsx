@@ -17,11 +17,12 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { useDocumentStoresQuery } from '@/lib/hooks/use-document-stores'
 import { useProjectsQuery } from '@/lib/hooks/use-projects'
+import { useCharacterPhotosQuery } from '@/components/images/embedded-gallery/hooks/useCharacterPhotosQuery'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import FileBrowser, { type FileInfo } from '@/components/files/FileBrowser'
@@ -77,7 +78,7 @@ interface GalleryEntry {
   relativePath: string
   fileName: string
   blobUrl: string
-  mimeType: string
+  mimeType: string | null
   caption: string | null
   keptAt: string
   generationPromptExcerpt?: string
@@ -105,6 +106,25 @@ interface PhotoAlbumsResponse {
 
 type Step = 'scope' | 'browse-project' | 'browse-gallery' | 'browse-mount'
 
+interface AttachMountFileVars {
+  mountPointId: string
+  relativePath: string
+  /** The name the success toast gives the file. */
+  displayName: string
+  /** What was being attached, for the failure log. */
+  what: 'file' | 'store file' | 'gallery photo'
+  /** The toast when the server gives no reason. */
+  failureToast: string
+}
+
+interface LinkedFile {
+  id: string
+  filename: string
+  filepath: string
+  mimeType: string
+  url: string
+}
+
 export default function LibraryFilePickerModal({
   isOpen,
   onClose,
@@ -116,7 +136,6 @@ export default function LibraryFilePickerModal({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedScopeName, setSelectedScopeName] = useState<string>('General')
   const [selectedMount, setSelectedMount] = useState<MountPointSummary | null>(null)
-  const [linking, setLinking] = useState(false)
 
   const { data: projectsData, isLoading: projectsLoading } = useProjectsQuery<Project>({ enabled: isOpen })
   const projects = projectsData ?? []
@@ -162,38 +181,66 @@ export default function LibraryFilePickerModal({
       setSelectedProjectId(null)
       setSelectedScopeName('General')
       setSelectedMount(null)
-      setLinking(false)
     }
   }, [isOpen])
 
-  const attachMountFile = useCallback(
-    async (mountPointId: string, relativePath: string, displayName: string) => {
-      const res = await fetch(
-        `/api/v1/chats/${chatId}/files?action=attach-mount-file`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mountPointId, relativePath }),
-        }
-      )
-      if (!res.ok) {
-        let errorMessage = 'Failed to attach document'
-        try {
-          const errorData = await res.json()
-          errorMessage = errorData.error || errorMessage
-        } catch {
-          errorMessage = `HTTP ${res.status}: ${res.statusText}`
-        }
-        throw new Error(errorMessage)
-      }
-      showSuccessToast(`Attached "${displayName}" — the Librarian has noted it`)
-      if (onMountFileAttached) {
-        onMountFileAttached()
-      }
+  // A Scriptorium file (a store's, a project's or a gallery photo) is pinned
+  // to the chat by a Librarian announcement; there is no composer hand-off.
+  const { mutate: attachMountFile, isPending: attachPending } = useMutation({
+    mutationFn: (vars: AttachMountFileVars) =>
+      apiFetch(`/api/v1/chats/${chatId}/files?action=attach-mount-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mountPointId: vars.mountPointId, relativePath: vars.relativePath }),
+      }),
+    onSuccess: (_data, vars) => {
+      showSuccessToast(`Attached "${vars.displayName}" — the Librarian has noted it`)
+      onMountFileAttached?.()
       onClose()
     },
-    [chatId, onClose, onMountFileAttached]
-  )
+    onError: (error, vars) => {
+      const errorMessage = apiErrorMessage(error, '')
+      console.error(`[LibraryFilePickerModal] Failed to attach ${vars.what}`, {
+        chatId,
+        mountPointId: vars.mountPointId,
+        relativePath: vars.relativePath,
+        error: errorMessage,
+      })
+      showErrorToast(errorMessage || vars.failureToast)
+    },
+  })
+
+  // A legacy library file is linked by id and handed to the composer's tray.
+  const { mutate: linkFile, isPending: linkPending } = useMutation({
+    mutationFn: (file: FileInfo) =>
+      apiFetch<{ file: LinkedFile }>(`/api/v1/chats/${chatId}/files?action=link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId: file.id }),
+      }),
+    onSuccess: ({ file: linkedFile }, file) => {
+      showSuccessToast(`Linked "${file.originalFilename || file.filename || 'file'}" to chat`)
+      onFileLinked({
+        id: linkedFile.id,
+        filename: linkedFile.filename,
+        filepath: linkedFile.filepath,
+        mimeType: linkedFile.mimeType,
+        url: linkedFile.url,
+      })
+      onClose()
+    },
+    onError: (error, file) => {
+      const errorMessage = apiErrorMessage(error, '')
+      console.error('[LibraryFilePickerModal] Failed to attach file', {
+        chatId,
+        fileId: file.id,
+        error: errorMessage,
+      })
+      showErrorToast(errorMessage || 'Failed to attach file')
+    },
+  })
+
+  const linking = attachPending || linkPending
 
   const handleProjectScopeSelect = useCallback(
     (projectId: string | null, name: string) => {
@@ -217,121 +264,55 @@ export default function LibraryFilePickerModal({
   }, [])
 
   const handleFileClick = useCallback(
-    async (file: FileInfo) => {
+    (file: FileInfo) => {
       if (linking) return
-
       // Scriptorium document-store files don't live in the legacy `files`
       // table, so the link endpoint can't take their id. Post a Librarian
       // attachment announcement instead — the synthetic message carries the
       // mount-file id as a message-level attachment, and the assistant-side
       // attachment walker surfaces it to the next character turn.
-      const isMountFile = !!file.mountPointId && !!file.relativePath
-      const filename = file.originalFilename || file.filename || 'file'
-
-      try {
-        setLinking(true)
-
-        if (isMountFile) {
-          await attachMountFile(file.mountPointId!, file.relativePath!, filename)
-          return
-        }
-
-        const res = await fetch(
-          `/api/v1/chats/${chatId}/files?action=link`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileId: file.id }),
-          }
-        )
-
-        if (!res.ok) {
-          let errorMessage = 'Failed to link file'
-          try {
-            const errorData = await res.json()
-            errorMessage = errorData.error || errorMessage
-          } catch {
-            errorMessage = `HTTP ${res.status}: ${res.statusText}`
-          }
-          throw new Error(errorMessage)
-        }
-
-        const data = await res.json()
-        const linkedFile = data.file
-
-        showSuccessToast(`Linked "${filename}" to chat`)
-        onFileLinked({
-          id: linkedFile.id,
-          filename: linkedFile.filename,
-          filepath: linkedFile.filepath,
-          mimeType: linkedFile.mimeType,
-          url: linkedFile.url,
+      if (file.mountPointId && file.relativePath) {
+        attachMountFile({
+          mountPointId: file.mountPointId,
+          relativePath: file.relativePath,
+          displayName: file.originalFilename || file.filename || 'file',
+          what: 'file',
+          failureToast: 'Failed to attach file',
         })
-        onClose()
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error)
-        console.error('[LibraryFilePickerModal] Failed to attach file', {
-          chatId,
-          fileId: file.id,
-          mountPointId: file.mountPointId ?? null,
-          relativePath: file.relativePath ?? null,
-          isMountFile,
-          error: errorMessage,
-        })
-        showErrorToast(errorMessage || 'Failed to attach file')
-      } finally {
-        setLinking(false)
+        return
       }
+      linkFile(file)
     },
-    [chatId, linking, onFileLinked, onClose, attachMountFile]
+    [linking, attachMountFile, linkFile]
   )
 
   // A file picked in the store browser (a project's store or any other).
   const handlePickEntry = useCallback(
-    async (entry: DocumentEntry) => {
+    (entry: DocumentEntry) => {
       if (linking) return
-      try {
-        setLinking(true)
-        await attachMountFile(entry.mountPointId, entry.relativePath, entry.fileName)
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error)
-        console.error('[LibraryFilePickerModal] Failed to attach store file', {
-          chatId,
-          mountPointId: entry.mountPointId,
-          relativePath: entry.relativePath,
-          error: errorMessage,
-        })
-        showErrorToast(errorMessage || 'Failed to attach file')
-      } finally {
-        setLinking(false)
-      }
+      attachMountFile({
+        mountPointId: entry.mountPointId,
+        relativePath: entry.relativePath,
+        displayName: entry.fileName,
+        what: 'store file',
+        failureToast: 'Failed to attach file',
+      })
     },
-    [chatId, linking, attachMountFile]
+    [linking, attachMountFile]
   )
 
   const handleGalleryPick = useCallback(
-    async (entry: GalleryEntry) => {
+    (entry: GalleryEntry) => {
       if (linking) return
-      const displayName = entry.caption || entry.fileName
-      try {
-        setLinking(true)
-        await attachMountFile(entry.mountPointId, entry.relativePath, displayName)
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error)
-        console.error('[LibraryFilePickerModal] Failed to attach gallery photo', {
-          chatId,
-          linkId: entry.linkId,
-          error: errorMessage,
-        })
-        showErrorToast(errorMessage || 'Failed to attach photo')
-      } finally {
-        setLinking(false)
-      }
+      attachMountFile({
+        mountPointId: entry.mountPointId,
+        relativePath: entry.relativePath,
+        displayName: entry.caption || entry.fileName,
+        what: 'gallery photo',
+        failureToast: 'Failed to attach photo',
+      })
     },
-    [chatId, linking, attachMountFile]
+    [linking, attachMountFile]
   )
 
   const handleBack = useCallback(() => {
@@ -566,21 +547,17 @@ function GalleryPanel({
   linking: boolean
 }) {
   // Same `photos/` folder Aurora's character page reads when a user persona is
-  // set; falls back to the global Quilltap Uploads gallery otherwise. The URL is
-  // built inside the queryFn from `userPersona`, which the key already encodes.
-  const { data, isLoading, error } = useQuery({
-    queryKey: userPersona?.characterId
-      ? queryKeys.characters.photos(userPersona.characterId)
-      : queryKeys.photos.list({ limit: 200 }),
-    queryFn: ({ signal }) =>
-      apiFetch<GalleryResponse>(
-        userPersona?.characterId
-          ? `/api/v1/characters/${userPersona.characterId}/photos?limit=200`
-          : '/api/v1/photos?limit=200',
-        { signal }
-      ),
+  // set (its one album read); falls back to the global Quilltap Uploads gallery
+  // otherwise. Only the query that applies is enabled.
+  const personaCharacterId = userPersona?.characterId ?? ''
+  const personaPhotos = useCharacterPhotosQuery(personaCharacterId, { enabled: Boolean(personaCharacterId) })
+  const generalPhotos = useQuery({
+    queryKey: queryKeys.photos.list({ limit: 200 }),
+    queryFn: ({ signal }) => apiFetch<GalleryResponse>('/api/v1/photos?limit=200', { signal }),
+    enabled: !personaCharacterId,
   })
-  const entries = data?.entries ?? []
+  const { data, isLoading, error } = personaCharacterId ? personaPhotos : generalPhotos
+  const entries: GalleryEntry[] = data?.entries ?? []
 
   if (isLoading) {
     return <p className="qt-text-secondary py-8 text-center">Loading your gallery…</p>

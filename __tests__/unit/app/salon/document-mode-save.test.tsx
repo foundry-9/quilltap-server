@@ -20,6 +20,8 @@ jest.mock('@/app/salon/[id]/hooks/documentModeApi', () => {
     persistChatDocumentState: jest.fn(async () => undefined),
     readDocumentContentForChat: jest.fn(),
     renameDocumentForChat: jest.fn(),
+    fetchOpenDocumentRecords: jest.fn(),
+    fetchChatDocumentState: jest.fn(),
   }
 })
 
@@ -30,6 +32,8 @@ import {
   closeDocumentForChat,
   readDocumentContentForChat,
   renameDocumentForChat,
+  fetchOpenDocumentRecords,
+  fetchChatDocumentState,
 } from '@/app/salon/[id]/hooks/documentModeApi'
 import { showErrorToast } from '@/lib/toast'
 
@@ -38,6 +42,8 @@ const writeMock = requestDocumentWrite as jest.Mock
 const closeMock = closeDocumentForChat as jest.Mock
 const readMock = readDocumentContentForChat as jest.Mock
 const renameMock = renameDocumentForChat as jest.Mock
+const openListMock = fetchOpenDocumentRecords as jest.Mock
+const chatStateMock = fetchChatDocumentState as jest.Mock
 
 const DOC_ID = 'doc-1'
 
@@ -138,5 +144,65 @@ describe('useDocumentMode saves', () => {
     expect(writeMock).toHaveBeenCalledTimes(1)
     expect(closeMock).toHaveBeenCalledWith('chat-1', DOC_ID)
     expect(result.current.openDocs).toHaveLength(0)
+  })
+
+  it('saves a dirty pane before a server-side close takes it down (#261)', async () => {
+    const { result } = await openPlainDoc()
+    act(() => result.current.handleContentChange(DOC_ID, 'typed during the turn'))
+    writeMock.mockResolvedValue(okResponse(2))
+    chatStateMock.mockResolvedValue({ chat: { documentMode: 'split' } })
+    openListMock.mockResolvedValue({ documents: [] })
+
+    await act(async () => {
+      await result.current.reloadFromServer()
+    })
+
+    expect(writeMock).toHaveBeenCalledTimes(1)
+    expect(writeMock.mock.calls[0][1]).toMatchObject({ content: 'typed during the turn' })
+    expect(result.current.openDocs).toHaveLength(0)
+  })
+
+  it('keeps a server-closed pane open when its save is refused (#261)', async () => {
+    const { result } = await openPlainDoc()
+    act(() => result.current.handleContentChange(DOC_ID, 'typed during the turn'))
+    writeMock.mockResolvedValue(failResponse(500))
+    readMock.mockResolvedValue({ content: 'v0', mtime: 5 })
+    chatStateMock.mockResolvedValue({ chat: { documentMode: 'split' } })
+    openListMock.mockResolvedValue({ documents: [] })
+
+    await act(async () => {
+      await result.current.reloadFromServer()
+    })
+
+    expect(showErrorToast).toHaveBeenCalled()
+    expect(result.current.openDocs).toHaveLength(1)
+    expect(result.current.openDocs[0].document.content).toBe('typed during the turn')
+  })
+
+  it('saves dirty panes when the server returns the chat to normal mode (#261)', async () => {
+    openMock.mockResolvedValue({
+      document: { id: DOC_ID, filePath: 'notes.txt', scope: 'project', displayTitle: 'Notes' },
+      content: 'v0',
+      mtime: 1,
+    })
+    openListMock.mockResolvedValue({ documents: [] })
+    const hook = renderHook(
+      ({ chat }: { chat: { documentMode: 'split' | 'normal' } | null }) =>
+        useDocumentMode({ chatId: 'chat-1', chat: chat as never }),
+      { initialProps: { chat: null as { documentMode: 'split' | 'normal' } | null } },
+    )
+    await act(async () => {
+      await hook.result.current.openDocument({ filePath: 'notes.txt' })
+    })
+    act(() => hook.result.current.handleContentChange(DOC_ID, 'last words'))
+    writeMock.mockResolvedValue(okResponse(2))
+
+    await act(async () => {
+      hook.rerender({ chat: { documentMode: 'normal' } })
+    })
+
+    await waitFor(() => expect(hook.result.current.openDocs).toHaveLength(0))
+    expect(writeMock).toHaveBeenCalledTimes(1)
+    expect(writeMock.mock.calls[0][1]).toMatchObject({ content: 'last words' })
   })
 })

@@ -1,6 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback, useId } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 type Status = 'idle' | 'submitting' | 'success' | 'error'
 
@@ -10,32 +13,47 @@ interface ArchiveReencryptSummary {
   failures: Array<{ fileId: string; filename: string; reason: string }>
 }
 
+interface ChangePassphraseResponse {
+  success?: boolean
+  error?: string
+  message?: string
+  archives?: ArchiveReencryptSummary
+}
+
 export function ChangePassphraseCard() {
+  const id = useId()
   const [currentPassphrase, setCurrentPassphrase] = useState('')
   const [newPassphrase, setNewPassphrase] = useState('')
   const [confirmPassphrase, setConfirmPassphrase] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [errorMessage, setErrorMessage] = useState('')
-  const [archiveCount, setArchiveCount] = useState<number | null>(null)
+  // The count the last change reported, which outranks the listing's.
+  const [reportedArchiveCount, setReportedArchiveCount] = useState<number | null>(null)
   const [archiveSummary, setArchiveSummary] = useState<ArchiveReencryptSummary | null>(null)
 
   const mismatch = newPassphrase.length > 0 && confirmPassphrase.length > 0 && newPassphrase !== confirmPassphrase
   const isValid = !mismatch && (newPassphrase === confirmPassphrase) && status !== 'submitting'
 
   // Character archive bundles are encrypted under the passphrase, so changing
-  // it rewrites each one. Tell the operator how many, up front.
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/v1/files?category=ARCHIVE')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.files) setArchiveCount(data.files.length)
-      })
-      .catch(() => {
-        /* count is a courtesy; the change itself reports the real numbers */
-      })
-    return () => { cancelled = true }
-  }, [])
+  // it rewrites each one. Tell the operator how many, up front. The count is a
+  // courtesy (a failed read shows nothing); the change reports the real numbers.
+  const { data: listedArchiveCount = null } = useQuery({
+    queryKey: queryKeys.files.list({ category: 'ARCHIVE' }),
+    queryFn: ({ signal }) => apiFetch<{ files?: unknown[] }>('/api/v1/files?category=ARCHIVE', { signal }),
+    select: (data) => (data.files ? data.files.length : null),
+    retry: false,
+  })
+  const archiveCount = reportedArchiveCount ?? listedArchiveCount
+
+  const changeMutation = useMutation({
+    mutationFn: (body: { oldPassphrase: string; newPassphrase: string }) =>
+      apiFetch<ChangePassphraseResponse>('/api/v1/system/unlock?action=change-passphrase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+  })
+  const { mutateAsync: changeAsync } = changeMutation
 
   const resetForm = useCallback(() => {
     setCurrentPassphrase('')
@@ -53,18 +71,12 @@ export function ChangePassphraseCard() {
     setArchiveSummary(null)
 
     try {
-      const res = await fetch('/api/v1/system/unlock?action=change-passphrase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          oldPassphrase: currentPassphrase,
-          newPassphrase,
-        }),
+      const data = await changeAsync({
+        oldPassphrase: currentPassphrase,
+        newPassphrase,
       })
 
-      const data = await res.json()
-
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         setStatus('error')
         setErrorMessage(data.error || data.message || 'Failed to change passphrase')
         return
@@ -72,8 +84,8 @@ export function ChangePassphraseCard() {
 
       setStatus('success')
       if (data.archives) {
-        setArchiveSummary(data.archives as ArchiveReencryptSummary)
-        setArchiveCount(data.archives.total >= 0 ? data.archives.total : archiveCount)
+        setArchiveSummary(data.archives)
+        if (data.archives.total >= 0) setReportedArchiveCount(data.archives.total)
       }
       resetForm()
 
@@ -81,9 +93,9 @@ export function ChangePassphraseCard() {
       window.dispatchEvent(new CustomEvent('quilltap-passphrase-changed'))
     } catch (err) {
       setStatus('error')
-      setErrorMessage(err instanceof Error ? err.message : 'An unexpected error occurred')
+      setErrorMessage(apiErrorMessage(err, 'Failed to change passphrase'))
     }
-  }, [isValid, currentPassphrase, newPassphrase, resetForm, archiveCount])
+  }, [isValid, currentPassphrase, newPassphrase, resetForm, changeAsync])
 
   const archiveFailures = archiveSummary?.failures ?? []
 
@@ -106,12 +118,12 @@ export function ChangePassphraseCard() {
       )}
 
       <div>
-        <label htmlFor="cp-current" className="block qt-text-label mb-2">
+        <label htmlFor={`${id}-current`} className="block qt-text-label mb-2">
           Current Passphrase
         </label>
         <input
           type="password"
-          id="cp-current"
+          id={`${id}-current`}
           value={currentPassphrase}
           onChange={(e) => { setCurrentPassphrase(e.target.value); setStatus('idle') }}
           placeholder="Leave empty if no passphrase is set"
@@ -124,12 +136,12 @@ export function ChangePassphraseCard() {
       </div>
 
       <div>
-        <label htmlFor="cp-new" className="block qt-text-label mb-2">
+        <label htmlFor={`${id}-new`} className="block qt-text-label mb-2">
           New Passphrase
         </label>
         <input
           type="password"
-          id="cp-new"
+          id={`${id}-new`}
           value={newPassphrase}
           onChange={(e) => { setNewPassphrase(e.target.value); setStatus('idle') }}
           placeholder="Enter new passphrase (or leave empty to remove)"
@@ -139,12 +151,12 @@ export function ChangePassphraseCard() {
       </div>
 
       <div>
-        <label htmlFor="cp-confirm" className="block qt-text-label mb-2">
+        <label htmlFor={`${id}-confirm`} className="block qt-text-label mb-2">
           Confirm New Passphrase
         </label>
         <input
           type="password"
-          id="cp-confirm"
+          id={`${id}-confirm`}
           value={confirmPassphrase}
           onChange={(e) => { setConfirmPassphrase(e.target.value); setStatus('idle') }}
           placeholder="Confirm new passphrase"

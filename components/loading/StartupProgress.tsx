@@ -15,9 +15,12 @@
  * data; this component is purely presentational.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, type Query } from '@tanstack/react-query';
 
 import { formatRelativeAge } from '@/lib/format-time';
+import { ApiFetchError, apiFetch } from '@/lib/query/fetcher';
+import { queryKeys } from '@/lib/query/keys';
 import { useNow } from '@/hooks/useNow';
 
 type ProgressTier = { current: number; total: number; unit: string };
@@ -47,6 +50,30 @@ interface StartupStatus {
 }
 
 const POLL_INTERVAL_MS = 1000;
+
+/**
+ * The one read of the startup status: the gate and the screen are two
+ * observers of it, so they share each poll. Each says how often it wants one;
+ * a failed poll is not retried early — the next tick is the retry.
+ */
+function useStartupStatusQuery(refetchInterval: number | false | ((query: Query<StartupStatus>) => number | false)) {
+  return useQuery({
+    queryKey: queryKeys.system.startupStatus,
+    queryFn: ({ signal }) =>
+      apiFetch<StartupStatus>('/api/v1/system/startup-status', { signal, cache: 'no-store' }),
+    refetchInterval,
+    // Startup goes on whether or not the window is in front.
+    refetchIntervalInBackground: true,
+    retry: false,
+  });
+}
+
+/** Stop once the app is displayable: the backfills have settled, or startup failed. */
+function gateInterval(query: Query<StartupStatus>): number | false {
+  const data = query.state.data;
+  if (data && (data.backgroundSettled === true || data.phase === 'failed')) return false;
+  return POLL_INTERVAL_MS;
+}
 
 export interface StartupGateState {
   /** The server's current coarse startup phase, or null before the first poll. */
@@ -78,50 +105,14 @@ export interface StartupGateState {
  * (reconcile, vault backfill, mount-index rescan) actually finishes.
  */
 export function useStartupPhase(): StartupGateState {
-  const [state, setState] = useState<StartupGateState>({
-    phase: null,
-    settled: false,
-    everSettling: false,
-  });
+  const { data } = useStartupStatusQuery(gateInterval);
+  const settled = data?.backgroundSettled === true;
+  const settling = !!data && !settled && data.phase !== 'failed';
+  // Sticky: once a poll has seen the gate hold, it stays seen.
+  const [everSettling, setEverSettling] = useState(false);
+  if (settling && !everSettling) setEverSettling(true);
 
-  useEffect(() => {
-    let stopped = false;
-
-    async function poll() {
-      if (stopped) return;
-      try {
-        const response = await fetch('/api/v1/system/startup-status', {
-          cache: 'no-store',
-        });
-        if (response.ok) {
-          const data: StartupStatus = await response.json();
-          const settled = data.backgroundSettled === true;
-          const settling = !settled && data.phase !== 'failed';
-          setState((prev) => ({
-            phase: data.phase,
-            settled,
-            everSettling: prev.everSettling || settling,
-          }));
-          // Stop polling once the app is displayable: either the background
-          // backfills have settled, or startup failed (errors surface in-app).
-          if (settled || data.phase === 'failed') {
-            return;
-          }
-        }
-      } catch {
-        // best-effort — keep polling
-      }
-      if (stopped) return;
-      setTimeout(poll, POLL_INTERVAL_MS);
-    }
-
-    poll();
-    return () => {
-      stopped = true;
-    };
-  }, []);
-
-  return state;
+  return { phase: data?.phase ?? null, settled, everSettling: everSettling || settling };
 }
 
 const PHASE_HEADLINE: Record<string, string> = {
@@ -149,42 +140,16 @@ export function StartupProgress() {
   // poll landing. The shared clock makes them tick on their own, so a stalled
   // step visibly stalls instead of looking freshly finished.
   const nowMs = useNow(1_000);
-  const [status, setStatus] = useState<StartupStatus | null>(null);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const stoppedRef = useRef(false);
-
-  useEffect(() => {
-    stoppedRef.current = false;
-
-    async function poll() {
-      if (stoppedRef.current) return;
-      try {
-        const response = await fetch('/api/v1/system/startup-status', {
-          cache: 'no-store',
-        });
-        if (!response.ok) {
-          setFetchError(`status endpoint returned ${response.status}`);
-        } else {
-          const data: StartupStatus = await response.json();
-          setStatus(data);
-          setFetchError(null);
-        }
-      } catch (err) {
-        setFetchError(err instanceof Error ? err.message : String(err));
-      }
-
-      // Keep polling for display while the screen is up. The gate owner
-      // (app-layout) decides when to release and refreshes stale data; this
-      // component is purely presentational.
-      if (stoppedRef.current) return;
-      setTimeout(poll, POLL_INTERVAL_MS);
-    }
-
-    poll();
-    return () => {
-      stoppedRef.current = true;
-    };
-  }, []);
+  // Keep polling for display while the screen is up. The gate owner
+  // (app-layout) decides when to release and refreshes stale data; this
+  // component is purely presentational.
+  const { data, error } = useStartupStatusQuery(POLL_INTERVAL_MS);
+  const status = data ?? null;
+  const fetchError = error
+    ? error instanceof ApiFetchError
+      ? `status endpoint returned ${error.status}`
+      : error.message
+    : null;
 
   const phase = status?.phase ?? 'pending';
   const isErrored = phase === 'failed';

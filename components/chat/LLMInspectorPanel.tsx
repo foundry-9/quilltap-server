@@ -52,7 +52,6 @@ const FILTER_LABELS: Record<FilterCategory, string> = {
 interface LLMInspectorPanelProps {
   isOpen: boolean
   onClose: () => void
-  chatId: string
   logs: LLMLog[]
   loading: boolean
   scrollToMessageId?: string | null

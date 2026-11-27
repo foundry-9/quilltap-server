@@ -12,9 +12,14 @@ import { useState, useEffect, useCallback, useMemo, useId } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
 import JsonSchemaForm from '@/components/chat/JsonSchemaForm'
+import { useQueryClient } from '@tanstack/react-query'
 import { showErrorToast } from '@/lib/toast'
+import { apiFetch, apiErrorMessage, ApiFetchError } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { runBuiltInTool, cleanArgs } from '@/components/chat/run-tool-request'
 import type { AvailableTool } from '@/app/api/v1/tools/route'
 import type { Participant } from '@/app/salon/[id]/types'
+import { Spinner } from '@/components/ui/Spinner'
 
 interface RunToolModalProps {
   isOpen: boolean
@@ -55,6 +60,7 @@ export default function RunToolModal({
   initialTool = null,
 }: RunToolModalProps) {
   const id = useId()
+  const queryClient = useQueryClient()
   const [tools, setTools] = useState<AvailableTool[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedTool, setSelectedTool] = useState<AvailableTool | null>(null)
@@ -108,12 +114,19 @@ export default function RunToolModal({
     setSelectedCharacterId(defaultCharacterId)
     setIsPrivate(false)
 
-    fetch(`/api/v1/tools?chatId=${chatId}&includeSchemas=true`)
-      .then(res => res.json())
+    // Fresh on every open (staleTime 0), through the same cache entry the
+    // composer's `/` menu reads.
+    queryClient
+      .fetchQuery({
+        queryKey: queryKeys.tools.byChat(chatId),
+        queryFn: ({ signal }) =>
+          apiFetch<{ tools?: AvailableTool[] }>(`/api/v1/tools?chatId=${chatId}&includeSchemas=true`, { signal }),
+        staleTime: 0,
+      })
       .then(data => {
         if (data.tools) {
           // Filter to only user-invocable tools
-          const invocable = (data.tools as AvailableTool[]).filter(t => t.userInvocable !== false)
+          const invocable = data.tools.filter(t => t.userInvocable !== false)
           setTools(invocable)
           if (requestedToolId) {
             const requested = invocable.find(t => t.id === requestedToolId)
@@ -128,11 +141,14 @@ export default function RunToolModal({
         }
       })
       .catch(err => {
+        // A refusal that answered in JSON has always left the list as it was,
+        // without a toast; only an unreadable or unreachable answer says so.
+        if (err instanceof ApiFetchError && err.info !== undefined) return
         console.error('Failed to load tools:', err)
         showErrorToast('Failed to load available tools')
       })
       .finally(() => setLoading(false))
-  }, [isOpen, chatId, defaultCharacterId, requestedToolId, requestNonce, handleSelectTool])
+  }, [isOpen, chatId, defaultCharacterId, requestedToolId, requestNonce, handleSelectTool, queryClient])
 
   const handleBack = useCallback(() => {
     setSelectedTool(null)
@@ -145,36 +161,17 @@ export default function RunToolModal({
     setExecuting(true)
 
     try {
-      // Build clean arguments: only include fields that have values
-      const cleanArgs: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(formValues)) {
-        if (value !== undefined && value !== null && value !== '') {
-          cleanArgs[key] = value
-        }
-      }
-
-      const res = await fetch(`/api/v1/chats/${chatId}?action=run-tool`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          toolName: selectedTool.id,
-          arguments: cleanArgs,
-          characterId: selectedCharacterId || undefined,
-          private: isPrivate,
-        }),
+      await runBuiltInTool(chatId, {
+        toolName: selectedTool.id,
+        arguments: cleanArgs(formValues),
+        characterId: selectedCharacterId,
+        private: isPrivate,
       })
-
-      const data = await res.json()
-
-      if (!res.ok || !data.success) {
-        showErrorToast(data.error || data.message || 'Tool execution failed')
-        return
-      }
 
       onToolExecuted()
       onClose()
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to execute tool')
+      showErrorToast(apiErrorMessage(err, '') || 'Tool execution failed')
     } finally {
       setExecuting(false)
     }
@@ -202,13 +199,8 @@ export default function RunToolModal({
     (selectedTool.parameters as { properties?: unknown }).properties &&
     Object.keys((selectedTool.parameters as { properties: Record<string, unknown> }).properties).length > 0)
 
-  // Build JSON preview of current arguments
-  const cleanPreviewArgs: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(formValues)) {
-    if (value !== undefined && value !== null && value !== '') {
-      cleanPreviewArgs[key] = value
-    }
-  }
+  // JSON preview of the arguments a run would send
+  const cleanPreviewArgs = cleanArgs(formValues)
 
   const title = selectedTool
     ? `Run Tool: ${selectedTool.name}`
@@ -241,10 +233,7 @@ export default function RunToolModal({
         >
           {executing ? (
             <span className="flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
+              <Spinner className="h-4 w-4" />
               Running...
             </span>
           ) : 'Run Tool'}
@@ -274,10 +263,7 @@ export default function RunToolModal({
     >
       {loading ? (
         <div className="qt-loading-state">
-          <svg className="animate-spin h-6 w-6 qt-text-secondary" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
+          <Spinner className="h-6 w-6 qt-text-secondary" />
         </div>
       ) : !selectedTool ? (
         /* Phase 1: Tool Selection */

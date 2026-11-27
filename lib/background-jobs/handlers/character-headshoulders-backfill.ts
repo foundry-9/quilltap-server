@@ -134,6 +134,8 @@ export async function handleCharacterHeadShouldersBackfill(job: BackgroundJob): 
     job.userId,
     payload.characterId,
     selection.provider,
+    undefined,
+    selection.connectionProfileId,
   );
 
   const headAndShouldersPrompt = content.substring(0, 500).trim();

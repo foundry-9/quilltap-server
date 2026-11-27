@@ -3,6 +3,7 @@
 import { useId } from 'react'
 import Link from 'next/link'
 import { SettingsCard } from '@/components/ui/SettingsCard'
+import { ProfileOption } from '@/components/ui/ProfileOption'
 import { ChatSettings, ConnectionProfile } from './types'
 import { settingsCardHref } from '@/lib/settings/hrefs'
 
@@ -53,14 +54,9 @@ export function ImageDescriptionSettings({
             className="qt-select"
           >
             <option value="">Auto-select vision-capable profile</option>
-            {visionProfiles.map((profile) => {
-              const hasApiKey = Boolean(profile.apiKey)
-              return (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
-                </option>
-              )
-            })}
+            {visionProfiles.map((profile) => (
+              <ProfileOption key={profile.id} profile={profile} />
+            ))}
           </select>
           {visionProfiles.length === 0 && (
             <p className="mt-1 text-xs qt-text-warning">

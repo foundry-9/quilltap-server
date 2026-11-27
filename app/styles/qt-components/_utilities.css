@@ -1488,4 +1488,37 @@
   .qt-scroll-container {
     container-type: size;
   }
+
+  /* ==========================================================================
+     SEGMENTED CONTROL
+     ========================================================================== */
+
+  /**
+   * One option of a segmented control — a row of small buttons on a muted
+   * track, one of them raised (the wardrobe's Items / Outfits and Single /
+   * Bundle switches, its "Add to" choice). Muted at rest, full strength on
+   * hover; the chosen one adds qt-segmented-item-active. Size and shape stay
+   * at the call site.
+   * Usage:
+   *   <div class="inline-flex gap-1 qt-bg-muted/50 rounded-lg p-1">
+   *     <button class="qt-segmented-item qt-segmented-item-active px-3 py-1 rounded text-xs font-medium transition-colors">…
+   */
+  .qt-segmented-item {
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-segmented-item:hover {
+    color: var(--color-foreground);
+  }
+
+  /** The chosen option: the default surface, full-strength text, a small shadow. */
+  .qt-segmented-item-active,
+  .qt-segmented-item-active:hover {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
+    box-shadow:
+      var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+  }
 }

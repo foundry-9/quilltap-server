@@ -16,20 +16,26 @@
  * @module components/scenarios/use-scenario-mutator
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { hashKey, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { withArchivedParam } from '@/components/scenarios/archived-query'
 import type { Scenario, ScenarioMutator } from '@/components/scenarios/types'
 
 interface ListResponse {
-  mountPointId: string | null
+  mountPointId?: string | null
   scenarios: Scenario[]
-  warnings: string[]
+  warnings?: string[]
 }
 
 interface MutateResponse {
   scenarios: Scenario[]
   warnings: string[]
 }
+
+const NO_SCENARIOS: Scenario[] = []
+const NO_WARNINGS: string[] = []
 
 function encodePathSegment(p: string): string {
   // Strip the Scenarios/ prefix if present and the .md extension; the API
@@ -38,14 +44,37 @@ function encodePathSegment(p: string): string {
   return encodeURIComponent(stripped)
 }
 
-export function useScenarioMutator(basePath: string): ScenarioMutator {
-  const [scenarios, setScenarios] = useState<Scenario[]>([])
-  const [warnings, setWarnings] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+/**
+ * @param basePath The scope's collection route.
+ * @param listKey  The scope's list key, when the pickers read the same list
+ *   under one (`queryKeys.scenarios.general` / `project`); otherwise the list
+ *   is cached under `queryKeys.scenarios.store(basePath)`.
+ */
+export function useScenarioMutator(
+  basePath: string,
+  listKey?: (includeArchived: boolean) => QueryKey,
+): ScenarioMutator {
+  const queryClient = useQueryClient()
   const [showArchived, setShowArchived] = useState(false)
 
   const collectionUrl = withArchivedParam(basePath, showArchived)
+  const key: QueryKey = listKey ? listKey(showArchived) : queryKeys.scenarios.store(basePath, showArchived)
+
+  // The server decides what is visible, so "Show archived" is a different
+  // list (a different key), not a filter.
+  // `collectionUrl` is basePath + showArchived, which the key (the caller's or
+  // the store default) already encodes.
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  const query = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => apiFetch<ListResponse>(collectionUrl, { signal }),
+  })
+  const scenarios = query.data?.scenarios ?? NO_SCENARIOS
+  const warnings = query.data?.warnings ?? NO_WARNINGS
+  // A re-read keeps the current list on screen; only the first read shows the
+  // loading state, so a `silent` refresh and a plain one look the same.
+  const loading = query.isPending
+  const error = query.error ? apiErrorMessage(query.error, 'Failed to load scenarios') : null
 
   const itemUrl = useCallback(
     (scenarioPath: string, query = '') =>
@@ -56,38 +85,28 @@ export function useScenarioMutator(basePath: string): ScenarioMutator {
     [basePath, showArchived],
   )
 
-  const refresh = useCallback<ScenarioMutator['refresh']>(async (opts) => {
-    // A silent refresh (workspace tab re-activation) keeps the current list on
-    // screen instead of flipping the manager back to its loading state.
-    if (!opts?.silent) setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(collectionUrl)
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body?.error || `Failed to load scenarios (${res.status})`)
-      }
-      const data = (await res.json()) as ListResponse
-      setScenarios(data.scenarios || [])
-      setWarnings(data.warnings || [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
-    }
-  }, [collectionUrl])
+  const { refetch } = query
+  const refresh = useCallback<ScenarioMutator['refresh']>(async () => {
+    await refetch()
+  }, [refetch])
 
-  useEffect(() => {
-    // Initial fetch, and a refetch whenever "Show archived" flips — the server
-    // decides what's visible, so the toggle is a new request, not a filter.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState lands inside async refresh()
-    void refresh()
-  }, [refresh])
-
+  // Every write answers with the freshly listed scenarios: that answer is this
+  // list, and every other scenario list (the pickers' tiers, the other
+  // archived view) is re-read, since the same files may be in them.
+  const ownHash = hashKey(key)
   const applyMutateResponse = useCallback((data: MutateResponse) => {
-    setScenarios(data.scenarios || [])
-    setWarnings(data.warnings || [])
-  }, [])
+    queryClient.setQueryData<ListResponse>(key, (prev) => ({
+      ...prev,
+      scenarios: data.scenarios || [],
+      warnings: data.warnings || [],
+    }))
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.scenarios.all,
+      predicate: (q) => q.queryHash !== ownHash,
+    })
+    // `key` is rebuilt each render from the values `ownHash` encodes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ownHash is the identity of key
+  }, [queryClient, ownHash])
 
   const createScenario = useCallback<ScenarioMutator['createScenario']>(
     async (input) => {

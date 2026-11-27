@@ -9,15 +9,15 @@
  * the page as you type, a persona row whose chips are lenses over the whole
  * page, and the attention strip. Every card wears its persona's badge.
  *
- * Addressing: `?group=`, `?section=` (a card), `?persona=`, `?q=`, and the
- * legacy `?tab=` / `?tab=&section=` — all resolved by `resolveSettingsLink`.
- * A workspace tab passes the same values as props instead of the URL.
+ * Addressing: `group`, `section` (a card), `persona`, `q`, and the legacy
+ * `tab` / `tab` + `section` — all resolved by `resolveSettingsLink`. The page
+ * is a workspace tab (`/settings` redirects into one), which passes the
+ * address as props.
  *
  * Design of record: docs/developer/features/complete/settings-redesign.md
  */
 
-import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { BrandName } from '@/components/ui/brand-name'
 import { ChatSettingsProvider } from '@/components/settings/chat-settings/ChatSettingsProvider'
 import { AttentionStrip, useAttentionChips, type AttentionChip } from '@/components/settings/AttentionStrip'
@@ -92,8 +92,7 @@ function visibleCardsFor(filtered: SettingsCard[] | null): SettingsCard[] | null
   return filtered.filter((c) => !c.hostedBy || !ids.has(c.hostedBy))
 }
 
-function SettingsPage({ address, inWorkspace }: { address: AddressParams; inWorkspace: boolean }) {
-  const router = useRouter()
+function SettingsPage({ address }: { address: AddressParams }) {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const selectId = useId()
@@ -115,21 +114,17 @@ function SettingsPage({ address, inWorkspace }: { address: AddressParams; inWork
   const [searchGroup, setSearchGroup] = useState<SettingsGroupId | null>(null)
   const [openCards, setOpenCards] = useState<Set<string>>(() => initialOpenCards(link?.card ?? null))
   const [closedInSearch, setClosedInSearch] = useState<Set<string>>(() => new Set())
-  // The address this page last wrote to the URL; its echo is not a new deep link.
-  const [writtenKey, setWrittenKey] = useState<string | null>(null)
 
   const incomingKey = paramsKey(address)
   if (incomingKey !== seenKey) {
     setSeenKey(incomingKey)
-    if (incomingKey !== writtenKey) {
-      setChosenGroup(link?.group ?? null)
-      setFocusCard(link?.card ?? null)
-      setFocusProvider(address.provider)
-      setLens(addressLens)
-      setQuery(address.q ?? '')
-      setSearchGroup(null)
-      setOpenCards((prev) => withFocus(prev, link?.card ?? null))
-    }
+    setChosenGroup(link?.group ?? null)
+    setFocusCard(link?.card ?? null)
+    setFocusProvider(address.provider)
+    setLens(addressLens)
+    setQuery(address.q ?? '')
+    setSearchGroup(null)
+    setOpenCards((prev) => withFocus(prev, link?.card ?? null))
   }
 
   // --- Attention strip + default group --------------------------------------
@@ -170,28 +165,6 @@ function SettingsPage({ address, inWorkspace }: { address: AddressParams; inWork
   }
   const group = getSettingsGroup(activeGroup)!
 
-  // --- Addressing (standalone page only; a workspace tab's URL is /workspace) --
-  const writeAddress = useCallback(
-    (next: { group?: SettingsGroupId | null; persona?: SettingsPersona | null }) => {
-      if (inWorkspace) return
-      const params = new URLSearchParams()
-      if (next.group) params.set('group', next.group)
-      if (next.persona) params.set('persona', next.persona)
-      const written: AddressParams = {
-        group: next.group ?? null,
-        tab: null,
-        section: null,
-        persona: next.persona ?? null,
-        q: null,
-        provider: null,
-      }
-      setWrittenKey(paramsKey(written))
-      const qs = params.toString()
-      router.replace(qs ? `/settings?${qs}` : '/settings', { scroll: false })
-    },
-    [inWorkspace, router],
-  )
-
   const selectGroup = useCallback(
     (id: SettingsGroupId) => {
       setFocusCard(null)
@@ -200,32 +173,23 @@ function SettingsPage({ address, inWorkspace }: { address: AddressParams; inWork
         return
       }
       setChosenGroup(id)
-      writeAddress({ group: id, persona: lens })
     },
-    [searching, lens, writeAddress],
+    [searching],
   )
 
-  const chooseLens = useCallback(
-    (persona: SettingsPersona | null) => {
-      setLens(persona)
-      setFocusCard(null)
-      writeAddress({ group: chosenGroup, persona })
-    },
-    [chosenGroup, writeAddress],
-  )
+  const chooseLens = useCallback((persona: SettingsPersona | null) => {
+    setLens(persona)
+    setFocusCard(null)
+  }, [])
 
-  const openChip = useCallback(
-    (chip: AttentionChip) => {
-      setQuery('')
-      setLens(null)
-      setChosenGroup(chip.group)
-      setFocusCard(chip.card)
-      setFocusProvider(chip.provider ?? null)
-      setOpenCards((prev) => withFocus(prev, chip.card))
-      writeAddress({ group: chip.group })
-    },
-    [writeAddress],
-  )
+  const openChip = useCallback((chip: AttentionChip) => {
+    setQuery('')
+    setLens(null)
+    setChosenGroup(chip.group)
+    setFocusCard(chip.card)
+    setFocusProvider(chip.provider ?? null)
+    setOpenCards((prev) => withFocus(prev, chip.card))
+  }, [])
 
   // --- `/` focuses the search; Escape in it clears ---------------------------
   useEffect(() => {
@@ -449,41 +413,21 @@ function withFocus(set: Set<string>, focus: string | null): Set<string> {
   return toggled(set, card.hostedBy ?? card.id, true)
 }
 
-function SettingsFromAddress(props: SettingsViewProps) {
-  const searchParams = useSearchParams()
-  const pathname = usePathname()
-  const inWorkspace = pathname !== '/settings'
-  const fromProps = !!(props.group || props.tab || props.section || props.persona || props.q || props.provider)
-  const address: AddressParams = useMemo(
-    () =>
-      fromProps || inWorkspace
-        ? {
-            group: props.group ?? null,
-            tab: props.tab ?? null,
-            section: props.section ?? null,
-            persona: props.persona ?? null,
-            q: props.q ?? null,
-            provider: props.provider ?? null,
-          }
-        : {
-            group: searchParams.get('group'),
-            tab: searchParams.get('tab'),
-            section: searchParams.get('section'),
-            persona: searchParams.get('persona'),
-            q: searchParams.get('q'),
-            provider: searchParams.get('provider'),
-          },
-    [fromProps, inWorkspace, props.group, props.tab, props.section, props.persona, props.q, props.provider, searchParams],
-  )
-  return <SettingsPage address={address} inWorkspace={inWorkspace} />
-}
-
 export function SettingsView(props: SettingsViewProps = {}) {
+  const address: AddressParams = useMemo(
+    () => ({
+      group: props.group ?? null,
+      tab: props.tab ?? null,
+      section: props.section ?? null,
+      persona: props.persona ?? null,
+      q: props.q ?? null,
+      provider: props.provider ?? null,
+    }),
+    [props.group, props.tab, props.section, props.persona, props.q, props.provider],
+  )
   return (
     <ChatSettingsProvider>
-      <Suspense fallback={<div className="qt-text-secondary">Loading...</div>}>
-        <SettingsFromAddress {...props} />
-      </Suspense>
+      <SettingsPage address={address} />
     </ChatSettingsProvider>
   )
 }

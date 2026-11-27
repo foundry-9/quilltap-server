@@ -6,8 +6,8 @@ import { FormActions } from '@/components/ui/FormActions'
 import ErrorAlert from '@/components/ui/ErrorAlert'
 import { useImportKeys } from './hooks'
 import { ImportKeysPreview } from './ImportKeysPreview'
-import { showSuccessToast } from '@/lib/toast'
-import type { DuplicateHandling, ProfileAssociation } from './types'
+import { useAnnounceAssociations } from '@/hooks/useAutoAssociate'
+import type { DuplicateHandling } from './types'
 
 interface ImportKeysDialogProps {
   isOpen: boolean
@@ -42,6 +42,7 @@ export function ImportKeysDialog({
     isOpen,
     onSuccess,
   })
+  const announceAssociations = useAnnounceAssociations()
 
   // Don't call actions.reset() here - the !isOpen effect in useImportKeys handles that
   const handleClose = useCallback(() => {
@@ -52,15 +53,7 @@ export function ImportKeysDialog({
   useEffect(() => {
     if (state.step === 'complete' && state.importResult) {
 
-      // Show toasts for auto-associations
-      if (state.importResult.associations && state.importResult.associations.length > 0) {
-        state.importResult.associations.forEach((assoc: ProfileAssociation) => {
-          showSuccessToast(
-            `${assoc.profileName} linked to API key "${assoc.keyLabel}"`,
-            4000
-          )
-        })
-      }
+      announceAssociations(state.importResult.associations)
 
       // Auto-close after a brief delay
       const timer = setTimeout(() => {
@@ -69,7 +62,7 @@ export function ImportKeysDialog({
 
       return () => clearTimeout(timer)
     }
-  }, [state.step, state.importResult, handleClose])
+  }, [state.step, state.importResult, handleClose, announceAssociations])
 
   if (!isOpen) return null
 

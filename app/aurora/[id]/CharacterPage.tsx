@@ -29,6 +29,7 @@ import { AIWizardModal, type GeneratedCharacterData, normalizeGeneratedScenarios
 import { CharacterOptimizerModal } from '@/components/characters/optimizer'
 import { applyCharacterFieldUpdates } from '@/components/characters/apply-character-field-updates'
 import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
+import { deleteCharacter, deletionSummary, type CharacterDeleteOptions } from '@/components/characters/delete-character'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
@@ -303,25 +304,15 @@ function LoadedCharacterPage({
     }
   }
 
-  const deleteCharacter = async (options: { cascadeChats: boolean; cascadeImages: boolean }) => {
+  const removeCharacter = async (options: CharacterDeleteOptions) => {
     await autosave.flush()
-    const params = new URLSearchParams()
-    if (options.cascadeChats) params.set('cascadeChats', 'true')
-    if (options.cascadeImages) params.set('cascadeImages', 'true')
-    const qs = params.toString()
-    const result = await autosave.run(async () => {
-      const res = await fetch(`/api/v1/characters/${characterId}${qs ? `?${qs}` : ''}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('The character could not be deleted.')
-      return (await res.json().catch(() => ({}))) as Record<string, number>
-    }, 'The character could not be deleted.')
+    const result = await autosave.run(
+      () => deleteCharacter(characterId, options, 'The character could not be deleted.'),
+      'The character could not be deleted.',
+    )
     if (!result) return
     setShowDelete(false)
-    const parts = [`${character.name} deleted`]
-    if (result.deletedChats > 0) parts.push(`${result.deletedChats} chat${result.deletedChats === 1 ? '' : 's'} deleted`)
-    if (result.deletedImages > 0) parts.push(`${result.deletedImages} image${result.deletedImages === 1 ? '' : 's'} deleted`)
-    if (result.deletedMemories > 0)
-      parts.push(`${result.deletedMemories} memor${result.deletedMemories === 1 ? 'y' : 'ies'} deleted`)
-    showSuccessToast(parts.join('. '))
+    showSuccessToast(deletionSummary(result, character.name))
     void invalidateLists()
     queryClient.removeQueries({ queryKey: queryKeys.characters.detail(characterId) })
     onBack()
@@ -374,11 +365,7 @@ function LoadedCharacterPage({
       })
     }
     if (data.wardrobeItems && data.wardrobeItems.length > 0) {
-      const { saved, outfits } = await saveGeneratedWardrobeItems(characterId, data.wardrobeItems)
-      if (saved > 0) {
-        const outfitText = outfits > 0 ? ` (including ${outfits} outfit${outfits > 1 ? 's' : ''})` : ''
-        showSuccessToast(`${saved} wardrobe item${saved > 1 ? 's' : ''} created${outfitText}`)
-      }
+      await saveGeneratedWardrobeItems(characterId, data.wardrobeItems)
     }
     const scenarios = normalizeGeneratedScenarios(data.scenarios)
     if (scenarios.length > 0) {
@@ -537,7 +524,7 @@ function LoadedCharacterPage({
           characterId={characterId}
           characterName={character.name}
           profiles={profiles.map((p) => ({ id: p.id, name: p.name }))}
-          defaultConnectionProfileId={character.defaultConnectionProfileId}
+          defaultConnectionProfileId={character.defaultConnectionProfileId ?? undefined}
           vaultAvailable={!!character.characterDocumentMountPointId}
           onClose={() => setShowOptimizer(false)}
           onApplied={() => {
@@ -588,7 +575,7 @@ function LoadedCharacterPage({
           characterId={characterId}
           characterName={character.name}
           onClose={() => setShowDelete(false)}
-          onConfirm={(options) => void deleteCharacter(options)}
+          onConfirm={(options) => void removeCharacter(options)}
         />
       )}
     </CharacterPageContext.Provider>

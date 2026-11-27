@@ -45,7 +45,7 @@ import {
 export { InventoryRequestError, inventoryRequest } from '@/lib/inventory/request'
 
 /** The tier key a container's reads are cached under. */
-export function inventoryTierKey(container: InventoryContainer, shared = false): string {
+function inventoryTierKey(container: InventoryContainer, shared = false): string {
   return `${encodeInventoryContainer(container)}${shared ? '|shared' : ''}`
 }
 

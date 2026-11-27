@@ -21,6 +21,17 @@ import type {
   WizardCharacterData,
 } from '../types'
 import { normalizeGeneratedScenarios } from '../types'
+import { parseAgentSseLine, splitSseBuffer } from '@/components/agent-stream/parse-agent-stream'
+
+/** One event of the `ai-wizard-stream` SSE response. */
+interface WizardStreamEvent {
+  type?: string
+  field?: string
+  snippet?: string
+  error?: string
+  errors?: Record<string, string>
+  fullContent?: unknown
+}
 
 interface UseAIWizardProps {
   characterId?: string
@@ -287,63 +298,56 @@ export function useAIWizard({
         const { done, value } = await reader.read()
         if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-
-        // Keep the last incomplete line in buffer
-        buffer = lines.pop() || ''
+        // The last incomplete line stays in the buffer for the next chunk.
+        const { lines, rest } = splitSseBuffer(buffer, decoder.decode(value, { stream: true }))
+        buffer = rest
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6))
+          const event = parseAgentSseLine(line) as WizardStreamEvent | null
+          if (!event) continue
 
-              switch (event.type) {
-                case 'field_start':
-                  setGenerationProgress((prev) => ({
-                    ...prev,
-                    currentField: event.field as GeneratableField,
-                  }))
-                  break
+          switch (event.type) {
+            case 'field_start':
+              setGenerationProgress((prev) => ({
+                ...prev,
+                currentField: event.field as GeneratableField,
+              }))
+              break
 
-                case 'field_complete':
-                  setGenerationProgress((prev) => ({
-                    ...prev,
-                    currentField: null,
-                    completedFields: [...prev.completedFields, event.field as GeneratableField],
-                    snippets: {
-                      ...prev.snippets,
-                      [event.field]: event.snippet || '',
-                    },
-                  }))
-                  break
+            case 'field_complete':
+              setGenerationProgress((prev) => ({
+                ...prev,
+                currentField: null,
+                completedFields: [...prev.completedFields, event.field as GeneratableField],
+                snippets: {
+                  ...prev.snippets,
+                  [event.field as string]: event.snippet || '',
+                },
+              }))
+              break
 
-                case 'field_error':
-                  setGenerationProgress((prev) => ({
-                    ...prev,
-                    currentField: null,
-                    errors: {
-                      ...prev.errors,
-                      [event.field]: event.error || 'Generation failed',
-                    },
-                  }))
-                  break
+            case 'field_error':
+              setGenerationProgress((prev) => ({
+                ...prev,
+                currentField: null,
+                errors: {
+                  ...prev.errors,
+                  [event.field as string]: event.error || 'Generation failed',
+                },
+              }))
+              break
 
-                case 'done':
-                  setGeneratedData(event.fullContent as GeneratedCharacterData)
-                  if (event.error) {
-                    setError(event.error)
-                  }
-                  setGenerationProgress((prev) => ({
-                    ...prev,
-                    currentField: null,
-                    errors: event.errors || prev.errors,
-                  }))
-                  break
+            case 'done':
+              setGeneratedData(event.fullContent as GeneratedCharacterData)
+              if (event.error) {
+                setError(event.error)
               }
-            } catch {
-              // Ignore parse errors for incomplete JSON
-            }
+              setGenerationProgress((prev) => ({
+                ...prev,
+                currentField: null,
+                errors: event.errors || prev.errors,
+              }))
+              break
           }
         }
       }

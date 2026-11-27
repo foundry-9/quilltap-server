@@ -20,6 +20,8 @@ jest.mock('@/lib/logger', () => {
 
 import { AbstractBaseRepository } from '@/lib/database/repositories/base.repository'
 import { ChatsRepository } from '@/lib/database/repositories/chats.repository'
+import { ConnectionProfilesRepository } from '@/lib/database/repositories/connection-profiles.repository'
+import { PROFILE_USAGE_COUNTER_FIELD_NAMES } from '@/lib/llm/profile-usage'
 
 const RowSchema = z.object({
   id: z.string(),
@@ -100,16 +102,30 @@ describe('AbstractBaseRepository._update — patch-only fields', () => {
   })
 })
 
-describe('ChatsRepository — the Concierge state, the carried Inventory and the turn mode are patch-only', () => {
-  it('declares conciergeMode, conciergeModeSetBy, conciergeModeReason, equippedInventory and turnMode', () => {
+describe('ChatsRepository — the Concierge state, the carried Inventory, the turn mode and the usage totals are patch-only', () => {
+  it('declares the Concierge trio, equippedInventory, turnMode and the usage totals', () => {
     const repo = new ChatsRepository() as unknown as { patchOnlyFields(): readonly string[] }
     expect([...repo.patchOnlyFields()].sort()).toEqual([
       'conciergeMode',
       'conciergeModeReason',
       'conciergeModeSetBy',
       'equippedInventory',
+      'estimatedCostUSD',
+      'priceSource',
+      'totalCacheReadTokens',
+      'totalCacheWriteTokens',
+      'totalCompletionTokens',
+      'totalPromptTokens',
       'turnMode',
     ])
+  })
+})
+
+describe('ConnectionProfilesRepository — the usage ledgers are patch-only', () => {
+  it('declares every counter column', () => {
+    const repo = new ConnectionProfilesRepository() as unknown as { patchOnlyFields(): readonly string[] }
+    expect([...repo.patchOnlyFields()].sort()).toEqual([...PROFILE_USAGE_COUNTER_FIELD_NAMES].sort())
+    expect(repo.patchOnlyFields()).toHaveLength(10)
   })
 })
 

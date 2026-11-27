@@ -12,6 +12,7 @@
  */
 
 import { useState } from 'react'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import Link from 'next/link'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { TagDisplay } from '@/components/tags/tag-display'
@@ -166,7 +167,7 @@ export function ChatCard({
 }: ChatCardProps) {
   const navigate = useWorkspaceNavigate()
   const { formatCharacterName } = useUserCharacterDisplayName()
-  const [copiedLink, setCopiedLink] = useState(false)
+  const { copied: copiedLink, copy: copyLink } = useCopyToClipboard(1500)
 
   // A day-boundary tick — one timer, firing once at local midnight — is all
   // this readout needs to roll "today" over to "Yesterday" on a list that
@@ -185,12 +186,9 @@ export function ChatCard({
     e.preventDefault()
     e.stopPropagation()
     const url = `${window.location.origin}/salon/${chat.id}`
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopiedLink(true)
+    if (await copyLink(url)) {
       showSuccessToast('Link copied to clipboard')
-      setTimeout(() => setCopiedLink(false), 1500)
-    } catch {
+    } else {
       showErrorToast('Failed to copy link')
     }
   }

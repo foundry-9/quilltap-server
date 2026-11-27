@@ -50,7 +50,7 @@ function foldChar(ch: string): string {
  * diacritics per character, so offsets in the folded text line up with the
  * original (a precomposed letter folds to one character).
  */
-export function highlightText(text: string, terms: readonly string[] | undefined): ReactNode {
+function highlightText(text: string, terms: readonly string[] | undefined): ReactNode {
   const needles = (terms ?? []).map((t) => t.trim()).filter(Boolean).map((t) => Array.from(t).map(foldChar).join(''))
   if (needles.length === 0 || !text) return text
   const chars = Array.from(text)

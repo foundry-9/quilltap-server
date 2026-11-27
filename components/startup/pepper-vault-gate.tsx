@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-
-type DbKeyState = 'resolved' | 'needs-setup' | 'needs-passphrase' | 'needs-vault-storage';
+import type { DbKeyState } from '@/lib/startup/dbkey';
 
 /** Track whether the gate check has succeeded (not just attempted) */
 let gateResolved = false;

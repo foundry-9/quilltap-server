@@ -38,8 +38,6 @@ function setup({ isPaused = false }: { isPaused?: boolean } = {}) {
   const rendered = renderHook(() =>
     useSSEStreaming({
       chatId: 'chat-1',
-      chat: { id: 'chat-1', participants: [] } as never,
-      messages,
       setMessages: setMessages as never,
       isMultiChar: false,
       hasActiveCharacters: true,
@@ -47,7 +45,6 @@ function setup({ isPaused = false }: { isPaused?: boolean } = {}) {
         { id: 'participant-1', type: 'CHARACTER', isActive: true, controlledBy: 'llm' },
       ],
       isPaused,
-      respondingParticipantId: null,
       setRespondingParticipantId: jest.fn(),
       activeTypingParticipantId: null,
       impersonatingParticipantIds: [],

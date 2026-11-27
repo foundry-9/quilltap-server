@@ -18,6 +18,12 @@ import { TypedQueryFilter, UpdateSpec } from '../interfaces';
 import { getCollection, ensureCollection } from '../manager';
 import { acceptsSamplingParameters } from '@/lib/plugins/provider-validation';
 import { withoutSamplingParameters } from '@/lib/llm/sampling-params';
+import {
+  counterIncrementsFor,
+  PROFILE_USAGE_COUNTER_FIELD_NAMES,
+  type UsageTally,
+} from '@/lib/llm/profile-usage';
+import type { UsageCategory } from '@/lib/schemas/llm-log.types';
 
 /**
  * Drop the sampling keys from a parameters blob bound for a provider that
@@ -201,43 +207,56 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
   }
 
   // ============================================================================
-  // TOKEN USAGE TRACKING
+  // USAGE COUNTERS
   // ============================================================================
 
   /**
-   * Increment token usage counters for a connection profile
-   * Uses atomic operations for thread safety
+   * The usage counters are patch-only: a whole-row `update` (the profile
+   * editor's save, an auto-configure) rebuilds the row from a snapshot, and
+   * would otherwise write back counts that calls made in the meantime had
+   * already raised.
    */
-  async incrementTokenUsage(
+  protected override patchOnlyFields(): readonly string[] {
+    return PROFILE_USAGE_COUNTER_FIELD_NAMES;
+  }
+
+  /**
+   * Add one call to a profile's chat or automatic ledger, atomically (`$inc`).
+   * The only writer of the counters; reached from `accountLLMCall`
+   * (lib/services/usage-accounting.service.ts).
+   */
+  async incrementUsage(
     profileId: string,
-    promptTokens: number,
-    completionTokens: number
+    category: UsageCategory,
+    tally: UsageTally
   ): Promise<void> {
+    const inc = counterIncrementsFor(category, tally);
+    if (Object.keys(inc).length === 0) return;
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        const now = this.getCurrentTimestamp();
-
         const result = await collection.updateOne(
           { id: profileId },
-          {
-            $inc: {
-              totalTokens: promptTokens + completionTokens,
-              totalPromptTokens: promptTokens,
-              totalCompletionTokens: completionTokens,
-              messageCount: 1,
-            },
-            $set: { updatedAt: now },
-          } as UpdateSpec<ConnectionProfile>
+          { $inc: inc } as UpdateSpec<ConnectionProfile>
         );
 
         if (result.matchedCount === 0) {
-          logger.warn('Connection profile not found for token usage increment', { profileId });
+          logger.warn('Connection profile not found for usage increment', {
+            context: 'ConnectionProfilesRepository',
+            profileId,
+            category,
+          });
           return;
         }
+        logger.debug('Recorded connection profile usage', {
+          context: 'ConnectionProfilesRepository',
+          profileId,
+          category,
+          ...tally,
+        });
       },
-      'Error incrementing token usage',
-      { profileId, promptTokens, completionTokens },
+      'Error incrementing connection profile usage',
+      { profileId, category, ...tally },
       undefined
     );
   }

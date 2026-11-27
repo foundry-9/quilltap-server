@@ -10,7 +10,7 @@ import { AvatarSettings } from '@/components/settings/chat-settings/AvatarSettin
 import { DynamicBackgroundsSettings } from '@/components/settings/chat-settings/DynamicBackgroundsSettings'
 import { WithChatSettings } from './with-chat-settings'
 
-export { default as AppearanceCard } from '@/components/settings/appearance-tab'
+export { default as AppearanceCard } from '@/components/settings/appearance'
 export { default as TagsCard } from '@/components/settings/tags-tab'
 export { CalliopeSettings as CalliopeCard } from '@/components/settings/calliope/CalliopeSettings'
 

@@ -13,14 +13,6 @@ import type { ConnectionProfile, ImageProfile } from '@/components/settings/chat
 import type { AttentionChip } from '@/components/settings/AttentionStrip'
 import { SettingsView } from '@/app/settings/SettingsView'
 
-const mockSearch = { current: new URLSearchParams() }
-const mockReplace = jest.fn()
-jest.mock('next/navigation', () => ({
-  useSearchParams: () => mockSearch.current,
-  usePathname: () => '/settings',
-  useRouter: () => ({ replace: mockReplace, push: jest.fn() }),
-}))
-
 jest.mock('next/link', () => ({
   __esModule: true,
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -106,10 +98,11 @@ function currentGroup(): string | null {
   return within(rail()).getAllByRole('button').find((b) => b.getAttribute('aria-current') === 'page')?.textContent ?? null
 }
 
+/** Render the page as its workspace tab does: the address arrives as props. */
 async function renderAt(query: string) {
-  mockSearch.current = new URLSearchParams(query)
+  const props = Object.fromEntries(new URLSearchParams(query))
   await act(async () => {
-    renderWithQuery(<SettingsView />)
+    renderWithQuery(<SettingsView {...props} />)
   })
 }
 
@@ -120,7 +113,6 @@ describe('SettingsView', () => {
   beforeEach(() => {
     mockContext.current = makeContext()
     mockChips.current = []
-    mockReplace.mockClear()
     mockBackdrop.mockClear()
     scrollIntoView = jest.fn()
     Element.prototype.scrollIntoView = scrollIntoView
@@ -148,12 +140,11 @@ describe('SettingsView', () => {
     ])
   })
 
-  it('opens a group from the rail and writes ?group=', async () => {
+  it('opens a group from the rail', async () => {
     await renderAt('')
     fireEvent.click(within(rail()).getByRole('button', { name: 'Security' }))
     expect(currentGroup()).toBe('Security')
     expect(document.getElementById('encryption-passphrase')).not.toBeNull()
-    expect(mockReplace).toHaveBeenCalledWith('/settings?group=security', { scroll: false })
   })
 
   describe('default group', () => {

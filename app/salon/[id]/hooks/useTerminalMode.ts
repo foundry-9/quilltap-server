@@ -11,8 +11,9 @@
  * of "open terminal", not an externally-driven modal.
  */
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { showErrorToast } from '@/lib/toast'
+import { apiErrorMessage } from '@/lib/query/fetcher'
 import type { Chat } from '../types'
 import {
   type TerminalMode,
@@ -97,12 +98,19 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
     }
   }, [chatId])
 
-  // Hydrate from chat on first load + when the chat record changes from beneath us.
+  // Hydrate from chat on first load + when the chat's terminal fields change
+  // from beneath us. Keyed on the fields, never the object: several writers
+  // hand back a new chat spread from the old one, and re-hydrating from that
+  // stale copy re-opened a pane the user had just hidden (#262).
+  const hasChat = chat !== null
+  const chatTerminalMode = chat?.terminalMode
+  const chatTerminalSessionId = chat?.activeTerminalSessionId
+  const chatVerticalSplit = chat?.rightPaneVerticalSplit
   useEffect(() => {
-    if (!chat) return
-    const incomingMode = (chat.terminalMode ?? 'normal') as TerminalMode
-    const incomingSessionId = chat.activeTerminalSessionId ?? null
-    const incomingSplit = chat.rightPaneVerticalSplit ?? 50
+    if (!hasChat) return
+    const incomingMode = (chatTerminalMode ?? 'normal') as TerminalMode
+    const incomingSessionId = chatTerminalSessionId ?? null
+    const incomingSplit = chatVerticalSplit ?? 50
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local mirror of chat record on mount/refresh, mirrors useDocumentMode pattern
     setRightPaneVerticalSplitState(incomingSplit)
@@ -130,7 +138,7 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
 
     setTerminalModeState(incomingMode)
     setActiveTerminalSessionIdState(incomingSessionId)
-  }, [chat, chatId, persist])
+  }, [hasChat, chatTerminalMode, chatTerminalSessionId, chatVerticalSplit, chatId, persist])
 
   // Listen for the in-page terminal-exited custom event so a Hide-pane → Kill
   // happening from the message embed cleans the pane up too.
@@ -173,8 +181,7 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
       const fc = fetchChatRef.current
       if (fc) await fc()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to spawn terminal'
-      showErrorToast(message)
+      showErrorToast(apiErrorMessage(error, 'Failed to spawn terminal session'))
     }
   }, [chatId, enterModeWithSession, closeTerminalPicker])
 
@@ -188,8 +195,7 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
       }
       await enterModeWithSession(sessionId)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to attach session'
-      showErrorToast(message)
+      showErrorToast(apiErrorMessage(error, 'Failed to load terminal session'))
     }
   }, [enterModeWithSession, closeTerminalPicker])
 
@@ -236,8 +242,7 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
       try {
         await killTerminalSessionApi(sessionId)
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to terminate session'
-        showErrorToast(message)
+        showErrorToast(apiErrorMessage(error, 'Failed to terminate session'))
       }
     }
   }, [activeTerminalSessionId, persist])
@@ -254,23 +259,33 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
     void persist({ rightPaneVerticalSplit: clamped })
   }, [persist])
 
-  return {
+  return useMemo<UseTerminalModeReturn>(() => ({
     terminalMode,
     activeTerminalSessionId,
     rightPaneVerticalSplit,
-
     showTerminalPicker,
     pickerSessions,
     closeTerminalPicker,
-
     requestOpen,
     attachExistingSession,
     spawnNewSession,
-
     hidePane,
     killTerminal,
-
     toggleFocusMode,
     setRightPaneVerticalSplit,
-  }
+  }), [
+    terminalMode,
+    activeTerminalSessionId,
+    rightPaneVerticalSplit,
+    showTerminalPicker,
+    pickerSessions,
+    closeTerminalPicker,
+    requestOpen,
+    attachExistingSession,
+    spawnNewSession,
+    hidePane,
+    killTerminal,
+    toggleFocusMode,
+    setRightPaneVerticalSplit,
+  ])
 }

@@ -364,6 +364,45 @@ describe('quilltap-import-service', () => {
   // executeImport() - Overwrite Strategy Tests
   // ============================================================================
 
+  describe('executeImport() - preview selection (#267)', () => {
+    it('imports only the selected character, and counts the other nowhere', async () => {
+      const a = createMockExportedCharacter();
+      const b = createMockExportedCharacter();
+      const exportData = createMockQuilltapExport({ characters: [a, b] });
+
+      const result = await executeImport(testUserId, exportData, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+        selectedIds: { characters: [a.id] },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.imported.characters).toBe(1);
+      expect(result.skipped.characters).toBe(0);
+      expect(mockUserRepos.characters.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('overwrites nothing that was left unticked', async () => {
+      const existingChar = createMockCharacter({ userId: testUserId });
+      const exportData = createMockQuilltapExport({
+        characters: [createMockExportedCharacter({ id: existingChar.id })],
+      });
+      configureFindById(mockUserRepos.characters.findById, [existingChar]);
+
+      const result = await executeImport(testUserId, exportData, {
+        conflictStrategy: 'overwrite',
+        includeMemories: false,
+        includeRelatedEntities: false,
+        selectedIds: { characters: [] },
+      });
+
+      expect(result.imported.characters).toBe(0);
+      expect(result.skipped.characters).toBe(0);
+      expect(mockUserRepos.characters.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('executeImport() - overwrite strategy', () => {
     it('should overwrite existing entities under their existing id (#188)', async () => {
       const existingChar = createMockCharacter({ userId: testUserId, name: 'Old Name' });

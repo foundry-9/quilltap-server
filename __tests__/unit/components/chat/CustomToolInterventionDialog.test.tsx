@@ -377,6 +377,21 @@ describe('CustomToolInterventionDialog — a consult the author hid', () => {
     await waitFor(() => expect(screen.getByLabelText('Message')).toHaveProperty('value', 'RE-ASKED MESSAGE'))
   })
 
+  it('shows the fresh answer after a re-ask with nothing pinned (#244)', async () => {
+    holds = [hiddenConsultHold()]
+    // The fresh deal's own preview is what the server would answer for {}.
+    previewReply = previewOf(runView({ message: 'RE-ASKED MESSAGE' }))
+    renderDialog()
+    await screen.findByTestId('custom-tool-intervention')
+    expect(screen.getByLabelText('Message')).toHaveProperty('value', 'The house pays out.')
+
+    fireEvent.click(screen.getByText('Re-ask'))
+    await waitFor(() => expect(callsTo('intervention-reask')).toHaveLength(1))
+    expect(callsTo('intervention-reask')[0].body).toMatchObject({ id: 'a', overrides: {} })
+    // Nothing is pinned, yet the frozen baseline must give way to the new deal.
+    await waitFor(() => expect(screen.getByLabelText('Message')).toHaveProperty('value', 'RE-ASKED MESSAGE'))
+  })
+
   it('shows no oracle section for a tool that consults none', async () => {
     holds = [holdView('a')]
     renderDialog()

@@ -70,7 +70,7 @@ export interface OpenTabOptions {
   parentTabId?: string
 }
 
-interface WorkspaceContextValue {
+export interface WorkspaceContextValue {
   state: WorkspaceState
   /** True once the layout has been hydrated from localStorage (or confirmed empty). */
   hydrated: boolean

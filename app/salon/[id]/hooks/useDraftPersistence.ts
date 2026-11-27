@@ -54,5 +54,14 @@ export function useDraftPersistence({ chatId, setInput }: UseDraftPersistencePar
     }
   }, [draftStorageKey])
 
-  return { persistDraft }
+  /** Forget the saved draft (a sent message). */
+  const clearDraft = useCallback(() => {
+    try {
+      localStorage.removeItem(draftStorageKey)
+    } catch {
+      // Ignore
+    }
+  }, [draftStorageKey])
+
+  return { persistDraft, clearDraft }
 }

@@ -14,6 +14,7 @@ import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags 
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { supportsImageGeneration } from '@/lib/llm/image-capable';
 import { createLLMProvider } from '@/lib/llm';
+import { zeroProfileUsageCounters } from '@/lib/llm/profile-usage';
 import { requiresBaseUrl, testProviderConnection, validateProviderConfig } from '@/lib/plugins/provider-validation';
 import { ProviderEnum } from '@/lib/schemas/types';
 import { supportsMimeType as providerSupportsMimeType } from '@/lib/llm/attachment-support';
@@ -244,10 +245,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     userId: user.id,
     tags: [],
     sortIndex: maxSortIndex + 1,
-    totalTokens: 0,
-    totalPromptTokens: 0,
-    totalCompletionTokens: 0,
-    messageCount: 0,
+    ...zeroProfileUsageCounters(),
   });
 
   const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);

@@ -1,58 +1,22 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { triggerDownload } from '@/lib/download-utils'
-import type { GenerationModeration } from '@/lib/schemas/file.types'
 import type { GalleryImage, EntityType } from '../types'
-
-interface CharacterGalleryEntry {
-  linkId: string
-  mountPointId: string
-  relativePath: string
-  fileName: string
-  blobUrl: string
-  mimeType: string | null
-  sha256: string
-  fileSizeBytes: number
-  keptAt: string
-  caption: string | null
-  tags: string[]
-  generationModeration?: GenerationModeration | null
-}
-
-interface CharacterGalleryListResponse {
-  entries: CharacterGalleryEntry[]
-  total: number
-  hasMore: boolean
-}
-
-function toGalleryImage(entry: CharacterGalleryEntry): GalleryImage {
-  return {
-    id: entry.linkId,
-    filename: entry.fileName,
-    filepath: entry.blobUrl,
-    mimeType: entry.mimeType,
-    size: entry.fileSizeBytes,
-    createdAt: entry.keptAt,
-    caption: entry.caption,
-    tags: entry.tags,
-    generationModeration: entry.generationModeration ?? null,
-  }
-}
+import {
+  toGalleryImage,
+  useCharacterPhotosQuery,
+  type CharacterGalleryListResponse,
+} from './useCharacterPhotosQuery'
 
 export function useGalleryData(entityId: string, _entityType: EntityType) {
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
   const queryClient = useQueryClient()
 
-  const { data, isLoading: loading, refetch } = useQuery({
-    queryKey: queryKeys.characters.photos(entityId),
-    queryFn: ({ signal }) =>
-      apiFetch<CharacterGalleryListResponse>(`/api/v1/characters/${entityId}/photos?limit=200`, { signal }),
-  })
+  const { data, isLoading: loading, refetch } = useCharacterPhotosQuery(entityId)
 
   const allImages: GalleryImage[] = (data?.entries ?? []).map(toGalleryImage)
 

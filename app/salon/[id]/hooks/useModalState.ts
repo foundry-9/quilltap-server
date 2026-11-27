@@ -42,7 +42,6 @@ export function useModalState() {
   const [continueChatModalOpen, setContinueChatModalOpen] = useState(false)
   const [mergeConversationModalOpen, setMergeConversationModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
-  const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
   const [searchReplaceModalOpen, setSearchReplaceModalOpen] = useState(false)
   const [bulkReplaceModalOpen, setBulkReplaceModalOpen] = useState(false)
@@ -79,8 +78,6 @@ export function useModalState() {
   const closeMergeConversation = useCallback(() => setMergeConversationModalOpen(false), [])
   const openRename = useCallback(() => setRenameModalOpen(true), [])
   const closeRename = useCallback(() => setRenameModalOpen(false), [])
-  const openGenerateImage = useCallback(() => setGenerateImageDialogOpen(true), [])
-  const closeGenerateImage = useCallback(() => setGenerateImageDialogOpen(false), [])
   const openAddCharacter = useCallback(() => setAddCharacterDialogOpen(true), [])
   const closeAddCharacter = useCallback(() => setAddCharacterDialogOpen(false), [])
   const openSearchReplace = useCallback(() => setSearchReplaceModalOpen(true), [])
@@ -126,7 +123,6 @@ export function useModalState() {
     continueChatModalOpen,
     mergeConversationModalOpen,
     renameModalOpen,
-    generateImageDialogOpen,
     addCharacterDialogOpen,
     searchReplaceModalOpen,
     bulkReplaceModalOpen,
@@ -151,7 +147,6 @@ export function useModalState() {
     openContinueChat, closeContinueChat,
     openMergeConversation, closeMergeConversation,
     openRename, closeRename,
-    openGenerateImage, closeGenerateImage,
     openAddCharacter, closeAddCharacter,
     openSearchReplace, closeSearchReplace,
     openBulkReplace, closeBulkReplace,
@@ -173,3 +168,6 @@ export function useModalState() {
     openEditEnclave, closeEditEnclave,
   }
 }
+
+/** Everything `useModalState` returns — the Salon hands it to `ChatModals` whole. */
+export type ModalState = ReturnType<typeof useModalState>

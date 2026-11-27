@@ -22,7 +22,6 @@ export interface UseGroupsReturn {
   groups: Group[]
   loading: boolean
   error: string | null
-  fetchGroups: () => Promise<void>
   createGroup: (name: string, description?: string | null) => Promise<Group | null>
   deleteGroup: (id: string) => Promise<boolean>
 }

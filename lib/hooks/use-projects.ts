@@ -11,21 +11,45 @@
  * @module lib/hooks/use-projects
  */
 
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { queryKeys } from '@/lib/query/keys'
-import { useEnvelopeSelect, type EntityListOptions, type EntityRow } from './use-profiles'
+import { useEnvelopeListQuery, type EntityListOptions, type EntityRow } from './use-profiles'
 
 const unwrapProjects = <P,>(data: { projects?: P[] }) => data.projects
 
 export function useProjectsQuery<P = EntityRow, R = P[]>(options?: EntityListOptions<P, R>) {
-  const select = useEnvelopeSelect<{ projects?: P[] }, P, R>(unwrapProjects, options?.select)
-  return useQuery({
+  return useEnvelopeListQuery<{ projects?: P[] }, P, R>({
     queryKey: queryKeys.projects.list(),
-    queryFn: ({ signal }) => apiFetch<{ projects?: P[] }>('/api/v1/projects', { signal }),
-    select,
-    enabled: options?.enabled,
-    staleTime: options?.staleTime,
-    refetchOnMount: options?.refetchOnMount,
+    url: '/api/v1/projects',
+    unwrap: unwrapProjects,
+    options,
   })
+}
+
+/**
+ * Create a project (`POST /api/v1/projects`) and re-read every project list.
+ * Toasts the outcome; resolves the new project, or null on failure.
+ */
+export function useCreateProject<P = EntityRow>() {
+  const queryClient = useQueryClient()
+  return useCallback(async (name: string, description: string | null): Promise<P | null> => {
+    try {
+      const data = await apiFetch<{ project: P }>('/api/v1/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description }),
+      })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.lists })
+      showSuccessToast('Project created successfully!')
+      return data.project
+    } catch (err) {
+      const errorMsg = apiErrorMessage(err, 'Failed to create project')
+      console.error('useCreateProject: create error', { error: errorMsg })
+      showErrorToast(errorMsg)
+      return null
+    }
+  }, [queryClient])
 }

@@ -15,6 +15,7 @@ import {
   PricingCache,
   FALLBACK_PRICING,
   sortByCost,
+  parseOpenRouterPricing,
 } from './pricing'
 
 // Cache TTL: 24 hours
@@ -78,20 +79,11 @@ async function fetchOpenRouterPublicPricing(): Promise<ModelPricing[]> {
     const models: ModelPricing[] = []
 
     for (const model of data.data || []) {
-      // Parse pricing (OpenRouter returns costs per token as strings)
-      const promptCost = parseFloat(String(model.pricing?.prompt || '0'))
-      const completionCost = parseFloat(String(model.pricing?.completion || '0'))
-
-      // Convert from per-token to per-1M tokens
-      const promptCostPer1M = promptCost * 1_000_000
-      const completionCostPer1M = completionCost * 1_000_000
-
       models.push({
         modelId: model.id,
         provider: 'OPENROUTER', // All models stored as OPENROUTER provider
         name: model.name || model.id,
-        promptCostPer1M,
-        completionCostPer1M,
+        ...parseOpenRouterPricing(model.pricing),
         contextLength: model.context_length ?? null,
         maxCompletionTokens: model.top_provider?.max_completion_tokens ?? null,
         supportsVision: model.architecture?.modality?.includes('image') || false,
@@ -289,20 +281,11 @@ async function fetchOpenRouterPricing(apiKey: string): Promise<ModelPricing[]> {
 
     for await (const page of pages) {
       for (const model of page.result?.data || []) {
-        // Parse pricing (OpenRouter returns costs per token as strings)
-        const promptCost = parseFloat(String(model.pricing?.prompt || '0'))
-        const completionCost = parseFloat(String(model.pricing?.completion || '0'))
-
-        // Convert from per-token to per-1M tokens
-        const promptCostPer1M = promptCost * 1_000_000
-        const completionCostPer1M = completionCost * 1_000_000
-
         models.push({
           modelId: model.id,
           provider: 'OPENROUTER',
           name: model.name,
-          promptCostPer1M,
-          completionCostPer1M,
+          ...parseOpenRouterPricing(model.pricing as unknown as Record<string, unknown>),
           contextLength: model.contextLength ?? null,
           supportsVision: model.architecture?.modality?.includes('image') || false,
           supportsTools: model.supportedParameters?.some(

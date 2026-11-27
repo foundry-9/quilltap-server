@@ -14,6 +14,9 @@
  */
 
 import { useState, useCallback, useRef } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { ApiFetchError, apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { triggerDownload } from '@/lib/download-utils'
 import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
 import { BrandName } from '@/components/ui/brand-name'
 import { ThemeCard } from './components/ThemeCard'
@@ -26,7 +29,6 @@ import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 interface ThemeSelectorProps {
   activeThemeId: string | null
   availableThemes: ThemeSummary[]
-  isLoading?: boolean
   onThemeSelect: (themeId: string | null) => void
   onRefreshThemes?: () => Promise<void>
 }
@@ -37,7 +39,6 @@ interface ThemeSelectorProps {
 export function ThemeSelector({
   activeThemeId,
   availableThemes,
-  isLoading = false,
   onThemeSelect,
   onRefreshThemes,
 }: ThemeSelectorProps) {
@@ -49,6 +50,23 @@ export function ThemeSelector({
   const { refusedThemes } = useTheme()
   const workspace = useWorkspaceOptional()
   const router = useRouter()
+
+  const installMutation = useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData()
+      formData.append('theme', file)
+      return apiFetch<{ themeId?: string }>('/api/v1/themes?action=install', {
+        method: 'POST',
+        body: formData,
+      })
+    },
+  })
+  const { mutateAsync: installAsync } = installMutation
+  const uninstallMutation = useMutation({
+    mutationFn: (themeId: string) =>
+      apiFetch<{ message?: string }>(`/api/v1/themes/${themeId}`, { method: 'DELETE' }),
+  })
+  const { mutateAsync: uninstallAsync } = uninstallMutation
 
   /** Open Calliope's Atelier — a tab inside the workspace, a route outside. */
   const openAtelier = () => {
@@ -74,32 +92,17 @@ export function ThemeSelector({
     setInstallStatus(null)
 
     try {
-      const formData = new FormData()
-      formData.append('theme', file)
-
-      const response = await fetch('/api/v1/themes?action=install', {
-        method: 'POST',
-        body: formData,
+      const result = await installAsync(file)
+      setInstallStatus({
+        message: `Theme "${result.themeId}" installed successfully`,
+        type: 'success',
       })
-
-      const result = await response.json()
-
-      if (response.ok) {
-        setInstallStatus({
-          message: `Theme "${result.themeId}" installed successfully`,
-          type: 'success',
-        })
-        // Refresh themes list
-        await onRefreshThemes?.()
-      } else {
-        setInstallStatus({
-          message: result.error || 'Installation failed',
-          type: 'error',
-        })
-      }
+      // Refresh themes list
+      await onRefreshThemes?.()
     } catch (err) {
       setInstallStatus({
-        message: 'Failed to upload theme file',
+        // The server's refusal speaks for itself; a dropped upload says so.
+        message: err instanceof ApiFetchError ? apiErrorMessage(err, 'Installation failed') : 'Failed to upload theme file',
         type: 'error',
       })
     } finally {
@@ -109,41 +112,29 @@ export function ThemeSelector({
         fileInputRef.current.value = ''
       }
     }
-  }, [onRefreshThemes])
+  }, [installAsync, onRefreshThemes])
 
   // Handle uninstall
   const handleUninstall = useCallback(async (themeId: string) => {
     try {
-      const response = await fetch(`/api/v1/themes/${themeId}`, {
-        method: 'DELETE',
-      })
-
-      const result = await response.json()
-
-      if (response.ok) {
-        setInstallStatus({
-          message: result.message || `Theme uninstalled successfully`,
-          type: 'success',
-        })
-        // If the uninstalled theme was active, switch to default
-        if (activeThemeId === themeId) {
-          onThemeSelect(null)
-        }
-        // Refresh themes list
-        await onRefreshThemes?.()
-      } else {
-        setInstallStatus({
-          message: result.error || 'Uninstall failed',
-          type: 'error',
-        })
-      }
-    } catch {
+      const result = await uninstallAsync(themeId)
       setInstallStatus({
-        message: 'Failed to uninstall theme',
+        message: result.message || `Theme uninstalled successfully`,
+        type: 'success',
+      })
+      // If the uninstalled theme was active, switch to default
+      if (activeThemeId === themeId) {
+        onThemeSelect(null)
+      }
+      // Refresh themes list
+      await onRefreshThemes?.()
+    } catch (err) {
+      setInstallStatus({
+        message: err instanceof ApiFetchError ? apiErrorMessage(err, 'Uninstall failed') : 'Failed to uninstall theme',
         type: 'error',
       })
     }
-  }, [activeThemeId, onThemeSelect, onRefreshThemes])
+  }, [uninstallAsync, activeThemeId, onThemeSelect, onRefreshThemes])
 
   // Handle export
   const handleExport = useCallback(async (themeId: string) => {
@@ -158,16 +149,7 @@ export function ThemeSelector({
         return
       }
 
-      // Download the file
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${themeId}.qtap-theme`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      await triggerDownload(await response.blob(), `${themeId}.qtap-theme`)
     } catch {
       setInstallStatus({
         message: 'Failed to export theme',
@@ -187,7 +169,7 @@ export function ThemeSelector({
   return (
     <section className="border-t qt-border-default pt-8">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xl font-semibold qt-text">Theme</h2>
+        <h2 className="qt-heading-3 qt-text">Theme</h2>
         <div className="flex items-center gap-2">
         <button
           type="button"
@@ -200,7 +182,7 @@ export function ThemeSelector({
         <button
           type="button"
           onClick={handleInstallClick}
-          disabled={isInstalling || isLoading}
+          disabled={isInstalling}
           className="qt-button-secondary qt-button-sm flex items-center gap-1.5"
         >
           {isInstalling ? (
@@ -261,9 +243,7 @@ export function ThemeSelector({
           theme={null}
           isActive={activeThemeId === null}
           onSelect={() => onThemeSelect(null)}
-          disabled={isLoading}
           onToggleExpand={() => handleOpenPreview(null)}
-          onExport={() => handleExport('default')}
         />
 
         {/* Bundle Theme Cards */}
@@ -273,15 +253,12 @@ export function ThemeSelector({
             theme={theme}
             isActive={activeThemeId === theme.id}
             onSelect={() => onThemeSelect(theme.id)}
-            disabled={isLoading}
             onToggleExpand={() => handleOpenPreview(theme.id)}
-            onUninstall={theme.source === 'bundle' ? () => handleUninstall(theme.id) : undefined}
-            onExport={() => handleExport(theme.id)}
           />
         ))}
       </div>
 
-      <RefusedThemes refused={refusedThemes} onUninstall={handleUninstall} disabled={isLoading} />
+      <RefusedThemes refused={refusedThemes} onUninstall={handleUninstall} />
 
       {/* Hint about adding themes */}
       {availableThemes.length === 0 && (

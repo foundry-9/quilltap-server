@@ -20,6 +20,7 @@ import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import type { RegenerationState } from '../hooks/useRegeneration'
 import type { ConciergeRetryHandlers } from '../concierge-retry'
 import { useDeferredMeasureRef } from '../hooks/useDeferredMeasureRef'
+import type { MessageAvatarInfo } from './message-row/types'
 
 interface VirtualizedMessageListProps {
   /** Flat (post-tool-grouping) message list. Still needed for the TOOL-row
@@ -41,7 +42,8 @@ interface VirtualizedMessageListProps {
   /** Toggle expansion state for a system-author message */
   onToggleSystemMessageExpanded: (messageId: string) => void
   swipeStates: Record<string, SwipeState>
-  setSwipeStates: React.Dispatch<React.SetStateAction<Record<string, SwipeState>>>
+  /** Swipe a group one variant left or right (reads live state, #264). */
+  onSwitchSwipe: (groupId: string, direction: 'prev' | 'next') => void
   // Appearance
   /** `undefined` while the settings query is in flight; every read below defaults. */
   chatSettings: ChatSettings | null | undefined
@@ -54,8 +56,6 @@ interface VirtualizedMessageListProps {
   streaming: boolean
   streamingContent: string
   waitingForResponse: boolean
-  userParticipantId: string | null
-  respondingParticipantId: string | null
   /** Chat ID for terminal embed rendering */
   chatId: string
   // Message actions - signatures match useMessageActions return type
@@ -68,8 +68,7 @@ interface VirtualizedMessageListProps {
     setRegenerateMemoriesOnSave: (value: boolean) => void
     toggleSourceView: (messageId: string) => void
     deleteMessage: (messageId: string) => Promise<void>
-    switchSwipe: (groupId: string, direction: 'prev' | 'next', swipeStates: Record<string, SwipeState>, setSwipeStates: (value: any) => void) => void
-    copyMessageContent: (content: string) => void
+    copyMessageContent: (content: string) => void | Promise<void>
     resendMessage: (message: Message) => Promise<void>
     canResendMessage: (messageId: string) => boolean
   }
@@ -79,12 +78,6 @@ interface VirtualizedMessageListProps {
    */
   regeneration: RegenerationState | null
   onRegenerate: (messageId: string) => void
-  turnManagement: {
-    handleNudge: (participantId: string) => void | Promise<void>
-    handleQueue: (participantId: string) => void
-    handleDequeue: (participantId: string) => void
-    handleContinue: () => void
-  }
   // Handlers
   setEditContent: (content: string) => void
   onOverrideDangerFlag: (messageId: string) => void
@@ -93,7 +86,6 @@ interface VirtualizedMessageListProps {
    * Lantern's refused backdrop. Absent on a Locked chat, which hides the buttons.
    */
   conciergeRetry?: ConciergeRetryHandlers
-  onRemoveCharacter: (participantId: string) => void
   onReattribute: (messageId: string) => void
   onImageClick: (filepath: string, filename: string, fileId?: string) => void
   /** Opens the SaveImageDialog for one image attachment on a message. */
@@ -108,12 +100,7 @@ interface VirtualizedMessageListProps {
   getRespondingCharacter: () => CharacterData | undefined
   shouldShowAvatars: () => boolean
   getFirstCharacter: () => CharacterData | null | undefined
-  getMessageAvatar: (message: Message) => {
-    name: string
-    title?: string | null
-    avatarUrl?: string | null
-    defaultImage?: { id: string; filepath: string; url?: string } | null
-  } | null
+  getMessageAvatar: (message: Message) => MessageAvatarInfo | null
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
   /** Character id → name, for naming a Staff bar's `customAnnouncer` */
@@ -160,7 +147,7 @@ export function VirtualizedMessageList({
   expandedSystemMessageIds,
   onToggleSystemMessageExpanded,
   swipeStates,
-  setSwipeStates,
+  onSwitchSwipe,
   chatSettings,
   roleplayRenderingPatterns,
   roleplayDialogueDetection,
@@ -170,17 +157,13 @@ export function VirtualizedMessageList({
   streaming,
   streamingContent,
   waitingForResponse,
-  userParticipantId,
-  respondingParticipantId,
   chatId,
   regeneration,
   onRegenerate,
   messageActions,
-  turnManagement,
   setEditContent,
   onOverrideDangerFlag,
   conciergeRetry,
-  onRemoveCharacter,
   onReattribute,
   onImageClick,
   onSaveImage,
@@ -322,17 +305,14 @@ export function VirtualizedMessageList({
                     message={message}
                     character={getCharacterForMessage(messageForAvatar)}
                     headerAvatar={headerAvatar}
-                    onImageClick={(filepath, filename, fileId) => {
-                      onImageClick(filepath, filename, fileId)
-                    }}
+                    onImageClick={onImageClick}
                     onTryUncensored={conciergeRetry?.onRetryPicture}
                   />
                 </div>
               )
             }
 
-            const messageAvatarData = shouldShowAvatars() ? getMessageAvatar(message) : null
-            const messageAvatar = messageAvatarData as any
+            const messageAvatar = shouldShowAvatars() ? getMessageAvatar(message) : null
 
             return (
               <div
@@ -374,7 +354,6 @@ export function VirtualizedMessageList({
                   turnState={turnState}
                   streaming={streaming}
                   waitingForResponse={waitingForResponse}
-                  userParticipantId={userParticipantId}
                   tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
                   conciergeDisplay={conciergeDisplay}
                   onOverrideDangerFlag={onOverrideDangerFlag}
@@ -390,19 +369,11 @@ export function VirtualizedMessageList({
                   onDelete={messageActions.deleteMessage}
                   onGenerateSwipe={onRegenerate}
                   regeneration={regeneration?.messageId === message.id ? regeneration : null}
-                  onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
+                  onSwitchSwipe={onSwitchSwipe}
                   onCopyContent={messageActions.copyMessageContent}
                   onResend={messageActions.resendMessage}
-                  onImageClick={(filepath, filename, fileId) => {
-                    onImageClick(filepath, filename, fileId)
-                  }}
+                  onImageClick={onImageClick}
                   onSaveImage={onSaveImage}
-                  onHandleNudge={turnManagement.handleNudge}
-                  onHandleQueue={turnManagement.handleQueue}
-                  onHandleDequeue={turnManagement.handleDequeue}
-                  onHandleTalkativenessChange={() => {}}
-                  onHandleRemoveCharacter={onRemoveCharacter}
-                  onHandleContinue={turnManagement.handleContinue}
                   onReattribute={onReattribute}
                   hasLLMLogs={messagesWithLogs.has(message.id)}
                   onViewLLMLogs={onViewLLMLogs}

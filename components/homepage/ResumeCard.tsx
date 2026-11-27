@@ -12,7 +12,6 @@ import Link from 'next/link'
 import AvatarStack from '@/components/ui/AvatarStack'
 import { Icon } from '@/components/ui/icon'
 import { ConciergeMark } from '@/components/chat/ConciergeMark'
-import { useWorkspaceLink } from '@/components/workspace/useWorkspaceLink'
 import { formatMessageTime } from '@/lib/format-time'
 import { chatActivityAt } from '@/lib/chat/chat-activity'
 import { activeCast, castNames, messageCountLabel } from './chat-cast'
@@ -23,8 +22,6 @@ interface ResumeCardProps {
 }
 
 export function ResumeCard({ chat }: ResumeCardProps) {
-  // Inside the workspace, open the conversation as a tab instead of navigating.
-  const openInWorkspace = useWorkspaceLink()
   const href = `/salon/${chat.id}`
   const cast = activeCast(chat)
 
@@ -32,7 +29,6 @@ export function ResumeCard({ chat }: ResumeCardProps) {
     <section className="qt-homepage-section" data-section="resume">
       <Link
         href={href}
-        onClick={(e) => openInWorkspace(href, e)}
         className="qt-homepage-resume-picture"
         tabIndex={-1}
         aria-hidden="true"
@@ -50,7 +46,7 @@ export function ResumeCard({ chat }: ResumeCardProps) {
         </div>
         <div className="qt-homepage-section-content">
           <h3 className="qt-homepage-resume-title">
-            <Link href={href} onClick={(e) => openInWorkspace(href, e)}>
+            <Link href={href}>
               {chat.title}
             </Link>
           </h3>
@@ -64,7 +60,6 @@ export function ResumeCard({ chat }: ResumeCardProps) {
           <div className="qt-homepage-resume-actions">
             <Link
               href={href}
-              onClick={(e) => openInWorkspace(href, e)}
               className="qt-button qt-button-primary gap-2"
               aria-label={`Resume ${chat.title}`}
             >

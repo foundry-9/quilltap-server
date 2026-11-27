@@ -61,7 +61,6 @@ export function DetailsSection() {
           kindSlot={
             <CharacterKindPicker
               kind={resolveCharacterKind(character)}
-              saving={false}
               disabled={readOnly}
               onChange={(kind) => void saveNow({ kind }, 'The kind of character could not be saved.')}
             />

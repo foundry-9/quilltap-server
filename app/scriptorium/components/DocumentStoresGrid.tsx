@@ -7,6 +7,7 @@
  */
 
 import { useRouter } from 'next/navigation'
+import { EmptyStatePanel } from '@/components/ui/EmptyState'
 import { DocumentStoreCard } from './DocumentStoreCard'
 import type { DocumentStore } from '../types'
 
@@ -47,7 +48,7 @@ export function DocumentStoresGrid({
 
   if (stores.length === 0) {
     return (
-      <div className="mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
+      <EmptyStatePanel>
         <p className="mb-4 text-lg qt-text-secondary">No document stores yet</p>
         <p className="mb-6 qt-text-small max-w-md mx-auto">
           Mount external document directories as searchable knowledge sources.
@@ -59,7 +60,7 @@ export function DocumentStoresGrid({
         >
           Add your first document store
         </button>
-      </div>
+      </EmptyStatePanel>
     )
   }
 

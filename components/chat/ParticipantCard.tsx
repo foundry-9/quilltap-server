@@ -80,6 +80,13 @@ interface ParticipantCardProps {
   isCurrentTurn: boolean
   queuePosition: number // 0 = not in queue, 1+ = position in queue
   isGenerating: boolean
+  /**
+   * Whether anyone in the room is speaking. `isGenerating` is this card's own
+   * reply; while someone else speaks the action button queues rather than
+   * nudges, since a nudge mid-stream is refused (#254). Defaults to
+   * `isGenerating`.
+   */
+  roomIsGenerating?: boolean
   onNudge: (participantId: string) => void
   onQueue: (participantId: string) => void
   onDequeue: (participantId: string) => void
@@ -128,6 +135,7 @@ export function ParticipantCard({
   isCurrentTurn,
   queuePosition,
   isGenerating,
+  roomIsGenerating = isGenerating,
   onNudge,
   onQueue,
   onDequeue,
@@ -161,7 +169,6 @@ export function ParticipantCard({
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
   )
-  const isCharacter = participant.type === 'CHARACTER'
   const entity = participant.character
 
   if (!entity) {
@@ -174,17 +181,17 @@ export function ParticipantCard({
   const isInactive = turnStatus === 'inactive' || turnStatus === 'absent'
 
   // Check if this is a user-controlled character (not LLM-controlled)
-  const isUserControlledCharacter = isCharacter && participant.controlledBy === 'user'
+  const isUserControlledCharacter = participant.controlledBy === 'user'
 
   // Handle nudge/queue button click
   const handleActionClick = () => {
     if (queuePosition > 0) {
       // Already in queue - dequeue
       onDequeue(participant.id)
-    } else if (isGenerating) {
+    } else if (roomIsGenerating) {
       // Someone is actively generating - add to queue for later
       onQueue(participant.id)
-    } else if (isCharacter && !isUserControlledCharacter) {
+    } else if (!isUserControlledCharacter) {
       // Not generating and this is an LLM-controlled character - nudge for immediate response
       // Only LLM-controlled characters can be nudged for AI response
       onNudge(participant.id)
@@ -221,11 +228,6 @@ export function ParticipantCard({
     onSystemPromptChange(participant.id, e.target.value || null)
   }
 
-  // Handle active toggle via the eye icon button (legacy compat)
-  const handleActiveToggleClick = () => {
-    onActiveChange?.(participant.id, !participant.isActive)
-  }
-
   // Handle status change via dropdown
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as 'active' | 'silent' | 'absent' | 'removed'
@@ -246,10 +248,10 @@ export function ParticipantCard({
   const getActionButtonLabel = () => {
     if (queuePosition > 0) return 'Dequeue'
     if (isGenerating && isCurrentTurn) return 'Speaking...'
-    if (isGenerating) return 'Queue'
+    if (roomIsGenerating) return 'Queue'
     if (isCurrentTurn) return isUserControlledCharacter ? 'Queue' : 'Nudge' // Their turn but not yet generating - can nudge to start (LLM only)
     // Only LLM-controlled characters show "Nudge", user-controlled show "Queue"
-    return (isCharacter && !isUserControlledCharacter) ? 'Nudge' : 'Queue'
+    return !isUserControlledCharacter ? 'Nudge' : 'Queue'
   }
 
   // Determine if button should be disabled - only disabled while actively generating
@@ -329,7 +331,7 @@ export function ParticipantCard({
               </div>
             )}
           </div>
-          {(onRegenerateAvatar || (isCharacter && participant.character?.id && wardrobeDialog)) && (
+          {(onRegenerateAvatar || (participant.character?.id && wardrobeDialog)) && (
             <div className="qt-participant-avatar-tools">
               {onRegenerateAvatar && (
                 <button
@@ -345,7 +347,7 @@ export function ParticipantCard({
                   <Icon name="camera" className="w-3.5 h-3.5" />
                 </button>
               )}
-              {isCharacter && participant.character?.id && wardrobeDialog && (
+              {participant.character?.id && wardrobeDialog && (
                 <button
                   type="button"
                   onClick={() => wardrobeDialog.open({
@@ -359,7 +361,7 @@ export function ParticipantCard({
                   <Icon name="wardrobe" className="w-3.5 h-3.5" />
                 </button>
               )}
-              {isCharacter && participant.character?.id && inventoryDialog && (
+              {participant.character?.id && inventoryDialog && (
                 <button
                   type="button"
                   onClick={() => inventoryDialog.open({
@@ -428,7 +430,7 @@ export function ParticipantCard({
           {/* Connection profile dropdown for every character — including the
               active "You" seat, so any participant can be flipped between
               "User (you type)" and an LLM (and back) from one control. */}
-          {isCharacter && connectionProfiles && onConnectionProfileChange ? (
+          {connectionProfiles && onConnectionProfileChange ? (
             <div className="mt-1">
               <select
                 value={connectionProfileValue}
@@ -455,7 +457,7 @@ export function ParticipantCard({
             </div>
           ) : (
             /* Fallback: plain-text LLM indicator when no dropdown */
-            isCharacter && participant.connectionProfile && (
+            participant.connectionProfile && (
               <div className="qt-participant-card-status mt-1 truncate flex items-center gap-1" title={`${participant.connectionProfile.provider}: ${participant.connectionProfile.modelName}`}>
                 <ProviderModelBadge
                   provider={participant.connectionProfile.provider}
@@ -472,7 +474,7 @@ export function ParticipantCard({
               identity stack from the latest character data so edits to
               manifesto/personality/prompt content show up without waiting for
               another invalidation trigger. */}
-          {isCharacter && !isUserParticipant && !isUserControlledCharacter && entity && (onSystemPromptChange || onRebuildSystemPrompt) && (
+          {!isUserParticipant && !isUserControlledCharacter && entity && (onSystemPromptChange || onRebuildSystemPrompt) && (
             <div className="mt-1 flex items-center gap-1">
               {onSystemPromptChange && (participant.character?.systemPrompts?.length ?? 0) > 0 && (
                 <select
@@ -507,7 +509,7 @@ export function ParticipantCard({
           {/* Subprompts in play — the smaller per-chat instructions kept in
               the character's vault. Same recompile path as the prompt
               dropdown above. */}
-          {isCharacter && !isUserParticipant && !isUserControlledCharacter && entity && onSubpromptsChange && (
+          {!isUserParticipant && !isUserControlledCharacter && entity && onSubpromptsChange && (
             <div className="mt-1">
               <SubpromptPicker
                 characterId={entity.id}
@@ -520,7 +522,7 @@ export function ParticipantCard({
           )}
 
           {/* Talkativeness slider for characters */}
-          {isCharacter && !isUserParticipant && (
+          {!isUserParticipant && (
             <div className="mt-2">
               <div className="flex items-center justify-between qt-text-xs mb-1">
                 <label htmlFor={`${talkId}-active`}>Talkativeness</label>
@@ -628,7 +630,7 @@ export function ParticipantCard({
         {/* Remove button - for characters when canRemove is true
             canRemove now includes the safety check that at least one user-controlled character remains
             User-controlled participants cannot be removed via this button */}
-        {isCharacter && !isUserParticipant && onRemove && canRemove && (
+        {!isUserParticipant && onRemove && canRemove && (
           <button
             onClick={() => onRemove(participant.id)}
             disabled={isGenerating}

@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
-import ConnectionProfilesTab from '@/components/settings/connection-profiles-tab'
+import ConnectionProfilesTab from '@/components/settings/connection-profiles'
 import { renderWithQuery } from '../../../helpers/renderWithQuery'
 
 

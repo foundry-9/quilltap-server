@@ -3,98 +3,104 @@
  * Defines all TypeScript types and interfaces used in the chat settings module
  */
 
+import type { z } from 'zod'
+import {
+  AgentModeSettingsSchema,
+  AnswerConfirmationSettingsSchema,
+  AutonomousRoomSettingsSchema,
+  ChatSettingsSchema,
+  ContextCompressionSettingsSchema,
+  CoreWhisperSettingsSchema,
+  DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS as SERVER_DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS,
+  LLMLoggingSettingsSchema,
+  MemoryCascadePreferencesSchema,
+  SmartTypographySettingsSchema,
+  ThinkingDisplaySettingsSchema,
+  TokenDisplaySettingsSchema,
+  WardrobeImageSettingsSchema,
+} from '@/lib/schemas/settings.types'
 import type {
-  LLMLoggingSettings as LLMLoggingSettingsType,
+  AgentModeSettings as AgentModeSettingsType,
+  AnswerConfirmationSettings as AnswerConfirmationSettingsType,
+  AutoLockSettings as AutoLockSettingsType,
+  AutonomousRoomSettings as AutonomousRoomSettingsType,
+  CheapLLMSettings as CheapLLMSettingsType,
   ConciergeSettings as ConciergeSettingsType,
   ConciergeDisplaySettings,
   ConciergePreScreenSettings,
-  ImpersonationVoiceMode,
-  WardrobeImageSettings as WardrobeImageSettingsType,
+  ContextCompressionSettings as ContextCompressionSettingsType,
+  CoreWhisperSettings as CoreWhisperSettingsType,
   DynamicBackgroundsSettings as DynamicBackgroundsSettingsType,
+  ImpersonationVoiceMode,
+  LLMLoggingSettings as LLMLoggingSettingsType,
+  MemoryCascadePreferences as MemoryCascadePreferencesType,
+  SmartTypographySettings as SmartTypographySettingsType,
+  StoryBackgroundsSettings as StoryBackgroundsSettingsType,
+  ThinkingDisplaySettings as ThinkingDisplaySettingsType,
+  TimestampConfig as TimestampConfigType,
+  TokenDisplaySettings as TokenDisplaySettingsType,
+  WardrobeImageSettings as WardrobeImageSettingsType,
 } from '@/lib/schemas/settings.types'
-import { DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS as SERVER_DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS } from '@/lib/schemas/settings.types'
+import type { AvatarDisplayMode } from '@/lib/schemas/common.types'
 import { DEFAULT_CONCIERGE_SETTINGS as SERVER_DEFAULT_CONCIERGE_SETTINGS } from '@/lib/services/dangerous-content/resolver.service'
+import type { ApiKeyRow, ImageProfileRow } from '@/lib/hooks/use-profiles'
 
-export type { ImpersonationVoiceMode }
-export type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
+/*
+ * The settings shapes and their defaults are the server's (`lib/schemas/
+ * settings.types.ts`): each type is the schema's inferred type and each
+ * default is what the schema fills in for an empty object, so the client can
+ * never drift from what the server would store.
+ */
+
+type ChatSettingsShape = typeof ChatSettingsSchema.shape
+
+/** What the server stores for a top-level chat-settings key that was never set. */
+function chatSettingDefault<K extends keyof ChatSettingsShape>(key: K): z.output<ChatSettingsShape[K]> {
+  return ChatSettingsSchema.shape[key].parse(undefined) as z.output<ChatSettingsShape[K]>
+}
+
+export type { AvatarDisplayMode, ImpersonationVoiceMode }
+export type {
+  CheapLLMStrategy,
+  EmbeddingProvider,
+  MemoryCascadeAction,
+  TimestampFormat,
+  TimestampMode,
+} from '@/lib/schemas/settings.types'
 export type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
-export type CheapLLMStrategy = 'USER_DEFINED' | 'PROVIDER_CHEAPEST' | 'LOCAL_FIRST'
-export type EmbeddingProvider = 'SAME_PROVIDER' | 'OPENAI' | 'LOCAL'
-export type TimestampMode = 'NONE' | 'START_ONLY' | 'EVERY_MESSAGE' | 'EVERY_N_MINUTES'
-export type TimestampFormat = 'ISO8601' | 'FRIENDLY' | 'DATE_ONLY' | 'TIME_ONLY' | 'CUSTOM'
-export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
 
 /**
  * Token Display Settings
  * Controls visibility of token and cost information in the UI
  */
-export interface TokenDisplaySettings {
-  showPerMessageTokens: boolean
-  showPerMessageCost: boolean
-  showChatTotals: boolean
-  showSystemEvents: boolean
-}
+export type TokenDisplaySettings = TokenDisplaySettingsType
 
-export interface CheapLLMSettings {
-  strategy: CheapLLMStrategy
-  userDefinedProfileId?: string | null
-  defaultCheapProfileId?: string | null
-  fallbackToLocal: boolean
-  /**
-   * Whether a cheap route with no connection profile behind it may have a
-   * stand-in drafted from the user's `isCheap` profiles when it fails. Routes
-   * that do have a profile take their chain from that profile instead.
-   */
-  allowCheapFallback?: boolean
-  /** The Green Room's own profile for choosing opening outfits; null = the cheap LLM. */
-  outfitSelectionProfileId?: string | null
-  embeddingProvider: EmbeddingProvider
-}
+export type CheapLLMSettings = CheapLLMSettingsType
 
-export interface TimestampConfig {
-  mode: TimestampMode
-  format: TimestampFormat
-  customFormat?: string | null
-  useFictionalTime: boolean
-  fictionalBaseTimestamp?: string | null
-  fictionalBaseRealTime?: string | null
-  autoPrepend: boolean
-  timezone?: string | null
-  /** Minimum minutes between Host timestamp announcements when mode is EVERY_N_MINUTES (default 15) */
-  intervalMinutes: number
-}
+export type TimestampConfig = TimestampConfigType
 
-export interface MemoryCascadePreferences {
-  onMessageDelete: MemoryCascadeAction
-  onSwipeRegenerate: MemoryCascadeAction
-}
+export type MemoryCascadePreferences = MemoryCascadePreferencesType
 
 /**
  * Story Backgrounds Settings
  * Controls AI-generated background images for chats
  */
-export interface StoryBackgroundsSettings {
-  enabled: boolean
-  defaultImageProfileId?: string | null
-}
+export type StoryBackgroundsSettings = StoryBackgroundsSettingsType
 
 /**
  * Wardrobe Image Settings
  * The designated image profile that draws pictures of wardrobe items.
- * Re-exported from schema types; `imageProfileId: null` = the default image profile.
+ * `imageProfileId: null` = the default image profile.
  */
 export type WardrobeImageSettings = WardrobeImageSettingsType
 
 /**
  * Dynamic Backgrounds
- * The collage behind the home, project and character pages. Re-exported from schema types.
+ * The collage behind the home, project and character pages.
  */
 export type DynamicBackgroundsSettings = DynamicBackgroundsSettingsType
 
-export interface AutoLockSettings {
-  enabled: boolean
-  idleMinutes: number
-}
+export type AutoLockSettings = AutoLockSettingsType
 
 export interface ChatSettings {
   id: string
@@ -167,31 +173,18 @@ export interface ChatSettings {
  * chain-of-thought in the Salon. Per-chat override (`showThinking`, tri-state)
  * lives on the chat row. DISPLAY ONLY.
  */
-export interface ThinkingDisplaySettings {
-  /** Whether new chats show captured thinking by default. */
-  defaultVisible?: boolean
-  /** Whether the thinking block starts collapsed when shown. */
-  defaultCollapsed?: boolean
-}
+export type ThinkingDisplaySettings = ThinkingDisplaySettingsType
 
-export const DEFAULT_THINKING_DISPLAY_SETTINGS: ThinkingDisplaySettings = {
-  defaultVisible: true,
-  defaultCollapsed: true,
-}
+export const DEFAULT_THINKING_DISPLAY_SETTINGS: ThinkingDisplaySettings = ThinkingDisplaySettingsSchema.parse({})
 
 /**
  * Answer confirmation — global default for the Salon consistency check that
  * vets a character's tool-using reply against what it recalled and looked up.
  * Off by default; a per-project or per-chat override can flip it on.
  */
-export interface AnswerConfirmationSettings {
-  /** Whether the consistency check runs by default (global). */
-  enabled?: boolean
-}
+export type AnswerConfirmationSettings = AnswerConfirmationSettingsType
 
-export const DEFAULT_ANSWER_CONFIRMATION_SETTINGS: AnswerConfirmationSettings = {
-  enabled: false,
-}
+export const DEFAULT_ANSWER_CONFIRMATION_SETTINGS: AnswerConfirmationSettings = AnswerConfirmationSettingsSchema.parse({})
 
 /**
  * Smart typography — two mechanisms split by confidence.
@@ -203,65 +196,28 @@ export const DEFAULT_ANSWER_CONFIRMATION_SETTINGS: AnswerConfirmationSettings = 
  * `dashes` and `ellipsis` write real characters into the text as it is typed,
  * because a writer typing `--` means a dash. Both are undone by one Backspace.
  */
-export interface SmartTypographySettings {
-  /** Curl quotes when displaying messages. Stored text is never modified. */
-  displayQuotes?: boolean
-  /** `--` → en dash and `---` → em dash, as you type. */
-  dashes?: boolean
-  /** `...` → ellipsis, as you type. */
-  ellipsis?: boolean
-  /** Paint a warning over punctuation that looks wrong while typing. */
-  punctuationWarnings?: boolean
-}
+export type SmartTypographySettings = SmartTypographySettingsType
 
-export const DEFAULT_SMART_TYPOGRAPHY_SETTINGS: SmartTypographySettings = {
-  displayQuotes: false,
-  dashes: true,
-  ellipsis: true,
-  punctuationWarnings: true,
-}
+export const DEFAULT_SMART_TYPOGRAPHY_SETTINGS: SmartTypographySettings = SmartTypographySettingsSchema.parse({})
 
 /**
  * Aurora's Core whisper — global defaults. Per-chat and per-character overrides
  * live on chat / character rows. Precedence: chat → character → global.
  */
-export interface CoreWhisperSettings {
-  enabled?: boolean
-  interval?: number
-  silenceThreshold?: number
-  packetTokenBudget?: number
-  fireOnContextTransition?: boolean
-}
+export type CoreWhisperSettings = CoreWhisperSettingsType
 
-export const DEFAULT_CORE_WHISPER_SETTINGS: CoreWhisperSettings = {
-  enabled: true,
-  interval: 12,
-  silenceThreshold: 3,
-  packetTokenBudget: 4096,
-  fireOnContextTransition: true,
-}
+export const DEFAULT_CORE_WHISPER_SETTINGS: CoreWhisperSettings = CoreWhisperSettingsSchema.parse({})
 
 /**
  * 4.6 Private Character Rooms — user-level defaults applied across the
  * householder's autonomous rooms. Per-room overrides live on the chat row.
  */
-export interface AutonomousRoomSettings {
-  /** Daily cumulative-token cap for all autonomous-room turns (instance-local-midnight rollover). null = no cap. */
-  dailyTokenBudget?: number | null
-  /** Default catch-up freshness window for scheduled runs (ms). */
-  defaultFreshnessWindowMs?: number
-  /** Default visibility for new autonomous rooms in the Salon chat list. */
-  visibilityDefault?: 'owner_only' | 'household' | 'open'
-  /** User-level ceiling for destructive-tool exposure in autonomous rooms. */
-  destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
-}
+export type AutonomousRoomSettings = AutonomousRoomSettingsType
 
-export interface ApiKey {
-  id: string
-  label: string
-  provider: string
-  isActive: boolean
-}
+export const DEFAULT_AUTONOMOUS_ROOM_SETTINGS: AutonomousRoomSettings = AutonomousRoomSettingsSchema.parse({})
+
+/** An API key row, as every settings list reads it. */
+export type ApiKey = ApiKeyRow
 
 export interface ConnectionProfile {
   id: string
@@ -286,16 +242,8 @@ export interface EmbeddingProfile {
   apiKey?: ApiKey | null
 }
 
-export interface ImageProfile {
-  id: string
-  name: string
-  provider: string
-  modelName: string
-  isDefault: boolean
-  isDangerousCompatible?: boolean
-  apiKeyId?: string
-  apiKey?: ApiKey | null
-}
+/** An image profile row, as every settings list reads it. */
+export type ImageProfile = ImageProfileRow
 
 /**
  * Avatar Display Mode Options
@@ -438,44 +386,23 @@ export const MEMORY_CASCADE_ACTIONS = [
 /**
  * Default memory cascade preferences
  */
-export const DEFAULT_MEMORY_CASCADE_PREFERENCES: MemoryCascadePreferences = {
-  onMessageDelete: 'ASK_EVERY_TIME',
-  onSwipeRegenerate: 'DELETE_MEMORIES',
-}
+export const DEFAULT_MEMORY_CASCADE_PREFERENCES: MemoryCascadePreferences = MemoryCascadePreferencesSchema.parse({})
 
 /**
  * Default token display settings
  */
-export const DEFAULT_TOKEN_DISPLAY_SETTINGS: TokenDisplaySettings = {
-  showPerMessageTokens: false,
-  showPerMessageCost: false,
-  showChatTotals: false,
-  showSystemEvents: false,
-}
+export const DEFAULT_TOKEN_DISPLAY_SETTINGS: TokenDisplaySettings = TokenDisplaySettingsSchema.parse({})
 
 /**
  * Context Compression Settings
  * Controls how older messages are compressed to reduce token costs
  */
-export interface ContextCompressionSettings {
-  enabled: boolean
-  windowSize: number
-  compressionTargetTokens: number
-  systemPromptTargetTokens: number
-  /** How often to re-inject project context (0 = never after initial, must be >= windowSize) */
-  projectContextReinjectInterval: number
-}
+export type ContextCompressionSettings = ContextCompressionSettingsType
 
 /**
  * Default context compression settings
  */
-export const DEFAULT_CONTEXT_COMPRESSION_SETTINGS: ContextCompressionSettings = {
-  enabled: true,
-  windowSize: 5,
-  compressionTargetTokens: 800,
-  systemPromptTargetTokens: 1500,
-  projectContextReinjectInterval: 5,
-}
+export const DEFAULT_CONTEXT_COMPRESSION_SETTINGS: ContextCompressionSettings = ContextCompressionSettingsSchema.parse({})
 
 /**
  * Token Display Options
@@ -506,18 +433,13 @@ export const TOKEN_DISPLAY_OPTIONS = [
 
 /**
  * LLM Logging Settings
- * Re-exported from schema types for use in chat settings components
  */
 export type LLMLoggingSettings = LLMLoggingSettingsType
 
 /**
  * Default LLM logging settings
  */
-export const DEFAULT_LLM_LOGGING_SETTINGS: LLMLoggingSettings = {
-  enabled: true,
-  verboseMode: false,
-  retentionDays: 30,
-}
+export const DEFAULT_LLM_LOGGING_SETTINGS: LLMLoggingSettings = LLMLoggingSettingsSchema.parse({})
 
 /**
  * Automation Settings Options
@@ -547,44 +469,48 @@ export type AutomationKey = (typeof AUTOMATION_OPTIONS)[number]['key']
 /**
  * Default automation settings
  */
-export const DEFAULT_AUTO_DETECT_RNG = true
+export const DEFAULT_AUTO_DETECT_RNG = chatSettingDefault('autoDetectRng')
 
 /**
  * Default custom-tools setting
  */
-export const DEFAULT_CUSTOM_TOOLS = true
+export const DEFAULT_CUSTOM_TOOLS = chatSettingDefault('customTools')
 
 /**
  * Default trigger-phrase setting — off: overhearing is a surprise the first time
  */
-export const DEFAULT_CUSTOM_TOOL_TRIGGERS = false
+export const DEFAULT_CUSTOM_TOOL_TRIGGERS = chatSettingDefault('customToolTriggers')
 
 /**
  * Default intervention setting — on: a held roll is the safe state, and the operator opts out to run unattended
  */
-export const DEFAULT_CUSTOM_TOOL_INTERVENTION = true
+export const DEFAULT_CUSTOM_TOOL_INTERVENTION = chatSettingDefault('customToolIntervention')
+
+/** Defaults for the composer and Salon toggles, read where a stored row lacks the key. */
+export const DEFAULT_COMPOSITION_MODE_DEFAULT = chatSettingDefault('compositionModeDefault')
+export const DEFAULT_COMPOSER_SPELLCHECK = chatSettingDefault('composerSpellcheck')
+export const DEFAULT_COMPOSER_EMOJI = chatSettingDefault('composerEmoji')
+export const DEFAULT_COMPOSER_UNICODE = chatSettingDefault('composerUnicode')
+export const DEFAULT_COMPOSER_SLASH_COMMANDS = chatSettingDefault('composerSlashCommands')
+export const DEFAULT_IMPERSONATION_VOICE_MODE = chatSettingDefault('impersonationVoiceMode')
+export const DEFAULT_TEXT_REPLACEMENTS_ENABLED = chatSettingDefault('textReplacementsEnabled')
+export const DEFAULT_AUTO_SCROLL_ON_RESPONSE_COMPLETE = chatSettingDefault('autoScrollOnResponseComplete')
 
 /**
  * Agent Mode Settings
  * Controls iterative tool use with self-correction
  */
-export interface AgentModeSettings {
-  /** Maximum number of agent turns (1-25) */
-  maxTurns: number
-  /** Whether agent mode is enabled by default for new chats */
-  defaultEnabled: boolean
-}
+export type AgentModeSettings = AgentModeSettingsType
 
 /**
  * Default agent mode settings
  */
-export const DEFAULT_AGENT_MODE_SETTINGS: AgentModeSettings = {
-  maxTurns: 10,
-  defaultEnabled: false,
-}
+export const DEFAULT_AGENT_MODE_SETTINGS: AgentModeSettings = AgentModeSettingsSchema.parse({})
 
 /**
- * Default story backgrounds settings
+ * Default story backgrounds settings. Spelled out rather than parsed: the
+ * schema leaves `defaultImageProfileId` absent, and this explicit `null` is
+ * what a merged save sends today.
  */
 export const DEFAULT_STORY_BACKGROUNDS_SETTINGS: StoryBackgroundsSettings = {
   enabled: false,
@@ -595,17 +521,13 @@ export const DEFAULT_STORY_BACKGROUNDS_SETTINGS: StoryBackgroundsSettings = {
  * Default wardrobe image settings — no designated profile, so the default image profile draws;
  * the wardrobe tools do not queue pictures.
  */
-export const DEFAULT_WARDROBE_IMAGE_SETTINGS: WardrobeImageSettings = {
-  imageProfileId: null,
-  generateFromTools: false,
-}
+export const DEFAULT_WARDROBE_IMAGE_SETTINGS: WardrobeImageSettings = WardrobeImageSettingsSchema.parse({})
 
 /** Default dynamic-backgrounds settings — off, uncensored pictures kept out, a new collage every three minutes. */
 export const DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS: DynamicBackgroundsSettings = SERVER_DEFAULT_DYNAMIC_BACKGROUNDS_SETTINGS
 
 /**
  * The Concierge's settings.
- * Re-exported from schema types for use in chat settings components
  */
 export type ConciergeSettings = ConciergeSettingsType
 

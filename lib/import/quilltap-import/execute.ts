@@ -45,6 +45,7 @@ import {
 } from './import-configuration';
 import { reconcileRelationships, remapChatInform } from './reconcile';
 import { remapImportedMessageId } from './message-id-remap';
+import { applyImportSelection } from './selection';
 import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
@@ -446,6 +447,7 @@ async function executeImportStrict(
     userId,
     conflictStrategy: options.conflictStrategy,
     includeMemories: options.includeMemories,
+    selectedKinds: options.selectedIds ? Object.keys(options.selectedIds) : [],
   });
 
   const repos = getUserRepositories(userId);
@@ -484,7 +486,8 @@ async function executeImportStrict(
     groups: 0,
   };
 
-  const data = getExportData(exportData);
+  // Only what the preview's selection chose goes any further (#267).
+  const data = applyImportSelection(getExportData(exportData), options.selectedIds);
 
   try {
     await preflightPreserveIds(userId, data, options, repos, globalRepos, warnings, idMaps);

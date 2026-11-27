@@ -6,8 +6,9 @@
  */
 
 import React from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { SaveImageDialog, type SaveImageTarget } from '@/app/salon/[id]/components/SaveImageDialog'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { renderWithQuery } from '../../../../helpers/renderWithQuery'
 
 const CONTAINER = { scope: 'project' as const, id: 'proj-1' }
 
@@ -41,7 +42,7 @@ describe.each(CASES)('SaveImageDialog ($kind door)', ({ kind, base }) => {
     const onSaved = jest.fn()
     const onClose = jest.fn()
     const target: SaveImageTarget = { kind, itemId: 'item-1', container: CONTAINER, fileId: 'file-1' }
-    render(
+    renderWithQuery(
       <SaveImageDialog
         isOpen={true}
         onClose={onClose}

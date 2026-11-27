@@ -29,8 +29,7 @@ jest.mock('react-markdown', () => ({
 }))
 jest.mock('remark-gfm', () => ({ __esModule: true, default: () => {} }))
 jest.mock('@/components/terminal/TerminalEmbed', () => ({ TerminalEmbed: () => null }))
-jest.mock('@/hooks/useAbsentMentions', () => ({ useAbsentMentions: () => [] }))
-jest.mock('@/hooks/useAtlasMentions', () => ({ useAtlasMentions: () => [] }))
+jest.mock('@/hooks/useChatMentions', () => ({ useChatMentions: () => [] }))
 
 const noop = () => {}
 

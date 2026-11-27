@@ -20,7 +20,6 @@ import { useNewChatModalOptional } from '@/components/providers/new-chat-provide
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
-import { useWorkspaceLink } from '@/components/workspace/useWorkspaceLink'
 import type { HomepageCharacter } from './types'
 
 /** How long the pointer rests before the card opens, so a pass across the wall opens nothing. */
@@ -46,7 +45,6 @@ function isKeyboardFocus(element: Element): boolean {
 export function CharacterCard({ character, align = 'start', placement = 'below' }: CharacterCardProps) {
   const newChat = useNewChatModalOptional()
   const router = useRouter()
-  const openInWorkspace = useWorkspaceLink()
   const { shouldHideChat } = useQuickHide()
   const popoverId = useId()
   const [open, setOpen] = useState(false)
@@ -171,7 +169,6 @@ export function CharacterCard({ character, align = 'start', placement = 'below' 
             {latestChat && latestHref && (
               <Link
                 href={latestHref}
-                onClick={(e) => openInWorkspace(latestHref, e)}
                 className="qt-character-card-link"
               >
                 <Icon name="play" className="w-3.5 h-3.5 shrink-0" />
@@ -182,7 +179,6 @@ export function CharacterCard({ character, align = 'start', placement = 'below' 
             )}
             <Link
               href={profileHref}
-              onClick={(e) => openInWorkspace(profileHref, e)}
               className="qt-character-card-link"
             >
               <Icon name="profile" className="w-3.5 h-3.5 shrink-0" />

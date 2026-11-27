@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useApiKeysQuery, useEmbeddingProfilesQuery } from '@/lib/hooks/use-profiles'
+import { useApiKeysQuery, useEmbeddingProfilesQuery, useEmbeddingProviderNamesQuery } from '@/lib/hooks/use-profiles'
 import type { ApiKey, EmbeddingModel, EmbeddingProfile, EmbeddingProvider } from '../types'
 
 /**
@@ -102,12 +102,7 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
     queryFn: ({ signal }) =>
       apiFetch<Record<string, EmbeddingModel[]>>('/api/v1/embedding-profiles?action=list-models', { signal }),
   })
-  const { data: providerNames } = useQuery({
-    queryKey: queryKeys.embeddingProfiles.providerNames,
-    queryFn: ({ signal }) =>
-      apiFetch<{ providers: string[] }>('/api/v1/embedding-profiles?action=list-providers', { signal }),
-    select: (data) => data.providers,
-  })
+  const { data: providerNames } = useEmbeddingProviderNamesQuery()
   // The provider list, or (when it cannot be read) the models catalogue's keys.
   const embeddingProviders = useMemo(
     () => toEmbeddingProviderInfo(providerNames ?? Object.keys(embeddingModels)),

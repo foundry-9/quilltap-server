@@ -44,8 +44,8 @@ export function AutoLockSettingsCard() {
     onSaved: () => {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
-      // Notify the AutoLockProvider to re-read its settings.
-      window.dispatchEvent(new CustomEvent('quilltap-autolock-settings-changed'))
+      // The AutoLockProvider reads the same entry, so it picks up the new timer.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.system.unlock })
     },
   })
 

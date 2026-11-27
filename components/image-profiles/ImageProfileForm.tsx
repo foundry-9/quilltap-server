@@ -1,34 +1,18 @@
 'use client'
 
 import { readErrorMessage } from '@/lib/fetch-helpers'
-import { useState, useEffect, useCallback, useId } from 'react'
+import { useState, useEffect, useCallback, useId, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ImageLoraSpec, ImageLoraSupport, ProviderOptionsSchema } from '@quilltap/plugin-types'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import type { ApiKeyRow, ImageProfileRow } from '@/lib/hooks/use-profiles'
 import { ImageProfileParameters } from './ImageProfileParameters'
 import { LoraListEditor } from './LoraListEditor'
 import { ProviderOptionsPanel } from '@/components/settings/connection-profiles/ProviderOptionsPanel'
 
-interface ApiKey {
-  id: string
-  label: string
-  provider: string
-  isActive: boolean
-}
-
-interface ImageProfile {
-  id: string
-  name: string
-  provider: string
-  apiKeyId?: string
-  baseUrl?: string
-  modelName: string
-  parameters: Record<string, any>
-  isDefault: boolean
-  isDangerousCompatible?: boolean
-  apiKey?: ApiKey | null
-}
+type ApiKey = ApiKeyRow
+type ImageProfile = ImageProfileRow
 
 interface ImageProviderInfo {
   value: string
@@ -119,32 +103,20 @@ export function ImageProfileForm({
   const [modelsFetchError, setModelsFetchError] = useState<string | null>(null)
   const [isValidatingKey, setIsValidatingKey] = useState(false)
   const [keyValidationStatus, setKeyValidationStatus] = useState<string | null>(null)
-  const [imageProviders, setImageProviders] = useState<ImageProviderInfo[]>(FALLBACK_PROVIDERS)
-  const [isFetchingProviders, setIsFetchingProviders] = useState(true)
   const queryClient = useQueryClient()
 
-  // Fetch available image providers on mount
-  useEffect(() => {
-    const fetchProviders = async () => {
-      try {
-        setIsFetchingProviders(true)
-        const res = await fetch('/api/v1/image-profiles?action=list-providers')
-        if (res.ok) {
-          const data = await res.json()
-          if (data.providers && data.providers.length > 0) {
-            setImageProviders(data.providers)
-          }
-        }
-      } catch (err) {
-        // Keep fallback providers on error
-        console.error('Failed to fetch image providers:', err)
-      } finally {
-        setIsFetchingProviders(false)
-      }
-    }
-
-    fetchProviders()
-  }, [])
+  // The image providers, re-read on every opening; the fallback list stands in
+  // until they load, and for good when the read fails or comes back empty.
+  const providersQuery = useQuery({
+    queryKey: queryKeys.imageProfiles.providers,
+    queryFn: ({ signal }) =>
+      apiFetch<{ providers?: ImageProviderInfo[] }>('/api/v1/image-profiles?action=list-providers', { signal }),
+    refetchOnMount: 'always',
+    retry: false,
+  })
+  const loadedProviders = providersQuery.data?.providers
+  const imageProviders = loadedProviders && loadedProviders.length > 0 ? loadedProviders : FALLBACK_PROVIDERS
+  const isFetchingProviders = providersQuery.isPending
 
   // A preselected provider the fallback list did not know is matched again
   // against the loaded list (a plugin image provider, or a key-provider name
@@ -179,7 +151,12 @@ export function ImageProfileForm({
 
   // Query the provider (or its plugin's built-in list) for image models.
   // Shared by the auto-load below and the explicit Fetch Models button.
+  // Only the newest request may write the list: switching provider or key
+  // mid-fetch must not let the slower, older answer land last (#295).
+  const modelsRequestRef = useRef(0)
   const fetchModels = useCallback(async () => {
+    const requestId = ++modelsRequestRef.current
+    const isCurrent = () => requestId === modelsRequestRef.current
     try {
       setIsFetchingModels(true)
       setModelsFetchError(null)
@@ -193,8 +170,10 @@ export function ImageProfileForm({
       }
 
       const res = await fetch(url.toString())
+      if (!isCurrent()) return
       if (res.ok) {
         const data = await res.json()
+        if (!isCurrent()) return
         setAvailableModels(data.models)
         setModelsSource(data.source === 'provider' ? 'provider' : 'builtin')
         setModelsFetchError(data.fetchError || null)
@@ -210,14 +189,15 @@ export function ImageProfileForm({
         setAvailableModels(providerInfo?.defaultModels || [])
         setModelsSource('builtin')
       }
-    } catch (err) {
+    } catch {
+      if (!isCurrent()) return
       // Fall back to default models on error
       const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
       const providerInfo = imageProviders.find(p => p.value === normalizedProvider || p.value === formData.provider)
       setAvailableModels(providerInfo?.defaultModels || [])
       setModelsSource('builtin')
     } finally {
-      setIsFetchingModels(false)
+      if (isCurrent()) setIsFetchingModels(false)
     }
   }, [formData.provider, formData.apiKeyId, imageProviders, queryClient])
 
@@ -605,7 +585,7 @@ export function ImageProfileForm({
           id="isDefault"
           checked={formData.isDefault}
           onChange={e => setFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
-          className="h-4 w-4 rounded"
+          className="qt-checkbox"
         />
         <label htmlFor="isDefault" className="ml-2 text-sm qt-text">
           Set as default profile for image generation
@@ -619,7 +599,7 @@ export function ImageProfileForm({
           id="isDangerousCompatible"
           checked={formData.isDangerousCompatible}
           onChange={e => setFormData(prev => ({ ...prev, isDangerousCompatible: e.target.checked }))}
-          className="h-4 w-4 rounded"
+          className="qt-checkbox"
         />
         <label htmlFor="isDangerousCompatible" className="ml-2 text-sm qt-text">
           Uncensored-compatible (suitable for dangerous/sensitive content routing)

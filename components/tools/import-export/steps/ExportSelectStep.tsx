@@ -1,6 +1,6 @@
 'use client'
 
-import { LoadingSpinner } from '../components/LoadingSpinner'
+import { Spinner } from '@/components/ui/Spinner'
 import { SearchInput } from '../components/SearchInput'
 
 interface Entity {
@@ -71,7 +71,7 @@ export function ExportSelectStep({
 
           {loadingEntities ? (
             <div className="flex justify-center py-6">
-              <LoadingSpinner />
+              <Spinner className="w-6 h-6" />
             </div>
           ) : filteredEntities.length === 0 ? (
             <div className="text-center py-6 qt-text-secondary">

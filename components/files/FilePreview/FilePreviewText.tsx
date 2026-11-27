@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo, useCallback, useRef, useState } from 'react'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -242,20 +243,11 @@ interface CopyButtonProps {
 }
 
 function CopyButton({ content, className = '' }: CopyButtonProps) {
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
 
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(content)
-      setCopied(true)
-      // Reset after 2 seconds
-      setTimeout(() => setCopied(false), 2000)
-    } catch (error) {
-      console.error('[CopyButton] Failed to copy to clipboard', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }, [content])
+  const handleCopy = useCallback(() => {
+    void copy(content)
+  }, [copy, content])
 
   return (
     <button

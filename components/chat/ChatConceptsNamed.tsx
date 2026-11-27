@@ -23,7 +23,7 @@ import { Icon } from '@/components/ui/icon'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { AbsentCharacterCardView, AtlasCardView } from '@/components/chat/MentionChip'
 import { requestMessageReveal } from '@/lib/chat/message-navigation'
-import type { ChatAbsentMention } from '@/hooks/useAbsentMentions'
+import type { ChatAbsentMention } from '@/hooks/useChatMentions'
 import type { AtlasMention } from '@/lib/schemas/atlas.types'
 
 const REVEAL_HINT = 'click to go to its first mention'

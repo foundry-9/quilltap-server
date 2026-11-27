@@ -14,10 +14,8 @@
  * @module lib/hooks/use-characters-list
  */
 
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useEnvelopeSelect, type EntityListOptions, type EntityRow } from './use-profiles'
+import { useEnvelopeListQuery, type EntityListOptions, type EntityRow } from './use-profiles'
 
 export type CharactersListFilters = {
   /** `user`: the operator's personas; `llm`: characters a model plays. */
@@ -27,8 +25,8 @@ export type CharactersListFilters = {
   npc?: boolean
 }
 
-/** The request URL for a filter set; also used by the few non-hook callers. */
-export function charactersListUrl(filters?: CharactersListFilters): string {
+/** The request URL for a filter set. */
+function charactersListUrl(filters?: CharactersListFilters): string {
   const params = new URLSearchParams()
   if (filters?.controlledBy) params.set('controlledBy', filters.controlledBy)
   if (filters?.archived) params.set('archived', filters.archived)
@@ -43,18 +41,15 @@ export function useCharactersList<C = EntityRow, R = C[]>(
   filters?: CharactersListFilters,
   options?: EntityListOptions<C, R>,
 ) {
-  const select = useEnvelopeSelect<{ characters?: C[] }, C, R>(unwrapCharacters, options?.select)
   // Undefined filter values must not split the cache from the bare list.
   const keyFilters: CharactersListFilters | undefined = filters
     ? Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== undefined))
     : undefined
   const listFilters = keyFilters && Object.keys(keyFilters).length > 0 ? keyFilters : undefined
-  return useQuery({
+  return useEnvelopeListQuery<{ characters?: C[] }, C, R>({
     queryKey: queryKeys.characters.list(listFilters),
-    queryFn: ({ signal }) => apiFetch<{ characters?: C[] }>(charactersListUrl(listFilters), { signal }),
-    select,
-    enabled: options?.enabled,
-    staleTime: options?.staleTime,
-    refetchOnMount: options?.refetchOnMount,
+    url: charactersListUrl(listFilters),
+    unwrap: unwrapCharacters,
+    options,
   })
 }

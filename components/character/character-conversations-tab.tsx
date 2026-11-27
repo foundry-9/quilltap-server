@@ -130,14 +130,10 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
       // Delete existing memories for this chat
       await fetch(`/api/v1/memories?chatId=${chatId}`, { method: 'DELETE' })
 
-      // Queue new memory extraction
+      // Queue new memory extraction. Each job covers a whole turn, every
+      // character who spoke in it, so the request names no character.
       const res = await fetch(`/api/v1/chats/${chatId}?action=queue-memories`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          characterId,
-          characterName,
-        }),
       })
       const data = await res.json()
 

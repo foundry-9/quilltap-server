@@ -1,12 +1,13 @@
 import { forwardRef } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ProfileCard as BaseProfileCard, ProfileCardBadge } from '@/components/ui/ProfileCard'
+import { SettingsCard, type SettingsCardBadge } from '@/components/ui/SettingsCard'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import { getProfileAttachmentSupportDescription } from '@/lib/llm/connection-profile-utils'
 import { getModelClass } from '@/lib/llm/model-classes'
 import { formatTokenCount } from '@/lib/utils/format-tokens'
+import { readProfileUsage, tallyTokens, type UsageTally } from '@/lib/llm/profile-usage'
 import type { ConnectionProfile } from './types'
 
 interface ProfileCardProps {
@@ -23,6 +24,44 @@ interface ProfileCardProps {
   isDeleting: boolean
   onAutoConfigure?: (profileId: string) => void
   isAutoConfiguring?: boolean
+}
+
+const LEDGER_LABELS = { chat: 'Chat', automatic: 'Automatic' } as const
+
+function usageBreakdown(tally: UsageTally): string {
+  const parts = [
+    `${tally.promptTokens.toLocaleString()} in`,
+    `${tally.completionTokens.toLocaleString()} out`,
+  ]
+  if (tally.cacheReadTokens > 0) parts.push(`${tally.cacheReadTokens.toLocaleString()} read from cache`)
+  if (tally.cacheWriteTokens > 0) parts.push(`${tally.cacheWriteTokens.toLocaleString()} written to cache`)
+  return parts.join(', ')
+}
+
+/**
+ * The profile's two usage ledgers, one line each, a ledger with no calls
+ * left out. Chat is a conversation's own answers; automatic is the errands
+ * Quilltap runs on its own (memory, titles, summaries, the classifier…).
+ */
+function ProfileUsageLines({ profile }: { profile: ConnectionProfile }) {
+  const usage = readProfileUsage(profile)
+  const ledgers = (['chat', 'automatic'] as const).filter((category) => usage[category].calls > 0)
+  if (ledgers.length === 0) return null
+  return (
+    <div className="text-sm qt-text-brand mt-1 font-medium">
+      {ledgers.map((category) => {
+        const tally = usage[category]
+        return (
+          <div key={category} title={usageBreakdown(tally)}>
+            <span>{LEDGER_LABELS[category]}: </span>
+            <span>{tally.calls.toLocaleString()} call{tally.calls === 1 ? '' : 's'}</span>
+            <span className="qt-text-secondary"> • </span>
+            <span>{formatTokenCount(tallyTokens(tally))} tokens</span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 /**
@@ -70,7 +109,7 @@ function ProfileCardContent({
   const isMissingApiKey = providerRequiresApiKey && !profile.apiKey
 
   // Build badges array
-  const badges: ProfileCardBadge[] = []
+  const badges: SettingsCardBadge[] = []
   if (profile.isDefault) {
     badges.push({ text: 'Default', variant: 'default' })
   }
@@ -93,7 +132,7 @@ function ProfileCardContent({
   }
 
   return (
-    <BaseProfileCard
+    <SettingsCard
       title={profile.name}
       subtitle={`${profile.provider} • ${profile.modelName}`}
       badges={badges}
@@ -127,20 +166,8 @@ function ProfileCardContent({
         {getProfileAttachmentSupportDescription(profile as any)}
       </p>
 
-      {/* Usage stats */}
-      {(profile.messageCount !== undefined || profile.totalTokens !== undefined) && (
-        <div className="text-sm qt-text-brand mt-1 font-medium">
-          {profile.messageCount !== undefined && (
-            <span>{profile.messageCount} message{profile.messageCount === 1 ? '' : 's'}</span>
-          )}
-          {profile.messageCount !== undefined && profile.totalTokens !== undefined && (
-            <span className="qt-text-secondary"> • </span>
-          )}
-          {profile.totalTokens !== undefined && profile.totalTokens > 0 && (
-            <span>{formatTokenCount(profile.totalTokens)} tokens</span>
-          )}
-        </div>
-      )}
+      {/* Usage: the chat and automatic ledgers */}
+      <ProfileUsageLines profile={profile} />
 
       {/* API Key info */}
       {profile.apiKey && (
@@ -160,12 +187,12 @@ function ProfileCardContent({
       <div className="qt-text-xs mt-2">
         {providerTakesSamplingParameters ? (
           <>
-            Temperature: {profile.parameters?.temperature ?? 0.7} •
-            Max Tokens: {profile.parameters?.max_tokens ?? 1000} •
-            Top P: {profile.parameters?.top_p ?? 1}
+            Temperature: {profile.parameters?.temperature ?? 'provider default'} •
+            Max Tokens: {profile.parameters?.max_tokens ?? 'provider default'} •
+            Top P: {profile.parameters?.top_p ?? 'provider default'}
           </>
         ) : (
-          <>Max Tokens: {profile.parameters?.max_tokens ?? 1000}</>
+          <>Max Tokens: {profile.parameters?.max_tokens ?? 'provider default'}</>
         )}
       </div>
 
@@ -177,7 +204,7 @@ function ProfileCardContent({
           ))}
         </div>
       )}
-    </BaseProfileCard>
+    </SettingsCard>
   )
 }
 

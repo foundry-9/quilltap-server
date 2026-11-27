@@ -62,28 +62,18 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { queryKeys } from '@/lib/query/keys'
-import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
+import { SeatThumb, type AudienceCandidate } from '@/components/chat/SeatThumb'
 
 /** Derived from the formatting toolbar's own CSS — see the header comment. */
 const TOOLBAR_MIN_WIDTH = 720
 const DIALOG_OPEN_WIDTH = 780
-
-/** A current participant of the chat, offered as an inform target. */
-export interface InformAudienceCandidate {
-  /** CHAT PARTICIPANT id — never a character id. */
-  participantId: string
-  name: string
-  controlledBy: 'llm' | 'user'
-  avatarUrl?: string | null
-  status?: 'active' | 'silent' | 'absent' | 'removed'
-}
 
 interface InformDialogProps {
   isOpen: boolean
   onClose: () => void
   chatId: string
   /** Current participants. User-controlled seats are filtered out here. */
-  audienceCandidates?: InformAudienceCandidate[]
+  audienceCandidates?: AudienceCandidate[]
   onPosted?: () => void
 }
 
@@ -94,7 +84,6 @@ export default function InformDialog({
   audienceCandidates = [],
   onPosted,
 }: InformDialogProps) {
-  const imagesHidden = useImagesHidden()
   const queryClient = useQueryClient()
   const [content, setContent] = useState('')
   // Chosen seats. EMPTY MEANS EVERYONE — the default, and what a full
@@ -236,15 +225,7 @@ export default function InformDialog({
                         picked ? 'qt-bg-primary/20' : 'hover:qt-bg-primary/10'
                       }`}
                     >
-                      {p.avatarUrl && !imagesHidden ? (
-                        <img
-                          src={p.avatarUrl}
-                          alt=""
-                          className="w-5 h-5 rounded-full object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-5 h-5 rounded-full qt-bg-secondary flex-shrink-0" />
-                      )}
+                      <SeatThumb avatarUrl={p.avatarUrl} sizeClass="w-5 h-5" />
                       <span className="min-w-0 truncate">{p.name}</span>
                       {(p.status === 'silent' || p.status === 'absent') && (
                         <span className="qt-text-xs flex-shrink-0">({p.status})</span>

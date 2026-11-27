@@ -54,8 +54,8 @@ function AddOnsEditor({
   const id = useId()
   return (
     <div>
-      <label className="qt-text-xs qt-text-secondary">Flourishes</label>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+      <span id={`${id}-flourishes`} className="qt-text-xs qt-text-secondary">Flourishes</span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1" role="group" aria-labelledby={`${id}-flourishes`}>
         <label className="flex items-center gap-1 cursor-pointer">
           <input
             type="checkbox"
@@ -311,7 +311,7 @@ export default function RoleplayTemplatesTab() {
           <button
             type="button"
             onClick={openCreateModal}
-            className="qt-button qt-button-primary px-4 py-2 rounded-md"
+            className="qt-button-primary"
           >
             Create Template
           </button>
@@ -407,7 +407,7 @@ export default function RoleplayTemplatesTab() {
                       type="button"
                       onClick={appendFormattingHint}
                       disabled={formData.delimiters.length === 0 && formData.narrationDelimiterMode !== 'none' && !formData.narrationOpen.trim()}
-                      className="px-2 py-1 text-xs rounded border qt-border-default qt-hover-accent disabled:opacity-50"
+                      className="qt-button-secondary qt-button-sm"
                       title="Append a starter formatting guide drafted from the delimiters above"
                     >
                       Draft formatting instructions
@@ -425,13 +425,13 @@ export default function RoleplayTemplatesTab() {
               </div>
 
               <div>
-                <label className="qt-label mb-1">
+                <p id={`${id}-narration-heading`} className="qt-label mb-1">
                   Narration Delimiters <span className="qt-text-destructive">*</span>
-                </label>
+                </p>
                 <p className="qt-text-xs mb-2">
                   How narration and action text is marked in this template&apos;s formatting &mdash; or, as in a proper novel, not marked at all.
                 </p>
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-3 mb-2" role="radiogroup" aria-labelledby={`${id}-narration-heading`}>
                   <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
                       type="radio"
@@ -532,7 +532,7 @@ export default function RoleplayTemplatesTab() {
 
               {/* Unmarked text + Markdown asterisks */}
               <div>
-                <label className="qt-label mb-1">Unmarked Text</label>
+                <p className="qt-label mb-1">Unmarked Text</p>
                 <p className="qt-text-xs mb-2">
                   Whatever no delimiter lays claim to. Give it a style of its own and it is dressed accordingly &mdash; italic narration, say, for a template whose narration wears no marks.
                 </p>
@@ -590,13 +590,13 @@ export default function RoleplayTemplatesTab() {
               {/* Delimiters Array Editor */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="qt-label">
+                  <p className="qt-label">
                     Formatting Delimiters
-                  </label>
+                  </p>
                   <button
                     type="button"
                     onClick={addDelimiter}
-                    className="px-3 py-1 text-xs rounded border qt-border-default qt-hover-accent"
+                    className="qt-button-secondary qt-button-sm"
                   >
                     + Add Delimiter
                   </button>
@@ -686,11 +686,16 @@ export default function RoleplayTemplatesTab() {
 
                         {delimiter.kind === 'wrap' && (
                           <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <label className="qt-text-xs">Delimiters:</label>
+                            <div
+                              className="flex items-center gap-2 mb-1"
+                              role="radiogroup"
+                              aria-labelledby={`${id}-delim-${index}-mode`}
+                            >
+                              <span id={`${id}-delim-${index}-mode`} className="qt-text-xs">Delimiters:</span>
                               <label className="flex items-center gap-1 cursor-pointer">
                                 <input
                                   type="radio"
+                                  name={`${id}-delim-${index}-mode`}
                                   checked={delimiter.delimiterMode === 'single'}
                                   onChange={() => updateDelimiter(index, 'delimiterMode', 'single')}
                                   className="qt-radio"
@@ -700,6 +705,7 @@ export default function RoleplayTemplatesTab() {
                               <label className="flex items-center gap-1 cursor-pointer">
                                 <input
                                   type="radio"
+                                  name={`${id}-delim-${index}-mode`}
                                   checked={delimiter.delimiterMode === 'pair'}
                                   onChange={() => updateDelimiter(index, 'delimiterMode', 'pair')}
                                   className="qt-radio"
@@ -850,7 +856,7 @@ export default function RoleplayTemplatesTab() {
                 type="button"
                 onClick={closeModal}
                 disabled={saving}
-                className="px-4 py-2 text-sm rounded-md border qt-border-default qt-hover-accent disabled:opacity-50"
+                className="qt-button-secondary"
               >
                 Cancel
               </button>
@@ -858,7 +864,7 @@ export default function RoleplayTemplatesTab() {
                 type="button"
                 onClick={handleSave}
                 disabled={saving || !formData.name.trim() || !formData.systemPrompt.trim() || (formData.narrationDelimiterMode !== 'none' && (!formData.narrationOpen.trim() || (formData.narrationDelimiterMode === 'pair' && !formData.narrationClose.trim())))}
-                className="qt-button qt-button-primary px-4 py-2 rounded-md disabled:opacity-50"
+                className="qt-button-primary"
               >
                 {saving ? 'Saving...' : editingTemplate ? 'Save Changes' : 'Create Template'}
               </button>
@@ -934,7 +940,7 @@ export default function RoleplayTemplatesTab() {
                     handleCopyAsNew(previewTemplate)
                     setPreviewTemplate(null)
                   }}
-                  className="px-4 py-2 text-sm rounded-md border qt-border-default qt-hover-accent"
+                  className="qt-button-secondary"
                 >
                   Copy as New
                 </button>
@@ -942,7 +948,7 @@ export default function RoleplayTemplatesTab() {
               <button
                 type="button"
                 onClick={() => setPreviewTemplate(null)}
-                className="qt-button qt-button-primary px-4 py-2 rounded-md"
+                className="qt-button-primary"
               >
                 Close
               </button>

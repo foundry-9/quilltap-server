@@ -122,6 +122,32 @@ describe('seedLegacyConnectionProfileFields', () => {
     })
   })
 
+  describe('usage ledgers (4.14.2)', () => {
+    it('maps the old combined total to the chat ledger and drops the old keys', () => {
+      const seeded = seedLegacyConnectionProfileFields({
+        provider: 'OPENAI',
+        totalTokens: 1500,
+        totalPromptTokens: 1000,
+        totalCompletionTokens: 500,
+        messageCount: 12,
+      } as never) as Record<string, unknown>
+      expect(seeded).toMatchObject({ chatCallCount: 12, chatPromptTokens: 1000, chatCompletionTokens: 500 })
+      for (const key of ['totalTokens', 'totalPromptTokens', 'totalCompletionTokens', 'messageCount']) {
+        expect(seeded).not.toHaveProperty(key)
+      }
+    })
+
+    it('keeps ledgers an archive already carries', () => {
+      const seeded = seedLegacyConnectionProfileFields({ provider: 'OPENAI', chatCallCount: 3, messageCount: 99 } as never)
+      expect(seeded.chatCallCount).toBe(3)
+    })
+
+    it('reads junk as zero', () => {
+      const seeded = seedLegacyConnectionProfileFields({ provider: 'OPENAI', messageCount: 'lots' } as never)
+      expect(seeded.chatCallCount).toBe(0)
+    })
+  })
+
   it('returns a copy and leaves the archive record untouched', () => {
     const archived = { provider: 'OPENAI', name: 'A Profile' }
     const seeded = seedLegacyConnectionProfileFields(archived)

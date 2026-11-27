@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { usePluginsQuery } from '@/lib/hooks/use-plugins'
-import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BrandName } from '@/components/ui/brand-name'
 import { PluginConfigModal } from './plugins/PluginConfigModal'
 import { UpgradeConfirmModal, type PluginUpgrade } from './plugins/UpgradeConfirmModal'
@@ -16,7 +16,6 @@ type PluginSource = 'included' | 'npm' | 'git' | 'manual' | 'bundled' | 'site'
 type ActiveTab = 'installed' | 'upgrades' | 'browse'
 
 interface DeploymentInfo {
-  isUserManaged: boolean
   isHosted: boolean
 }
 
@@ -30,17 +29,6 @@ interface Plugin {
   source: PluginSource
   packageName?: string
   hasConfigSchema?: boolean
-}
-
-interface InstalledPlugin {
-  name: string
-  title: string
-  version: string
-  description?: string
-  author?: { name: string; email?: string; url?: string }
-  source: 'bundled' | 'site'
-  capabilities: string[]
-  installedAt?: string
 }
 
 interface NpmPlugin {
@@ -160,7 +148,6 @@ function KeywordBadges({ keywords }: { keywords?: string[] }) {
 }
 
 const EMPTY_PLUGINS: Plugin[] = []
-const EMPTY_INSTALLED: InstalledPlugin[] = []
 const EMPTY_UPGRADES: PluginUpgrade[] = []
 
 export default function PluginsTab() {
@@ -168,8 +155,7 @@ export default function PluginsTab() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('installed')
   const [toggling, setToggling] = useState<Set<string>>(new Set())
 
-  // The registry, the site-installed list, the deployment shape and the
-  // upgrade check are cached reads; every write below invalidates
+  // The registry, the deployment shape and the upgrade check are cached reads; every write below invalidates
   // `queryKeys.plugins.all`, which also refreshes the attention strip.
   const pluginsQuery = usePluginsQuery<Plugin>()
   const plugins = pluginsQuery.data?.plugins ?? EMPTY_PLUGINS
@@ -178,19 +164,12 @@ export default function PluginsTab() {
     if (pluginsQuery.error) showErrorToast(apiErrorMessage(pluginsQuery.error, 'Failed to load plugins'))
   }, [pluginsQuery.error])
 
-  // A failure here falls back to the main list (`isPluginInstalled` reads both).
-  const { data: installedPlugins = EMPTY_INSTALLED } = useQuery({
-    queryKey: queryKeys.plugins.installed(),
-    queryFn: ({ signal }) => apiFetch<{ plugins?: InstalledPlugin[] }>('/api/v1/plugins?filter=installed', { signal }),
-    select: (data) => data.plugins ?? EMPTY_INSTALLED,
-  })
-
-  // Unreadable: assume user-managed.
+  // Unreadable: assume user-managed (not hosted).
   const { data: deploymentInfo = null, isPending: deploymentPending } = useQuery({
     queryKey: queryKeys.system.deployment,
     queryFn: ({ signal }) =>
       apiFetch<DeploymentInfo>('/api/v1/system/deployment', { signal }).catch(
-        (): DeploymentInfo => ({ isUserManaged: true, isHosted: false }),
+        (): DeploymentInfo => ({ isHosted: false }),
       ),
     staleTime: Infinity,
   })
@@ -234,19 +213,36 @@ export default function PluginsTab() {
   const [upgradeInProgress, setUpgradeInProgress] = useState<string | null>(null)
   const [confirmingUpgrade, setConfirmingUpgrade] = useState<PluginUpgrade | null>(null)
 
+  const toggleMutation = useMutation({
+    mutationFn: ({ pluginName, enabled }: { pluginName: string; enabled: boolean }) =>
+      apiFetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      }),
+  })
+  const searchMutation = useMutation({
+    mutationFn: (query: string) =>
+      apiFetch<{ results?: NpmPlugin[] }>('/api/v1/plugins?action=search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, type: 'all' }),
+      }),
+  })
+  // Install, upgrade and uninstall all answer `{ message? }`.
+  const packageMutation = useMutation({
+    mutationFn: ({ action, packageName }: { action: 'install' | 'uninstall'; packageName: string }) =>
+      apiFetch<{ message?: string }>(`/api/v1/plugins?action=${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageName }),
+      }),
+  })
+
   const handleTogglePlugin = async (pluginName: string, currentEnabled: boolean) => {
     setToggling(prev => new Set(prev).add(pluginName))
     try {
-      const res = await fetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !currentEnabled }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to update plugin')
-      }
+      await toggleMutation.mutateAsync({ pluginName, enabled: !currentEnabled })
 
       await refreshPlugins()
 
@@ -254,7 +250,7 @@ export default function PluginsTab() {
         !currentEnabled ? 'Plugin enabled successfully' : 'Plugin disabled successfully'
       )
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to update plugin')
+      showErrorToast(apiErrorMessage(err, 'Failed to update plugin'))
     } finally {
       setToggling(prev => {
         const next = new Set(prev)
@@ -269,24 +265,10 @@ export default function PluginsTab() {
 
     setSearching(true)
     try {
-      const res = await fetch('/api/v1/plugins?action=search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: searchQuery.trim() || 'quilltap',
-          type: 'all',
-        }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Search failed')
-      }
-
-      const data = await res.json()
+      const data = await searchMutation.mutateAsync(searchQuery.trim() || 'quilltap')
       setSearchResults(data.results || [])
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to search plugins')
+      showErrorToast(apiErrorMessage(err, 'Failed to search plugins'))
       setSearchResults([])
     } finally {
       setSearching(false)
@@ -296,39 +278,15 @@ export default function PluginsTab() {
   const installPlugin = async (packageName: string) => {
     setActionInProgress(packageName)
     try {
-      const res = await fetch('/api/v1/plugins?action=install', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packageName }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        // Check if the error is due to restart requirement on hosted deployment
-        if (data.requiresRestart && data.suggestedScope === 'site') {
-          showWarningToast(data.error || 'This plugin requires site-wide installation on hosted deployments.')
-        } else {
-          showErrorToast(data.error || 'Installation failed')
-        }
-        return
-      }
-
-      // Check if server is restarting after installation
-      if (data.serverRestarting) {
-        showSuccessToast(data.message || 'Plugin installed! Server is restarting...')
-        // The page will need to be refreshed after server comes back
-        showWarningToast('Please wait for the server to restart and refresh this page.')
-      } else {
-        showSuccessToast(data.message || 'Plugin installed successfully!')
-      }
+      const data = await packageMutation.mutateAsync({ action: 'install', packageName })
+      showSuccessToast(data.message || 'Plugin installed successfully!')
 
       // Refresh the lists and switch to the installed tab
       await refreshPlugins()
       setActiveTab('installed')
 
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Installation failed')
+      showErrorToast(apiErrorMessage(err, 'Installation failed'))
     } finally {
       setActionInProgress(null)
     }
@@ -342,17 +300,7 @@ export default function PluginsTab() {
 
     setActionInProgress(packageName)
     try {
-      const res = await fetch('/api/v1/plugins?action=uninstall', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packageName }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Uninstall failed')
-      }
+      const data = await packageMutation.mutateAsync({ action: 'uninstall', packageName })
 
       showSuccessToast(data.message || 'Plugin uninstalled successfully!')
 
@@ -360,7 +308,7 @@ export default function PluginsTab() {
       await refreshPlugins()
 
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Uninstall failed')
+      showErrorToast(apiErrorMessage(err, 'Uninstall failed'))
     } finally {
       setActionInProgress(null)
     }
@@ -369,17 +317,7 @@ export default function PluginsTab() {
   const upgradePlugin = async (upgrade: PluginUpgrade) => {
     setUpgradeInProgress(upgrade.packageName)
     try {
-      const res = await fetch('/api/v1/plugins?action=install', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packageName: upgrade.packageName }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Upgrade failed')
-      }
+      await packageMutation.mutateAsync({ action: 'install', packageName: upgrade.packageName })
 
       showSuccessToast(`${upgrade.pluginTitle} upgraded to v${upgrade.latestVersion}`)
 
@@ -394,7 +332,7 @@ export default function PluginsTab() {
       setConfirmingUpgrade(null)
 
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Upgrade failed')
+      showErrorToast(apiErrorMessage(err, 'Upgrade failed'))
     } finally {
       setUpgradeInProgress(null)
     }
@@ -411,8 +349,7 @@ export default function PluginsTab() {
   }
 
   const isPluginInstalled = (packageName: string): boolean => {
-    return installedPlugins.some(p => p.name === packageName) ||
-           plugins.some(p => p.name === packageName)
+    return plugins.some(p => p.name === packageName)
   }
 
   const canUninstall = (source: string): boolean => {
@@ -423,7 +360,7 @@ export default function PluginsTab() {
     return (
       <div className="qt-loading-state py-12">
         <div className="flex items-center gap-3">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
+          <div className="qt-spinner w-6 h-6" />
           <p className="qt-text-secondary">Loading plugins...</p>
         </div>
       </div>
@@ -466,9 +403,11 @@ export default function PluginsTab() {
 
       {/* Tab Navigation */}
       <div className="border-b qt-border-default">
-        <div className="flex gap-4">
+        <div className="flex gap-4" role="group" aria-label="Plugin views">
           <button
+            type="button"
             onClick={() => setActiveTab('installed')}
+            aria-pressed={activeTab === 'installed'}
             className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'installed'
                 ? 'qt-text'
@@ -481,7 +420,9 @@ export default function PluginsTab() {
             )}
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('upgrades')}
+            aria-pressed={activeTab === 'upgrades'}
             className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'upgrades'
                 ? 'qt-text'
@@ -494,7 +435,9 @@ export default function PluginsTab() {
             )}
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('browse')}
+            aria-pressed={activeTab === 'browse'}
             className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'browse'
                 ? 'qt-text'
@@ -616,7 +559,7 @@ export default function PluginsTab() {
             >
               {upgradesLoading ? (
                 <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+                  <div className="qt-spinner-sm" />
                   Checking...
                 </>
               ) : (
@@ -654,7 +597,7 @@ export default function PluginsTab() {
           {upgradesLoading ? (
             <div className="qt-loading-state py-12">
               <div className="flex items-center gap-3">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
+                <div className="qt-spinner w-6 h-6" />
                 <p className="qt-text-secondary">Checking for updates...</p>
               </div>
             </div>
@@ -785,7 +728,7 @@ export default function PluginsTab() {
             >
               {searching ? (
                 <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-primary-foreground border-r-transparent" />
+                  <div className="qt-spinner-sm" />
                   Searching...
                 </>
               ) : (

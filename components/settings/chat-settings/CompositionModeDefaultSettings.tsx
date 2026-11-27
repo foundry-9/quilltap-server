@@ -1,6 +1,6 @@
 'use client'
 
-import type { ChatSettings } from './types'
+import { DEFAULT_COMPOSITION_MODE_DEFAULT, type ChatSettings } from './types'
 
 export interface CompositionModeDefaultSettingsProps {
   settings: ChatSettings
@@ -13,7 +13,7 @@ export function CompositionModeDefaultSettings({
   saving,
   onChange,
 }: CompositionModeDefaultSettingsProps) {
-  const enabled = settings.compositionModeDefault ?? false
+  const enabled = settings.compositionModeDefault ?? DEFAULT_COMPOSITION_MODE_DEFAULT
 
   return (
     <div>

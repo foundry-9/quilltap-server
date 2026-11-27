@@ -4,15 +4,13 @@
 
 import type { ProviderOptionsSchema, ThinkingTurnRule } from '@quilltap/plugin-types'
 import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types'
+import type { ProfileUsageCounters } from '@/lib/llm/profile-usage'
+import type { ApiKeyRow } from '@/lib/hooks/use-profiles'
 
 export type { ProviderOptionsSchema, ThinkingTurnRule }
 
-export interface ApiKey {
-  id: string
-  label: string
-  provider: string
-  isActive: boolean
-}
+/** An API key row, as every settings list reads it. */
+export type ApiKey = ApiKeyRow
 
 export interface Tag {
   id: string
@@ -75,7 +73,7 @@ export interface ProviderConfig {
   thinkingTurnRule?: ThinkingTurnRule | null
 }
 
-export interface ConnectionProfile {
+export interface ConnectionProfile extends ProfileUsageCounters {
   id: string
   name: string
   /** Transport — 'api' (default) or 'courier' for manual / clipboard. */
@@ -115,10 +113,6 @@ export interface ConnectionProfile {
   sortIndex?: number
   apiKey?: ApiKey | null
   tags?: EnrichedTag[]
-  messageCount?: number
-  totalTokens?: number
-  totalPromptTokens?: number
-  totalCompletionTokens?: number
 }
 
 export interface ProfileFormData {
@@ -143,9 +137,14 @@ export interface ProfileFormData {
   apiKeyId: string
   baseUrl: string
   modelName: string
-  temperature: number
-  maxTokens: number
-  topP: number
+  /**
+   * Sampling knobs. `null` means "unset": the profile stores no value and the
+   * provider keeps its own default (#256). A save omits an unset knob rather
+   * than inventing one.
+   */
+  temperature: number | null
+  maxTokens: number | null
+  topP: number | null
   isDefault: boolean
   isCheap: boolean
   isDangerousCompatible: boolean

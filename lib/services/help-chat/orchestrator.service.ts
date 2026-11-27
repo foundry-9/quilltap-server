@@ -55,8 +55,6 @@ import {
   triggerTurnMemoryExtraction,
   triggerContextSummaryCheck,
 } from '@/lib/services/chat-message/memory-trigger.service'
-import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
-import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { buildHelpChatSystemPrompt } from '@/lib/help-chat/system-prompt-builder'
 import { resolveAllHelpContentForUrl } from '@/lib/help-chat/context-resolver'
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
@@ -577,15 +575,8 @@ async function processHelpResponse(
     await repos.chats.addMessage(chatId, assistantMessage)
     finalMessageId = assistantMessage.id
 
-    // Estimate cost for token tracking
-    const costResult = await estimateMessageCost(
-      connectionProfile.provider,
-      connectionProfile.modelName,
-      totalUsage.promptTokens,
-      totalUsage.completionTokens,
-      userId
-    )
-
+    // Tokens and cost were accounted per call in logLLMCall
+    // (usage-accounting.service.ts).
     // Send done event
     safeEnqueue(controller, encodeDoneEvent(encoder, {
       messageId: assistantMessage.id,
@@ -595,16 +586,6 @@ async function processHelpResponse(
       attachmentResults: null,
       toolsExecuted: agentTurnCount > 1,
     }))
-
-    // Track token usage
-    await trackMessageTokenUsage(
-      chatId,
-      connectionProfile.id,
-      totalUsage,
-      costResult.cost,
-      costResult.source
-    )
-
   }
 
   return finalMessageId

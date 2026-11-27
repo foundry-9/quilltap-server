@@ -7,8 +7,9 @@ import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { VoiceRewriteReviewPanel } from '@/components/chat/VoiceRewriteReviewPanel'
 import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
+import { resolveDefaultConnectionProfileId } from '@/lib/llm/profile-usage'
 import { useCharactersList } from '@/lib/hooks/use-characters-list'
-import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
+import { SeatThumb, type AudienceCandidate } from '@/components/chat/SeatThumb'
 
 type StaffId =
   | 'lantern'
@@ -60,16 +61,6 @@ interface ProfileCard {
   isDefault: boolean
 }
 
-/** A current participant of the chat, offered as a whisper target. */
-interface AudienceCandidate {
-  /** CHAT PARTICIPANT id — this is what gets persisted as a whisper target. */
-  participantId: string
-  name: string
-  controlledBy: 'llm' | 'user'
-  avatarUrl?: string | null
-  status?: 'active' | 'silent' | 'absent' | 'removed'
-}
-
 const EMPTY_CARDS: CharacterCard[] = []
 
 interface InsertAnnouncementDialogProps {
@@ -97,7 +88,6 @@ export default function InsertAnnouncementDialog({
   audienceCandidates = [],
   onPosted,
 }: InsertAnnouncementDialogProps) {
-  const imagesHidden = useImagesHidden()
   const [mode, setMode] = useState<Mode>('staff')
   const [staffId, setStaffId] = useState<StaffId>('host')
   const [characterId, setCharacterId] = useState<string>('')
@@ -152,13 +142,7 @@ export default function InsertAnnouncementDialog({
   const defaultProfileId = useMemo<string>(() => {
     if (mode !== 'character' || !selectedCharacter) return AS_IS
     if (selectedCharacter.controlledBy === 'user') return AS_IS
-    if (
-      selectedCharacter.defaultConnectionProfileId
-      && profiles.some((p) => p.id === selectedCharacter.defaultConnectionProfileId)
-    ) {
-      return selectedCharacter.defaultConnectionProfileId
-    }
-    return profiles.find((p) => p.isDefault)?.id ?? AS_IS
+    return resolveDefaultConnectionProfileId(selectedCharacter, profiles) ?? AS_IS
   }, [mode, selectedCharacter, profiles])
 
   // Default system prompt selection, in the same shape as the character's
@@ -484,15 +468,7 @@ export default function InsertAnnouncementDialog({
                         }`}
                         disabled={isPosting || stage !== 'compose'}
                       >
-                        {c.avatarUrl && !imagesHidden ? (
-                          <img
-                            src={c.avatarUrl}
-                            alt=""
-                            className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full qt-bg-secondary flex-shrink-0" />
-                        )}
+                        <SeatThumb avatarUrl={c.avatarUrl} sizeClass="w-8 h-8" />
                         <div className="min-w-0">
                           <div className="font-medium truncate">{c.name}</div>
                           {c.title && (
@@ -613,15 +589,7 @@ export default function InsertAnnouncementDialog({
                         disabled={isPosting || stage === 'generating'}
                         className="qt-checkbox flex-shrink-0"
                       />
-                      {p.avatarUrl && !imagesHidden ? (
-                        <img
-                          src={p.avatarUrl}
-                          alt=""
-                          className="w-6 h-6 rounded-full object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full qt-bg-secondary flex-shrink-0" />
-                      )}
+                      <SeatThumb avatarUrl={p.avatarUrl} sizeClass="w-6 h-6" />
                       <span className="min-w-0 truncate">{p.name}</span>
                       {p.controlledBy === 'user' && (
                         <span className="qt-text-xs flex-shrink-0">(you)</span>

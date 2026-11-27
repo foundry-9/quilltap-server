@@ -40,11 +40,14 @@ export function ChatDefaultsSection() {
   const partners = userControlledCharacters.filter((c) => c.id !== characterId)
 
   const setConnectionProfile = (profileId: string) => {
-    // "User acts as character" is a sentinel, not a profile: it flips control.
+    // "User acts as character" is a sentinel, not a profile: it flips control
+    // and clears the stored profile. A cleared value is `null`, never
+    // `undefined` — JSON drops an undefined key, so the server read it as "no
+    // change" and the old profile stayed (#237).
     const patch =
       profileId === USER_CONTROLLED_PROFILE_ID
-        ? { controlledBy: 'user' as const, defaultConnectionProfileId: undefined }
-        : { controlledBy: 'llm' as const, defaultConnectionProfileId: profileId || undefined }
+        ? { controlledBy: 'user' as const, defaultConnectionProfileId: null }
+        : { controlledBy: 'llm' as const, defaultConnectionProfileId: profileId || null }
     void autosave.saveNow(patch, 'The connection profile could not be saved.')
   }
 

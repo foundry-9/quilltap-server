@@ -1,14 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { AutonomousRoomSettings, ChatSettings } from './types'
-
-const DEFAULTS: Required<Omit<AutonomousRoomSettings, 'dailyTokenBudget'>> & Pick<AutonomousRoomSettings, 'dailyTokenBudget'> = {
-  dailyTokenBudget: null,
-  defaultFreshnessWindowMs: 12 * 60 * 60 * 1000,
-  visibilityDefault: 'owner_only',
-  destructiveToolPolicy: 'opt_in_per_room',
-}
+import { DEFAULT_AUTONOMOUS_ROOM_SETTINGS as DEFAULTS, type AutonomousRoomSettings, type ChatSettings } from './types'
 
 export interface AutonomousRoomSettingsProps {
   settings: ChatSettings

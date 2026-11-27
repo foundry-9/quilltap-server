@@ -16,6 +16,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { ProfileCard } from './ProfileCard'
+import { providerRequiresApiKey } from '@/lib/llm/api-key-support'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import type { ConnectionProfile, ProviderConfig } from './types'
@@ -25,7 +26,6 @@ interface ProfileListProps {
   cheapDefaultProfileId: string | null
   /** List of provider configurations to check API key requirements */
   providers?: ProviderConfig[]
-  showForm: boolean
   deleteConfirming: string | null
   isDeleting: boolean
   onEdit: (profile: ConnectionProfile) => void
@@ -46,7 +46,6 @@ export function ProfileList({
   profiles,
   cheapDefaultProfileId,
   providers = [],
-  showForm,
   deleteConfirming,
   isDeleting,
   onEdit,
@@ -58,12 +57,9 @@ export function ProfileList({
   onAutoConfigure,
   autoConfiguringId,
 }: ProfileListProps) {
-  // Helper to check if a provider requires an API key
-  const providerRequiresApiKey = (providerName: string): boolean => {
-    const provider = providers.find((p) => p.name === providerName)
-    // Default to true (safer) if provider not found
-    return provider?.configRequirements?.requiresApiKey ?? true
-  }
+  // Whether a provider requires an API key; an unknown provider is taken to (safer)
+  const requiresApiKey = (providerName: string): boolean =>
+    providerRequiresApiKey(providers.find((p) => p.name === providerName)?.configRequirements)
 
   // Whether a provider takes temperature / top_p; unknown providers show them
   const providerTakesSamplingParameters = (providerName: string): boolean => {
@@ -122,7 +118,6 @@ export function ProfileList({
         action={{
           label: '+ Add Profile',
           onClick: onAddClick,
-          show: !showForm,
         }}
       />
 
@@ -163,7 +158,7 @@ export function ProfileList({
                   key={profile.id}
                   profile={profile}
                   cheapDefaultProfileId={cheapDefaultProfileId}
-                  providerRequiresApiKey={providerRequiresApiKey(profile.provider)}
+                  providerRequiresApiKey={requiresApiKey(profile.provider)}
                   providerTakesSamplingParameters={providerTakesSamplingParameters(profile.provider)}
                   onEdit={onEdit}
                   onDelete={onDelete}

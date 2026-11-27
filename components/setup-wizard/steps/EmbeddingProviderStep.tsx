@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import type { WizardState, WizardAction, ProviderInfo } from '../useProviderWizardState'
+import { useState, useEffect, useCallback, useId } from 'react'
+import { providersWithCapability, type WizardState, type WizardAction } from '../useProviderWizardState'
 import { fetchEmbeddingModels } from '../wizard-api'
 
 interface StepProps {
@@ -19,8 +19,11 @@ interface EmbeddingModel {
 const BUILTIN_TFIDF_ID = '__builtin_tfidf__'
 
 export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
+  const headingId = useId()
+  // A preloaded Built-in profile carries provider 'BUILTIN'; show it as the
+  // Built-in option rather than as nothing selected (#268)
   const [selectedProvider, setSelectedProvider] = useState<string>(
-    state.embeddingConfig?.provider || ''
+    state.embeddingConfig?.provider === 'BUILTIN' ? BUILTIN_TFIDF_ID : state.embeddingConfig?.provider || ''
   )
   const [models, setModels] = useState<EmbeddingModel[]>([])
   const [selectedModel, setSelectedModel] = useState<string>(
@@ -30,11 +33,7 @@ export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
   const [error, setError] = useState<string | null>(null)
 
   // Get selected providers that have embeddings capability
-  const embeddingProviders = state.selectedProviders
-    .map((id) => state.availableProviders.find((p) => p.id === id))
-    .filter(
-      (p): p is ProviderInfo => p !== undefined && p.capabilities.embeddings
-    )
+  const embeddingProviders = providersWithCapability(state, 'embeddings')
 
   const loadModels = useCallback(async (provider: string) => {
     if (provider === BUILTIN_TFIDF_ID) {
@@ -101,9 +100,9 @@ export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
     <div className="space-y-6">
       {/* Provider list */}
       <div className="space-y-3">
-        <label className="qt-text-label">Embedding Provider</label>
+        <p id={`${headingId}-provider`} className="qt-text-label">Embedding Provider</p>
 
-        <div className="space-y-2">
+        <div className="space-y-2" role="group" aria-labelledby={`${headingId}-provider`}>
           {/* Built-in TF-IDF option */}
           <button
             type="button"

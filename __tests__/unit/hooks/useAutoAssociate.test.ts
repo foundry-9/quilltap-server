@@ -16,7 +16,9 @@ jest.mock('@/lib/toast', () => ({
 
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showSuccessToast } from '@/lib/toast'
-import { useAutoAssociate } from '@/hooks/useAutoAssociate'
+import { useAnnounceAssociations, useAutoAssociate } from '@/hooks/useAutoAssociate'
+import { createQueryWrapper } from '../../helpers/renderWithQuery'
+import { queryKeys } from '@/lib/query/keys'
 
 const mockFetchJson = fetchJson as jest.MockedFunction<typeof fetchJson>
 const mockShowSuccessToast = showSuccessToast as jest.MockedFunction<typeof showSuccessToast>
@@ -27,7 +29,7 @@ describe('useAutoAssociate', () => {
   })
 
   it('should return a function', () => {
-    const { result } = renderHook(() => useAutoAssociate())
+    const { result } = renderHook(() => useAutoAssociate(), { wrapper: createQueryWrapper().wrapper })
     expect(typeof result.current).toBe('function')
   })
 
@@ -37,7 +39,7 @@ describe('useAutoAssociate', () => {
       data: { success: true, associations: [] },
     } as any)
 
-    const { result } = renderHook(() => useAutoAssociate())
+    const { result } = renderHook(() => useAutoAssociate(), { wrapper: createQueryWrapper().wrapper })
 
     await act(async () => {
       await result.current()
@@ -60,7 +62,7 @@ describe('useAutoAssociate', () => {
       },
     } as any)
 
-    const { result } = renderHook(() => useAutoAssociate())
+    const { result } = renderHook(() => useAutoAssociate(), { wrapper: createQueryWrapper().wrapper })
 
     await act(async () => {
       await result.current()
@@ -85,7 +87,7 @@ describe('useAutoAssociate', () => {
       data: { success: true, associations: [] },
     } as any)
 
-    const { result } = renderHook(() => useAutoAssociate())
+    const { result } = renderHook(() => useAutoAssociate(), { wrapper: createQueryWrapper().wrapper })
 
     await act(async () => {
       await result.current()
@@ -100,7 +102,7 @@ describe('useAutoAssociate', () => {
       data: null,
     } as any)
 
-    const { result } = renderHook(() => useAutoAssociate())
+    const { result } = renderHook(() => useAutoAssociate(), { wrapper: createQueryWrapper().wrapper })
 
     await act(async () => {
       await result.current()
@@ -112,7 +114,7 @@ describe('useAutoAssociate', () => {
   it('should handle errors silently', async () => {
     mockFetchJson.mockRejectedValue(new Error('Network error'))
 
-    const { result } = renderHook(() => useAutoAssociate())
+    const { result } = renderHook(() => useAutoAssociate(), { wrapper: createQueryWrapper().wrapper })
 
     // Should not throw
     await act(async () => {
@@ -131,7 +133,7 @@ describe('useAutoAssociate', () => {
       },
     } as any)
 
-    const { result } = renderHook(() => useAutoAssociate())
+    const { result } = renderHook(() => useAutoAssociate(), { wrapper: createQueryWrapper().wrapper })
 
     await act(async () => {
       await result.current()
@@ -143,5 +145,43 @@ describe('useAutoAssociate', () => {
 
     expect(mockFetchJson).toHaveBeenCalledTimes(2)
     expect(mockShowSuccessToast).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('useAnnounceAssociations', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('toasts each association and refreshes the three profile lists', async () => {
+    const { wrapper, queryClient } = createQueryWrapper()
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries')
+    const { result } = renderHook(() => useAnnounceAssociations(), { wrapper })
+
+    act(() => {
+      result.current([{ profileName: 'GPT-4', keyLabel: 'OpenAI Key' }])
+    })
+
+    expect(mockShowSuccessToast).toHaveBeenCalledWith('GPT-4 linked to API key "OpenAI Key"', 4000)
+    const invalidated = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
+    expect(invalidated).toEqual([
+      queryKeys.connectionProfiles.all,
+      queryKeys.imageProfiles.all,
+      queryKeys.embeddingProfiles.all,
+    ])
+  })
+
+  it('does nothing for an empty or absent list', () => {
+    const { wrapper, queryClient } = createQueryWrapper()
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries')
+    const { result } = renderHook(() => useAnnounceAssociations(), { wrapper })
+
+    act(() => {
+      result.current([])
+      result.current(undefined)
+    })
+
+    expect(mockShowSuccessToast).not.toHaveBeenCalled()
+    expect(invalidate).not.toHaveBeenCalled()
   })
 })

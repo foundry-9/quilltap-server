@@ -2,6 +2,7 @@
 
 import { useId } from 'react'
 import { SettingsCard } from '@/components/ui/SettingsCard'
+import { ProfileOption } from '@/components/ui/ProfileOption'
 import type { ChatSettings, CheapLLMSettings as CheapLLMSettingsType, ConnectionProfile, CheapLLMStrategy, EmbeddingProvider } from './types'
 
 export interface CheapLLMSettingsProps {
@@ -32,10 +33,10 @@ export function CheapLLMSettings({
       <div className="space-y-4">
         {/* Strategy Selection */}
         <div>
-          <label className="block qt-text-label mb-2">
+          <span id={`${id}-strategy`} className="block qt-text-label mb-2">
             Strategy
-          </label>
-          <div className="space-y-2">
+          </span>
+          <div className="space-y-2" role="radiogroup" aria-labelledby={`${id}-strategy`}>
             {[
               { value: 'USER_DEFINED' as CheapLLMStrategy, label: 'User Defined', description: 'Use the profile you select below' },
               { value: 'PROVIDER_CHEAPEST' as CheapLLMStrategy, label: 'Provider Cheapest', description: 'Automatically use the cheapest model from current provider' },
@@ -79,14 +80,9 @@ export function CheapLLMSettings({
               className="qt-select"
             >
               <option value="">Select a profile...</option>
-              {connectionProfiles.map((profile) => {
-                const hasApiKey = Boolean(profile.apiKey)
-                return (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
-                  </option>
-                )
-              })}
+              {connectionProfiles.map((profile) => (
+              <ProfileOption key={profile.id} profile={profile} />
+            ))}
             </select>
             {connectionProfiles.length === 0 && !loadingProfiles && (
               <p className="mt-1 qt-text-xs qt-text-warning">
@@ -112,14 +108,9 @@ export function CheapLLMSettings({
             className="qt-select"
           >
             <option value="">Not set</option>
-            {connectionProfiles.map((profile) => {
-              const hasApiKey = Boolean(profile.apiKey)
-              return (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
-                </option>
-              )
-            })}
+            {connectionProfiles.map((profile) => (
+              <ProfileOption key={profile.id} profile={profile} />
+            ))}
           </select>
         </div>
 
@@ -142,14 +133,9 @@ export function CheapLLMSettings({
             className="qt-select"
           >
             <option value="">Use the cheap LLM</option>
-            {connectionProfiles.map((profile) => {
-              const hasApiKey = Boolean(profile.apiKey)
-              return (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
-                </option>
-              )
-            })}
+            {connectionProfiles.map((profile) => (
+              <ProfileOption key={profile.id} profile={profile} />
+            ))}
           </select>
         </div>
 
@@ -193,10 +179,10 @@ export function CheapLLMSettings({
 
         {/* Embedding Provider */}
         <div>
-          <label className="block qt-text-label mb-2">
+          <span id={`${id}-embedding-provider`} className="block qt-text-label mb-2">
             Embedding Provider
-          </label>
-          <div className="space-y-2">
+          </span>
+          <div className="space-y-2" role="radiogroup" aria-labelledby={`${id}-embedding-provider`}>
             {[
               { value: 'SAME_PROVIDER' as EmbeddingProvider, label: 'Same Provider', description: 'Use embeddings from the same provider as the cheap LLM' },
               { value: 'OPENAI' as EmbeddingProvider, label: 'OpenAI', description: 'Use OpenAI for embeddings' },

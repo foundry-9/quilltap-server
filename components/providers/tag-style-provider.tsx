@@ -1,59 +1,44 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from '@/lib/query/fetcher';
-import { queryKeys } from '@/lib/query/keys';
+import { createContext, useContext, useMemo } from 'react';
 import { useSession } from '@/components/providers/session-provider';
+import { useTagsQuery } from '@/lib/hooks/use-tags';
 import type { TagStyleMap, TagVisualStyle } from '@/lib/schemas/types';
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles';
 
 interface TagStyleContextValue {
   styles: TagStyleMap;
   loading: boolean;
-  refresh: () => Promise<void>;
-  updateStyles: (styles: TagStyleMap) => void;
   getStyleForTag: (tagId?: string | null) => TagVisualStyle;
 }
 
 const TagStyleContext = createContext<TagStyleContextValue | null>(null);
 
+type StyledTag = { id: string; visualStyle?: TagVisualStyle | null };
+
+/** The style map: every tag that has a visual style of its own. */
+function toStyleMap(tags: StyledTag[]): TagStyleMap {
+  const styleMap: TagStyleMap = {};
+  for (const tag of tags) {
+    if (tag.visualStyle) {
+      styleMap[tag.id] = tag.visualStyle;
+    }
+  }
+  return styleMap;
+}
+
+const NO_STYLES: TagStyleMap = {};
+
 export function TagStyleProvider({ children }: { children: React.ReactNode }) {
   const { status } = useSession();
-  const [styles, setStyles] = useState<TagStyleMap>({});
-
-  const { data: tagsData, isLoading } = useQuery({
-    queryKey: queryKeys.tags.list(),
-    queryFn: ({ signal }) => apiFetch<{ tags: Array<{ id: string; visualStyle?: TagVisualStyle }> }>('/api/v1/tags', { signal }),
-    enabled: status === 'authenticated',
-  });
-
-  useEffect(() => {
-    if (tagsData?.tags) {
-      // Build style map from tags that have visualStyle defined
-      const styleMap: TagStyleMap = {};
-      for (const tag of tagsData.tags) {
-        if (tag.visualStyle) {
-          styleMap[tag.id] = tag.visualStyle;
-        }
-      }
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- style map is derived from the tags query into local state, which updateStyles() also overwrites directly
-      setStyles(styleMap);
-    } else if (status !== 'authenticated') {
-      setStyles({});
-    }
-  }, [tagsData, status]);
-
-  const updateStyles = useCallback((next: TagStyleMap) => {
-    setStyles(next ?? {});
-  }, []);
+  const authenticated = status === 'authenticated';
+  const { data, isLoading } = useTagsQuery<StyledTag, TagStyleMap>({ enabled: authenticated, select: toStyleMap });
+  const styles = (authenticated && data) || NO_STYLES;
 
   const value = useMemo<TagStyleContextValue>(
     () => ({
       styles,
       loading: isLoading,
-      refresh: () => Promise.resolve(),
-      updateStyles,
       getStyleForTag: (tagId?: string | null) => {
         if (!tagId) {
           return DEFAULT_TAG_STYLE;
@@ -61,7 +46,7 @@ export function TagStyleProvider({ children }: { children: React.ReactNode }) {
         return mergeWithDefaultTagStyle(styles[tagId]);
       },
     }),
-    [styles, isLoading, updateStyles]
+    [styles, isLoading]
   );
 
   return <TagStyleContext.Provider value={value}>{children}</TagStyleContext.Provider>;

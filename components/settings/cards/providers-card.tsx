@@ -21,17 +21,8 @@ import { useCallback, useState, useSyncExternalStore } from 'react'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { hostedCardsOf } from '@/lib/settings/registry'
 import { PersonaBadge } from '@/components/settings/PersonaBadge'
-import type { ComponentType } from 'react'
-import { ApiKeysCard, ConnectionProfilesCard, ImageProfilesCard, EmbeddingProfilesCard } from './connections-cards'
+import { SETTINGS_CARD_COMPONENTS } from '@/components/settings/cards'
 import { ProvidersByProvider } from './providers-by-provider'
-
-/** The kind cards this card hosts, keyed by their registry id. */
-const HOSTED_CARD_COMPONENTS: Record<string, ComponentType> = {
-  'api-keys': ApiKeysCard,
-  'connection-profiles': ConnectionProfilesCard,
-  'image-profiles': ImageProfilesCard,
-  'embedding-profiles': EmbeddingProfilesCard,
-}
 
 export type ProvidersView = 'provider' | 'kind'
 
@@ -120,7 +111,7 @@ export function ProvidersCard({ focusCard, focusProvider, highlight }: Providers
       ) : (
         <div className="space-y-4">
           {hosted.map((card) => {
-            const Body = HOSTED_CARD_COMPONENTS[card.id]
+            const Body = SETTINGS_CARD_COMPONENTS[card.id]
             return (
               <CollapsibleCard
                 key={card.id}

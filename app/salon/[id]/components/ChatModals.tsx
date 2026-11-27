@@ -1,11 +1,11 @@
 'use client'
 
+import { useCallback, useMemo } from 'react'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import { scrollToMessage } from '@/lib/chat/message-navigation'
 import ChatProjectModal from '@/components/chat/ChatProjectModal'
 import ChatRenameModal from '@/components/chat/ChatRenameModal'
-import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
 import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
@@ -28,12 +28,9 @@ import InsertAnnouncementDialog from '@/components/chat/InsertAnnouncementDialog
 import InformDialog from '@/components/chat/InformDialog'
 import ComposeMailDialog from '@/components/chat/ComposeMailDialog'
 import ImpersonationVoiceDialog from '@/components/chat/ImpersonationVoiceDialog'
-import type {
-  CustomToolRequest,
-  ReattributeDialogState,
-  RunToolRequest,
-  SelectLLMProfileDialogState,
-} from '../hooks/useModalState'
+import { apiFetch } from '@/lib/query/fetcher'
+import { showErrorToast } from '@/lib/toast'
+import type { ModalState } from '../hooks/useModalState'
 
 interface ChatModalsProps {
   chatId: string
@@ -45,54 +42,10 @@ interface ChatModalsProps {
   /** Re-read the chat gallery after this client puts a new image in the chat. */
   invalidateChatGallery: () => void
   setAttachedFiles: (fn: React.SetStateAction<any[]>) => void
-  // Modal state
-  modalImage: { src: string; filename: string; fileId?: string } | null
-  setModalImage: (img: { src: string; filename: string; fileId?: string } | null) => void
-  galleryOpen: boolean
-  closeGallery: () => void
-  chatProjectModalOpen: boolean
-  closeChatProject: () => void
-  renameModalOpen: boolean
-  closeRename: () => void
-  generateImageDialogOpen: boolean
-  closeGenerateImage: () => void
-  addCharacterDialogOpen: boolean
-  closeAddCharacter: () => void
-  searchReplaceModalOpen: boolean
-  closeSearchReplace: () => void
-  bulkReplaceModalOpen: boolean
-  closeBulkReplace: () => void
-  toolSettingsModalOpen: boolean
-  closeToolSettings: () => void
-  runToolModalOpen: boolean
-  /** What the Run Tool dialog was asked to open onto (a `/` command's pre-selection). */
-  runToolRequest: RunToolRequest
-  closeRunTool: () => void
-  /** Pascal's custom-tool dialog — shared by the gutter wand and the `/` commands. */
-  customToolDialogOpen: boolean
-  customToolRequest: CustomToolRequest
-  closeCustomTool: () => void
-  stateEditorModalOpen: boolean
-  closeStateEditor: () => void
-  libraryFilePickerOpen: boolean
-  closeLibraryFilePicker: () => void
-  standaloneGenerateImageOpen: boolean
-  closeStandaloneGenerateImage: () => void
-  insertAnnouncementOpen: boolean
-  closeInsertAnnouncement: () => void
-  informOpen: boolean
-  closeInform: () => void
-  composeMailOpen: boolean
-  closeComposeMail: () => void
+  /** The Salon's dialog state (`useModalState`), handed over whole. */
+  modals: ModalState
   /** In Their Own Words — the impersonated-seat voice rehearsal. */
   impersonationVoice: import('../hooks').ImpersonationVoiceState
-  allLLMPauseModalOpen: boolean
-  setAllLLMPauseModalOpen: (open: boolean) => void
-  // Complex modal states
-  reattributeDialogState: ReattributeDialogState | null
-  setReattributeDialogState: (state: ReattributeDialogState | null) => void
-  selectLLMProfileDialogState: SelectLLMProfileDialogState | null
-  setSelectLLMProfileDialogState: (state: SelectLLMProfileDialogState | null) => void
   // File conflict
   isConflictDialogOpen: boolean
   cancelConflict: () => void
@@ -109,7 +62,7 @@ interface ChatModalsProps {
   onReattributed: () => Promise<void>
   onConfirmStopImpersonation: (participantId: string, connectionProfileId: string) => Promise<void>
   // Memory cascade
-  memoryCascadeConfirmation: { memoryCount: number; isSwipeGroup: boolean } | null
+  memoryCascadeConfirmation: { memoryCount: number; isSwipeGroup: boolean; swipeCount?: number } | null
   cancelMemoryCascadeConfirmation: () => void
   handleMemoryCascadeConfirm: (action: import('../types').MemoryCascadeAction, rememberChoice: boolean) => Promise<void>
   // All-LLM pause
@@ -129,29 +82,8 @@ export function ChatModals({
   fetchChat,
   invalidateChatGallery,
   setAttachedFiles,
-  // Modal state
-  modalImage, setModalImage,
-  galleryOpen, closeGallery,
-  chatProjectModalOpen, closeChatProject,
-  renameModalOpen, closeRename,
-  generateImageDialogOpen, closeGenerateImage,
-  addCharacterDialogOpen, closeAddCharacter,
-  searchReplaceModalOpen, closeSearchReplace,
-  bulkReplaceModalOpen, closeBulkReplace,
-  toolSettingsModalOpen, closeToolSettings,
-  runToolModalOpen, runToolRequest, closeRunTool,
-  customToolDialogOpen, customToolRequest, closeCustomTool,
-  stateEditorModalOpen, closeStateEditor,
-  libraryFilePickerOpen, closeLibraryFilePicker,
-  standaloneGenerateImageOpen, closeStandaloneGenerateImage,
-  insertAnnouncementOpen, closeInsertAnnouncement,
-  informOpen, closeInform,
-  composeMailOpen, closeComposeMail,
+  modals,
   impersonationVoice,
-  allLLMPauseModalOpen, setAllLLMPauseModalOpen,
-  // Complex
-  reattributeDialogState, setReattributeDialogState,
-  selectLLMProfileDialogState, setSelectLLMProfileDialogState,
   // File conflict
   isConflictDialogOpen, cancelConflict, conflictInfo, handleConflictResolution, resolvingConflict,
   // Participants
@@ -164,8 +96,89 @@ export function ChatModals({
   allLLMPauseTurnCount, llmParticipants,
   handleAllLLMContinue, handleAllLLMStop, handleAllLLMTakeOver,
 }: ChatModalsProps) {
+  const {
+    modalImage, setModalImage,
+    galleryOpen, closeGallery,
+    chatProjectModalOpen, closeChatProject,
+    renameModalOpen, closeRename,
+    addCharacterDialogOpen, closeAddCharacter,
+    searchReplaceModalOpen, closeSearchReplace,
+    bulkReplaceModalOpen, closeBulkReplace,
+    toolSettingsModalOpen, closeToolSettings,
+    runToolModalOpen, runToolRequest, closeRunTool,
+    customToolDialogOpen, customToolRequest, closeCustomTool,
+    stateEditorModalOpen, closeStateEditor,
+    libraryFilePickerOpen, closeLibraryFilePicker,
+    standaloneGenerateImageOpen, closeStandaloneGenerateImage,
+    insertAnnouncementOpen, closeInsertAnnouncement,
+    informOpen, closeInform,
+    composeMailOpen, closeComposeMail,
+    allLLMPauseModalOpen, setAllLLMPauseModalOpen,
+    reattributeDialogState, setReattributeDialogState,
+    selectLLMProfileDialogState, setSelectLLMProfileDialogState,
+  } = modals
   const firstCharacter = getFirstCharacter()
   const firstUserCharacter = getFirstUserCharacter()
+
+  const participants = chat?.participants
+  // Character ids of the cast still seated (Add Character and Insert Announcement).
+  const participantCharacterIds = useMemo(
+    () => (participants ?? [])
+      .filter(p => p.type === 'CHARACTER' && !p.removedAt)
+      .map(p => p.character?.id)
+      .filter((id): id is string => id !== null && id !== undefined),
+    [participants],
+  )
+  // Who an announcement or an Inform may be addressed to.
+  const audienceCandidates = useMemo(
+    () => (participants ?? [])
+      .filter(p => p.type === 'CHARACTER' && !p.removedAt && p.status !== 'removed' && p.character)
+      .map(p => ({
+        participantId: p.id,
+        name: p.character!.name,
+        controlledBy: p.controlledBy ?? 'llm',
+        avatarUrl: p.character!.avatarUrl ?? null,
+        status: p.status,
+      })),
+    [participants],
+  )
+
+  // Images the operator generated from the composer: recorded in the transcript
+  // as a user-initiated generate_image result, and attached to the next send.
+  const handleImagesGenerated = useCallback(
+    (images: Array<{ id: string; filename: string; filepath: string }>, prompt: string) => {
+      apiFetch(`/api/v1/chats/${chatId}?action=add-tool-result`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'generate_image',
+          initiatedBy: 'user',
+          prompt,
+          images: images.map(img => ({
+            id: img.id,
+            filename: img.filename,
+          })),
+        }),
+      })
+        .then(() => {
+          fetchChat()
+        })
+        .catch((err) => {
+          console.error('Failed to save tool result:', err instanceof Error ? err.message : String(err))
+          showErrorToast('The pictures are painted, but the Lantern could not enter them in the transcript.')
+        })
+
+      setAttachedFiles((prev: any[]) => [
+        ...prev,
+        ...images.map((img) => ({
+          ...img,
+          url: img.filepath.startsWith('/') ? img.filepath : `/${img.filepath}`,
+        })),
+      ])
+      invalidateChatGallery()
+    },
+    [chatId, fetchChat, setAttachedFiles, invalidateChatGallery],
+  )
 
   return (
     <>
@@ -233,43 +246,6 @@ export function ChatModals({
         }}
       />
 
-      <GenerateImageDialog
-        isOpen={generateImageDialogOpen}
-        onClose={closeGenerateImage}
-        chatId={chatId}
-        participants={chat?.participants || []}
-        imageProfileId={chat?.imageProfileId || undefined}
-        onImagesGenerated={(images, prompt) => {
-          fetch(`/api/v1/chats/${chatId}?action=add-tool-result`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tool: 'generate_image',
-              initiatedBy: 'user',
-              prompt,
-              images: images.map(img => ({
-                id: img.id,
-                filename: img.filename,
-              })),
-            }),
-          })
-            .then((res) => res.json())
-            .then(() => {
-              fetchChat()
-            })
-            .catch((err) => console.error('Failed to save tool result:', err instanceof Error ? err.message : String(err)))
-
-          setAttachedFiles((prev: any[]) => [
-            ...prev,
-            ...images.map((img) => ({
-              ...img,
-              url: img.filepath.startsWith('/') ? img.filepath : `/${img.filepath}`,
-            })),
-          ])
-          invalidateChatGallery()
-        }}
-      />
-
       <LibraryFilePickerModal
         isOpen={libraryFilePickerOpen}
         onClose={closeLibraryFilePicker}
@@ -298,45 +274,14 @@ export function ChatModals({
         onClose={closeStandaloneGenerateImage}
         chatId={chatId}
         participants={chat?.participants || []}
-        onImagesGenerated={(images, prompt) => {
-          fetch(`/api/v1/chats/${chatId}?action=add-tool-result`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tool: 'generate_image',
-              initiatedBy: 'user',
-              prompt,
-              images: images.map(img => ({
-                id: img.id,
-                filename: img.filename,
-              })),
-            }),
-          })
-            .then((res) => res.json())
-            .then(() => {
-              fetchChat()
-            })
-            .catch((err) => console.error('Failed to save tool result:', err instanceof Error ? err.message : String(err)))
-
-          setAttachedFiles((prev: any[]) => [
-            ...prev,
-            ...images.map((img) => ({
-              ...img,
-              url: img.filepath.startsWith('/') ? img.filepath : `/${img.filepath}`,
-            })),
-          ])
-          invalidateChatGallery()
-        }}
+        onImagesGenerated={handleImagesGenerated}
       />
 
       <AddCharacterDialog
         isOpen={addCharacterDialogOpen}
         onClose={closeAddCharacter}
         chatId={chatId}
-        existingCharacterIds={chat?.participants
-          .filter(p => p.type === 'CHARACTER' && !p.removedAt)
-          .map(p => p.character?.id)
-          .filter((id): id is string => id !== null && id !== undefined) || []}
+        existingCharacterIds={participantCharacterIds}
         onCharacterAdded={onCharacterAdded}
         onArrivalStream={onArrivalStream}
       />
@@ -346,19 +291,8 @@ export function ChatModals({
           isOpen={insertAnnouncementOpen}
           onClose={closeInsertAnnouncement}
           chatId={chatId}
-          participantCharacterIds={chat?.participants
-            .filter(p => p.type === 'CHARACTER' && !p.removedAt)
-            .map(p => p.character?.id)
-            .filter((id): id is string => id !== null && id !== undefined) || []}
-          audienceCandidates={(chat?.participants || [])
-            .filter(p => p.type === 'CHARACTER' && !p.removedAt && p.status !== 'removed' && p.character)
-            .map(p => ({
-              participantId: p.id,
-              name: p.character!.name,
-              controlledBy: p.controlledBy ?? 'llm',
-              avatarUrl: p.character!.avatarUrl ?? null,
-              status: p.status,
-            }))}
+          participantCharacterIds={participantCharacterIds}
+          audienceCandidates={audienceCandidates}
           onPosted={() => {
             fetchChat()
           }}
@@ -370,15 +304,7 @@ export function ChatModals({
           isOpen={informOpen}
           onClose={closeInform}
           chatId={chatId}
-          audienceCandidates={(chat?.participants || [])
-            .filter(p => p.type === 'CHARACTER' && !p.removedAt && p.status !== 'removed' && p.character)
-            .map(p => ({
-              participantId: p.id,
-              name: p.character!.name,
-              controlledBy: p.controlledBy ?? 'llm',
-              avatarUrl: p.character!.avatarUrl ?? null,
-              status: p.status,
-            }))}
+          audienceCandidates={audienceCandidates}
           onPosted={() => {
             fetchChat()
           }}
@@ -557,6 +483,7 @@ export function ChatModals({
           isOpen={true}
           memoryCount={memoryCascadeConfirmation.memoryCount}
           isSwipeGroup={memoryCascadeConfirmation.isSwipeGroup}
+          swipeCount={memoryCascadeConfirmation.swipeCount}
           onClose={cancelMemoryCascadeConfirmation}
           onConfirm={handleMemoryCascadeConfirm}
         />

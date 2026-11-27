@@ -50,7 +50,6 @@ describe('TagEditor entity paths (Bug 74)', () => {
   it.each([
     ['profile', '/api/v1/connection-profiles/entity-1'],
     ['character', '/api/v1/characters/entity-1'],
-    ['chat', '/api/v1/chats/entity-1'],
   ] as const)('reads %s tags from %s', async (entityType, base) => {
     const fetchMock = mockFetch()
     renderWithQuery(<TagEditor entityType={entityType} entityId="entity-1" />)

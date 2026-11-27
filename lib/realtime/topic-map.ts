@@ -91,6 +91,8 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // Name chips for absent characters. A new message — the only
             // thing that can name someone — publishes `chats`.
             queryKeys.chats.absentMentions(id),
+            // Token and cost totals. A new message publishes `chats`.
+            queryKeys.chats.cost(id),
             // Atlas chips. A new message (or a scenario row) is what can name
             // a thing, and it publishes `chats`.
             queryKeys.chats.atlasMentions(id),
@@ -99,6 +101,9 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // `chats` — without this a tool-driven outfit change left the
             // wardrobe dialog's cached snapshot stale (bug 198).
             queryKeys.wardrobe.outfit(id),
+            // The same chat's worn outfit as the Merge dialog reads it
+            // ("same as last conversation"), stale for the same reason.
+            queryKeys.wardrobe.outfitSummary(id),
             // Every character's outfit timeline in the chat. A tool call or a
             // parent-side replay of the turn's history settle publishes
             // `chats`, so the History tab stays honest under an open dialog.

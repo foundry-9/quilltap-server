@@ -50,7 +50,19 @@ The full Connection Profiles list shows:
 - **Status** — Connection health (✓ Healthy, ⚠️ Degraded, ✗ Unhealthy)
 - **Tags** — Custom tags for organization
 - **Default Badge** — Marks if this is the default "cheap" profile
+- **Usage** — Two ledgers, one line apiece (see below)
 - **Actions** — Buttons to edit, test, or delete
+
+### The Two Ledgers: Chat and Automatic
+
+Every profile keeps two sets of books, and each card shows a line for whichever has seen any custom:
+
+- **Chat** — calls made for a conversation's own replies: a Salon turn and every tool errand it runs before it speaks, a console or help-chat answer, a reply to an `@Name` question.
+- **Automatic** — calls Quilltap makes on its own initiative: committing memories to the Commonplace Book, titling and summarising chats, the Concierge's classifier, the Lantern's picture prompts, the character wizards and their kin.
+
+Each line gives the number of **calls** — every request sent to the provider, the ones that failed included — and the **tokens** they moved. Hover over a line for the particulars: input, output, and, where the provider keeps a prompt cache, how much was read from it and how much written to it.
+
+> **A truer count, as of 4.14.2.** The old figure — a single tally of "messages" and tokens — was kept by each conversation surface for itself, and kept carelessly: a Salon turn that ran three tool errands was charged for the last request alone, a regenerated reply was charged for nothing at all, and the cheap profile that does all the background work showed scarcely a token to its name. Every provider call is now counted at the one door they all pass through, whether or not LLM logging is switched on. On upgrade the old tally became the *Chat* ledger, and the *Automatic* ledger was filled in from whatever LLM logs were still on the shelf — so it starts as complete as your log retention allows, and is exact from here on.
 
 ## A Note on Names
 
@@ -91,6 +103,8 @@ See [API Keys](api-keys-settings.md) for the particulars. If you would rather be
    - **Max Tokens** — Maximum response length
    - **Top P** — Nucleus sampling (alternative to temperature)
    - **Provider-specific options** — May vary by provider
+
+   A profile need not state any of the three. One made by the setup wizard leaves them unset, and the provider then applies its own defaults; the form says *provider default* for each, and editing some other part of the profile leaves them unset still. Move a slider (or type a *Max Tokens* figure) to set one, and press **Use provider default** beneath a slider, or empty the *Max Tokens* box, to hand the matter back to the provider.
 
    Some providers no longer entertain *Temperature* or *Top P* at all. For those (Anthropic, at present) the two sliders are withdrawn from the form and only *Max Tokens* remains.
 
@@ -159,6 +173,8 @@ Your default profile is used automatically when you create new chats:
 2. Look for the **Connection Profile** dropdown
 3. Select which profile to use for that chat
 4. The selected profile is used for all messages in that chat
+
+Wherever you pick a profile *for conversation* — a new chat, adding a character, a new NPC, switching a participant's profile mid-chat, or a character's default — the profiles you have used most for chat are listed first, most calls at the top. Profiles never used for chat follow in the order you keep in Settings. The Settings list itself is not reshuffled: it stays in the order you dragged it into.
 
 ### Switching Profiles Mid-Chat
 

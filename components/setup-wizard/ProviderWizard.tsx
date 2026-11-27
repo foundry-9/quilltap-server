@@ -64,7 +64,6 @@ export function ProviderWizard({ mode, onComplete, onCancel }: ProviderWizardPro
     isLastStep,
     hasValidChatProvider,
     allKeysValidated,
-    getProvidersWithCapability,
   } = useProviderWizardState()
 
   // In settings mode, load existing config on mount
@@ -120,6 +119,11 @@ export function ProviderWizard({ mode, onComplete, onCancel }: ProviderWizardPro
           ? { provider: defaultImg.provider, model: defaultImg.modelName }
           : null
 
+        // Which row each part came from, so Save keeps or updates it rather
+        // than creating a second profile under a taken name (#268)
+        const ref = (p: { id: string; name: string; provider: string; modelName: string } | undefined) =>
+          p ? { id: p.id, name: p.name, provider: p.provider, model: p.modelName } : undefined
+
         dispatch({
           type: 'LOAD_EXISTING_CONFIG',
           state: {
@@ -129,6 +133,17 @@ export function ProviderWizard({ mode, onComplete, onCancel }: ProviderWizardPro
             cheapConfig,
             embeddingConfig,
             imageConfig,
+            existingProfiles: {
+              chat: ref(defaultProfile),
+              cheap: ref(cheapProfile),
+              embedding: ref(defaultEmb),
+              image: ref(defaultImg),
+            },
+            takenProfileNames: {
+              connection: config.connectionProfiles.map((p) => p.name),
+              embedding: config.embeddingProfiles.map((p) => p.name),
+              image: config.imageProfiles.map((p) => p.name),
+            },
           },
         })
 
@@ -210,8 +225,7 @@ export function ProviderWizard({ mode, onComplete, onCancel }: ProviderWizardPro
           onNext={!isLastStep ? handleNext : undefined}
           canGoNext={!isLastStep}
           nextDisabled={!canProceed()}
-          nextLabel={isSkippable ? 'Next' : 'Next'}
-          showSkip={isSkippable}
+                    showSkip={isSkippable}
           onSkip={isSkippable ? handleSkip : undefined}
           loading={state.saving}
         />

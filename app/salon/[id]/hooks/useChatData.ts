@@ -139,6 +139,23 @@ export function useChatData(chatId: string) {
   }, [setMessages, setSwipeStates])
 
   /**
+   * Swipe a group one variant left or right. Reads the live state through the
+   * refs, so a row holding an old closure cannot write back a transcript or a
+   * swipe selection from before another row's swipe (#264).
+   */
+  const stepSwipe = useCallback((groupId: string, direction: 'prev' | 'next') => {
+    const state = swipeStatesRef.current[groupId]
+    if (!state) return
+    const newIndex = direction === 'next'
+      ? Math.min(state.current + 1, state.total - 1)
+      : Math.max(state.current - 1, 0)
+    if (newIndex === state.current) return
+    const variant = state.messages[newIndex]
+    setSwipeStates(prev => ({ ...prev, [groupId]: { ...state, current: newIndex } }))
+    setMessages(prev => prev.map(m => (m.swipeGroupId === groupId ? variant : m)))
+  }, [setMessages, setSwipeStates])
+
+  /**
    * Would applying a response carrying `version` walk the transcript backwards?
    *
    * `fetchChat` and the hinted read run independently and can overlap, so
@@ -359,6 +376,7 @@ export function useChatData(chatId: string) {
     swipeStates,
     setSwipeStates,
     selectSwipeVariant,
+    stepSwipe,
     chatMemoryCount,
     setChatMemoryCount,
     fetchChat,

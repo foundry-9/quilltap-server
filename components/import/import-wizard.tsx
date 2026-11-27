@@ -4,11 +4,12 @@ import { useState, useCallback, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { activateOnKey } from '@/components/ui/activate-on-key'
 import { BaseModal } from '@/components/ui/BaseModal'
+import { WizardStepIndicator } from '@/components/ui/WizardStepIndicator'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { formatBytes } from '@/lib/utils/format-bytes'
 import { SpeakerMapper } from './speaker-mapper'
-import { MemoryCreationDialog } from './memory-creation-dialog'
+import { MemoryCreationDialog, type MemoryCreationChat } from './memory-creation-dialog'
 import {
   WizardLoadingStep,
   WizardCompleteStep,
@@ -33,6 +34,13 @@ interface EntityOption {
   id: string
   name: string
   title?: string | null
+}
+
+/** What `POST /api/v1/chats?action=import` answers with: the chat plus the import's tallies. */
+interface ImportedChat extends MemoryCreationChat {
+  _count?: { messages: number }
+  createdEntities?: { characters: Array<{ id: string; name: string }> }
+  memoryJobCount?: number
 }
 
 interface ProfileOption {
@@ -76,7 +84,7 @@ export function ImportWizard({
   const [parseResult, setParseResult] = useState<ParseResult | null>(null)
   const [mappings, setMappings] = useState<SpeakerMapping[]>([])
   const [defaultProfileId, setDefaultProfileId] = useState<string>(profiles[0]?.id || '')
-  const [importedChat, setImportedChat] = useState<any>(null)
+  const [importedChat, setImportedChat] = useState<ImportedChat | null>(null)
   const [showMemoryDialog, setShowMemoryDialog] = useState(false)
   const [createMemories, setCreateMemories] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -198,7 +206,7 @@ export function ImportWizard({
         throw new Error(errorData.error || 'Failed to import chat')
       }
 
-      const imported = await response.json()
+      const imported = (await response.json()) as ImportedChat
       setImportedChat(imported)
       setStep('complete')
 
@@ -235,14 +243,12 @@ export function ImportWizard({
   const getCompletionDescription = (): string => {
     const parts: string[] = []
     parts.push(`Imported ${importedChat?._count?.messages || 0} messages`)
-    if (importedChat?.createdEntities?.characters?.length > 0) {
-      parts.push(`created ${importedChat.createdEntities.characters.length} new character(s)`)
+    const createdCharacters = importedChat?.createdEntities?.characters?.length ?? 0
+    if (createdCharacters > 0) {
+      parts.push(`created ${createdCharacters} new character(s)`)
     }
-    if (importedChat?.createdEntities?.personas?.length > 0) {
-      parts.push(`created ${importedChat.createdEntities.personas.length} new user character(s)`)
-    }
-    if (importedChat?.memoryJobCount > 0) {
-      parts.push(`queued ${importedChat.memoryJobCount} messages for memory analysis`)
+    if ((importedChat?.memoryJobCount ?? 0) > 0) {
+      parts.push(`queued ${importedChat?.memoryJobCount} messages for memory analysis`)
     }
     return parts.join(', ')
   }
@@ -464,40 +470,7 @@ export function ImportWizard({
         footer={renderFooter()}
         footerClassName="qt-dialog-footer-default flex-shrink-0"
       >
-        {/* Step indicator */}
-        <div className="flex items-center gap-1 mb-4">
-          {STEPS.map((s, i) => (
-            <div key={s.key} className="flex items-center gap-1 flex-1">
-              <div className="flex items-center gap-2 flex-1">
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center qt-text-label-xs flex-shrink-0 transition-colors ${
-                    i < currentStepIndex
-                      ? 'qt-bg-primary qt-text-on-primary'
-                      : i === currentStepIndex
-                        ? 'qt-bg-primary qt-text-on-primary'
-                        : 'qt-bg-muted qt-text-secondary'
-                  }`}
-                >
-                  {i < currentStepIndex ? (
-                    <Icon name="check" className="w-3.5 h-3.5" />
-                  ) : (
-                    i + 1
-                  )}
-                </div>
-                <span className={`text-xs hidden sm:inline ${
-                  i === currentStepIndex ? 'qt-text font-medium' : 'qt-text-secondary'
-                }`}>
-                  {s.label}
-                </span>
-              </div>
-              {i < STEPS.length - 1 && (
-                <div className={`h-px flex-1 min-w-4 ${
-                  i < currentStepIndex ? 'qt-bg-primary' : 'bg-border'
-                }`} />
-              )}
-            </div>
-          ))}
-        </div>
+        <WizardStepIndicator steps={STEPS} current={currentStepIndex} />
 
         {renderStepContent()}
       </BaseModal>

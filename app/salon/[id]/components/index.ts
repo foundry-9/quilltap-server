@@ -1,7 +1,6 @@
 export { StreamingMessage } from './StreamingMessage'
 export { MessageRow } from './MessageRow'
 export { ChatComposer } from './ChatComposer'
-export { PendingToolCalls } from './PendingToolCalls'
 export { VirtualizedMessageList } from './VirtualizedMessageList'
 export { ChatModals } from './ChatModals'
 export { SpeakingAsAvatar } from './SpeakingAsAvatar'

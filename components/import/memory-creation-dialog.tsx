@@ -4,31 +4,29 @@ import { useState, useCallback, useMemo } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 
+/** The imported chat the dialog analyses: the fields it reads. */
+export interface MemoryCreationChat {
+  id: string
+  title: string
+  participants: Array<{
+    type: 'CHARACTER'
+    characterId?: string | null
+    connectionProfileId?: string | null
+    character?: { id: string; name: string } | null
+  }>
+  messages: Array<{
+    id: string
+    role: string
+    content: string
+    rawResponse?: { speakerName?: string } | null
+  }>
+}
+
 /**
  * Props for MemoryCreationDialog
  */
 interface MemoryCreationDialogProps {
-  chat: {
-    id: string
-    title: string
-    participants: Array<{
-      type: 'CHARACTER'
-      characterId?: string | null
-      connectionProfileId?: string | null
-      character?: { id: string; name: string } | null
-    }>
-    messages: Array<{
-      id: string
-      role: string
-      content: string
-      rawResponse?: { speakerName?: string } | null
-    }>
-    createdEntities?: {
-      characters: Array<{ id: string; name: string }>
-      personas: Array<{ id: string; name: string }>
-    }
-    memoryJobCount?: number
-  }
+  chat: MemoryCreationChat
   onClose: () => void
 }
 
@@ -112,36 +110,6 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
       setCreating(false)
     }
   }, [chat.id, firstCharacter, messagePairCount, onClose])
-
-  // If memories were already queued during import, show status
-  if (chat.memoryJobCount && chat.memoryJobCount > 0) {
-    return (
-      <BaseModal
-        isOpen
-        onClose={onClose}
-        title="Memory Analysis Queued"
-        maxWidth="md"
-        bodyClassName="qt-dialog-body-default"
-        footer={
-          <button
-            type="button"
-            onClick={onClose}
-            className="qt-button qt-button-primary"
-          >
-            Done
-          </button>
-        }
-      >
-        <p className="qt-text-small">
-          {chat.memoryJobCount} message{chat.memoryJobCount === 1 ? '' : 's'} queued for memory analysis.
-          Memories will be created in the background as each message is processed.
-        </p>
-        <p className="qt-text-xs mt-2">
-          You can check the status in the background jobs section.
-        </p>
-      </BaseModal>
-    )
-  }
 
   return (
     <BaseModal

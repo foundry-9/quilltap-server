@@ -62,8 +62,6 @@ import {
   extractSubmitFinalResponseFromText,
 } from '@/lib/services/chat-message/agent-mode-resolver.service'
 import { triggerContextSummaryCheck } from '@/lib/services/chat-message/memory-trigger.service'
-import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
-import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
 import { profileParams } from '@/lib/llm/cheap-llm'
 import { resolveToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils'
@@ -644,14 +642,8 @@ async function processConsoleResponse<Plan extends ConsoleTurnPlanBase>(
       guardsFired: researchGuard?.history ?? [],
     })
 
-    const costResult = await estimateMessageCost(
-      connectionProfile.provider,
-      connectionProfile.modelName,
-      totalUsage.promptTokens,
-      totalUsage.completionTokens,
-      userId
-    )
-
+    // Tokens and cost were accounted per call in logLLMCall
+    // (usage-accounting.service.ts).
     safeEnqueue(controller, encodeDoneEvent(encoder, {
       messageId: assistantMessage.id,
       usage: totalUsage,
@@ -663,14 +655,6 @@ async function processConsoleResponse<Plan extends ConsoleTurnPlanBase>(
       reasoningContent: runReasoning.trim() || null,
       systemKind: answer.systemKind ?? null,
     }))
-
-    await trackMessageTokenUsage(
-      chatId,
-      connectionProfile.id,
-      totalUsage,
-      costResult.cost,
-      costResult.source
-    )
   }
 }
 

@@ -35,7 +35,6 @@ export function DocumentPaneBinding({ entry, mode, roleplayTemplateId, doc }: Do
   const onDeleteDocument = useCallback(() => doc.deleteDocument(docId), [doc, docId])
   const onToggleFocusMode = useCallback(() => doc.toggleFocusMode(), [doc])
   const onFocusResolved = useCallback((pixelTop: number) => doc.setDocAttentionTop(docId, pixelTop), [doc, docId])
-  const onFocusCleared = useCallback(() => doc.setDocAttentionTop(docId, null), [doc, docId])
   const onFocusProcessed = useCallback(() => doc.clearDocFocusRequest(docId), [doc, docId])
 
   // A file shown read-only (an image, PDF, .docx…) gets the viewer, not the editor.
@@ -55,7 +54,6 @@ export function DocumentPaneBinding({ entry, mode, roleplayTemplateId, doc }: Do
       mode={mode}
       isDirty={entry.isDirty}
       isSaving={entry.isSaving}
-      isLLMEditing={entry.isLLMEditing}
       contentVersion={entry.contentVersion}
       roleplayTemplateId={roleplayTemplateId}
       attentionTop={entry.attentionTop}
@@ -71,7 +69,6 @@ export function DocumentPaneBinding({ entry, mode, roleplayTemplateId, doc }: Do
       onDeleteDocument={onDeleteDocument}
       focusRequest={entry.focusRequest}
       onFocusResolved={onFocusResolved}
-      onFocusCleared={onFocusCleared}
       onFocusProcessed={onFocusProcessed}
     />
   )
