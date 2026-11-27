@@ -4,6 +4,96 @@
 
 ### 4.15-dev
 
+### 4.14.1
+
+#### Dependencies: npm update across root, packages and plugins (second pass)
+
+- Ran `npm update -S` in the root project, every package and every plugin. Notable bumps: `openai` 7.65, `@anthropic-ai/sdk` 1.14 (anthropic plugin), `@openrouter/sdk` 1.5.142, `dompurify` 3.5.0, `@tanstack/react-query` / `react-query-devtools` / `eslint-plugin-query` 5.108.4, `@tanstack/react-virtual` 3.14.28, `tar` 7.5.24, `@types/react` 19.3.3, `@types/node` 24.19.4, `@napi-rs/canvas` 1.2.1 (CLI)
+- The plugins now require `@quilltap/plugin-utils` ^2.7.8
+- plugin-types 2.13.1 and plugin-utils 2.7.9 published (dependency-only); patch bumps to 14 plugins (`package.json` and `manifest.json`, all but builtin-embeddings), rebuilt
+
+#### Fix: regenerating a reply forms memories from the new swipe (#236)
+
+- With the default swipe cascade (`onSwipeRegenerate` = `DELETE_MEMORIES`), regenerating a character's reply retired the memories formed from the replaced line and never extracted any from the new one, so every swipe made the character forget that exchange. `regenerateMessageAsSwipe` (`lib/services/chat-message/regenerate-swipe.service.ts`) now goes through the edit path's `regenerateEditedMessageMemories` (`message-edit-impact.ts`, new `reason: 'swipe-regenerate'` option): the turn's AUTO memories are retired and a memory extraction job re-reads the turn with the new swipe in place of the old one. `REGENERATE_MEMORIES` does the same; `KEEP_MEMORIES` still neither retires nor extracts. With no extraction profile, the old line's memories are retired as before.
+- Extraction now reads a swipe group as its newest variant only. `loadChatMessageEvents` (`turn-transcript.ts`) drops superseded variants through the new `withoutSupersededSwipes` (`lib/chat/swipe-variants.ts`), and `locateMemorySource` locates a turn on that same reading, so a replaced variant is no longer extracted beside its replacement and no longer splits an autonomous room's speaker turn. This also applies to *Re-extract Memories*, the chat-wide memory regenerate and SillyTavern imports with swipes.
+- The server keeps no record of which swipe the operator is viewing, so extraction follows the newest variant, which is what the Salon shows by default. Swiping back to an older variant does not restore its memories.
+- Regression tests: `__tests__/unit/lib/services/chat-message/regenerate-swipe.service.test.ts` ("memory cascade"), `message-edit-impact.test.ts`, `load-chat-message-events.test.ts`, `__tests__/unit/lib/chat/swipe-variants.test.ts`.
+
+#### Docs: 4.14.1 release notes
+
+- New `docs/releases/4.14.1.md` covering the output-token ceiling, cheap-LLM reasoning headroom, summary file titles, History card previews and the custom-tool roster refresh
+- Release notes extended with the swipe memory fix (#236) and the fresh-instance dogfood fixes (sample wardrobes, empty-outfit whisper, seatless group chat rotation, project file upload, Speaks First badge, portrait preview wording, Test All background model, job-child DDL)
+- `docs/developer/API.md`: documented `GET /api/v1/characters/[id]?action=chats`, including the new `summaryExcerpt` field
+
+#### Fix: the sample characters keep their wardrobes on a fresh instance
+
+- The first-startup seed imported Lorian's and Riya's wardrobes into their vaults, and then the one-time `refreshVaultWardrobe` startup task (`lib/startup/refresh-vault-wardrobe.ts`), never yet run on the new database, projected the empty legacy `wardrobe_items` table over every vault and deleted them. Both sample characters had no clothes at all. With no legacy rows anywhere, the task now marks itself done and leaves the vaults alone (`hasAnyLegacyWardrobeRows`, `migrations/lib/legacy-wardrobe-rows.ts`); an upgraded database with rows projects them as before.
+- An instance already affected gets the wardrobes back from **Reset Built-in Characters** on the Characters (Aurora) page toolbar.
+- Regression test: `__tests__/unit/lib/startup/refresh-vault-wardrobe.test.ts`.
+
+#### Fix: a character with no wardrobe is no longer announced as naked
+
+- At a chat's opening, Aurora's outfit whisper rendered an empty outfit as "completely naked and unadorned" even when the character owned no wardrobe at all (the operator's own persona, any hand-made character). The chat model, the scene-state tracker and the Lantern took it as fact, and the first story background on a fresh instance painted the user's persona undressed. `announceOpeningOutfit` (`lib/chat/opening/arrival.ts`) now skips the whisper when nothing is worn and nothing is in reach; a character who owns clothes and wears none is still announced.
+- Regression tests: `__tests__/unit/lib/chat/opening/arrival.test.ts` ("the opening-outfit whisper needs a wardrobe to speak of").
+
+#### Fix: uploading a file from a project's Files card works
+
+- `useProjectFileUpload` posted to `/api/v1/projects/[id]/files/upload`, a route that has never existed, so every upload from the project page failed with a 409 "Server Action unavailable". It now posts to `POST /api/v1/files?action=upload` with `projectId` in the form and reads the `data` field the route returns.
+- Regression test: `__tests__/unit/components/files/use-project-file-upload.test.tsx`.
+
+#### Fix: a group chat without a user seat waits for the operator after each round
+
+- In a chat started as "Chat as yourself" (no user-controlled seat; the default for any character without a default partner) with two or more characters, the characters kept answering each other after every message until the chain cap (20 turns or 5 minutes). The operator's posts carry no participant, so they never enter the rotation's cycle bookkeeping, and nothing handed the floor back. Bug 249 fixed only the one-character case. Found in the fresh-instance dogfood run (two characters chained six replies to one message before being paused)
+- New `seatlessOperatorRoundAnswered` (`lib/chat/turn-manager/operator-round.ts`): when the human has posted, holds no seat, and every present character seat has answered or passed (`turn-pass`) since that post, `shouldChainNext` returns `user_turn`. A queued nudge still runs; chats with a user seat, genuinely all-LLM chats and autonomous rooms are unchanged
+
+#### Fix: new-chat picker no longer promises who speaks first
+
+- The new-chat character picker (`components/new-chat/CharacterPickerPanel.tsx`) marked the first selected character **Speaks First**. The opening greeting has been drawn by talkativeness, not list order, since before 4.13 (the opening turn's participant resolver), so the mark was often wrong: a two-character chat opened with the second character's line. The badge is gone, and `help/chat-multi-character.md` says how the opener is chosen and that characters can be seated from the Start Chat dialog. Found in the fresh-instance dogfood run
+
+#### Fix: out-of-chat portrait preview says where the picture goes
+
+- The Wardrobe dialog's out-of-chat portrait pane (reached from a character's avatar menu, **Generate portrait…**) said "Generates a one-off preview. Download to keep.", and the help said it saved nothing. The preview is in fact stored as a generated file linked to the character (`lib/wardrobe/routes/preview-avatar.ts`), so it shows in the character's photos and can be set as the avatar from **Choose from photos…**. The pane (`components/wardrobe/AvatarGenerationPane.tsx`) now says so, and the "Discard preview" button is "Close preview", since closing it deletes nothing. `help/wardrobe.md` and `help/character-editing.md` updated. Found in the fresh-instance dogfood run
+
+#### Fix: job child no longer tries to create tables on a fresh instance
+
+- On a fresh instance the first chat's `CONVERSATION_RENDER` job reached `conversation_chunks` in the forked job child before the parent had. A repository's first access runs the schema's idempotent `CREATE TABLE` / `CREATE INDEX IF NOT EXISTS` DDL, and `idx_conversation_chunks_createdAt` is made by no migration, so the child's read-only connection failed with `attempt to write a readonly database` (three errors in the log). The throw also skipped registering the collection's JSON, array and boolean columns, so the child's later reads of that collection were misparsed until restart. Found in the fresh-instance dogfood run
+- `SQLiteBackend.ensureCollection` (`lib/database/backends/sqlite/backend.ts`) skips the DDL on a read-only connection and still registers the columns. The parent, the only writer, runs the same DDL on its own first access
+
+#### Fix: setup wizard Test All checks a Manual background model
+
+- Test All tested the chat model and the embedding model, but not a background (cheap) model chosen under **Manual**, which can be a different provider and model. A bad pick passed the review page and showed up later as failing background jobs. Found in the fresh-instance dogfood run
+- `TestConfirmStep` now sends the same one-line test message to the Manual model, with its own row result, and the note names it ("Chat, the background model and embeddings work"; `testedSummary`). Auto makes no extra call: it uses the chat provider's key the chat test just proved
+- The Manual background profile was named with the raw provider id (`Cheap - OPENAI - gpt-5.4-nano`); it now uses the display name like the other wizard profiles
+
+#### Fix: custom-tool availability follows equip changes in an open Salon chat
+
+- The Salon read a chat's custom-tool roster (`queryKeys.customTools.byChat`) once and kept it. Availability gates on `inventory`, `metadata` or `progress` could flip mid-chat (an equip, a Pascal effect, a tool call), but the composer's wand, the `/` commands and the run dialog kept the old roster until the conversation tab was closed and reopened
+- The `chats` realtime topic, which equips and new messages already publish, now invalidates `customTools.byChat(chatId)` (`lib/realtime/topic-map.ts`). The Inventory dialog's offline fallback refresh (`useChatInventory`) includes it too
+
+#### Fix: output-token requests are capped at what the provider accepts
+
+- A profile's max tokens was sent as set, even above the provider's limit. Z.AI rejects any `max_tokens` over 131,072 with a 400; a GLM 5.3 Flash profile at 943,718 made memory extraction, consolidation and fold episode passes fail on every call (about 5,700 failures on one instance since Nov 22). Consolidation asks for the profile's whole budget, plus 4,000 tokens of reasoning headroom
+- New `lib/llm/output-ceiling.ts`: `withOutputCeiling` wraps every text provider `ProviderRegistry.createLLMProvider` returns, so `sendMessage` and `streamMessage` lower `maxTokens` to the provider's ceiling. The ceiling is the lower of the model's `maxOutputTokens` in the provider's live catalog (`lookupLiveModelEntry`, new in `model-catalog.ts`) and the manifest's new `providerConfig.maxOutputTokens`. It is resolved once per process per provider, base URL, key and model; a failed catalog read is retried after 10 minutes. The profile's stored value is unchanged
+- The Z.AI plugin (1.1.41) declares `maxOutputTokens: 131072` in its manifest and clamps its own requests to it, so it stays within the limit under an older host
+- The context budget is unchanged; it already counts at most 20% of the context window for output
+
+#### Fix: character History cards preview the context summary
+
+- Conversation cards on a character's **History** tab previewed a raw recent message, which was often a Staff whisper (Commonplace Book recall, a Host line) and said nothing about the chat
+- `GET /api/v1/characters/[id]?action=chats` now returns `summaryExcerpt` (`summaryExcerpt(chat.contextSummary)`, the line the home page's resume card shows), and `transformCharacterChatToCardData` previews it, falling back to the latest message when the chat has no summary yet
+
+#### Fix: cheap-LLM reasoning headroom pushed max_tokens past the model's limit
+
+- The cheap-LLM sender (`sendToProvider`, `lib/memory/cheap-llm-tasks/core-execution.ts`) added 4,000 tokens of reasoning headroom on top of whatever the caller asked for. Memory extraction and consolidation ask for the profile's whole output budget, so a profile on the `Deep` model class (128,000) sent 132,000, and NanoGPT/DeepSeek refused every call with `400 The max_tokens parameter is illegal` (limit 131,072). Consolidation clusters failed and extraction's OTHER fold formed nothing
+- `CheapLLMSelection` now carries `maxOutputTokens`, the profile's `resolveMaxTokens` ceiling, set by `selectionFromProfile`. `withReasoningHeadroom` takes an optional ceiling and stops the headroom there, never cutting below the requested answer budget. A selection that swaps in the provider's cheapest model carries no ceiling, since the profile's does not describe that model
+- The uncensored image-prompt selections in scene-state tracking, story backgrounds and the image-generation tool were built by hand; they now go through `selectionFromProfile`, which also gives them the profile's provider parameters and keeps a non-Ollama profile's own base URL
+
+#### Fix: conversation summary files follow their chat's current title
+
+- A chat's summary file in each participant's vault (`Conversation Summaries/<title>.md`) was named, and its frontmatter `conversationTitle` set, from the chat's title at the last summary fold. Chats are retitled between folds, so files kept old names and recall's "relevant past conversations" reported old titles
+- New startup pass `syncConversationSummaryTitles` (`lib/startup/sync-conversation-summary-titles.ts`), chained after the vault backfill in `instrumentation.ts`, matches each file to its chat by frontmatter `conversationId` and renames it to the current title, with the writer's name rule (`summaryFileName`, or `disambiguatedSummaryFileName` when another conversation holds the name; both now exported from the bridge). A changed frontmatter title is rewritten; nothing else in the file changes
+- A rename alone keeps the file's chunks and embeddings. A title rewrite re-chunks the file and queues its embedding again (frontmatter is not embedded, so the vectors do not change). Files whose chat no longer exists and archived characters' vaults are skipped. Matching files are not touched
+
 ### 4.14.0
 
 #### Docs: release checklist adds a fresh-instance dogfood step

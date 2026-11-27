@@ -145,7 +145,7 @@ export function AvatarGenerationPane({
       <p className="mt-2 qt-text-xs qt-text-small">
         {inChat
           ? `Replaces this chat's avatar with the staged outfit.`
-          : `Generates a one-off preview. Download to keep.`}
+          : `Generates a portrait and keeps it in ${characterName}'s photos. To make it the avatar, choose it from the avatar menu's Choose from photos.`}
       </p>
 
       {!inChat && preview && (
@@ -159,8 +159,8 @@ export function AvatarGenerationPane({
             <button
               type="button"
               onClick={() => setPreview(null)}
-              aria-label="Discard preview"
-              title="Discard preview"
+              aria-label="Close preview"
+              title="Close preview (the portrait stays in their photos)"
               className="absolute top-1 right-1 w-6 h-6 rounded-full qt-bg-default border qt-border-default flex items-center justify-center qt-text-secondary hover:qt-text shadow-sm"
             >
               ×

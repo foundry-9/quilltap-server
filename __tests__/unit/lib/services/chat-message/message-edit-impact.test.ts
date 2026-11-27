@@ -130,6 +130,30 @@ describe('locateMemorySource', () => {
     })
   })
 
+  // #236: extraction reads a swipe group as its newest variant, so the turn is
+  // located on that reading, and a replaced variant's own id stays a source.
+  it('locates a replaced swipe variant through the one that replaced it', () => {
+    const opener = msg('su', 'USER')
+    const old = msg('sv0', 'ASSISTANT', { swipeGroupId: 'swipe-sv0', swipeIndex: 0 })
+    const fresh = msg('sv1', 'ASSISTANT', { swipeGroupId: 'swipe-sv0', swipeIndex: 1 })
+    expect(locateMemorySource([opener, old, fresh], old, null)).toEqual({
+      kind: 'turn',
+      locator: { turnOpenerMessageId: 'su' },
+      sourceMessageIds: ['su', 'sv1', 'sv0'],
+    })
+  })
+
+  it('in an autonomous room, a replaced swipe variant does not split the speaker turn', () => {
+    const r1 = msg('r1', 'ASSISTANT')
+    const old = msg('r2a', 'ASSISTANT', { swipeGroupId: 'swipe-r2a', swipeIndex: 0 })
+    const fresh = msg('r2b', 'ASSISTANT', { swipeGroupId: 'swipe-r2a', swipeIndex: 1 })
+    expect(locateMemorySource([r1, old, fresh], old, 'autonomous')).toEqual({
+      kind: 'turn',
+      locator: { turnOpenerMessageId: null, extractionAnchorMessageId: 'r2b', extractAfterMessageId: 'r1' },
+      sourceMessageIds: ['r2b', 'r2a'],
+    })
+  })
+
   it('in an autonomous room, a line after the last speaker has no closed turn yet', () => {
     const r1 = msg('r1', 'ASSISTANT')
     const trailing = msg('t', 'ASSISTANT', { isSilentMessage: true } as Partial<MessageEvent>)
@@ -214,6 +238,20 @@ describe('assessMessageEditImpact / regenerateEditedMessageMemories', () => {
       connectionProfileId: 'profile-1',
       backfill: true,
     })
+    expect(result).toEqual({ memoriesRetired: 2, jobId: 'job-1' })
+  })
+
+  it('retires a replaced swipe variant\'s memories under the swipe reason and re-extracts its turn', async () => {
+    const a1b = msg('a1b', 'ASSISTANT', { swipeGroupId: 'swipe-a1', swipeIndex: 1 })
+    const a1Grouped = { ...a1, swipeGroupId: 'swipe-a1', swipeIndex: 0 } as MessageEvent
+    const result = await regenerateEditedMessageMemories(
+      chat(), [u1, a1Grouped, a1b, u2, a2], a1Grouped, 'user-1', { reason: 'swipe-regenerate' },
+    )
+    expect(repos.memories.findBySourceMessageId).toHaveBeenCalledWith('a1')
+    expect(mockRetire).toHaveBeenCalledWith(['m1', 'm2'], { reason: 'swipe-regenerate' })
+    expect(mockEnqueueTurn).toHaveBeenCalledWith('user-1', expect.objectContaining({
+      chatId: 'chat-1', turnOpenerMessageId: 'u1', backfill: true,
+    }))
     expect(result).toEqual({ memoriesRetired: 2, jobId: 'job-1' })
   })
 

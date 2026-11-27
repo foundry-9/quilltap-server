@@ -15,6 +15,7 @@
 import type { Character, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
 import { frameEstablishedFact } from '@/lib/chat/established-fact'
+import { withoutSupersededSwipes } from '@/lib/chat/swipe-variants'
 
 export interface TurnCharacterSlice {
   characterId: string
@@ -72,12 +73,17 @@ export interface TurnTranscript {
 /**
  * A chat's message rows (`type: 'message'`), chronological — the one read of
  * a transcript every extraction path starts from.
+ *
+ * A swipe group contributes only its newest variant (`withoutSupersededSwipes`):
+ * the variants a regenerate replaced are not what was said, and reading them
+ * would form their memories again beside the new line's (#236).
  */
 export async function loadChatMessageEvents(chatId: string): Promise<MessageEvent[]> {
   const { getRepositories } = await import('@/lib/repositories/factory')
-  return (await getRepositories().chats.getMessages(chatId)).filter(
+  const messages = (await getRepositories().chats.getMessages(chatId)).filter(
     (m) => m.type === 'message',
   ) as unknown as MessageEvent[]
+  return withoutSupersededSwipes(messages)
 }
 
 /**

@@ -105,6 +105,8 @@ export interface CharacterChatShape {
   project?: { id: string; name: string } | null
   storyBackground?: { id: string; filepath: string } | null
   messages: CharacterChatMessageShape[]
+  /** One plain line from the context summary (`summaryExcerpt`), as the home page's resume card shows */
+  summaryExcerpt?: string | null
   tags?: Array<{ tag: { id: string; name: string } }>
   conciergeState?: ConciergeState
   conciergeSetBy?: ConciergeProvenance
@@ -135,7 +137,9 @@ export function transformCharacterChatToCardData(chat: CharacterChatShape): Chat
     lastMessageAt: chat.lastMessageAt,
     project: chat.project || null,
     userCharacter: chat.userCharacter || null,
-    previewText: getCharacterChatPreview(chat.messages),
+    // Where things stand, from the context summary; a chat too young to have
+    // one falls back to its latest line.
+    previewText: chat.summaryExcerpt || getCharacterChatPreview(chat.messages),
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     conciergeState: chat.conciergeState,
     conciergeSetBy: chat.conciergeSetBy,

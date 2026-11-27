@@ -1474,7 +1474,7 @@ function addRequestID(value, response) {
 }
 
 // node_modules/openai/version.mjs
-var VERSION = "7.62.0";
+var VERSION = "7.65.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -14954,9 +14954,9 @@ var Sessions = class extends APIResource {
     })));
   }
   /**
-   * Updates session tools, metadata, model, reasoning effort, service tier, or the
-   * default prompt cache lifetime. Model settings apply to subsequent turns. Omitted
-   * fields are unchanged. See
+   * Updates session tools, vaults, metadata, model, reasoning effort, service tier,
+   * or the default prompt cache lifetime. Model settings apply to subsequent turns.
+   * Omitted fields are unchanged. See
    * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
    *
    * @example
@@ -15125,7 +15125,10 @@ var Credentials = class extends APIResource {
    * const credential =
    *   await client.beta.agents.vaults.credentials.update(
    *     'credential_id',
-   *     { vault_id: 'vault_id', metadata: {} },
+   *     {
+   *       vault_id: 'vault_id',
+   *       metadata: { environment: 'staging' },
+   *     },
    *   );
    * ```
    */
@@ -18474,7 +18477,7 @@ var Permissions = class extends APIResource {
    * ```ts
    * // Automatically fetches more pages as needed.
    * for await (const permissionCreateResponse of client.fineTuning.checkpoints.permissions.create(
-   *   'ft:gpt-4o-mini-2024-07-18:org:weather:B7R9VjQd',
+   *   'ft:gpt-4.1-mini-2025-04-14:org:weather:B7R9VjQd',
    *   { project_ids: ['string'] },
    * )) {
    *   // ...
@@ -18529,7 +18532,7 @@ var Permissions = class extends APIResource {
    *     'cp_zc4Q7MP6XxulcVzj4MZdwsAB',
    *     {
    *       fine_tuned_model_checkpoint:
-   *         'ft:gpt-4o-mini-2024-07-18:org:weather:B7R9VjQd',
+   *         'ft:gpt-4.1-mini-2025-04-14:org:weather:B7R9VjQd',
    *     },
    *   );
    * ```
@@ -18677,7 +18680,7 @@ var Jobs = class extends APIResource {
    * @example
    * ```ts
    * const fineTuningJob = await client.fineTuning.jobs.create({
-   *   model: 'gpt-4o-mini',
+   *   model: 'gpt-4.1-mini-2025-04-14',
    *   training_file: 'file-abc123',
    * });
    * ```
@@ -24561,8 +24564,99 @@ var STATIC_MODELS = [
 ];
 var STATIC_CHAT_MODEL_IDS = STATIC_MODELS.map((m) => m.id).filter((id) => !IMAGE_GEN_MODEL_PATTERN.test(id));
 
+// manifest.json
+var manifest_default = {
+  $schema: "../../../public/schemas/plugin-manifest.schema.json",
+  name: "qtap-plugin-z-ai",
+  title: "Z.AI (GLM)",
+  description: "Z.AI GLM models and CogView image generation for Quilltap",
+  version: "1.1.42",
+  author: {
+    name: "Foundry-9 LLC",
+    email: "charles.sebold@foundry-9.com",
+    url: "https://foundry-9.com"
+  },
+  license: "MIT",
+  compatibility: {
+    quilltapVersion: ">=1.7.0",
+    nodeVersion: ">=18.0.0"
+  },
+  capabilities: [
+    "LLM_PROVIDER",
+    "IMAGE_PROVIDER"
+  ],
+  category: "PROVIDER",
+  main: "index.js",
+  typescript: true,
+  frontend: "REACT",
+  styling: "TAILWIND",
+  enabledByDefault: true,
+  status: "STABLE",
+  keywords: [
+    "quilltap",
+    "plugin",
+    "z.ai",
+    "zai",
+    "glm",
+    "cogview",
+    "llm",
+    "chat",
+    "image-generation"
+  ],
+  providerConfig: {
+    providerName: "Z_AI",
+    displayName: "Z.AI (GLM)",
+    description: "Z.AI GLM models including GLM-4.6, GLM-4.5 series, vision models, and CogView image generation",
+    abbreviation: "ZAI",
+    colors: {
+      bg: "bg-emerald-100",
+      text: "text-emerald-800",
+      icon: "text-emerald-600"
+    },
+    requiresApiKey: true,
+    requiresBaseUrl: false,
+    maxOutputTokens: 131072,
+    apiKeyLabel: "Z.AI API Key",
+    capabilities: {
+      chat: true,
+      imageGeneration: true,
+      embeddings: false,
+      webSearch: true
+    },
+    attachmentSupport: {
+      supported: true,
+      mimeTypes: [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp"
+      ],
+      description: "Images only (JPEG, PNG, GIF, WebP) \u2014 vision-capable models required"
+    }
+  },
+  permissions: {
+    network: [
+      "api.z.ai"
+    ],
+    userData: false,
+    database: false
+  }
+};
+
 // provider.ts
 var logger = createPluginLogger("qtap-plugin-z-ai");
+var MAX_OUTPUT_TOKENS = manifest_default.providerConfig.maxOutputTokens;
+function clampMaxTokens(requested, model) {
+  const wanted = requested ?? 4096;
+  if (wanted <= MAX_OUTPUT_TOKENS) return wanted;
+  logger.debug("Clamped max_tokens to the Z.AI ceiling", {
+    context: "ZAIProvider.clampMaxTokens",
+    model,
+    requested: wanted,
+    ceiling: MAX_OUTPUT_TOKENS
+  });
+  return MAX_OUTPUT_TOKENS;
+}
 var Z_AI_SUPPORTED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -24768,7 +24862,7 @@ var ZAIProvider = class {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 4096,
+      max_tokens: clampMaxTokens(params.maxTokens, params.model),
       top_p: params.topP ?? 1,
       stream: false
     };
@@ -24849,7 +24943,7 @@ var ZAIProvider = class {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 4096,
+      max_tokens: clampMaxTokens(params.maxTokens, params.model),
       top_p: params.topP ?? 1,
       stream: true,
       stream_options: { include_usage: true }

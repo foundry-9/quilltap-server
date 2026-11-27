@@ -333,8 +333,21 @@ async function sendToProvider(
   )
 
   const profileKey = `${selection.provider}:${selection.modelName}`
-  // Headroom so a model that thinks by default still has room to answer
-  const effectiveMaxTokens = withReasoningHeadroom(Math.max(maxTokens ?? 2048, 2048))
+  // Headroom so a model that thinks by default still has room to answer —
+  // capped at the profile's output ceiling, so a caller already asking for the
+  // whole budget is not pushed past what the provider accepts.
+  const effectiveMaxTokens = withReasoningHeadroom(
+    Math.max(maxTokens ?? 2048, 2048),
+    selection.maxOutputTokens,
+  )
+  logger.debug('[CheapLLM] Resolved output budget', {
+    taskType,
+    provider: selection.provider,
+    model: selection.modelName,
+    requestedMaxTokens: maxTokens ?? null,
+    profileCeiling: selection.maxOutputTokens ?? null,
+    effectiveMaxTokens,
+  })
 
   // `durationMs` is the wall-clock of the provider call this row describes.
   // This shared path covers MEMORY_EXTRACTION, TITLE_GENERATION, SUMMARIZATION,

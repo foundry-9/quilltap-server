@@ -15,7 +15,7 @@ import {
 
 import { CONCEALMENT_MARKER, craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { parseStoredSceneState, isParticipantPresent, type SceneState } from '@/lib/schemas/chat.types';
-import { type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { type CheapLLMSelection, resolveUncensoredCheapLLMSelection, selectionFromProfile } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { logger } from '@/lib/logger';
 import { resolveSpeakerNames } from '@/lib/chat/speaker-names';
@@ -316,14 +316,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   if (uncensoredProfileId) {
     const uncensoredProfile = allProfiles.find(p => p.id === uncensoredProfileId);
     if (uncensoredProfile) {
-      const isLocal = uncensoredProfile.provider === 'OLLAMA';
-      uncensoredLLMSelection = {
-        provider: uncensoredProfile.provider,
-        modelName: uncensoredProfile.modelName,
-        connectionProfileId: uncensoredProfile.id,
-        baseUrl: isLocal ? (uncensoredProfile.baseUrl || 'http://localhost:11434') : undefined,
-        isLocal,
-      };
+      uncensoredLLMSelection = selectionFromProfile(uncensoredProfile, { localBaseUrlFallback: true });
     }
   }
 

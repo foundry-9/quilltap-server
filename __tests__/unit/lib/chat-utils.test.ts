@@ -95,4 +95,22 @@ describe('transformCharacterChatToCardData', () => {
     expect(transformCharacterChatToCardData(characterChat({ conciergeState: 'uncensored' })))
       .not.toHaveProperty('isDangerousChat')
   })
+
+  it("previews the context summary's excerpt rather than the latest line", () => {
+    const card = transformCharacterChatToCardData(characterChat({
+      summaryExcerpt: 'The bridge is down and the ford is rising.',
+      messages: [{ id: 'm1', role: 'ASSISTANT', content: 'The Host inclines his head.', createdAt: '2026-08-01T00:00:00.000Z' }],
+    }))
+
+    expect(card.previewText).toBe('The bridge is down and the ford is rising.')
+  })
+
+  it('falls back to the latest line when there is no summary yet', () => {
+    const card = transformCharacterChatToCardData(characterChat({
+      summaryExcerpt: null,
+      messages: [{ id: 'm1', role: 'ASSISTANT', content: 'Good morning.', createdAt: '2026-08-01T00:00:00.000Z' }],
+    }))
+
+    expect(card.previewText).toBe('Good morning.')
+  })
 })

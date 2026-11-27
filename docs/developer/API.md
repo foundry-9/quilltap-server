@@ -1699,6 +1699,16 @@ Counts for the character page's header stats line and its Vault card, plus the c
 - `characterFiles` / `characterFilesTotal` count the canonical managed vault files present (`SINGLE_FILE_OVERLAY_PATHS`); `missingCharacterFiles` names the absent ones by path. It is `[]` when the character has no vault.
 - `vault` is the character's linked document store, or `null` when there is none.
 
+#### `GET /api/v1/characters/[id]?action=chats`
+
+The character's conversations for the **History** tab, newest activity first (`chatActivityAt`, the stored `lastMessageAt`).
+
+**Query parameters**:
+- `search` (optional) - Case-insensitive match against the title or any message's content
+- `limit` / `offset` (optional) - Paging (`readPagination`; default 10, max 200)
+
+**Response**: `200 OK` — `{ chats, total }`, where `total` counts the filtered set before paging. Each chat: `id`, `title`, `createdAt`, `updatedAt`, `lastMessageAt`, `character` (`{ id, name }`), `project` (`{ id, name }` or `null`), `storyBackground` (`{ id, filepath }` or `null`), `messages` (the three newest `message` rows: `id`, `role`, `content`, `createdAt`), `summaryExcerpt` (one plain line from `contextSummary` via `summaryExcerpt()`, or `null` before the first summary — the card's preview, falling back to the newest message), `tags`, `conciergeState`, `conciergeSetBy`, `conciergeReason`, `dangerCategories`, `_count` (`{ messages, memories }`) and `scriptoriumStatus`.
+
 #### `POST /api/v1/characters/[id]?action=archive`
 
 Archive the character: write the encrypted `.qtap` bundle (an `ARCHIVE` file row), verify it, commit the tombstone (`archivedAt` + `archiveFileId`, chat seats flipped to absent), then prune the vault in place — mail, non-avatar photos, conversation summaries, own memories and their embeddings go; managed fields, avatar, and wardrobe stay readable.

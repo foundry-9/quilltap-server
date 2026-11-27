@@ -805,12 +805,19 @@ export class SQLiteBackend implements DatabaseBackend {
       // Store the schema for later use
       this.collectionSchemas.set(name, schema);
 
-      // Generate DDL from schema
-      const ddlStatements = generateDDL(name, schema);
-
-      // Execute DDL
-      for (const sql of ddlStatements) {
-        db.exec(sql);
+      // Execute DDL — except on a read-only connection (the job child), which
+      // may not write and need not: the parent is the only writer and runs the
+      // same idempotent DDL on its own first access. On a fresh instance the
+      // child can reach a collection first, and an index the migrations never
+      // made (conversation_chunks' createdAt index) made every such access
+      // throw "attempt to write a readonly database" and skip the column
+      // registration below, so the child's later reads were misparsed.
+      if (db.readonly) {
+        logger.debug('Skipping collection DDL on a read-only connection', { table: name });
+      } else {
+        for (const sql of generateDDL(name, schema)) {
+          db.exec(sql);
+        }
       }
 
       // Detect JSON, array, and boolean columns from schema

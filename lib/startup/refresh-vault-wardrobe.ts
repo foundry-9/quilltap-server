@@ -22,7 +22,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { projectVaultWardrobe } from '@/lib/wardrobe/vault-sync';
-import { readLegacyWardrobeRows } from '@/migrations/lib/legacy-wardrobe-rows';
+import { hasAnyLegacyWardrobeRows, readLegacyWardrobeRows } from '@/migrations/lib/legacy-wardrobe-rows';
 
 const logger = createServiceLogger('Startup:VaultWardrobeRefresh');
 
@@ -47,6 +47,16 @@ export async function refreshVaultWardrobe(): Promise<VaultWardrobeRefreshResult
 
   if (hasRefreshRun()) {
     result.alreadyDone = true;
+    return result;
+  }
+
+  // Nothing to project: a database born after the cutover has the legacy
+  // table but no rows, and its vaults are already canonical. Projecting the
+  // empty rows would wipe them — on a fresh instance that deleted the sample
+  // characters' wardrobes the seed import had just written.
+  if (!hasAnyLegacyWardrobeRows()) {
+    logger.info('Vault wardrobe refresh: no legacy wardrobe rows; vaults left as they are');
+    markRefreshRun();
     return result;
   }
 

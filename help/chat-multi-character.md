@@ -34,6 +34,10 @@ This is ideal for:
 4. Select another character to add
 5. Repeat to add more characters
 
+Or seat the whole company at once: in the **Start Chat** dialog, click **+ Add another character** and tick everyone who should be present from the first line.
+
+Whichever way you assemble them, the order in which you picked them does not decide who speaks first. The opening line goes to a character drawn by **talkativeness**, by the same reckoning that orders every later round, so the chatterbox of the party will more often than not have the first word.
+
 ### From an Existing Chat
 
 1. Open any chat
@@ -77,6 +81,8 @@ When multiple characters are present, they take turns speaking:
 1. **You Send a Message** — Your message kicks off a round
 2. **Characters Respond** — Each active character speaks once
 3. **Your Turn Returns** — After all characters have spoken, you can respond again
+
+This holds whether you join the party as one of your own characters or simply **chat as yourself**, without a seat at the table: once every character present has answered your message (or politely passed), the room falls quiet and waits for you, rather than carrying on the conversation without you.
 
 The **Turn Manager** controls this cycle. See [Turn Manager](chat-turn-manager.md) for details.
 

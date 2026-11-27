@@ -51,6 +51,16 @@ jest.mock('@/lib/services/chat-message/user-identity-resolver.service', () => ({
   resolveUserIdentity: jest.fn(async () => ({ name: 'Revenant', description: '' })),
 }))
 
+const regenerateEditedMessageMemories = jest.fn(async (..._args: unknown[]) => ({ memoriesRetired: 1, jobId: 'job-1' as string | null }))
+jest.mock('@/lib/services/chat-message/message-edit-impact', () => ({
+  regenerateEditedMessageMemories: (...args: unknown[]) => regenerateEditedMessageMemories(...args),
+}))
+
+const retireMemories = jest.fn(async (..._args: unknown[]) => ({ retired: 1 }))
+jest.mock('@/lib/memory/retire', () => ({
+  retireMemories: (...args: unknown[]) => retireMemories(...args),
+}))
+
 import { regenerateMessageAsSwipe } from '@/lib/services/chat-message/regenerate-swipe.service'
 import { resolveRespondingParticipant } from '@/lib/services/chat-message/participant-resolver.service'
 import type { MessageEvent, ChatMetadataBase } from '@/lib/schemas/types'
@@ -63,6 +73,7 @@ const buildRepos = (overrides: Record<string, unknown> = {}) => ({
     addMessage: jest.fn(async () => {}),
     updateMessage: jest.fn(async () => {}),
     update: jest.fn(async () => {}),
+    getMessages: jest.fn(async () => []),
   },
   chatSettings: {
     findByUserId: jest.fn(async () => ({ memoryCascadePreferences: { onSwipeRegenerate: 'DELETE_MEMORIES' } })),
@@ -265,6 +276,70 @@ describe('regenerateMessageAsSwipe', () => {
     expect((repos as any).chats.addMessage).not.toHaveBeenCalled()
     expect((repos as any).chats.updateMessage).not.toHaveBeenCalled()
     expect(findBySourceMessageId).not.toHaveBeenCalled()
+  })
+
+  // #236: a swipe retired the replaced line's memories and formed none for
+  // the new one. It now re-extracts the turn with the new line in its place.
+  describe('memory cascade', () => {
+    const opener = makeMessage('msg-user', 'USER', now, 'p-revenant')
+    const target = makeMessage('msg-abigail', 'ASSISTANT', now + 100, 'p-abigail')
+    const cascade = (onSwipeRegenerate: string) => ({
+      chatSettings: { findByUserId: jest.fn(async () => ({ memoryCascadePreferences: { onSwipeRegenerate } })) },
+    })
+
+    it('retires the replaced line\'s memories and enqueues extraction over the stored transcript', async () => {
+      const findBySourceMessageId = jest.fn(async () => [{ id: 'mem-1' }])
+      const repos = buildRepos({ memories: { findBySourceMessageId } }) as any
+      let stored: MessageEvent[] = [opener, target]
+      repos.chats.addMessage.mockImplementation(async (_chatId: string, m: MessageEvent) => { stored = [...stored, m] })
+      repos.chats.getMessages.mockImplementation(async () => stored)
+
+      const newSwipe = await regenerateMessageAsSwipe({
+        repos, userId: 'user-1', chat, targetMessage: target, allMessages: [opener, target],
+      })
+
+      expect(regenerateEditedMessageMemories).toHaveBeenCalledTimes(1)
+      const [passedChat, transcript, passedTarget, passedUser, options] = regenerateEditedMessageMemories.mock.calls[0] as any[]
+      expect(passedChat).toBe(chat)
+      expect(transcript.map((m: MessageEvent) => m.id)).toEqual(['msg-user', 'msg-abigail', newSwipe.id])
+      expect(passedTarget).toMatchObject({ id: 'msg-abigail', swipeGroupId: 'swipe-msg-abigail', swipeIndex: 0 })
+      expect(passedUser).toBe('user-1')
+      expect(options).toEqual({ reason: 'swipe-regenerate' })
+      // The helper retired them; no second retire beside it.
+      expect(retireMemories).not.toHaveBeenCalled()
+      expect(findBySourceMessageId).not.toHaveBeenCalled()
+    })
+
+    it('treats REGENERATE_MEMORIES the same way', async () => {
+      const repos = buildRepos(cascade('REGENERATE_MEMORIES'))
+      await regenerateMessageAsSwipe({ repos, userId: 'user-1', chat, targetMessage: target, allMessages: [opener, target] })
+      expect(regenerateEditedMessageMemories).toHaveBeenCalledTimes(1)
+    })
+
+    it('neither retires nor extracts under KEEP_MEMORIES', async () => {
+      const findBySourceMessageId = jest.fn(async () => [{ id: 'mem-1' }])
+      const repos = buildRepos({ ...cascade('KEEP_MEMORIES'), memories: { findBySourceMessageId } })
+      await regenerateMessageAsSwipe({ repos, userId: 'user-1', chat, targetMessage: target, allMessages: [opener, target] })
+      expect(regenerateEditedMessageMemories).not.toHaveBeenCalled()
+      expect(retireMemories).not.toHaveBeenCalled()
+      expect(findBySourceMessageId).not.toHaveBeenCalled()
+    })
+
+    it('still retires the replaced line\'s memories when nothing can extract the new one', async () => {
+      regenerateEditedMessageMemories.mockResolvedValueOnce({ memoriesRetired: 0, jobId: null })
+      const findBySourceMessageId = jest.fn(async () => [{ id: 'mem-1' }, { id: 'mem-2' }])
+      const repos = buildRepos({ memories: { findBySourceMessageId } })
+      await regenerateMessageAsSwipe({ repos, userId: 'user-1', chat, targetMessage: target, allMessages: [opener, target] })
+      expect(findBySourceMessageId).toHaveBeenCalledWith('msg-abigail')
+      expect(retireMemories).toHaveBeenCalledWith(['mem-1', 'mem-2'], { reason: 'swipe-regenerate' })
+    })
+
+    it('keeps the swipe when the cascade fails', async () => {
+      regenerateEditedMessageMemories.mockRejectedValueOnce(new Error('boom'))
+      const repos = buildRepos()
+      const newSwipe = await regenerateMessageAsSwipe({ repos, userId: 'user-1', chat, targetMessage: target, allMessages: [opener, target] })
+      expect(newSwipe.content).toBe('A freshly regenerated line.')
+    })
   })
 
   it('refuses to regenerate staff/system messages', async () => {

@@ -100,6 +100,8 @@ See [API Keys](api-keys-settings.md) for the particulars. If you would rather be
 
    > **A correction, as of 4.9.** *Max Tokens* and *Top P* were, until now, written down faithfully and then left in the drawer: the Salon sent neither to the provider, which fell back on whatever default it kept for itself. Regenerating a reply used your figures; the original reply did not — which explains a good deal of otherwise inexplicable difference between the two. Both settings are now sent on every path. If a profile has been carrying a *Max Tokens* far above what you actually want spent, this is the moment to look at it, because it will now be honoured.
 
+   > **No more than the provider will take, as of 4.14.1.** A *Max Tokens* set higher than the provider will accept used to be sent regardless, and a provider with firm views on the matter (Z.AI declines anything above 131,072) refused every such request outright — background tasks that asked for a profile's whole allowance failed by the thousand without a word to anyone. Quilltap now learns each model's real ceiling from the provider itself, once a session (from the provider's model catalogue where it keeps one, and from the limit its plugin declares for every model), and quietly sends no more than that. Your figure is left exactly as you wrote it; it is simply not permitted to ask for the impossible.
+
 3. Click **Save** to create the profile
 
 ### Step 3: Test the Connection

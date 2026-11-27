@@ -44,6 +44,8 @@ The pair were handsomely re-engaged in 4.14: Lorian now arrives as a teacher of 
 
 Should Lorian and Riya have arrived at your establishment as mere silhouettes — a letter where a portrait ought to be, an empty personality, no system prompt, no wardrobe to speak of — they were the casualties of a first-run mishap now mended. A press of **Reset Built-in Characters** sends for the genuine articles, portraits and all. The hollow pair may have left behind two retired stores in the Scriptorium, named in the manner of *Lorian Version … Store* and *Riya Version … Store*; they hold nothing of consequence and may be dismissed at your leisure.
 
+An establishment opened fresh on 4.14 may have met the pair complete in every other particular but with not a stitch to their names — their wardrobes were packed, and then mislaid by the porter on the very first morning. That, too, is mended; **Reset Built-in Characters** fetches the wardrobes back.
+
 ## Help Tools
 
 Certain characters may be granted the privilege of peering behind the curtain — reading your Quilltap settings and searching the documentation on your behalf, rather like a well-informed butler who knows where everything is kept.
