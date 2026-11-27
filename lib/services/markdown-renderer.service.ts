@@ -17,17 +17,14 @@
 
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
-import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
-import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
 import rehypeStringify from 'rehype-stringify';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
-import remarkSmartypants from 'remark-smartypants';
 import { rehypeSafeUrls } from '@/lib/markdown/safe-urls';
-import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math';
-import { SMARTYPANTS_OPTIONS, shouldCurlQuotes } from '@/lib/markdown/typography';
+import { remarkPluginsFor } from '@/lib/markdown/remark-plugins';
+import { normalizeMathDelimiters } from '@/lib/markdown/math';
+import { shouldCurlQuotes } from '@/lib/markdown/typography';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 import {
   DEFAULT_RENDERING_PATTERNS,
@@ -83,28 +80,11 @@ export interface MarkdownRenderOptions {
  * This is cached to avoid recreating the processor for each message.
  */
 function createMarkdownProcessor(curlQuotes: boolean) {
+  // The remark half is the one ordered list the client renderer also runs
+  // (lib/markdown/remark-plugins.ts), so the two cannot drift.
   const processor = unified()
     .use(remarkParse)
-    .use(remarkGfm)
-    // remark-math parses $$…$$ math (single-dollar math is off — see
-    // lib/markdown/math.ts); rehype-katex below renders it. Must stay in sync
-    // with the client list.
-    .use(remarkMath, REMARK_MATH_OPTIONS)
-    // remark-breaks renders single newlines as hard <br> breaks, matching the
-    // client-side MessageContent.tsx pipeline. In chat an author who hits Enter
-    // means a line break, so soft breaks are preserved rather than collapsed to
-    // a space (CommonMark's default). Must stay in sync with the client list.
-    .use(remarkBreaks);
-
-  // Smart typography (Layer 1.6, Part A): quotes only, never dashes. Sits
-  // between remarkBreaks and remarkRehype so it operates on mdast TEXT nodes —
-  // which is what structurally excludes code, math and link targets, each of
-  // which is a distinct node type or a property rather than text. Must stay in
-  // sync with the client list; the shared options live in
-  // lib/markdown/typography.ts so the two cannot drift.
-  if (curlQuotes) {
-    processor.use(remarkSmartypants, SMARTYPANTS_OPTIONS);
-  }
+    .use(remarkPluginsFor(curlQuotes));
 
   return processor
     .use(remarkRehype)

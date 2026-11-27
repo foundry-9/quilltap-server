@@ -1,6 +1,7 @@
 'use client'
 
 import { patchChat } from '@/lib/chat/patch-chat'
+import { apiFetch } from '@/lib/query/fetcher'
 import type { Message } from '../types'
 import type { ActiveDocument, DocumentMode } from './useDocumentMode'
 import type { DocumentViewTarget } from '@/lib/folder-browser/document-actions'
@@ -50,21 +51,16 @@ interface ChatStateResponse {
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
-async function getResponseMessage(response: Response, fallbackMessage: string): Promise<string> {
-  try {
-    const text = await response.text()
-    return text || fallbackMessage
-  } catch {
-    return fallbackMessage
-  }
-}
-
-async function parseJsonResponse<T>(response: Response, fallbackMessage: string): Promise<T> {
-  if (!response.ok) {
-    throw new Error(await getResponseMessage(response, fallbackMessage))
-  }
-
-  return response.json() as Promise<T>
+/**
+ * POST `?action=<action>` on the chat. A refusal throws an `ApiFetchError`
+ * carrying the server's parsed `{ error }`.
+ */
+function postDocumentAction<T>(chatId: string, action: string, body?: unknown): Promise<T> {
+  return apiFetch<T>(`/api/v1/chats/${chatId}?action=${action}`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
 }
 
 export function toActiveDocument(
@@ -97,12 +93,7 @@ export async function persistChatDocumentState(
  * editor pane per record on mount and after LLM open/close tool calls.
  */
 export async function fetchOpenDocumentRecords(chatId: string): Promise<OpenDocumentsResponse> {
-  const response = await fetch(`/api/v1/chats/${chatId}?action=open-documents`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-  })
-
-  return parseJsonResponse<OpenDocumentsResponse>(response, 'Failed to load open documents')
+  return postDocumentAction<OpenDocumentsResponse>(chatId, 'open-documents')
 }
 
 export async function readDocumentContentForChat(
@@ -113,13 +104,7 @@ export async function readDocumentContentForChat(
     mountPoint?: string | null
   },
 ): Promise<ReadDocumentResponse> {
-  const response = await fetch(`/api/v1/chats/${chatId}?action=read-document`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify(params),
-  })
-
-  return parseJsonResponse<ReadDocumentResponse>(response, 'Failed to read document content')
+  return postDocumentAction<ReadDocumentResponse>(chatId, 'read-document', params)
 }
 
 /**
@@ -135,13 +120,7 @@ export async function resolveDocumentExistsForChat(
     mountPoint?: string
   },
 ): Promise<ResolveDocumentResponse> {
-  const response = await fetch(`/api/v1/chats/${chatId}?action=resolve-document`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify(params),
-  })
-
-  return parseJsonResponse<ResolveDocumentResponse>(response, 'Failed to resolve document')
+  return postDocumentAction<ResolveDocumentResponse>(chatId, 'resolve-document', params)
 }
 
 export async function openDocumentForChat(
@@ -160,15 +139,13 @@ export async function openDocumentForChat(
     targetFolder?: string
   },
 ): Promise<OpenDocumentResponse> {
-  const response = await fetch(`/api/v1/chats/${chatId}?action=open-document`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify(params),
-  })
-
-  return parseJsonResponse<OpenDocumentResponse>(response, 'Failed to open document')
+  return postDocumentAction<OpenDocumentResponse>(chatId, 'open-document', params)
 }
 
+/**
+ * Close one document. The answer's status is not read: the pane closes
+ * whatever the server said.
+ */
 export async function closeDocumentForChat(chatId: string, chatDocumentId?: string): Promise<void> {
   await fetch(`/api/v1/chats/${chatId}?action=close-document`, {
     method: 'POST',
@@ -189,6 +166,8 @@ export async function requestDocumentWrite(
     diffContent?: string
   },
 ): Promise<Response> {
+  // The raw answer, not apiFetch: the save loop branches on a 409
+  // (`documentWriteOutcome`, document-saver.ts).
   return fetch(`/api/v1/chats/${chatId}?action=write-document`, {
     method: 'POST',
     headers: JSON_HEADERS,
@@ -197,8 +176,7 @@ export async function requestDocumentWrite(
 }
 
 export async function fetchChatDocumentState(chatId: string): Promise<ChatStateResponse> {
-  const response = await fetch(`/api/v1/chats/${chatId}`)
-  return parseJsonResponse<ChatStateResponse>(response, 'Failed to load chat state')
+  return apiFetch<ChatStateResponse>(`/api/v1/chats/${chatId}`)
 }
 
 interface RenameDocumentResponse {
@@ -212,13 +190,7 @@ export async function renameDocumentForChat(
   newTitle: string,
   chatDocumentId?: string,
 ): Promise<RenameDocumentResponse> {
-  const response = await fetch(`/api/v1/chats/${chatId}?action=rename-document`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ newTitle, chatDocumentId }),
-  })
-
-  return parseJsonResponse<RenameDocumentResponse>(response, 'Failed to rename document')
+  return postDocumentAction<RenameDocumentResponse>(chatId, 'rename-document', { newTitle, chatDocumentId })
 }
 
 interface DeleteDocumentResponse {
@@ -231,11 +203,5 @@ export async function deleteDocumentForChat(
   chatId: string,
   chatDocumentId?: string,
 ): Promise<DeleteDocumentResponse> {
-  const response = await fetch(`/api/v1/chats/${chatId}?action=delete-document`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ chatDocumentId }),
-  })
-
-  return parseJsonResponse<DeleteDocumentResponse>(response, 'Failed to delete document')
+  return postDocumentAction<DeleteDocumentResponse>(chatId, 'delete-document', { chatDocumentId })
 }

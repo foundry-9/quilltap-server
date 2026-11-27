@@ -3,10 +3,11 @@
  *
  * Generated composites reference their components by title; this creates leaf
  * garments first, collects the ids the API mints, then creates composites with
- * the resolved `componentItemIds`. Shared by the new-character and
- * edit-character views.
+ * the resolved `componentItemIds`, and toasts what was made. Shared by the
+ * new-character and edit-character views.
  */
 
+import { showSuccessToast } from '@/lib/toast'
 import { orderGeneratedItemsLeafFirst } from '@/lib/wardrobe/generated-items'
 import { wardrobeCollectionUrl } from '@/lib/wardrobe/wardrobe-container'
 import type { GeneratedWardrobeItem } from '@/components/characters/ai-wizard'
@@ -54,6 +55,11 @@ export async function saveGeneratedWardrobeItems(
     } catch (err) {
       console.error('Error saving generated wardrobe item', err instanceof Error ? err.message : String(err))
     }
+  }
+
+  if (saved > 0) {
+    const outfitText = outfits > 0 ? ` (including ${outfits} outfit${outfits > 1 ? 's' : ''})` : ''
+    showSuccessToast(`${saved} wardrobe item${saved > 1 ? 's' : ''} created${outfitText}`)
   }
 
   return { saved, outfits }

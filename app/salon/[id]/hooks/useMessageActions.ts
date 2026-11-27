@@ -1,11 +1,10 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useChatSettingsMutation } from '@/hooks/useChatSettingsMutation'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { Message, MemoryCascadeAction, ChatSettings } from '../types'
-import { queryKeys } from '@/lib/query/keys'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import { apiFetch } from '@/lib/query/fetcher'
 import type { MessageEditImpact } from '@/lib/schemas/message-edit-impact.types'
@@ -39,7 +38,7 @@ export function useMessageActions(
   messagesEndRef: React.RefObject<HTMLDivElement>,
   chatSettings?: ChatSettings | null,
 ) {
-  const queryClient = useQueryClient()
+  const { save: saveChatSettings } = useChatSettingsMutation()
   // State for memory cascade dialog
   const [memoryCascadeConfirmation, setMemoryCascadeConfirmation] = useState<MemoryCascadeConfirmation | null>(null)
   // What editing the open line would disturb (fetched when the editor opens),
@@ -167,27 +166,17 @@ export function useMessageActions(
   ) => {
     if (!memoryCascadeConfirmation) return
 
-    // If user wants to remember, update settings
+    // If user wants to remember, update settings. The one settings writer
+    // publishes the remembered choice to the shared query, so "don't ask me
+    // again" holds for the next dialog too (bug 134, write side). A failed
+    // save never blocks the deletion.
     if (rememberChoice) {
-      try {
-        await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            memoryCascadePreferences: {
-              onMessageDelete: action,
-              onSwipeRegenerate: chatSettings?.memoryCascadePreferences?.onSwipeRegenerate || 'DELETE_MEMORIES',
-            },
-          }),
-        })
-        // The settings row this hook reads from is the shared query, so the
-        // remembered choice has to be published there too — otherwise "don't
-        // ask me again" holds for this dialog and is forgotten by the next one
-        // until something else refetches (bug 134, write side).
-        await queryClient.invalidateQueries({ queryKey: queryKeys.settings.chat })
-      } catch {
-        // Don't fail if settings update fails
-      }
+      await saveChatSettings({
+        memoryCascadePreferences: {
+          onMessageDelete: action,
+          onSwipeRegenerate: chatSettings?.memoryCascadePreferences?.onSwipeRegenerate || 'DELETE_MEMORIES',
+        },
+      })
     }
 
     // Complete the deletion with the chosen action

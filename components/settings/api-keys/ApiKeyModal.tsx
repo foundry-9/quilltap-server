@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
+import { useProvidersQuery } from '@/lib/hooks/use-profiles'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import ErrorAlert from '@/components/ui/ErrorAlert'
-import { showSuccessToast } from '@/lib/toast'
+import { useAnnounceAssociations } from '@/hooks/useAutoAssociate'
 import type { ProfileAssociation } from './types'
 import { providerAcceptsApiKey, type ApiKeyConfigRequirements } from '@/lib/llm/api-key-support'
 
@@ -45,51 +46,39 @@ interface ProviderOption {
   label: string
 }
 
+interface KeyProviderRow {
+  name: string
+  displayName: string
+  configRequirements?: ApiKeyConfigRequirements
+}
+
+const EMPTY_OPTIONS: ProviderOption[] = []
+
+/**
+ * Offered on "may this provider hold a key?", not "must it?" — the two
+ * answers differ for OpenAI-Compatible, whose hosted endpoints need a bearer
+ * token its local ones have no use for, and asking the stricter question left
+ * no way to create such a key at all (Bug 81).
+ */
+function toKeyProviderOptions(rows: KeyProviderRow[]): ProviderOption[] {
+  return rows
+    .filter((p) => providerAcceptsApiKey(p.configRequirements))
+    .map((p) => ({ value: p.name, label: p.displayName }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
 export function ApiKeyModal({ isOpen, onClose, onSuccess, initialProvider }: ApiKeyModalProps) {
-  const [providers, setProviders] = useState<ProviderOption[]>([])
-  const [providersLoading, setProvidersLoading] = useState(true)
+  // Providers that can hold an API key, from the shared providers list.
+  const { data: providers = EMPTY_OPTIONS, isPending: providersLoading } = useProvidersQuery<
+    KeyProviderRow,
+    ProviderOption[]
+  >({ select: toKeyProviderOptions })
 
   const form = useFormState<ApiKeyFormData>({
     label: '',
     provider: '',
     apiKey: '',
   })
-
-  // Fetch providers that can hold an API key
-  useEffect(() => {
-    const fetchProviders = async () => {
-      try {
-        const response = await fetch('/api/v1/providers')
-        const data = await response.json()
-
-        interface ProviderData {
-          name: string
-          displayName: string
-          configRequirements?: ApiKeyConfigRequirements
-        }
-
-        // Offered on "may this provider hold a key?", not "must it?" — the two
-        // answers differ for OpenAI-Compatible, whose hosted endpoints need a
-        // bearer token its local ones have no use for, and asking the stricter
-        // question left no way to create such a key at all (Bug 81).
-        const apiKeyProviders = (data.providers as ProviderData[])
-          .filter((p) => providerAcceptsApiKey(p.configRequirements))
-          .map((p) => ({
-            value: p.name,
-            label: p.displayName,
-          }))
-          .sort((a, b) => a.label.localeCompare(b.label))
-
-        setProviders(apiKeyProviders)
-      } catch (err) {
-        console.error('Failed to fetch providers for API key modal', { error: err })
-        // Fallback to empty - user will see an empty dropdown
-      } finally {
-        setProvidersLoading(false)
-      }
-    }
-    fetchProviders()
-  }, [])
 
   // Preselect the provider each time the modal opens with one. The form
   // persists across openings (it is reset on close), so this runs on the
@@ -103,6 +92,7 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess, initialProvider }: Api
   }, [isOpen, initialProvider])
 
   const createKey = useAsyncOperation<ApiKeyResponse>()
+  const announceAssociations = useAnnounceAssociations()
 
   const handleSubmit = async () => {
     const result = await createKey.execute(async () => {
@@ -120,15 +110,7 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess, initialProvider }: Api
     })
 
     if (result) {
-      // Show toasts for any auto-associations
-      if (result.associations && result.associations.length > 0) {
-        result.associations.forEach((assoc) => {
-          showSuccessToast(
-            `${assoc.profileName} linked to API key "${result.label}"`,
-            4000
-          )
-        })
-      }
+      announceAssociations(result.associations)
 
       form.resetForm()
       onSuccess()

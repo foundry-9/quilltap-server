@@ -645,7 +645,7 @@
    {"when":"","properties":[{"property":"color","vars":["--color-foreground","--qt-brand-fg"]},{"property":"font-family","vars":[],"literal":true},{"property":"font-size","vars":[],"literal":true},{"property":"font-weight","vars":[],"literal":true}]}
   ],
   "qt-spinner": [
-   {"when":"","properties":[{"property":"animation","vars":["--animate-spin"]},{"property":"border","vars":["--color-primary","--qt-spinner-track"]},{"property":"border-color","vars":[],"literal":true},{"property":"border-radius","vars":[],"literal":true},{"property":"border-right-color","vars":["--color-primary","--qt-spinner-indicator"]},{"property":"border-style","vars":[],"literal":true},{"property":"border-top-color","vars":[],"literal":true},{"property":"border-width","vars":[],"literal":true},{"property":"height","vars":["--spacing"]},{"property":"width","vars":["--spacing"]}]}
+   {"when":"","properties":[{"property":"animation","vars":["--animate-spin"]},{"property":"border","vars":["--color-primary","--qt-spinner-track"]},{"property":"border-radius","vars":[],"literal":true},{"property":"border-right-color","vars":["--color-primary","--qt-spinner-indicator"]},{"property":"height","vars":["--spacing"]},{"property":"width","vars":["--spacing"]}]}
   ],
   "qt-thinking-indicator": [
    {"when":"","properties":[{"property":"animation","vars":["--qt-thinking-duration","--qt-thinking-easing"],"literal":true},{"property":"transform","vars":["--qt-thinking-angle-rest"]},{"property":"transform-origin","vars":["--qt-thinking-origin"]}]}

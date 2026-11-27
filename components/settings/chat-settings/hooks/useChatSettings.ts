@@ -14,7 +14,7 @@
  * @module components/settings/chat-settings/hooks/useChatSettings
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
@@ -59,14 +59,11 @@ import {
 interface UseChatSettingsReturn {
   settings: ChatSettings | null
   loading: boolean
-  error: string | null
   saving: boolean
-  success: boolean
   connectionProfiles: ConnectionProfile[]
   embeddingProfiles: EmbeddingProfile[]
   imageProfiles: ImageProfile[]
   loadingProfiles: boolean
-  fetchSettings: () => Promise<void>
   handleAvatarModeChange: (mode: AvatarDisplayMode) => Promise<void>
   handleAvatarStyleChange: (style: AvatarDisplayStyle) => Promise<void>
   handleCheapLLMUpdate: (updates: Partial<CheapLLMSettings>) => Promise<void>
@@ -104,25 +101,12 @@ interface UseChatSettingsReturn {
 
 export function useChatSettings(): UseChatSettingsReturn {
   const queryClient = useQueryClient()
-  const { data: settingsData, isLoading, error: loadError, refetch } = useChatSettingsQuery()
+  const { data: settingsData, isLoading } = useChatSettingsQuery()
   const { data: connectionProfiles } = useConnectionProfilesQuery<ConnectionProfile>()
   const { data: embeddingProfiles } = useEmbeddingProfilesQuery<EmbeddingProfile>()
   const { data: imageProfiles } = useImageProfilesQuery<ImageProfile>()
 
-  // The "Saved" flash beside the tab's heading.
-  const [success, setSuccess] = useState(false)
-  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const flashSuccess = useCallback(() => {
-    setSuccess(true)
-    if (successTimer.current) clearTimeout(successTimer.current)
-    successTimer.current = setTimeout(() => setSuccess(false), 2000)
-  }, [])
-
-  const { save, saving } = useChatSettingsMutation({ onSaved: flashSuccess })
-
-  const fetchSettings = useCallback(async () => {
-    await refetch()
-  }, [refetch])
+  const { save, saving } = useChatSettingsMutation()
 
   const handlers = useMemo(() => {
     /** Write a patch once the row is loaded (a merge needs the current value). */
@@ -228,14 +212,11 @@ export function useChatSettings(): UseChatSettingsReturn {
   return {
     settings: settingsData ?? null,
     loading: isLoading,
-    error: loadError ? (loadError instanceof Error ? loadError.message : 'An error occurred') : null,
     saving,
-    success,
     connectionProfiles: connectionProfiles ?? [],
     embeddingProfiles: embeddingProfiles ?? [],
     imageProfiles: imageProfiles ?? [],
     loadingProfiles: !connectionProfiles || !embeddingProfiles || !imageProfiles,
-    fetchSettings,
     ...handlers,
   }
 }

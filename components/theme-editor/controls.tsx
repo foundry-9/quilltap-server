@@ -340,19 +340,47 @@ function LengthPartField({
   )
 }
 
+/** The colour picker beside a colour's text. What it picks keeps the alpha of `value`, the colour it replaces. */
+function ColourPicker({ value, label, onPick }: { value: string | null; label: string; onPick: (colour: string) => void }) {
+  return (
+    <input
+      type="color"
+      className="w-8 h-8 p-0 border qt-border-default rounded cursor-pointer flex-shrink-0"
+      value={pickerHex(value) ?? '#000000'}
+      aria-label={label}
+      onChange={(e) => onPick(pickedValue(e.target.value, value))}
+    />
+  )
+}
+
+/** A timing function as text, with the easing keywords offered. */
+function EasingField({ value, label, onCommit }: { value: string; label: string; onCommit: (easing: string) => void }) {
+  const list = useId()
+  return (
+    <>
+      <CommitText
+        value={value}
+        label={label}
+        list={list}
+        accept={isEasing}
+        message={(t) => (isEasing(t) ? null : `“${t}” is not a timing function. It will not be applied.`)}
+        onCommit={onCommit}
+      />
+      <datalist id={list}>
+        {EASING_KEYWORDS.map((k) => (
+          <option key={k} value={k} />
+        ))}
+      </datalist>
+    </>
+  )
+}
+
 /** A colour inside a larger value (a shadow layer's): a picker and the text, which may also be a `var()`. */
 function InlineColour({ value, label, onChange }: { value: string; label: string; onChange: (colour: string) => void }) {
-  const hex = pickerHex(value)
   const accept = (t: string) => isAcceptedColour(t) || /^var\(--[\w-]+(\s*,[^)]*)?\)$/.test(t) || /^(currentcolor|transparent)$/i.test(t)
   return (
     <span className="flex items-start gap-1 min-w-0 flex-1">
-      <input
-        type="color"
-        className="w-8 h-8 p-0 border qt-border-default rounded cursor-pointer flex-shrink-0"
-        value={hex ?? '#000000'}
-        aria-label={`${label} picker`}
-        onChange={(e) => onChange(pickedValue(e.target.value, value))}
-      />
+      <ColourPicker value={value} label={`${label} picker`} onPick={onChange} />
       <CommitText
         value={value}
         label={label}
@@ -470,16 +498,9 @@ function Typed<T>({
 /** A colour picker beside the text field. The picker keeps the alpha of the value it replaces. */
 export function ColorControl(props: ControlProps) {
   const { label, literal, onCommit } = props
-  const hex = pickerHex(literal)
   return (
     <div className="flex items-start gap-2 min-w-0 flex-1">
-      <input
-        type="color"
-        className="w-8 h-8 p-0 border qt-border-default rounded cursor-pointer flex-shrink-0"
-        value={hex ?? '#000000'}
-        aria-label={`${label} colour picker`}
-        onChange={(e) => onCommit(pickedValue(e.target.value, literal))}
-      />
+      <ColourPicker value={literal} label={`${label} colour picker`} onPick={onCommit} />
       <TextControl {...props} />
     </div>
   )
@@ -807,7 +828,6 @@ export function DurationControl(props: ControlProps) {
 const NO_DELAY: Quantity = { number: 0, unit: 'ms' }
 
 function TransitionLayerFields({ layer, label, onChange }: { layer: TransitionLayer; label: string; onChange: (l: TransitionLayer) => void }) {
-  const easingList = useId()
   return (
     <div className="@container">
     <div className="grid gap-1 @sm:grid-cols-2">
@@ -827,19 +847,7 @@ function TransitionLayerFields({ layer, label, onChange }: { layer: TransitionLa
       </label>
       <label className="flex items-center gap-1 qt-text-xs qt-text-secondary">
         <span className="w-16 flex-shrink-0">Easing</span>
-        <CommitText
-          value={layer.easing ?? 'ease'}
-          label={`${label}, easing`}
-          list={easingList}
-          accept={isEasing}
-          message={(t) => (isEasing(t) ? null : `“${t}” is not a timing function. It will not be applied.`)}
-          onCommit={(easing) => onChange({ ...layer, easing })}
-        />
-        <datalist id={easingList}>
-          {EASING_KEYWORDS.map((k) => (
-            <option key={k} value={k} />
-          ))}
-        </datalist>
+        <EasingField value={layer.easing ?? 'ease'} label={`${label}, easing`} onCommit={(easing) => onChange({ ...layer, easing })} />
       </label>
       <label className="flex items-center gap-1 qt-text-xs qt-text-secondary">
         <span className="w-16 flex-shrink-0">Delay</span>
@@ -1049,24 +1057,7 @@ export function NumberControl(props: ControlProps) {
 
 /** A timing function (a primitive of type easing), with the keywords offered. */
 export function EasingControl(props: ControlProps) {
-  const list = useId()
-  return (
-    <>
-      <CommitText
-        value={props.value}
-        label={`${props.label} value`}
-        list={list}
-        accept={isEasing}
-        message={(t) => (isEasing(t) ? null : `“${t}” is not a timing function. It will not be applied.`)}
-        onCommit={props.onCommit}
-      />
-      <datalist id={list}>
-        {EASING_KEYWORDS.map((k) => (
-          <option key={k} value={k} />
-        ))}
-      </datalist>
-    </>
-  )
+  return <EasingField value={props.value} label={`${props.label} value`} onCommit={props.onCommit} />
 }
 
 const CONTROLS: Partial<Record<TokenType, (props: ControlProps) => ReactNode>> = {

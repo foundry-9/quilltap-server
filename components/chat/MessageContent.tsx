@@ -3,14 +3,11 @@
 import { useMemo, ReactNode } from 'react'
 import Link from 'next/link'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkBreaks from 'remark-breaks'
-import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import remarkSmartypants from 'remark-smartypants'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
-import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math'
-import { SMARTYPANTS_OPTIONS, shouldCurlQuotes } from '@/lib/markdown/typography'
+import { normalizeMathDelimiters } from '@/lib/markdown/math'
+import { shouldCurlQuotes } from '@/lib/markdown/typography'
+import { remarkPluginsFor } from '@/lib/markdown/remark-plugins'
 import { CodeBlockWithCopy } from '@/components/chat/CodeBlockWithCopy'
 import { DiagramBlock } from '@/components/chat/diagrams/DiagramBlock'
 import { diagramEngineFor, type DiagramStyle } from '@/lib/markdown/diagrams'
@@ -294,16 +291,9 @@ export default function MessageContent({
     dialogueDetection: dialogueConfig,
   })
 
-  // The remark plugin list is rebuilt only when the typographer state flips.
-  // Smart typography sits after remarkBreaks and before react-markdown's
-  // internal remark-rehype, mirroring the server's insertion point exactly.
-  const remarkPlugins = useMemo(
-    () =>
-      curlQuotes
-        ? [remarkGfm, [remarkMath, REMARK_MATH_OPTIONS], remarkBreaks, [remarkSmartypants, SMARTYPANTS_OPTIONS]]
-        : [remarkGfm, [remarkMath, REMARK_MATH_OPTIONS], remarkBreaks],
-    [curlQuotes],
-  ) as React.ComponentProps<typeof ReactMarkdown>['remarkPlugins']
+  // The remark plugins are the one ordered list the server pre-render also runs
+  // (lib/markdown/remark-plugins.ts); a stable reference per typographer state.
+  const remarkPlugins = remarkPluginsFor(curlQuotes) as React.ComponentProps<typeof ReactMarkdown>['remarkPlugins']
 
   // Name chips: katex first, so math is already spans the marker pass skips.
   const rehypePlugins = useMemo(
@@ -487,18 +477,9 @@ export default function MessageContent({
       <div className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto message-content ${className}`}>
         <MentionChipsContext.Provider value={mentions ?? null}>
         <ReactMarkdown
-          // remark-breaks turns a single newline into a hard <br>. In chat, an
-          // author who hits Enter means a line break (the way Slack/Discord/GitHub
-          // comments behave), so soft breaks should be preserved rather than
-          // collapsed to a space the way CommonMark does by default. Blank-line
-          // paragraph separation still works as before.
-          // remark-math + rehype-katex render $$…$$ math (single-dollar math is
-          // off — see lib/markdown/math.ts). remark-smartypants curls quotes
-          // when the display setting is on (Layer 1.6, Part A — quotes only,
-          // never dashes; see lib/markdown/typography.ts). Must stay in sync
-          // with the server pipeline in
-          // lib/services/markdown-renderer.service.ts — if the two lists
-          // disagree, a message changes appearance when it stops streaming.
+          // The remark list (gfm, math, breaks, optional smart quotes) is shared
+          // with the server pre-render — see lib/markdown/remark-plugins.ts.
+          // rehype-katex renders the math; the server's rehype list runs it too.
           remarkPlugins={remarkPlugins}
           rehypePlugins={rehypePlugins}
           // react-markdown's default URL sanitizer only allows http(s)/mailto/

@@ -21,13 +21,13 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
 import {
-  GENERAL_INVENTORY_CONTAINER,
   GENERAL_INVENTORY_NAME,
   decodeInventoryContainer,
   encodeInventoryContainer,
   type InventoryContainer,
 } from '@/lib/inventory/container'
 import { useInventoryArchetypes } from '@/lib/hooks/use-inventory'
+import { ContainerSelect } from '@/components/item-browser/ContainerSelect'
 import type { InventoryItemActions } from './hooks/useInventoryItemActions'
 import { describeInventoryRefusal } from './hooks/useInventoryItemActions'
 import type { InventoryCatalogue } from './InventoryTransferDialog'
@@ -85,7 +85,6 @@ export function InventoryInstantiateDialog({
       onClose={onClose}
       title={archetype ? `Instantiate "${archetype.title || archetype.name}"` : 'Make an object from an archetype'}
       maxWidth="lg"
-      overlayClassName="z-[70]"
       closeOnClickOutside={!working}
       footer={(
         <div className="flex justify-end gap-2">
@@ -102,33 +101,15 @@ export function InventoryInstantiateDialog({
       {archetype ? (
         <>
           <label className="text-sm qt-text" htmlFor="inventory-instantiate-target">Into</label>
-          <select id="inventory-instantiate-target" className="qt-select w-full mt-1" value={target} onChange={(e) => setTarget(e.target.value)}>
-            <option value="" disabled>Choose an inventory</option>
-            {catalogue.characters.length > 0 && (
-              <optgroup label="Characters">
-                {catalogue.characters.map((c) => (
-                  <option key={c.id} value={encodeInventoryContainer({ scope: 'character', id: c.id })}>{c.name}</option>
-                ))}
-              </optgroup>
-            )}
-            <optgroup label="General">
-              <option value={encodeInventoryContainer(GENERAL_INVENTORY_CONTAINER)}>{GENERAL_INVENTORY_NAME}</option>
-            </optgroup>
-            {catalogue.projects.length > 0 && (
-              <optgroup label="Projects">
-                {catalogue.projects.map((p) => (
-                  <option key={p.id} value={encodeInventoryContainer({ scope: 'project', id: p.id })}>{p.name}</option>
-                ))}
-              </optgroup>
-            )}
-            {catalogue.groups.length > 0 && (
-              <optgroup label="Groups">
-                {catalogue.groups.map((g) => (
-                  <option key={g.id} value={encodeInventoryContainer({ scope: 'group', id: g.id })}>{g.name}</option>
-                ))}
-              </optgroup>
-            )}
-          </select>
+          <ContainerSelect
+            id="inventory-instantiate-target"
+            className="qt-select w-full mt-1"
+            value={target}
+            onChange={setTarget}
+            catalogue={catalogue}
+            generalName={GENERAL_INVENTORY_NAME}
+            placeholder="Choose an inventory"
+          />
           <p className="qt-text-xs qt-text-secondary mt-1">
             The destination must be able to reach the archetype (a character reaches their own vault, their groups, a named project and General).
           </p>

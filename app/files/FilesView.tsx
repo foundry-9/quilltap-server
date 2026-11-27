@@ -7,14 +7,11 @@
  * Uses the FileBrowser component for navigation.
  */
 
-import { Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
 import FileBrowser from '@/components/files/FileBrowser'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 
-function FilesPageContent({ bgStyle }: { bgStyle: ReturnType<typeof useSubsystemBackgroundStyle> }) {
-  const searchParams = useSearchParams()
-  const selectedFileId = searchParams.get('fileId')
+export function FilesView() {
+  const bgStyle = useSubsystemBackgroundStyle('commonplace-book')
 
   return (
     <div className="qt-page-container qt-text" style={bgStyle}>
@@ -44,20 +41,5 @@ function FilesPageContent({ bgStyle }: { bgStyle: ReturnType<typeof useSubsystem
         </ul>
       </div>
     </div>
-  )
-}
-
-export function FilesView() {
-  const bgStyle = useSubsystemBackgroundStyle('commonplace-book')
-  return (
-    <Suspense fallback={
-      <div className="qt-page-container qt-text" style={bgStyle}>
-        <div className="flex min-h-screen items-center justify-center">
-          <p className="text-lg qt-text">Loading files...</p>
-        </div>
-      </div>
-    }>
-      <FilesPageContent bgStyle={bgStyle} />
-    </Suspense>
   )
 }

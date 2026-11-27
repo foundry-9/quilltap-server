@@ -1,16 +1,14 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef, useId } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useTagStyles } from '@/components/providers/tag-style-provider'
+import { useTagsQuery } from '@/lib/hooks/use-tags'
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles'
 import type { TagVisualStyle } from '@/lib/schemas/types'
 import { TagBadge } from '@/components/tags/tag-badge'
-import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { getErrorMessage } from '@/lib/error-utils'
 import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
 
 interface TagUsageCount {
@@ -31,65 +29,64 @@ interface TagOption {
   totalUsage?: number
 }
 
+const EMPTY_TAGS: TagOption[] = []
+
+type TagPatch = { visualStyle?: TagVisualStyle | null; quickHide?: boolean }
+
 export default function TagsTab() {
   const id = useId()
+  const queryClient = useQueryClient()
   const [tagSaving, setTagSaving] = useState<string | null>(null)
-  const [tagOptions, setTagOptions] = useState<TagOption[]>([])
   const [selectedTagId, setSelectedTagId] = useState('')
   const [quickHideSavingId, setQuickHideSavingId] = useState<string | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState(false)
-  const { refresh: refreshTagStyles } = useTagStyles()
-  const { refresh: refreshQuickHideTags } = useQuickHide()
   const colorDebounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
-  const { data, isLoading, error: loadError, refetch: mutateTags } = useQuery({
-    queryKey: queryKeys.tags.list(),
-    queryFn: ({ signal }) => apiFetch<{ tags: TagOption[] }>('/api/v1/tags', { signal }),
-  })
+  // The shared tag list: the badges' styles and the quick-hide menu read the
+  // same cache entry, so patching it here reaches them too.
+  const { data, isLoading, refetch: mutateTags } = useTagsQuery<TagOption>()
+  const tagOptions = data ?? EMPTY_TAGS
 
-  // Copy the query data into local state the UI mutates
-  useEffect(() => {
-    if (data?.tags) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- tags query data is copied into local state that the save/delete handlers update optimistically
-      setTagOptions(data.tags)
-    }
-  }, [data?.tags])
+  /** Patch one tag in the cached list (the edits show at once; the server's answer follows). */
+  const patchCachedTag = useCallback(
+    (tagId: string, patch: Partial<TagOption>) => {
+      queryClient.setQueryData<{ tags: TagOption[] }>(queryKeys.tags.list(), (prev) =>
+        prev && { ...prev, tags: prev.tags.map((option) => (option.id === tagId ? { ...option, ...patch } : option)) },
+      )
+    },
+    [queryClient],
+  )
+
+  const updateTagMutation = useMutation({
+    mutationFn: ({ tagId, patch }: { tagId: string; patch: TagPatch }) =>
+      apiFetch<{ tag: TagOption }>(`/api/v1/tags/${tagId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      }),
+  })
+  const { mutateAsync: updateTagAsync } = updateTagMutation
+  const deleteTagMutation = useMutation({
+    mutationFn: (tagId: string) => apiFetch(`/api/v1/tags/${tagId}`, { method: 'DELETE' }),
+  })
+  const { mutateAsync: deleteTagAsync } = deleteTagMutation
+  const deleting = deleteTagMutation.isPending
 
   const updateTagVisualStyle = useCallback(async (tagId: string, visualStyle: TagVisualStyle | null) => {
     setTagSaving(tagId)
 
     try {
-      const res = await fetch(`/api/v1/tags/${tagId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visualStyle }),
-      })
+      const { tag } = await updateTagAsync({ tagId, patch: { visualStyle } })
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to update tag style')
-      }
-
-      const { tag } = await res.json()
-
-      // Update local state
-      setTagOptions(prev =>
-        prev.map(option =>
-          option.id === tagId ? { ...option, visualStyle: tag.visualStyle ?? null } : option
-        )
-      )
-
-      // Refresh the global tag style context
-      await refreshTagStyles()
+      patchCachedTag(tagId, { visualStyle: tag.visualStyle ?? null })
 
       showSuccessToast('Tag style saved')
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'An error occurred')
+      showErrorToast(apiErrorMessage(err, 'An error occurred'))
     } finally {
       setTagSaving(null)
     }
-  }, [refreshTagStyles])
+  }, [updateTagAsync, patchCachedTag])
 
   const handleTagStyleFieldChange = useCallback((tagId: string, updates: Partial<TagVisualStyle>) => {
     const tag = tagOptions.find(t => t.id === tagId)
@@ -102,15 +99,11 @@ export default function TagsTab() {
     }
 
     // Update local state immediately for responsiveness
-    setTagOptions(prev =>
-      prev.map(option =>
-        option.id === tagId ? { ...option, visualStyle: newStyle } : option
-      )
-    )
+    patchCachedTag(tagId, { visualStyle: newStyle })
 
     // Persist to server
     updateTagVisualStyle(tagId, newStyle)
-  }, [tagOptions, updateTagVisualStyle])
+  }, [tagOptions, patchCachedTag, updateTagVisualStyle])
 
   // Debounced handler for color picker changes to avoid toast spam while dragging
   const handleColorChange = useCallback((tagId: string, updates: Partial<TagVisualStyle>) => {
@@ -124,11 +117,7 @@ export default function TagsTab() {
     }
 
     // Update local state immediately for instant preview
-    setTagOptions(prev =>
-      prev.map(option =>
-        option.id === tagId ? { ...option, visualStyle: newStyle } : option
-      )
-    )
+    patchCachedTag(tagId, { visualStyle: newStyle })
 
     // Clear any existing debounce timer for this tag
     const existingTimer = colorDebounceTimers.current.get(tagId)
@@ -143,7 +132,7 @@ export default function TagsTab() {
     }, 500)
 
     colorDebounceTimers.current.set(tagId, timer)
-  }, [tagOptions, updateTagVisualStyle])
+  }, [tagOptions, patchCachedTag, updateTagVisualStyle])
 
   // Clean up debounce timers on unmount
   useEffect(() => {
@@ -170,66 +159,33 @@ export default function TagsTab() {
     async (tagId: string, nextValue: boolean) => {
       setQuickHideSavingId(tagId)
       try {
-        const res = await fetch(`/api/v1/tags/${tagId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quickHide: nextValue }),
-        })
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update quick-hide')
-        }
-
-        const { tag } = await res.json()
-        setTagOptions(prev =>
-          prev.map(option =>
-            option.id === tagId ? { ...option, quickHide: tag.quickHide } : option
-          )
-        )
-        await refreshQuickHideTags()
+        const { tag } = await updateTagAsync({ tagId, patch: { quickHide: nextValue } })
+        patchCachedTag(tagId, { quickHide: tag.quickHide })
         showSuccessToast('Quick-hide setting saved')
       } catch (err) {
-        console.error('Error toggling quick-hide', { error: err instanceof Error ? err.message : String(err) })
-        showErrorToast(err instanceof Error ? err.message : 'Failed to update quick-hide')
+        const message = apiErrorMessage(err, 'Failed to update quick-hide')
+        console.error('Error toggling quick-hide', { error: message })
+        showErrorToast(message)
       } finally {
         setQuickHideSavingId(current => (current === tagId ? null : current))
       }
     },
-    [refreshQuickHideTags]
+    [updateTagAsync, patchCachedTag]
   )
 
   const handleDeleteTag = useCallback(async (tagId: string) => {
-    setDeleting(true)
     try {
-      const res = await fetch(`/api/v1/tags/${tagId}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to delete tag')
-      }
+      await deleteTagAsync(tagId)
 
       showSuccessToast('Tag deleted')
       setDeleteConfirming(null)
 
-      // Refresh everything
-      await Promise.all([
-        mutateTags(),
-        refreshTagStyles(),
-        refreshQuickHideTags(),
-      ])
+      // Every reader of the tag list refreshes from the one entry
+      await mutateTags()
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to delete tag')
-    } finally {
-      setDeleting(false)
+      showErrorToast(apiErrorMessage(err, 'Failed to delete tag'))
     }
-  }, [mutateTags, refreshTagStyles, refreshQuickHideTags])
-
-  const tagLabelLookup = useMemo(() => {
-    const entries = new Map<string, string>()
-    for (const tag of tagOptions) {
-      entries.set(tag.id, tag.name)
-    }
-    return entries
-  }, [tagOptions])
+  }, [deleteTagAsync, mutateTags])
 
   // Tags that have a visual style defined
   const tagsWithStyles = useMemo(
@@ -254,7 +210,7 @@ export default function TagsTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold mb-4">Tag Appearance</h2>
+        <h2 className="qt-heading-3 mb-4">Tag Appearance</h2>
         <p className="qt-text-secondary mb-4">
           Map tags to custom emojis and colors. Tags without a custom style use the default gray border/background and show only the tag name.
         </p>
@@ -293,7 +249,7 @@ export default function TagsTab() {
           {tagsWithStyles.length > 0 ? (
             <div className="grid gap-4 grid-cols-1 landscape:grid-cols-3 lg:grid-cols-4">
               {tagsWithStyles.map((tag) => {
-                const label = tagLabelLookup.get(tag.id) || 'Unknown tag'
+                const label = tag.name
                 const mergedStyle = mergeWithDefaultTagStyle(tag.visualStyle)
                 const quickHideEnabled = Boolean(tag.quickHide)
                 const isSaving = tagSaving === tag.id
@@ -329,7 +285,7 @@ export default function TagsTab() {
                             checked={mergedStyle.emojiOnly ?? false}
                             onChange={(e) => handleTagStyleFieldChange(tag.id, { emojiOnly: e.target.checked })}
                             disabled={isSaving || !mergedStyle.emoji}
-                            className="rounded"
+                            className="qt-checkbox"
                           />
                           <span>Show emoji only</span>
                         </label>
@@ -340,7 +296,7 @@ export default function TagsTab() {
                             checked={mergedStyle.bold ?? false}
                             onChange={(e) => handleTagStyleFieldChange(tag.id, { bold: e.target.checked })}
                             disabled={isSaving}
-                            className="rounded"
+                            className="qt-checkbox"
                           />
                           <span className="font-bold">Bold</span>
                         </label>
@@ -351,7 +307,7 @@ export default function TagsTab() {
                             checked={mergedStyle.italic ?? false}
                             onChange={(e) => handleTagStyleFieldChange(tag.id, { italic: e.target.checked })}
                             disabled={isSaving}
-                            className="rounded"
+                            className="qt-checkbox"
                           />
                           <span className="italic">Italic</span>
                         </label>
@@ -362,7 +318,7 @@ export default function TagsTab() {
                             checked={mergedStyle.strikethrough ?? false}
                             onChange={(e) => handleTagStyleFieldChange(tag.id, { strikethrough: e.target.checked })}
                             disabled={isSaving}
-                            className="rounded"
+                            className="qt-checkbox"
                           />
                           <span className="line-through">Strikethrough</span>
                         </label>
@@ -374,7 +330,7 @@ export default function TagsTab() {
                               checked={quickHideEnabled}
                               onChange={(e) => handleQuickHideToggle(tag.id, e.target.checked)}
                               disabled={quickHideSavingId === tag.id}
-                              className="rounded"
+                              className="qt-checkbox"
                             />
                             <span>Enable quick-hide button</span>
                           </label>
@@ -429,7 +385,7 @@ export default function TagsTab() {
 
       {/* Tag Management Section */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Tag Management</h2>
+        <h2 className="qt-heading-3 mb-4">Tag Management</h2>
         <p className="qt-text-secondary mb-4">
           View all tags and their usage across your workspace. Delete tags you no longer need — they will be removed from all entities that use them.
         </p>

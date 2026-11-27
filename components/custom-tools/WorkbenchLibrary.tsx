@@ -14,7 +14,8 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
-import { apiFetch } from '@/lib/query/fetcher'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { showConfirmation } from '@/lib/alert'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
@@ -86,7 +87,7 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
       queryClient.invalidateQueries({ queryKey: queryKeys.customTools.all })
     },
     onError: (error) => {
-      showErrorToast(error instanceof Error ? error.message : 'The contrivance would not be removed.')
+      showErrorToast(apiErrorMessage(error, 'The contrivance would not be removed.'))
     },
   })
 
@@ -147,13 +148,12 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
       const file = await apiFetch<{ content: string }>(buildMountFileItemUrl(tool.mountPointId, tool.definitionPath))
       onDuplicate(file.content)
     } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'The definition could not be read.')
+      showErrorToast(apiErrorMessage(error, 'The definition could not be read.'))
     }
   }
 
-  const handleDelete = (tool: { mountPointId: string; definitionPath: string; title: string }) => {
-     
-    if (!window.confirm(`Clear ${tool.title} from the table? The file ${tool.definitionPath} will be deleted.`)) return
+  const handleDelete = async (tool: { mountPointId: string; definitionPath: string; title: string }) => {
+    if (!(await showConfirmation(`Clear ${tool.title} from the table? The file ${tool.definitionPath} will be deleted.`))) return
     deleteMutation.mutate({ mountPointId: tool.mountPointId, path: tool.definitionPath, title: tool.title })
   }
 
@@ -183,6 +183,7 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
             className="qt-button qt-button-ghost qt-button-sm"
             onClick={() => onOpen(tool.mountPointId, tool.definitionPath)}
             title="Open on the workbench"
+            aria-label="Open on the workbench"
           >
             <Icon name="pencil" className="w-4 h-4" />
           </button>
@@ -191,15 +192,17 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
             className="qt-button qt-button-ghost qt-button-sm"
             onClick={() => handleDuplicate(tool)}
             title="Duplicate as a new contrivance"
+            aria-label="Duplicate as a new contrivance"
           >
             <Icon name="copy" className="w-4 h-4" />
           </button>
           <button
             type="button"
             className="qt-button qt-button-ghost qt-button-sm"
-            onClick={() => handleDelete(tool)}
+            onClick={() => void handleDelete(tool)}
             disabled={deleteMutation.isPending}
             title="Delete the definition file"
+            aria-label="Delete the definition file"
           >
             <Icon name="trash" className="w-4 h-4" />
           </button>
@@ -309,9 +312,10 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
             type="button"
             className="qt-button qt-button-ghost qt-button-sm"
             onClick={() =>
-              handleDelete({ mountPointId: error.mountPointId, definitionPath: error.definitionPath, title: error.definitionPath })
+              void handleDelete({ mountPointId: error.mountPointId, definitionPath: error.definitionPath, title: error.definitionPath })
             }
             title="Delete the definition file"
+            aria-label="Delete the definition file"
           >
             <Icon name="trash" className="w-4 h-4" />
           </button>
@@ -374,7 +378,7 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
 
         {libraryQuery.isError && (
           <div className="text-sm qt-text-destructive py-4">
-            {libraryQuery.error instanceof Error ? libraryQuery.error.message : 'The library could not be read.'}
+            {apiErrorMessage(libraryQuery.error, 'The library could not be read.')}
           </div>
         )}
 

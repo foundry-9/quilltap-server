@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 
@@ -41,7 +42,7 @@ export function DataDirectorySection() {
   })
   const dirInfo = data || null
   const [opening, setOpening] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
   const [error, setError] = useState<string | null>(loadError ? (loadError instanceof Error ? loadError.message : 'Failed to load data directory info') : null)
 
   const handleOpenFolder = async () => {
@@ -70,14 +71,7 @@ export function DataDirectorySection() {
 
   const handleCopyPath = async () => {
     if (!dirInfo?.path) return
-
-    try {
-      await navigator.clipboard.writeText(dirInfo.path)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy to clipboard', { error: err })
-    }
+    await copy(dirInfo.path)
   }
 
   if (isLoading) {

@@ -2,6 +2,7 @@
 
 import { useCallback, useId, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { EmptyStatePanel } from '@/components/ui/EmptyState'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
@@ -14,6 +15,8 @@ import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
+import { deleteCharacter, deletionSummary, type CharacterDeleteOptions } from '@/components/characters/delete-character'
+import { characterAvatarSrc } from '@/lib/characters/avatar-src'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { processTemplate } from '@/lib/templates/processor'
@@ -160,98 +163,52 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     [characters, shouldHideByIds]
   )
 
-  const getAvatarSrc = (character: Character): string | null => {
-    if (character.defaultImage) {
-      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
-      const filepath = character.defaultImage.filepath
-      return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
-    }
-    return character.avatarUrl || null
-  }
-
   const openDeleteDialog = (character: Character) => {
     setDeleteDialogCharacter(character)
   }
 
-  const handleDeleteConfirm = async (options: { cascadeChats: boolean; cascadeImages: boolean }) => {
+  const handleDeleteConfirm = async (options: CharacterDeleteOptions) => {
     if (!deleteDialogCharacter) return
 
-    const id = deleteDialogCharacter.id
-    const params = new URLSearchParams()
-    if (options.cascadeChats) params.set('cascadeChats', 'true')
-    if (options.cascadeImages) params.set('cascadeImages', 'true')
-
     try {
-      const url = `/api/v1/characters/${id}${params.toString() ? `?${params.toString()}` : ''}`
-      const res = await fetch(url, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete character')
-
-      const result = await res.json()
+      const result = await deleteCharacter(deleteDialogCharacter.id, options, 'Failed to delete character')
       await mutateCharacters()
       setDeleteDialogCharacter(null)
-
-      // Show success message with details
-      const deletedItems: string[] = ['Character deleted']
-      if (result.deletedChats > 0) {
-        deletedItems.push(`${result.deletedChats} chat${result.deletedChats === 1 ? '' : 's'} deleted`)
-      }
-      if (result.deletedImages > 0) {
-        deletedItems.push(`${result.deletedImages} image${result.deletedImages === 1 ? '' : 's'} deleted`)
-      }
-      if (result.deletedMemories > 0) {
-        deletedItems.push(`${result.deletedMemories} memor${result.deletedMemories === 1 ? 'y' : 'ies'} deleted`)
-      }
-      showSuccessToast(deletedItems.join('. '))
-
+      showSuccessToast(deletionSummary(result, 'Character'))
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete character')
     }
   }
 
-  const toggleFavorite = async (e: React.MouseEvent, id: string) => {
+  // The card's three switches: one action route each, answered with the
+  // updated row, whose one flag is folded into the cached list.
+  const toggleFlag = async (
+    e: React.MouseEvent,
+    id: string,
+    action: 'favorite' | 'toggle-controlled-by' | 'toggle-carina',
+    field: 'isFavorite' | 'controlledBy' | 'canBeCarina',
+    failureMessage: string,
+  ) => {
     e.preventDefault()
     try {
-      const res = await fetch(`/api/v1/characters/${id}?action=favorite`, { method: 'POST' })
-      if (!res.ok) throw new Error('Failed to toggle favorite')
+      const res = await fetch(`/api/v1/characters/${id}?action=${action}`, { method: 'POST' })
+      if (!res.ok) throw new Error(failureMessage)
       const data = await res.json()
       await mutateCharacters(
-        (prev) => prev && { characters: prev.characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)) },
+        (prev) => prev && { characters: prev.characters.map((c) => (c.id === id ? { ...c, [field]: data.character[field] } : c)) },
         { revalidate: false }
       )
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle favorite')
+      showErrorToast(err instanceof Error ? err.message : failureMessage)
     }
   }
 
-  const toggleControlledBy = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault()
-    try {
-      const res = await fetch(`/api/v1/characters/${id}?action=toggle-controlled-by`, { method: 'POST' })
-      if (!res.ok) throw new Error('Failed to toggle controlled-by')
-      const data = await res.json()
-      await mutateCharacters(
-        (prev) => prev && { characters: prev.characters.map((c) => (c.id === id ? { ...c, controlledBy: data.character.controlledBy } : c)) },
-        { revalidate: false }
-      )
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle controlled-by')
-    }
-  }
-
-  const toggleCarina = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault()
-    try {
-      const res = await fetch(`/api/v1/characters/${id}?action=toggle-carina`, { method: 'POST' })
-      if (!res.ok) throw new Error('Failed to toggle Carina eligibility')
-      const data = await res.json()
-      await mutateCharacters(
-        (prev) => prev && { characters: prev.characters.map((c) => (c.id === id ? { ...c, canBeCarina: data.character.canBeCarina } : c)) },
-        { revalidate: false }
-      )
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle Carina eligibility')
-    }
-  }
+  const toggleFavorite = (e: React.MouseEvent, id: string) =>
+    toggleFlag(e, id, 'favorite', 'isFavorite', 'Failed to toggle favorite')
+  const toggleControlledBy = (e: React.MouseEvent, id: string) =>
+    toggleFlag(e, id, 'toggle-controlled-by', 'controlledBy', 'Failed to toggle controlled-by')
+  const toggleCarina = (e: React.MouseEvent, id: string) =>
+    toggleFlag(e, id, 'toggle-carina', 'canBeCarina', 'Failed to toggle Carina eligibility')
 
   const handleCardClick = (e: React.MouseEvent, characterId: string) => {
     // Don't navigate if clicking on a button, link, or interactive element
@@ -448,7 +405,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
 
       {/* Characters Section */}
       {visibleCharacters.length === 0 ? (
-        <div className="character-empty-state mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
+        <EmptyStatePanel className="character-empty-state">
           <p className="mb-4 text-lg qt-text-secondary">No characters yet</p>
           <Link
             href="/aurora/new"
@@ -456,7 +413,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
           >
             Create your first character
           </Link>
-        </div>
+        </EmptyStatePanel>
       ) : (
         <div className="character-card-grid mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {visibleCharacters.map((character) => (
@@ -467,10 +424,9 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center flex-grow gap-4">
-                  {getAvatarSrc(character) ? (
-                     
+                  {characterAvatarSrc(character) ? (
                     <img
-                      src={getAvatarSrc(character)!}
+                      src={characterAvatarSrc(character)!}
                       alt={character.name}
                       width={48}
                       height={48}
@@ -587,6 +543,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                       href={`/api/v1/characters/${character.id}?action=export&format=json`}
                       className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border qt-border-default qt-bg-muted/80 px-3 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted"
                       title="Export character data"
+                      aria-label={`Export ${character.name}`}
                     >
                       <Icon name="download" className="w-5 h-5" />
                     </a>
@@ -596,6 +553,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                   onClick={() => openDeleteDialog(character)}
                   className="character-card__action qt-button-destructive qt-shadow-sm"
                   title="Delete this character"
+                  aria-label={`Delete ${character.name}`}
                 >
                   <Icon name="trash" className="w-5 h-5" />
                 </button>

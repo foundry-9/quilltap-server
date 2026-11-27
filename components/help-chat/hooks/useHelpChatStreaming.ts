@@ -9,6 +9,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { getSettingsCard, getSettingsGroup, resolveSettingsHref } from '@/lib/settings/registry'
+import { readAgentSse } from '@/components/agent-stream/parse-agent-stream'
 
 export interface NavigationLink {
   url: string
@@ -24,6 +25,18 @@ interface StreamingState {
   /** Links extracted from help_search results — suggested pages based on search relevance */
   suggestedLinks: NavigationLink[]
   error: string | null
+}
+
+/** The help chat stream's events, as far as this hook reads them. */
+interface HelpStreamEvent {
+  content?: string
+  turnStart?: { participantId: string | null }
+  done?: boolean
+  messageId?: string
+  toolResult?: { name?: string; success?: boolean; result?: unknown }
+  status?: { participantId?: string | null }
+  error?: string
+  chainComplete?: boolean
 }
 
 interface UseHelpChatStreamingOptions {
@@ -124,155 +137,141 @@ export function useHelpChatStreaming({ chatId, onMessageComplete }: UseHelpChatS
         throw new Error(errorData.error || `HTTP ${res.status}`)
       }
 
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response body')
-
-      const decoder = new TextDecoder()
-      let buffer = ''
       let currentContent = ''
       const collectedLinks: NavigationLink[] = []
       const collectedSuggestions: NavigationLink[] = []
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+      const outcome = await readAgentSse(res, (raw) => {
+        // A handler that throws on an unexpected shape skips that one event.
+        const event = raw as HelpStreamEvent
+        try {
+          // Content chunk
+          if (event.content) {
+            currentContent += event.content
+            setState(prev => ({
+              ...prev,
+              isExecutingTools: false,
+              streamingContent: currentContent,
+            }))
+          }
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
+          // Turn start (multi-character)
+          if (event.turnStart) {
+            const { participantId } = event.turnStart
+            currentContent = '' // Reset for new character
+            setState(prev => ({
+              ...prev,
+              streamingContent: '',
+              streamingParticipantId: participantId,
+            }))
+          }
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const jsonStr = line.slice(6).trim()
-          if (!jsonStr) continue
-
-          try {
-            const event = JSON.parse(jsonStr)
-
-            // Content chunk
-            if (event.content) {
-              currentContent += event.content
-              setState(prev => ({
-                ...prev,
-                isExecutingTools: false,
-                streamingContent: currentContent,
-              }))
+          // Done event
+          if (event.done) {
+            const messageId = event.messageId
+            currentContent = '' // Reset for potential next character
+            setState(prev => ({
+              ...prev,
+              streamingContent: '',
+            }))
+            if (messageId) {
+              onMessageCompleteRef.current?.(messageId)
             }
+          }
 
-            // Turn start (multi-character)
-            if (event.turnStart) {
-              currentContent = '' // Reset for new character
-              setState(prev => ({
-                ...prev,
-                streamingContent: '',
-                streamingParticipantId: event.turnStart.participantId,
-              }))
-            }
-
-            // Done event
-            if (event.done) {
-              const messageId = event.messageId
-              currentContent = '' // Reset for potential next character
-              setState(prev => ({
-                ...prev,
-                streamingContent: '',
-              }))
-              if (messageId) {
-                onMessageCompleteRef.current?.(messageId)
-              }
-            }
-
-            // Navigate event (from help_navigate tool) — collect as a link
-            if (event.toolResult && event.toolResult.name === 'help_navigate' && event.toolResult.success) {
-              try {
-                const result = typeof event.toolResult.result === 'string'
-                  ? JSON.parse(event.toolResult.result)
-                  : event.toolResult.result
-                const navUrl = result?.url || result?.navigationUrl
-                if (navUrl) {
-                  const link: NavigationLink = {
-                    url: navUrl,
-                    label: labelFromUrl(navUrl),
-                  }
-                  // Avoid duplicates
-                  if (!collectedLinks.some(l => l.url === link.url)) {
-                    collectedLinks.push(link)
-                    setState(prev => ({
-                      ...prev,
-                      streamingNavigationLinks: [...collectedLinks],
-                    }))
-                  }
+          // Navigate event (from help_navigate tool) — collect as a link
+          if (event.toolResult && event.toolResult.name === 'help_navigate' && event.toolResult.success) {
+            try {
+              const result = typeof event.toolResult.result === 'string'
+                ? JSON.parse(event.toolResult.result)
+                : event.toolResult.result
+              const navUrl = result?.url || result?.navigationUrl
+              if (navUrl) {
+                const link: NavigationLink = {
+                  url: navUrl,
+                  label: labelFromUrl(navUrl),
                 }
-              } catch { /* ignore */ }
-            }
+                // Avoid duplicates
+                if (!collectedLinks.some(l => l.url === link.url)) {
+                  collectedLinks.push(link)
+                  setState(prev => ({
+                    ...prev,
+                    streamingNavigationLinks: [...collectedLinks],
+                  }))
+                }
+              }
+            } catch { /* ignore */ }
+          }
 
-            // Search results (from help_search tool) — extract URLs as suggested links
-            if (event.toolResult && event.toolResult.name === 'help_search' && event.toolResult.success) {
-              try {
-                const result = typeof event.toolResult.result === 'string'
-                  ? JSON.parse(event.toolResult.result)
-                  : event.toolResult.result
-                const results = result?.results || result
-                if (Array.isArray(results)) {
-                  for (const item of results) {
-                    const url = item?.url
-                    if (url && typeof url === 'string' && url.startsWith('/')) {
-                      // Skip if already in nav links or suggestions
-                      if (!collectedLinks.some(l => l.url === url) &&
-                          !collectedSuggestions.some(l => l.url === url)) {
-                        collectedSuggestions.push({
-                          url,
-                          label: item.title || labelFromUrl(url),
-                        })
-                      }
+          // Search results (from help_search tool) — extract URLs as suggested links
+          if (event.toolResult && event.toolResult.name === 'help_search' && event.toolResult.success) {
+            try {
+              const result = typeof event.toolResult.result === 'string'
+                ? JSON.parse(event.toolResult.result)
+                : event.toolResult.result
+              const results = result?.results || result
+              if (Array.isArray(results)) {
+                for (const item of results) {
+                  const url = item?.url
+                  if (url && typeof url === 'string' && url.startsWith('/')) {
+                    // Skip if already in nav links or suggestions
+                    if (!collectedLinks.some(l => l.url === url) &&
+                        !collectedSuggestions.some(l => l.url === url)) {
+                      collectedSuggestions.push({
+                        url,
+                        label: item.title || labelFromUrl(url),
+                      })
                     }
                   }
-                  if (collectedSuggestions.length > 0) {
-                    setState(prev => ({
-                      ...prev,
-                      suggestedLinks: [...collectedSuggestions],
-                    }))
-                  }
                 }
-              } catch { /* ignore */ }
-            }
-
-            // Status events (tool execution) — clear intermediate content
-            // so the user sees a "working" indicator instead of stale text
-            if (event.status) {
-              currentContent = ''
-              setState(prev => ({
-                ...prev,
-                isExecutingTools: true,
-                streamingContent: '',
-                streamingParticipantId: event.status.participantId || prev.streamingParticipantId,
-              }))
-            }
-
-            // Error
-            if (event.error) {
-              setState(prev => ({
-                ...prev,
-                error: event.error,
-                isStreaming: false,
-              }))
-              return
-            }
-
-            // Chain complete
-            if (event.chainComplete) {
-              setState(prev => ({
-                ...prev,
-                isStreaming: false,
-                streamingContent: '',
-              }))
-              return
-            }
-          } catch {
-            // Ignore parse errors
+                if (collectedSuggestions.length > 0) {
+                  setState(prev => ({
+                    ...prev,
+                    suggestedLinks: [...collectedSuggestions],
+                  }))
+                }
+              }
+            } catch { /* ignore */ }
           }
+
+          // Status events (tool execution) — clear intermediate content
+          // so the user sees a "working" indicator instead of stale text
+          if (event.status) {
+            const statusParticipantId = event.status.participantId
+            currentContent = ''
+            setState(prev => ({
+              ...prev,
+              isExecutingTools: true,
+              streamingContent: '',
+              streamingParticipantId: statusParticipantId || prev.streamingParticipantId,
+            }))
+          }
+
+          // Error
+          if (event.error) {
+            const message = event.error
+            setState(prev => ({
+              ...prev,
+              error: message,
+              isStreaming: false,
+            }))
+            return true
+          }
+
+          // Chain complete
+          if (event.chainComplete) {
+            setState(prev => ({
+              ...prev,
+              isStreaming: false,
+              streamingContent: '',
+            }))
+            return true
+          }
+        } catch {
+          // Ignore malformed events
         }
-      }
+      })
+      if (outcome === 'stopped') return
 
       // Stream ended normally
       setState(prev => ({

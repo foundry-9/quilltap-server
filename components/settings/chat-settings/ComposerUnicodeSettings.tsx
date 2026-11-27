@@ -1,6 +1,6 @@
 'use client'
 
-import type { ChatSettings } from './types'
+import { DEFAULT_COMPOSER_UNICODE, type ChatSettings } from './types'
 import { SettingsToggleRow } from './components/SettingsToggleRow'
 
 export interface ComposerUnicodeSettingsProps {
@@ -14,7 +14,7 @@ export function ComposerUnicodeSettings({
   saving,
   onChange,
 }: ComposerUnicodeSettingsProps) {
-  const enabled = settings.composerUnicode ?? true
+  const enabled = settings.composerUnicode ?? DEFAULT_COMPOSER_UNICODE
 
   return (
     <SettingsToggleRow

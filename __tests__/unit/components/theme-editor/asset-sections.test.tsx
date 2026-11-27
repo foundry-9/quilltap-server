@@ -29,10 +29,6 @@ jest.mock('@/components/theme-editor/use-theme-drafts', () => ({
   fetchThemeDraft: jest.fn(),
 }))
 
-jest.mock('@/components/workspace/useWorkspaceLink', () => ({
-  useWorkspaceLink: () => () => false,
-}))
-
 jest.mock('@/lib/toast', () => ({
   showErrorToast: jest.fn(),
   showSuccessToast: jest.fn(),

@@ -46,6 +46,7 @@ jest.mock('@/components/chat/JsonSchemaForm', () => ({
 }))
 
 import RunToolModal from '@/components/chat/RunToolModal'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 import { showErrorToast } from '@/lib/toast'
 import type { AvailableTool } from '@/app/api/v1/tools/route'
 
@@ -125,7 +126,7 @@ describe('RunToolModal', () => {
       // Never resolve the fetch
       fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-      render(<RunToolModal {...baseProps} />)
+      renderWithQuery(<RunToolModal {...baseProps} />)
 
       // The modal should be showing a spinner (svg with animate-spin)
       const spinner = document.querySelector('.animate-spin')
@@ -136,11 +137,12 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockTool()])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/v1/tools?chatId=chat-123&includeSchemas=true'
+        '/api/v1/tools?chatId=chat-123&includeSchemas=true',
+        expect.objectContaining({ signal: expect.anything() })
       )
     })
 
@@ -152,7 +154,7 @@ describe('RunToolModal', () => {
       mockFetchTools(tools)
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       expect(screen.getByText('Search Memories')).toBeInTheDocument()
@@ -167,7 +169,7 @@ describe('RunToolModal', () => {
       mockFetchTools(tools)
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       expect(screen.getByText('User Tool')).toBeInTheDocument()
@@ -178,7 +180,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockTool()])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       const searchInput = screen.getByPlaceholderText('Search tools...')
@@ -195,7 +197,7 @@ describe('RunToolModal', () => {
       mockFetchTools(tools)
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       const searchInput = screen.getByPlaceholderText('Search tools...')
@@ -217,7 +219,7 @@ describe('RunToolModal', () => {
       mockFetchTools(tools)
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       expect(screen.getByText('No image profile configured')).toBeInTheDocument()
@@ -235,7 +237,7 @@ describe('RunToolModal', () => {
       mockFetchTools(tools)
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       const toolButton = screen.getByText('Generate Image').closest('button')!
@@ -246,7 +248,7 @@ describe('RunToolModal', () => {
       fetchMock.mockRejectedValueOnce(new Error('Network error'))
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       expect(showErrorToast).toHaveBeenCalledWith('Failed to load available tools')
@@ -256,7 +258,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockTool()])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       expect(screen.getByText('Cancel')).toBeInTheDocument()
@@ -269,7 +271,7 @@ describe('RunToolModal', () => {
       mockFetchTools(tools)
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -283,7 +285,7 @@ describe('RunToolModal', () => {
       mockFetchTools(tools)
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -295,7 +297,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockToolWithParams()])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -307,7 +309,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockToolWithParams()])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -331,7 +333,7 @@ describe('RunToolModal', () => {
       mockFetchTools(tools)
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -344,7 +346,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockToolWithParams()])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -357,7 +359,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockToolWithParams()])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -375,7 +377,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockToolWithParams()])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -407,7 +409,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockTool({ parameters: undefined })])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -426,7 +428,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockTool({ parameters: undefined })])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -444,7 +446,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockTool({ parameters: undefined })])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -462,7 +464,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockTool({ parameters: undefined })])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -497,7 +499,7 @@ describe('RunToolModal', () => {
       ]
 
       await act(async () => {
-        render(
+        renderWithQuery(
           <RunToolModal
             {...baseProps}
             participants={participantsWithoutTopLevelCharacterId as any}
@@ -534,7 +536,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockTool()])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Cancel'))
@@ -546,7 +548,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockToolWithParams()])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       fireEvent.click(screen.getByText('Search Memories'))
@@ -558,7 +560,7 @@ describe('RunToolModal', () => {
     })
 
     it('does not fetch tools when modal is closed', () => {
-      render(<RunToolModal {...baseProps} isOpen={false} />)
+      renderWithQuery(<RunToolModal {...baseProps} isOpen={false} />)
 
       expect(fetchMock).not.toHaveBeenCalled()
     })
@@ -567,7 +569,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockToolWithParams()])
 
       const { rerender } = await act(async () => {
-        return render(<RunToolModal {...baseProps} />)
+        return renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       // Select a tool
@@ -603,7 +605,7 @@ describe('RunToolModal', () => {
       mockFetchTools(tools)
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} />)
+        renderWithQuery(<RunToolModal {...baseProps} />)
       })
 
       expect(screen.getByText('plugin: MCP Server')).toBeInTheDocument()
@@ -618,7 +620,7 @@ describe('RunToolModal', () => {
       ])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} initialTool={{ toolId: 'wardrobe_wear', nonce: 1 }} />)
+        renderWithQuery(<RunToolModal {...baseProps} initialTool={{ toolId: 'wardrobe_wear', nonce: 1 }} />)
       })
 
       expect(screen.getByText('Run Tool: Wear Wardrobe Items')).toBeInTheDocument()
@@ -632,7 +634,7 @@ describe('RunToolModal', () => {
       mockFetchTools([createMockTool({ id: 'search', name: 'Search Memories' })])
 
       await act(async () => {
-        render(<RunToolModal {...baseProps} initialTool={{ toolId: 'nonesuch', nonce: 1 }} />)
+        renderWithQuery(<RunToolModal {...baseProps} initialTool={{ toolId: 'nonesuch', nonce: 1 }} />)
       })
 
       expect(screen.getByText('Search Memories')).toBeInTheDocument()
@@ -645,7 +647,7 @@ describe('RunToolModal', () => {
 
       let rerender: (ui: React.ReactElement) => void = () => {}
       await act(async () => {
-        rerender = render(<RunToolModal {...baseProps} initialTool={{ toolId: 'wardrobe_wear', nonce: 1 }} />).rerender
+        rerender = renderWithQuery(<RunToolModal {...baseProps} initialTool={{ toolId: 'wardrobe_wear', nonce: 1 }} />).rerender
       })
       fireEvent.click(screen.getByText('Back'))
       expect(screen.queryByText('Run Tool: Wear Wardrobe Items')).toBeNull()

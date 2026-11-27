@@ -2,8 +2,9 @@
 
 import { useId, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import type { DbKeyState as ServerDbKeyState } from '@/lib/startup/dbkey';
 
-type DbKeyState = 'resolved' | 'needs-setup' | 'needs-passphrase' | 'needs-vault-storage' | 'loading';
+type DbKeyState = ServerDbKeyState | 'loading';
 
 export default function UnlockPage() {
   const fieldId = useId();

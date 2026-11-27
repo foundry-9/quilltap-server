@@ -10,7 +10,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { ProfileCard } from '@/components/ui/ProfileCard'
+import { SettingsCard } from '@/components/ui/SettingsCard'
 import type { ApiKeyActions } from './hooks/useApiKeyActions'
 
 /** An API key as `GET /api/v1/api-keys` lists it. */
@@ -35,7 +35,7 @@ export interface ApiKeyCardProps {
 export function ApiKeyCard({ apiKey, actions, headerExtra }: ApiKeyCardProps) {
   const testResult = actions.testResults[apiKey.id]
   return (
-    <ProfileCard
+    <SettingsCard
       title={apiKey.label}
       subtitle={`${apiKey.provider} • ${apiKey.keyPreview}`}
       headerExtra={headerExtra}
@@ -75,6 +75,6 @@ export function ApiKeyCard({ apiKey, actions, headerExtra }: ApiKeyCardProps) {
           {testResult}
         </p>
       )}
-    </ProfileCard>
+    </SettingsCard>
   )
 }

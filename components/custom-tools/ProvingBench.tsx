@@ -23,10 +23,11 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { SegmentedRadioGroup, segmentedButtonClass } from '@/components/ui/SegmentedRadioGroup'
+import { useCustomToolDestinations } from './use-custom-tool-destinations'
 import {
   displayTitle,
   isInventoryRef,
@@ -107,21 +108,33 @@ interface MockInventoryDraftRow {
   metadata: string
 }
 
+/** A text parsed as one JSON object, or why it is not one. */
+function parseJsonObject(text: string):
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; reason: 'invalid' | 'not-object' } {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return { ok: false, reason: 'invalid' }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, reason: 'not-object' }
+  }
+  return { ok: true, value: parsed as Record<string, unknown> }
+}
+
 /**
  * A row's metadata, parsed — or why it cannot be. Values must be numbers,
  * strings, booleans, or lists of them, as the mock schema demands.
  */
 function parseMockMetadata(text: string): { ok: true; metadata?: MockInventoryRow['metadata'] } | { ok: false; reason: string } {
   if (text.trim() === '') return { ok: true }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    return { ok: false, reason: 'is not valid JSON' }
+  const object = parseJsonObject(text)
+  if (!object.ok) {
+    return { ok: false, reason: object.reason === 'invalid' ? 'is not valid JSON' : 'must be a JSON object' }
   }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return { ok: false, reason: 'must be a JSON object' }
-  }
+  const parsed = object.value
   const scalar = (v: unknown) =>
     typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))
   for (const [key, value] of Object.entries(parsed)) {
@@ -222,6 +235,8 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
   const [oracle, setOracle] = useState<BenchOracle>({ mode: 'scripted', answer: '' })
   const [rolls, setRolls] = useState<BenchRoll[]>([])
   const [audit, setAudit] = useState<CustomToolAuditResult | null>(null)
+  /** The reachable rows a consult reading `{{outcome.brief}}` would find blank. */
+  const missingBrief = useMemo(() => (audit ? reachableOutcomesMissingBrief(draft, audit.outcomes) : []), [draft, audit])
 
   // Merge declared defaults under whatever the user has touched, so a fresh
   // parameter shows up pre-filled without wiping edits to the others.
@@ -298,24 +313,12 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
 
   const manualSheetError = useMemo(() => {
     if (sheet.mode !== 'manual') return null
-    try {
-      const parsed = JSON.parse(sheet.text)
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        return 'The fact sheet must be a single JSON object.'
-      }
-      return null
-    } catch {
-      return 'The fact sheet is not valid JSON.'
-    }
+    const parsed = parseJsonObject(sheet.text)
+    if (parsed.ok) return null
+    return parsed.reason === 'invalid' ? 'The fact sheet is not valid JSON.' : 'The fact sheet must be a single JSON object.'
   }, [sheet])
 
-  const charactersQuery = useQuery({
-    queryKey: queryKeys.customTools.destinations(),
-    queryFn: ({ signal }) =>
-      apiFetch<{ characters: Array<{ characterId: string; characterName: string }> }>(
-        '/api/v1/custom-tools?action=destinations',
-        { signal }
-      ),
+  const charactersQuery = useCustomToolDestinations({
     enabled: sheet.mode === 'character',
     select: (data): BenchCharacter[] =>
       data.characters.map((c) => ({ id: c.characterId, name: c.characterName })),
@@ -323,14 +326,8 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
 
   const benchMetadata = (): Record<string, unknown> | { characterId: string } | undefined => {
     if (sheet.mode === 'character') return chairCharacterId ? { characterId: chairCharacterId } : undefined
-    try {
-      const parsed = JSON.parse(sheet.text)
-      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : undefined
-    } catch {
-      return undefined
-    }
+    const parsed = parseJsonObject(sheet.text)
+    return parsed.ok ? parsed.value : undefined
   }
 
   const testsState =
@@ -341,27 +338,15 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
     draft.outcomes.some((o) => scanPlaceholders(o.message).some((p) => p.ref.kind === 'state'))
 
   const mockStateError = useMemo(() => {
-    try {
-      const parsed = JSON.parse(mockStateText)
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        return 'Mock state must be a single JSON object.'
-      }
-      return null
-    } catch {
-      return 'Mock state is not valid JSON.'
-    }
+    const parsed = parseJsonObject(mockStateText)
+    if (parsed.ok) return null
+    return parsed.reason === 'invalid' ? 'Mock state is not valid JSON.' : 'Mock state must be a single JSON object.'
   }, [mockStateText])
 
   /** The mock merged state a bench roll or audit resolves `$state` against. */
   const benchState = (): Record<string, unknown> | undefined => {
-    try {
-      const parsed = JSON.parse(mockStateText)
-      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : undefined
-    } catch {
-      return undefined
-    }
+    const parsed = parseJsonObject(mockStateText)
+    return parsed.ok ? parsed.value : undefined
   }
 
   /** The oracle input for a single roll; undefined when the tool has no consult. */
@@ -478,26 +463,17 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           <code>progress</code> tests read the <code>progressions</code> key inside it. Lend the bench a sheet, or
           it rolls as nobody in particular.
         </p>
-        <div className="flex rounded overflow-hidden border w-fit" role="radiogroup" aria-label="Fact sheet mode">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={sheet.mode === 'character'}
-            className={`px-2 py-1 text-xs ${sheet.mode === 'character' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-            onClick={() => setSheet({ mode: 'character' })}
-          >
-            Pick a character
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={sheet.mode === 'manual'}
-            className={`px-2 py-1 text-xs ${sheet.mode === 'manual' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-            onClick={() => setSheet({ mode: 'manual', text: '{}' })}
-          >
-            Hand-typed sheet
-          </button>
-        </div>
+        <SegmentedRadioGroup
+          className="flex rounded overflow-hidden border w-fit"
+          ariaLabel="Fact sheet mode"
+          options={[
+            { value: 'character', label: 'Pick a character' },
+            { value: 'manual', label: 'Hand-typed sheet' },
+          ]}
+          value={sheet.mode}
+          onSelect={(mode) => setSheet(mode === 'character' ? { mode: 'character' } : { mode: 'manual', text: '{}' })}
+          optionClassName={segmentedButtonClass('xs')}
+        />
 
         {sheet.mode === 'character' ? (
           <select
@@ -700,37 +676,21 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           <p className="qt-hint">
             This tool consults a model mid-run. Script its answer here, or spend a real consult on a single roll.
           </p>
-          <div className="flex rounded overflow-hidden border w-fit" role="radiogroup" aria-label="Oracle mode">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={oracle.mode === 'scripted'}
-              className={`px-2 py-1 text-xs ${oracle.mode === 'scripted' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-              onClick={() => setOracle({ mode: 'scripted', answer: oracle.mode === 'scripted' ? oracle.answer : '' })}
-            >
-              Scripted answer
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={oracle.mode === 'fail'}
-              className={`px-2 py-1 text-xs ${oracle.mode === 'fail' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-              onClick={() => setOracle({ mode: 'fail' })}
-              title="The consult fails; the run shows your error line"
-            >
-              Silence
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={oracle.mode === 'live'}
-              className={`px-2 py-1 text-xs ${oracle.mode === 'live' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-              onClick={() => setOracle({ mode: 'live' })}
-              title="A single roll asks the real model — one paid consult per roll"
-            >
-              Ask it live
-            </button>
-          </div>
+          <SegmentedRadioGroup
+            className="flex rounded overflow-hidden border w-fit"
+            ariaLabel="Oracle mode"
+            options={[
+              { value: 'scripted', label: 'Scripted answer' },
+              { value: 'fail', label: 'Silence', title: 'The consult fails; the run shows your error line' },
+              { value: 'live', label: 'Ask it live', title: 'A single roll asks the real model — one paid consult per roll' },
+            ]}
+            value={oracle.mode}
+            onSelect={(mode) => {
+              if (mode === 'scripted') setOracle({ mode: 'scripted', answer: oracle.mode === 'scripted' ? oracle.answer : '' })
+              else setOracle({ mode })
+            }}
+            optionClassName={segmentedButtonClass('xs')}
+          />
 
           {oracle.mode === 'scripted' && (
             <div>
@@ -781,7 +741,6 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
               mean {formatValue(audit.valueMean)}
             </p>
             {audit.outcomes.map((entry) => {
-              const missingBrief = reachableOutcomesMissingBrief(draft, audit.outcomes)
               const outcome = draft.outcomes[entry.index]
               const label = outcome?.catchAll ? 'otherwise' : `row ${entry.index + 1}`
               return (

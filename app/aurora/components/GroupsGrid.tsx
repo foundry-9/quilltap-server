@@ -7,6 +7,7 @@
  */
 
 import { useRouter } from 'next/navigation'
+import { EmptyStatePanel } from '@/components/ui/EmptyState'
 import { GroupCard } from './GroupCard'
 import type { Group } from '../types'
 
@@ -32,7 +33,7 @@ export function GroupsGrid({ groups, onCreateClick, onDeleteClick, onOpenGroup }
 
   if (groups.length === 0) {
     return (
-      <div className="mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
+      <EmptyStatePanel>
         <p className="mb-4 text-lg qt-text-secondary">No groups yet</p>
         <button
           onClick={onCreateClick}
@@ -40,7 +41,7 @@ export function GroupsGrid({ groups, onCreateClick, onDeleteClick, onOpenGroup }
         >
           Create your first group
         </button>
-      </div>
+      </EmptyStatePanel>
     )
   }
 

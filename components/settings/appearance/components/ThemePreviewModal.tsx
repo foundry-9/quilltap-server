@@ -12,7 +12,7 @@
  * @module components/settings/appearance/components/ThemePreviewModal
  */
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
 import type { ThemePreviewImage } from '@/lib/themes/types'
 import { BaseModal } from '@/components/ui/BaseModal'
@@ -68,17 +68,10 @@ export function ThemePreviewModal({
   const supportsDarkMode = isDefault ? true : theme.supportsDarkMode
 
   const { defaultTheme } = useTheme()
-  const { preview: loadedPreview, icons, images, isLoading, error, fetchTokens } =
-    useThemePreview(isDefault ? null : themeId)
+  const { preview: loadedPreview, icons, images, isLoading, error } =
+    useThemePreview(isDefault ? null : themeId, isOpen)
   // The default theme injects nothing: its preview is the registry defaults alone.
   const preview = isDefault ? { css: '', choices: {} } : loadedPreview
-
-  // Fetch tokens (and icons/images) when the modal opens for a real theme.
-  useEffect(() => {
-    if (isOpen && !isDefault) {
-      fetchTokens()
-    }
-  }, [isOpen, isDefault, fetchTokens])
 
   // Light/Dark toggle (default light). The modal is keyed by theme in the parent,
   // so state resets to light each time a different theme's preview opens. A theme

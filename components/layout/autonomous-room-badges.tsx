@@ -16,7 +16,6 @@
  * @module components/layout/autonomous-room-badges
  */
 
-import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { useNow } from '@/hooks/useNow'
 import { useRealtimeRefetchInterval } from '@/hooks/useRealtime'
@@ -163,12 +162,10 @@ export function AutonomousRoomBadges() {
     // for a dropped socket.
     refetchInterval: useRealtimeRefetchInterval(POLL_INTERVAL_MS),
   })
-  const [busyChatId, setBusyChatId] = useState<string | null>(null)
-
   // Optimistic toggle: patch the cached run state immediately, roll back on
   // error, revalidate on settle. Shared with the Settings → System management
   // card — see hooks/useAutonomousRoomAction.
-  const toggleMutation = useAutonomousRoomAction('Autonomous-room badge action failed')
+  const { run: runRoomAction, busyChatId } = useAutonomousRoomAction('Autonomous-room badge action failed')
 
   const rooms = (data?.rooms ?? []).filter(
     (r) => r.runState === 'idle' || r.runState === 'running' || r.runState === 'paused',
@@ -197,14 +194,7 @@ export function AutonomousRoomBadges() {
     // pause → paused), so we can reflect it optimistically the instant the
     // button is clicked instead of waiting for the POST + revalidation
     // round-trip — which can lag when the server is busy running a turn.
-    setBusyChatId(room.id)
-    try {
-      await toggleMutation.mutateAsync({ chatId: room.id, verb })
-    } catch {
-      // Already logged in the mutation's onError handler.
-    } finally {
-      setBusyChatId(null)
-    }
+    await runRoomAction(room.id, verb)
   }
 
   return (

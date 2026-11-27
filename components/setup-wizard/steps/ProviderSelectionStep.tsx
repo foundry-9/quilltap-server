@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
-import type { WizardState, WizardAction, ProviderInfo } from '../useProviderWizardState'
+import { providersWithCapability, type WizardState, type WizardAction, type ProviderInfo } from '../useProviderWizardState'
 import { fetchProviders } from '../wizard-api'
 
 interface ProviderSelectionStepProps {
@@ -45,10 +45,7 @@ export function ProviderSelectionStep({ state, dispatch }: ProviderSelectionStep
     }
   }, [state.availableProviders.length, dispatch])
 
-  const hasValidChatProvider = state.selectedProviders.some((id) => {
-    const provider = state.availableProviders.find((p) => p.id === id)
-    return provider?.capabilities.chat
-  })
+  const hasValidChatProvider = providersWithCapability(state, 'chat').length > 0
 
   const handleToggle = (providerId: string) => {
     dispatch({ type: 'TOGGLE_PROVIDER', providerId })

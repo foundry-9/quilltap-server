@@ -14,7 +14,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
-import { useWorkspaceLink } from '@/components/workspace/useWorkspaceLink'
 import { themeDraftAction, type DraftDetail } from '../use-theme-drafts'
 import { useDraftOperations } from './use-draft-operations'
 import { formatBytes } from '@/lib/utils/format-bytes'
@@ -35,7 +34,6 @@ const percent = (n: number, of: number) => (of > 0 ? Math.min(100, Math.round((n
 
 export function FilesPanel({ detail }: { detail: DraftDetail }) {
   const ops = useDraftOperations()
-  const openIn = useWorkspaceLink()
   const [removing, setRemoving] = useState<string | null>(null)
   const { totals, files } = detail
   const href = `/scriptorium/${detail.mountPointId}`
@@ -113,7 +111,7 @@ export function FilesPanel({ detail }: { detail: DraftDetail }) {
       </div>
       <p className="qt-text-xs qt-text-secondary">
         The files live in the folder <span className="font-mono">Themes/{detail.id}/</span> of Quilltap General.{' '}
-        <Link href={href} onClick={(e) => openIn(href, e)} className="qt-inline-link">
+        <Link href={href} className="qt-inline-link">
           Open Quilltap General in the Scriptorium
         </Link>
       </p>

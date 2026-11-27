@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useFormState } from '@/hooks/useFormState'
 import { PromptTemplate, INITIAL_FORM_DATA } from './types'
 import { usePrompts } from './hooks/usePrompts'
@@ -20,12 +20,6 @@ export default function PromptsTab() {
 
   const form = useFormState(INITIAL_FORM_DATA)
   const prompts = usePrompts()
-
-  // Fetch templates on mount only
-  useEffect(() => {
-    prompts.fetchTemplates()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount; prompts is a fresh object every render
-  }, []) // Only fetch once on mount - fetchTemplates is stable
 
   const openCreateModal = useCallback(() => {
     setEditingTemplate(null)
@@ -78,16 +72,16 @@ export default function PromptsTab() {
   const builtInTemplates = prompts.templates.filter(t => t.isBuiltIn)
   const userTemplates = prompts.templates.filter(t => !t.isBuiltIn)
 
-  if (prompts.fetchOp.loading) {
+  if (prompts.loading) {
     return <LoadingState message="Loading templates..." />
   }
 
   return (
     <div className="space-y-6">
-      {prompts.fetchOp.error && (
+      {prompts.fetchError && (
         <ErrorAlert
-          message={prompts.fetchOp.error}
-          onRetry={prompts.fetchTemplates}
+          message={prompts.fetchError}
+          onRetry={prompts.retryFetch}
         />
       )}
 
@@ -97,16 +91,16 @@ export default function PromptsTab() {
         </div>
       )}
 
-      {prompts.saveOp.error && (
+      {prompts.saveError && (
         <ErrorAlert
-          message={prompts.saveOp.error}
+          message={prompts.saveError}
           onRetry={() => {}}
         />
       )}
 
-      {prompts.deleteOp.error && (
+      {prompts.deleteError && (
         <ErrorAlert
-          message={prompts.deleteOp.error}
+          message={prompts.deleteError}
           onRetry={() => {}}
         />
       )}
@@ -119,7 +113,7 @@ export default function PromptsTab() {
         isBuiltIn={true}
         copiedId={prompts.copiedId}
         deleteConfirmId={prompts.deleteConfirm}
-        isDeleting={prompts.deleteOp.loading}
+        isDeleting={prompts.deleting}
         onPreview={setPreviewTemplate}
         onCopy={prompts.copyToClipboard}
         onCopyAsNew={handleCopyAsNew}
@@ -136,7 +130,7 @@ export default function PromptsTab() {
         isBuiltIn={false}
         copiedId={prompts.copiedId}
         deleteConfirmId={prompts.deleteConfirm}
-        isDeleting={prompts.deleteOp.loading}
+        isDeleting={prompts.deleting}
         onPreview={setPreviewTemplate}
         onCopy={prompts.copyToClipboard}
         onEdit={openEditModal}
@@ -160,7 +154,7 @@ export default function PromptsTab() {
         isOpen={isModalOpen}
         editingTemplate={editingTemplate}
         formData={form.formData}
-        isSaving={prompts.saveOp.loading}
+        isSaving={prompts.saving}
         onClose={closeModal}
         onSave={handleSave}
         onFormChange={form.handleChange}

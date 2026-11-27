@@ -4,24 +4,10 @@ import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import type { ImageProfileRow } from '@/lib/hooks/use-profiles'
 import { ProviderIcon } from './ProviderIcon'
+import { ProfileOption } from '@/components/ui/ProfileOption'
 
-interface ApiKey {
-  id: string
-  label: string
-  provider: string
-  isActive: boolean
-}
-
-interface ImageProfile {
-  id: string
-  name: string
-  provider: string
-  modelName: string
-  isDefault: boolean
-  apiKey?: ApiKey | null
-  tags?: any[]
-}
 
 interface ImageProfilePickerProps {
   value?: string | null
@@ -59,7 +45,7 @@ export function ImageProfilePicker({
       if (characterId) params.set('sortByCharacter', characterId)
       if (userCharacterId) params.set('sortByUserCharacter', userCharacterId)
       const query = params.toString()
-      return apiFetch<{ profiles?: ImageProfile[] }>(
+      return apiFetch<{ profiles?: ImageProfileRow[] }>(
         `/api/v1/image-profiles${query ? `?${query}` : ''}`,
         { signal },
       )
@@ -96,16 +82,13 @@ export function ImageProfilePicker({
         className="qt-select disabled:opacity-50"
       >
         <option value="">No image generation</option>
-        {profiles.map(profile => {
-          const hasApiKey = Boolean(profile.apiKey)
-          return (
-            <option key={profile.id} value={profile.id}>
-              {profile.name} ({profile.modelName})
-              {profile.isDefault ? ' [Default]' : ''}
-              {!hasApiKey ? ' ⚠️ No API Key' : ''}
-            </option>
-          )
-        })}
+        {profiles.map(profile => (
+          <ProfileOption
+            key={profile.id}
+            profile={profile}
+            label={`${profile.name} (${profile.modelName})${profile.isDefault ? ' [Default]' : ''}`}
+          />
+        ))}
       </select>
 
       {error && <p className="qt-text-destructive text-sm">{error}</p>}

@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { formatTokenCount, formatCostForDisplay } from '@/lib/utils/format-tokens'
 import { Icon } from '@/components/ui/icon'
 
@@ -11,8 +13,6 @@ export interface ChatCostSummaryProps {
   className?: string
   /** Variant for different display contexts */
   variant?: 'default' | 'compact'
-  /** Key to trigger refresh (e.g., message count) - when this changes, cost data is re-fetched */
-  refreshKey?: number | string
 }
 
 interface CostData {
@@ -37,55 +37,27 @@ export function ChatCostSummary({
   show = true,
   className = '',
   variant = 'default',
-  refreshKey,
 }: ChatCostSummaryProps) {
-  const [costData, setCostData] = useState<CostData | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  // Fetch cost data when dependencies change
-  useEffect(() => {
-    if (!show) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch effect; setLoading is managed by loading lifecycle
-      setLoading(false)
-      return
-    }
-
-    // AbortController lets us cancel the in-flight fetch cleanly when the
-    // effect re-runs (StrictMode double-invoke in dev) or the component
-    // unmounts. Without this, the aborted fetch would surface as a generic
-    // "Failed to fetch chat cost summary" error on every render.
-    const controller = new AbortController()
-    let cancelled = false
-
-    async function fetchCostData() {
+  // Refreshed by the `chats` realtime topic (lib/realtime/topic-map.ts): a
+  // new message is what moves the totals.
+  const { data: costData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.chats.cost(chatId),
+    queryFn: async ({ signal }) => {
       try {
-        const res = await fetch(`/api/v1/chats/${chatId}?action=cost`, {
-          signal: controller.signal,
-        })
-        if (!res.ok) {
-          throw new Error(`Cost endpoint returned HTTP ${res.status}`)
-        }
-        const data = await res.json()
-        if (!cancelled) setCostData(data)
+        return await apiFetch<CostData>(`/api/v1/chats/${chatId}?action=cost`, { signal })
       } catch (error) {
-        // Swallow aborts — they're the expected outcome of effect cleanup.
-        if (controller.signal.aborted) return
-        const message = error instanceof Error ? error.message : String(error)
-        // Use warn rather than error; a missing cost breakdown is a UI degradation,
-        // not something the user needs to see as a red console alarm every render.
-        console.warn(`ChatCostSummary: ${message} (chatId=${chatId})`)
-      } finally {
-        if (!cancelled) setLoading(false)
+        // Warn rather than error: a missing cost breakdown is a UI
+        // degradation, not a red console alarm. Aborts are expected.
+        if (!signal.aborted) {
+          const message = error instanceof Error ? error.message : String(error)
+          console.warn(`ChatCostSummary: ${message} (chatId=${chatId})`)
+        }
+        throw error
       }
-    }
-
-    fetchCostData()
-
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [chatId, show, refreshKey])
+    },
+    enabled: show,
+    retry: false,
+  })
 
   if (!show) {
     return null

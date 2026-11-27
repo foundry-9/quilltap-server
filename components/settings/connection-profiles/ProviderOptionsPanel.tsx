@@ -5,8 +5,8 @@
  * Reads values from a flat `parameters` record (the same JSON blob stored
  * on a ConnectionProfile and handed back to the plugin as
  * `LLMParams.profileParameters`) and writes back through `onSetParameter`.
- * Fields tagged with an `affects` directive also fire `onDirective` so the
- * host modal can react to UI-affecting toggles (e.g. OpenRouter's
+ * A field tagged with an `affects` directive is still just a parameter: the
+ * host modal reads it back from `parameters` (e.g. OpenRouter's
  * `useCustomModel`, which swaps the model input).
  */
 
@@ -16,7 +16,6 @@ import { useState } from 'react'
 import type {
   ProviderOptionField,
   ProviderOptionsSchema,
-  ProviderOptionDirective,
 } from '@quilltap/plugin-types'
 import { fieldAppliesToModel } from '@/lib/plugins/model-matchers'
 
@@ -27,11 +26,6 @@ interface ProviderOptionsPanelProps {
   /** Model the profile is currently bound to (used to filter multi-enum lists). */
   modelName?: string
   onSetParameter: (key: string, value: unknown) => void
-  onDirective?: (
-    directive: ProviderOptionDirective,
-    field: ProviderOptionField,
-    value: unknown
-  ) => void
 }
 
 function shouldRenderField(
@@ -73,15 +67,11 @@ export function ProviderOptionsPanel({
   fetchedModels,
   modelName,
   onSetParameter,
-  onDirective,
 }: ProviderOptionsPanelProps) {
   if (!schema || schema.groups.length === 0) return null
 
   const handleChange = (field: ProviderOptionField, value: unknown) => {
     onSetParameter(field.key, value)
-    if (field.affects && onDirective) {
-      onDirective(field.affects, field, value)
-    }
   }
 
   return (

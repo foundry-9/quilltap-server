@@ -1,26 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useState } from 'react'
 import { queryKeys } from '@/lib/query/keys'
-import { readErrorText, writeErrorText } from './hooks/api-error-text'
+import { MEMORY_SETTING_DEFAULTS } from '@/lib/memory/settings-defaults'
+import type { MemoryExtractionModeSettings } from '@/lib/schemas/settings.types'
+import { useMemorySettingsDocument } from './hooks/useMemorySettingsDocument'
 import { MemoryExtractionLimitsSection } from './memory-extraction-limits-section'
 
-type OtherPass = 'turn' | 'fold' | 'hybrid'
-
-interface ExtractionModeConfig {
-  otherPass: OtherPass
-  perTurnOtherFloor: number
-  foldCandidatesPerSubject: number
-}
-
-const DEFAULT_CONFIG: ExtractionModeConfig = {
-  otherPass: 'hybrid',
-  perTurnOtherFloor: 0.75,
-  foldCandidatesPerSubject: 3,
-}
+type OtherPass = MemoryExtractionModeSettings['otherPass']
 
 const CONFIG_URL = '/api/v1/memories?action=extraction-mode-config'
 
@@ -48,48 +35,15 @@ const OTHER_PASS_OPTIONS: ReadonlyArray<{ value: OtherPass; label: string; descr
  * extracted. Instance-wide (`instance_settings['memoryExtractionMode']`).
  */
 export function MemoryExtractionGrainCard() {
-  const queryClient = useQueryClient()
-  const [config, setConfig] = useState<ExtractionModeConfig>(DEFAULT_CONFIG)
+  const { config, loading: isLoading, saving, error, setError, save } =
+    useMemorySettingsDocument<MemoryExtractionModeSettings>({
+      queryKey: queryKeys.memories.extractionModeConfig,
+      url: CONFIG_URL,
+      defaults: MEMORY_SETTING_DEFAULTS.extractionMode,
+      noun: 'extraction settings',
+    })
   const [floorDraft, setFloorDraft] = useState<string | null>(null)
   const [perSubjectDraft, setPerSubjectDraft] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const { data: loaded, isLoading, error: loadError } = useQuery({
-    queryKey: queryKeys.memories.extractionModeConfig,
-    queryFn: ({ signal }) => apiFetch<{ settings?: Partial<ExtractionModeConfig> }>(CONFIG_URL, { signal }),
-  })
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the form is local state seeded from the query
-    if (loaded?.settings) setConfig({ ...DEFAULT_CONFIG, ...loaded.settings })
-  }, [loaded])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- surface the read failure in the shared error line
-    if (loadError) setError(readErrorText(loadError, 'Failed to load extraction settings'))
-  }, [loadError])
-
-  const save = async (patch: Partial<ExtractionModeConfig>) => {
-    setSaving(true)
-    setError(null)
-    try {
-      const data = await apiFetch<{ settings: ExtractionModeConfig }>(CONFIG_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      })
-      setConfig({ ...DEFAULT_CONFIG, ...data.settings })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.memories.extractionModeConfig })
-      showSuccessToast('Extraction settings saved')
-    } catch (err) {
-      const msg = writeErrorText(err, 'Failed to save extraction settings')
-      setError(msg)
-      showErrorToast(msg)
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const commitFloor = () => {
     if (floorDraft === null) return

@@ -1,32 +1,18 @@
 'use client'
 
-import { WizardModal } from '@/components/ui/WizardModal'
+import { WizardModal, wizardStep } from '@/components/ui/WizardModal'
 import { useRestoreData } from './hooks/useRestoreData'
 import { RestoreItemSelector } from './RestoreItemSelector'
 import { RestoreProgress } from './RestoreProgress'
-import type { RestoreDialogProps } from './types'
+import type { RestoreDialogProps, RestoreStep } from './types'
+import { Spinner } from '@/components/ui/Spinner'
+
+/** The restore wizard's steps, in order. */
+const RESTORE_STEPS: ReadonlyArray<RestoreStep> = ['source', 'preview', 'mode', 'progress']
 
 function LoadingSpinner({ size = 4 }: { size?: number }) {
   return (
-    <svg
-      className={`w-${size} h-${size} animate-spin`}
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
-    </svg>
+    <Spinner className={`w-${size} h-${size}`} />
   )
 }
 
@@ -35,7 +21,7 @@ export function RestoreDialog({
   onClose,
   onRestoreComplete,
 }: RestoreDialogProps) {
-  const { state, fileInputRef, actions } = useRestoreData(isOpen)
+  const { state, actions } = useRestoreData(isOpen)
 
   const handleClose = () => {
     if (!state.restoring && !state.uploading) {
@@ -50,21 +36,6 @@ export function RestoreDialog({
     actions.resetDialog()
     onRestoreComplete()
     onClose()
-  }
-
-  const getStepNumber = (): number => {
-    switch (state.step) {
-      case 'source':
-        return 1
-      case 'preview':
-        return 2
-      case 'mode':
-        return 3
-      case 'progress':
-        return 4
-      default:
-        return 1
-    }
   }
 
   const renderModeSelection = () => (
@@ -178,7 +149,7 @@ export function RestoreDialog({
     <WizardModal
       onClose={handleClose}
       title="Restore Backup"
-      step={{ current: getStepNumber(), total: 4 }}
+      step={wizardStep(RESTORE_STEPS, state.step)}
       busy={busy}
       done={state.step === 'progress' && !!state.restoreSummary}
       onDone={handleCloseAfterRestore}

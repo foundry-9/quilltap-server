@@ -9,19 +9,13 @@ import type { Character } from './types'
 import { USER_CONTROLLED_PROFILE } from './types'
 import { useNewChatForm } from './NewChatFormContext'
 import { SubpromptPicker } from '@/components/subprompts'
-import { resolveDefaultSystemPrompt } from '@/lib/characters/default-system-prompt'
+import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
+import { seat } from './hooks/useNewChat'
+import { characterAvatarSrc } from '@/lib/characters/avatar-src'
 
 interface CharacterPickerPanelProps {
   /** Layout only: focus the search box on mount (the full-page form). */
   autoFocusSearch?: boolean
-}
-
-function getAvatarSrc(character: Character): string | null {
-  if (character.defaultImage) {
-    const filepath = character.defaultImage.filepath
-    return character.defaultImage.url || (filepath.startsWith('/') ? filepath : '/' + filepath)
-  }
-  return character.avatarUrl || null
 }
 
 /** The New Chat dialog's cast picker; reads and writes the cast through {@link useNewChatForm}. */
@@ -91,17 +85,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
     if (selectedIds.has(character.id)) {
       onSelectedCharactersChange((prev) => prev.filter((sc) => sc.character.id !== character.id))
     } else {
-      const connectionProfileId = character.defaultConnectionProfileId || profiles[0]?.id || ''
-      const defaultPrompt = resolveDefaultSystemPrompt(character)
-      onSelectedCharactersChange((prev) => [
-        ...prev,
-        {
-          character,
-          connectionProfileId,
-          selectedSystemPromptId: defaultPrompt?.id || null,
-          controlledBy: 'llm',
-        },
-      ])
+      onSelectedCharactersChange((prev) => [...prev, seat(character, 'llm', profiles)])
     }
   }
 
@@ -167,7 +151,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
           ) : (
             filtered.map((character) => {
               const isSelected = selectedIds.has(character.id)
-              const avatarSrc = getAvatarSrc(character)
+              const avatarSrc = characterAvatarSrc(character)
               return (
                 <button
                   key={character.id}
@@ -224,7 +208,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
         ) : (
           <div className="space-y-4">
             {selectedCharacters.map((sc) => {
-              const avatarSrc = getAvatarSrc(sc.character)
+              const avatarSrc = characterAvatarSrc(sc.character)
               return (
                 <div key={sc.character.id} className="border qt-border-default rounded-lg p-4 qt-bg-muted/30">
                   <div className="flex items-start gap-3">
@@ -290,7 +274,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
                             {sc.character.systemPrompts.map((prompt) => (
                               <option key={prompt.id} value={prompt.id}>
                                 {prompt.name}
-                                {prompt.isDefault ? ' (Default)' : ''}
+                                {prompt.id === resolveDefaultSystemPromptId(sc.character) ? ' (Default)' : ''}
                               </option>
                             ))}
                           </select>

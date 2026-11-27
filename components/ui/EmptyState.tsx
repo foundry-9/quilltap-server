@@ -74,4 +74,25 @@ export function EmptyState({
   )
 }
 
+/**
+ * The large dashed card a list page shows when it has nothing to list (no
+ * projects, no chats, no photos yet). The caller supplies the words and the
+ * call to action; the panel is the frame they sit in.
+ */
+export function EmptyStatePanel({
+  className,
+  spacious = false,
+  children,
+}: {
+  /** Extra classes, e.g. a theme hook such as `chat-empty-state` */
+  className?: string
+  /** Taller padding (`py-16` rather than `py-12`) */
+  spacious?: boolean
+  children: React.ReactNode
+}) {
+  const padding = spacious ? 'py-16' : 'py-12'
+  const base = `mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 ${padding} text-center qt-shadow-sm`
+  return <div className={className ? `${className} ${base}` : base}>{children}</div>
+}
+
 export default EmptyState

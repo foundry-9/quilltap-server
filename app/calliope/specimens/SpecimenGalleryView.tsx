@@ -20,6 +20,7 @@ import { InspectToggle } from '@/components/theme-inspect/InspectToggle'
 import { SectionJump } from '@/components/ui/SectionJump'
 import { hookGroups } from '@/components/theme-editor/assets/styles-model'
 import { THEME_CHOICES } from '@/lib/themes/engine/client'
+import { seekFrames } from '@/components/theme-editor/seek-frames'
 
 type ModeChoice = 'window' | 'light' | 'dark' | 'both'
 
@@ -76,29 +77,23 @@ export function SpecimenGalleryView() {
   const registerGallery = inspect?.registerGallery
   const reveal = useCallback((className: string) => {
     setQuery('')
-    let frames = 0
-    const seek = () => {
+    seekFrames(() => {
       const heading = document.getElementById(specimenHeadingId(className))
-      if (heading) {
+      if (!heading) return false
+      heading.scrollIntoView({ block: 'start' })
+      heading.focus({ preventScroll: true })
+      // Specimens above it are drawn as they come near (content-visibility), so the first scroll can land short:
+      // scroll again until it stays put.
+      let last = Number.NaN
+      seekFrames(() => {
+        const top = heading.getBoundingClientRect().top
+        if (top === last) return true
+        last = top
         heading.scrollIntoView({ block: 'start' })
-        heading.focus({ preventScroll: true })
-        // Specimens above it are drawn as they come near (content-visibility), so the first scroll can land short:
-        // scroll again until it stays put.
-        let last = Number.NaN
-        let settles = 0
-        const settle = () => {
-          const top = heading.getBoundingClientRect().top
-          if (top === last || ++settles > REVEAL_FRAMES) return
-          last = top
-          heading.scrollIntoView({ block: 'start' })
-          requestAnimationFrame(settle)
-        }
-        requestAnimationFrame(settle)
-        return
-      }
-      if (++frames < REVEAL_FRAMES) requestAnimationFrame(seek)
-    }
-    requestAnimationFrame(seek)
+        return false
+      }, REVEAL_FRAMES)
+      return true
+    }, REVEAL_FRAMES)
   }, [])
   useEffect(() => registerGallery?.({ reveal }), [registerGallery, reveal])
 

@@ -10,7 +10,6 @@
 import Link from 'next/link'
 import AvatarStack from '@/components/ui/AvatarStack'
 import { formatMessageTime } from '@/lib/format-time'
-import { useWorkspaceLink } from '@/components/workspace/useWorkspaceLink'
 import type { RecentChat } from './types'
 import { chatActivityAt } from '@/lib/chat/chat-activity'
 import { ConciergeMark } from '@/components/chat/ConciergeMark'
@@ -21,17 +20,12 @@ interface RecentChatItemProps {
 }
 
 export function RecentChatItem({ chat }: RecentChatItemProps) {
-  // Inside the workspace, open the conversation as a tab instead of navigating
-  // (which would unmount the whole workspace). Falls through to normal Link
-  // navigation on the legacy home route.
-  const openInWorkspace = useWorkspaceLink()
   const href = `/salon/${chat.id}`
   const cast = activeCast(chat)
 
   return (
     <Link
       href={href}
-      onClick={(e) => openInWorkspace(href, e)}
       className="qt-homepage-row"
     >
       {/* Story background thumbnail (preferred) or Avatar stack */}

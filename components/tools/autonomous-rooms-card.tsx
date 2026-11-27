@@ -81,25 +81,13 @@ export function AutonomousRoomsCard() {
     // the original 5 s cadence held in reserve.
     refetchInterval: useRealtimeRefetchInterval(ROOMS_POLL_INTERVAL_MS),
   })
-  const [busyChatId, setBusyChatId] = useState<string | null>(null)
   const [editRoom, setEditRoom] = useState<{ id: string; title: string } | null>(null)
 
   // The server flips the run state synchronously, so reflect it optimistically
   // the instant the button is clicked rather than waiting for the POST +
   // revalidation round-trip (which can lag while a turn is running). Shared
   // with the page-toolbar badges — see hooks/useAutonomousRoomAction.
-  const actionMutation = useAutonomousRoomAction('Autonomous-room action failed')
-
-  const action = async (chatId: string, verb: 'start' | 'pause' | 'stop' | 'resume') => {
-    setBusyChatId(chatId)
-    try {
-      await actionMutation.mutateAsync({ chatId, verb })
-    } catch {
-      // Already logged in the mutation's onError handler.
-    } finally {
-      setBusyChatId(null)
-    }
-  }
+  const { run: action, busyChatId } = useAutonomousRoomAction('Autonomous-room action failed')
 
   if (isLoading) {
     return <div className="qt-text-secondary">Loading autonomous rooms…</div>

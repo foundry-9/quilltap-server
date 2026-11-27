@@ -27,6 +27,16 @@ export function describeRetryRefusal(error: unknown): string | null {
   }
 }
 
+/**
+ * The toast for a retry request that never opened: the Concierge's reason on a
+ * 409, else the server's `error`, else `fallback`.
+ */
+export async function describeRetryFailure(res: Response, fallback: string): Promise<string> {
+  const info = await res.json().catch(() => null) as { error?: unknown } | null
+  const refusal = res.status === 409 ? describeRetryRefusal(info?.error) : null
+  return refusal || (info?.error as string | undefined) || fallback
+}
+
 /** Whether a row is the Lantern's report that its painter refused the backdrop. */
 export function isLanternBackgroundRefusal(message: Pick<Message, 'systemSender' | 'systemKind'>): boolean {
   return message.systemSender === 'lantern' && message.systemKind === 'background-refused'

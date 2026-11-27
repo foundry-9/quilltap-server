@@ -40,27 +40,7 @@ import {
   findReplacement,
 } from '@/lib/text-replacement/useTextReplacementRules'
 import { $isInCodeContext } from '../utils/code-context'
-
-/**
- * Word-boundary trigger characters. Newline is excluded — submit/paragraph
- * handlers own that key.
- */
-const TRIGGER_CHARS = new Set([
-  ' ',
-  ' ', // NBSP
-  '\t',
-  '.',
-  ',',
-  ';',
-  ':',
-  '!',
-  '?',
-  ')',
-])
-
-function isBoundaryChar(ch: string): boolean {
-  return TRIGGER_CHARS.has(ch)
-}
+import { TEXT_REPLACEMENT_TRIGGER_CHARS, isTextReplacementBoundary } from '@/lib/text-replacement/boundary'
 
 interface CandidateWord {
   nodeKey: string
@@ -94,7 +74,7 @@ export function TextReplacementPlugin(): null {
       const rules = compiledRef.current
       if (rules.empty) return false
       if (editor.isComposing()) return false
-      if (!TRIGGER_CHARS.has(event.key)) return false
+      if (!TEXT_REPLACEMENT_TRIGGER_CHARS.has(event.key)) return false
 
       const candidate = editor.getEditorState().read<CandidateWord | null>(() => {
         const selection = $getSelection()
@@ -118,7 +98,7 @@ export function TextReplacementPlugin(): null {
 
         // Walk back across non-boundary chars to find the start of the word.
         let start = offset
-        while (start > 0 && !isBoundaryChar(text[start - 1])) start--
+        while (start > 0 && !isTextReplacementBoundary(text[start - 1])) start--
 
         if (start === offset) return null // empty word (cursor sits on a boundary)
 

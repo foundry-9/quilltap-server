@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { useRoleplayTemplatesQuery } from '@/lib/hooks/use-profiles'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { useChatSettingsMutation } from '@/hooks/useChatSettingsMutation'
@@ -29,9 +30,6 @@ export interface UseRoleplayTemplatesReturn {
   formData: TemplateFormData
   previewTemplate: RoleplayTemplate | null
   deleteConfirm: string | null
-
-  // Data fetching
-  fetchTemplates: () => Promise<void>
 
   // Modal handlers
   openCreateModal: () => void
@@ -206,18 +204,13 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
   // The template list and the default pick, both from the shared cache.
   const queryClient = useQueryClient()
-  const { data: templatesData, isLoading: loading, refetch: refetchTemplates } =
-    useRoleplayTemplatesQuery<RoleplayTemplate>()
+  const { data: templatesData, isLoading: loading } = useRoleplayTemplatesQuery<RoleplayTemplate>()
   const { data: defaultTemplateId = null } = useChatSettingsQuery(
     (settings) => settings.defaultRoleplayTemplateId ?? null,
   )
   const { save: saveChatSettings, saving: defaultSaving } = useChatSettingsMutation()
 
   const templates = templatesData ?? []
-
-  const fetchTemplates = useCallback(async () => {
-    await refetchTemplates()
-  }, [refetchTemplates])
 
   const handleDefaultTemplateChange = async (templateId: string | null) => {
     setError(null)
@@ -251,6 +244,22 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     setFormData(INITIAL_FORM_DATA)
   }
 
+  // Create (no id) or update (an id); either way the shared list is re-read.
+  const saveMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string | null; payload: Record<string, unknown> }) =>
+      apiFetch(id ? `/api/v1/roleplay-templates/${id}` : '/api/v1/roleplay-templates', {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.roleplayTemplates.all }),
+  })
+  const deleteMutation = useMutation({
+    mutationFn: (templateId: string) =>
+      apiFetch(`/api/v1/roleplay-templates/${templateId}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.roleplayTemplates.all }),
+  })
+
   const handleSave = async () => {
     try {
       setSaving(true)
@@ -266,44 +275,13 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         markdownAsterisks: formData.markdownAsterisks,
       }
 
-      if (editingTemplate) {
-        // Update existing template
-        const res = await fetch(`/api/v1/roleplay-templates/${editingTemplate.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => null)
-          throw new Error(data?.error || `Failed to update template (${res.status})`)
-        }
-
-        await res.json()
-        await queryClient.invalidateQueries({ queryKey: queryKeys.roleplayTemplates.all })
-        setSuccess('Template updated successfully')
-      } else {
-        // Create new template
-        const res = await fetch('/api/v1/roleplay-templates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => null)
-          throw new Error(data?.error || `Failed to create template (${res.status})`)
-        }
-
-        const created = await res.json()
-        await queryClient.invalidateQueries({ queryKey: queryKeys.roleplayTemplates.all })
-        setSuccess('Template created successfully')
-      }
+      await saveMutation.mutateAsync({ id: editingTemplate?.id ?? null, payload })
+      setSuccess(editingTemplate ? 'Template updated successfully' : 'Template created successfully')
 
       closeModal()
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'An error occurred'
+      const message = apiErrorMessage(err, 'An error occurred')
       setError(message)
       console.error('Error saving roleplay template:', message, err)
     } finally {
@@ -316,21 +294,12 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       setSaving(true)
       setError(null)
 
-      const res = await fetch(`/api/v1/roleplay-templates/${templateId}`, {
-        method: 'DELETE',
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(data?.error || `Failed to delete template (${res.status})`)
-      }
-
-      await queryClient.invalidateQueries({ queryKey: queryKeys.roleplayTemplates.all })
+      await deleteMutation.mutateAsync(templateId)
       setSuccess('Template deleted successfully')
       setDeleteConfirm(null)
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'An error occurred'
+      const message = apiErrorMessage(err, 'An error occurred')
       setError(message)
       console.error('Error deleting roleplay template:', message, err)
     } finally {
@@ -370,7 +339,6 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     formData,
     previewTemplate,
     deleteConfirm,
-    fetchTemplates,
     openCreateModal,
     openEditModal,
     closeModal,

@@ -8,9 +8,10 @@
  * the Concierge state: Unmoderated (whoever set it), nothing else.
  */
 
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import { QuickHideProvider, useQuickHide } from '@/components/providers/quick-hide-provider'
 import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 
 jest.mock('@/components/providers/session-provider', () => ({
   useSession: () => ({ status: 'authenticated' }),
@@ -41,7 +42,7 @@ const THREE_STATES: Array<{ id: string; conciergeState: ConciergeState }> = [
 ]
 
 async function renderProbe(chats: Parameters<typeof Probe>[0]['chats']) {
-  render(
+  renderWithQuery(
     <QuickHideProvider>
       <Probe chats={chats} />
     </QuickHideProvider>

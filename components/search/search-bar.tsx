@@ -9,7 +9,15 @@ import { SearchDialog } from './search-dialog'
 import { ConversationMatches } from './conversation-matches'
 import { usePageToolbarOptional } from '@/components/providers/page-toolbar-provider'
 import { CONVERSATION_SEARCH_MIN_QUERY } from '@/lib/chat/conversation-search'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { isMacPlatform } from '@/lib/utils/platform'
 import type { SearchResult, SearchResponse, SearchType } from './types'
+
+const INLINE_LIMIT = 20
+const NO_RESULTS: SearchResult[] = []
+const NO_COUNTS: Partial<Record<SearchType, number>> = {}
 
 export function SearchBar() {
   const router = useRouter()
@@ -18,11 +26,11 @@ export function SearchBar() {
 
   // Desktop inline search state
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchResult[]>([])
-  const [countsByType, setCountsByType] = useState<Partial<Record<SearchType, number>>>({})
-  const [isLoading, setIsLoading] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
-  const [hasSearched, setHasSearched] = useState(false)
+  // The search on screen, set by the debounce, Enter or focus. It is the query
+  // key, so an answer for an earlier term can never replace a newer one.
+  const [submittedQuery, setSubmittedQuery] = useState('')
+  const hasSearched = submittedQuery.length >= 2
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Mobile dialog state
@@ -49,7 +57,7 @@ export function SearchBar() {
   // Global keyboard shortcut (Cmd+K on macOS, Ctrl+K on Windows/Linux)
   // On macOS, Ctrl+K is "delete to end of line" and should not be intercepted
   useEffect(() => {
-    const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
+    const isMac = isMacPlatform()
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // On macOS: only respond to Cmd+K (metaKey)
@@ -76,36 +84,40 @@ export function SearchBar() {
   // Close dropdown when clicking outside
   useClickOutside(containerRef, () => setShowDropdown(false))
 
-  // Debounced search
-  const performSearch = useCallback(async (searchQuery: string) => {
-    if (searchQuery.length < 2) {
-      setResults([])
-      setCountsByType({})
-      setHasSearched(false)
+  const searchQuery = useQuery({
+    queryKey: queryKeys.uiSearch.inline(submittedQuery),
+    queryFn: ({ signal }) =>
+      apiFetch<SearchResponse>(
+        `/api/v1/ui/search?q=${encodeURIComponent(submittedQuery)}&limit=${INLINE_LIMIT}`,
+        { signal },
+      ),
+    enabled: hasSearched,
+    // The last answer stays up while the next term's is fetched, as it did.
+    placeholderData: keepPreviousData,
+  })
+  // With no term submitted the kept-previous answer is not this search's.
+  const results = hasSearched ? (searchQuery.data?.results ?? NO_RESULTS) : NO_RESULTS
+  const countsByType = hasSearched ? (searchQuery.data?.countsByType ?? NO_COUNTS) : NO_COUNTS
+  const isLoading = hasSearched && searchQuery.isFetching
+  useEffect(() => {
+    if (searchQuery.error) {
+      console.error('Inline search error', { error: searchQuery.error.message })
+    }
+  }, [searchQuery.error])
+
+  // A search for the term already on screen is asked again, not read from cache.
+  const { refetch } = searchQuery
+  const performSearch = useCallback((nextQuery: string) => {
+    if (nextQuery.length < 2) {
+      setSubmittedQuery('')
       return
     }
-
-    setIsLoading(true)
-    setHasSearched(true)
-
-    try {
-      const response = await fetch(`/api/v1/ui/search?q=${encodeURIComponent(searchQuery)}&limit=20`)
-
-      if (!response.ok) {
-        throw new Error(`Search failed: ${response.status}`)
-      }
-
-      const data: SearchResponse = await response.json()
-      setResults(data.results ?? [])
-      setCountsByType(data.countsByType ?? {})
-    } catch (error) {
-      console.error('Inline search error', { error: error instanceof Error ? error.message : String(error) })
-      setResults([])
-      setCountsByType({})
-    } finally {
-      setIsLoading(false)
+    if (nextQuery === submittedQuery) {
+      void refetch()
+      return
     }
-  }, [])
+    setSubmittedQuery(nextQuery)
+  }, [submittedQuery, refetch])
 
   // Handle input change with debounce
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,9 +141,7 @@ export function SearchBar() {
       clearTimeout(searchTimeoutRef.current)
     }
     setQuery('')
-    setResults([])
-    setCountsByType({})
-    setHasSearched(false)
+    setSubmittedQuery('')
   }
 
   // Handle result click

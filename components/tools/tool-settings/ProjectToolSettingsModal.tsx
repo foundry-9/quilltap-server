@@ -7,13 +7,14 @@
  * Tools configured here are applied as defaults when creating new chats in the project.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { ToolSettingsContent } from './ToolSettingsContent'
+import { useToolSettingsDraft } from './useToolSettingsDraft'
 import type { AvailableTool } from './types'
 
 interface ProjectToolSettingsModalProps {
@@ -33,8 +34,10 @@ export function ProjectToolSettingsModal({
   disabledToolGroups,
   onSuccess,
 }: Readonly<ProjectToolSettingsModalProps>) {
-  const [localDisabledTools, setLocalDisabledTools] = useState<Set<string>>(new Set(disabledTools))
-  const [localDisabledGroups, setLocalDisabledGroups] = useState<Set<string>>(new Set(disabledToolGroups))
+  // The modal stays mounted between openings, so the draft survives a
+  // refetch and is discarded only on dismiss.
+  const draft = useToolSettingsDraft(disabledTools, disabledToolGroups)
+  const { disabledTools: localDisabledTools, disabledGroups: localDisabledGroups } = draft
   const [saving, setSaving] = useState(false)
 
   // Fetch available tools via TanStack Query (gated by isOpen)
@@ -45,13 +48,6 @@ export function ProjectToolSettingsModal({
   })
 
   const availableTools = toolsData?.tools ?? []
-
-  // Reset local state when props change
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream disabledTools changes (parent renders unconditionally)
-    setLocalDisabledTools(new Set(disabledTools))
-    setLocalDisabledGroups(new Set(disabledToolGroups))
-  }, [disabledTools, disabledToolGroups])
 
   // Save changes
   const handleSave = useCallback(async () => {
@@ -82,30 +78,16 @@ export function ProjectToolSettingsModal({
     }
   }, [projectId, localDisabledTools, localDisabledGroups, onSuccess, onClose])
 
-  // Check for changes
-  const hasChanges = useCallback(() => {
-    const originalToolSet = new Set(disabledTools)
-    const originalGroupSet = new Set(disabledToolGroups)
-
-    // Check tool differences
-    if (originalToolSet.size !== localDisabledTools.size) return true
-    for (const tool of localDisabledTools) {
-      if (!originalToolSet.has(tool)) return true
-    }
-
-    // Check group differences
-    if (originalGroupSet.size !== localDisabledGroups.size) return true
-    for (const group of localDisabledGroups) {
-      if (!originalGroupSet.has(group)) return true
-    }
-
-    return false
-  }, [disabledTools, disabledToolGroups, localDisabledTools, localDisabledGroups])
+  // Dismissing discards the unsaved toggles.
+  const handleDismiss = () => {
+    draft.reset()
+    onClose()
+  }
 
   return (
     <BaseModal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleDismiss}
       title="Default Tool Settings"
     >
       <div className="qt-dialog-body qt-dialog-body-default">
@@ -113,8 +95,8 @@ export function ProjectToolSettingsModal({
           availableTools={availableTools}
           disabledTools={localDisabledTools}
           disabledGroups={localDisabledGroups}
-          onDisabledToolsChange={setLocalDisabledTools}
-          onDisabledGroupsChange={setLocalDisabledGroups}
+          onDisabledToolsChange={draft.setDisabledTools}
+          onDisabledGroupsChange={draft.setDisabledGroups}
           showAvailability={false}
           loading={loading}
           footerNote="Configure which tools are enabled by default for new chats in this project. Existing chats are not affected."
@@ -125,7 +107,7 @@ export function ProjectToolSettingsModal({
       <div className="qt-dialog-footer qt-dialog-footer-default">
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleDismiss}
           className="qt-button-secondary"
           disabled={saving}
         >
@@ -135,7 +117,7 @@ export function ProjectToolSettingsModal({
           type="button"
           onClick={handleSave}
           className="qt-button-primary"
-          disabled={saving || !hasChanges()}
+          disabled={saving || !draft.dirty}
         >
           {saving ? 'Saving...' : 'Save'}
         </button>

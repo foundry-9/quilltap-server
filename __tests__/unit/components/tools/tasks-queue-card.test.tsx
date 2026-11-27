@@ -7,7 +7,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { createTestQueryClient } from '../../../helpers/renderWithQuery'
-import { TasksQueueCard } from '@/components/tools/tasks-queue-card'
+import { TasksQueueCard } from '@/components/tools/tasks-queue'
 
 type QueueData = {
   stats: {

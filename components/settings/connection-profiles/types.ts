@@ -5,15 +5,12 @@
 import type { ProviderOptionsSchema, ThinkingTurnRule } from '@quilltap/plugin-types'
 import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types'
 import type { ProfileUsageCounters } from '@/lib/llm/profile-usage'
+import type { ApiKeyRow } from '@/lib/hooks/use-profiles'
 
 export type { ProviderOptionsSchema, ThinkingTurnRule }
 
-export interface ApiKey {
-  id: string
-  label: string
-  provider: string
-  isActive: boolean
-}
+/** An API key row, as every settings list reads it. */
+export type ApiKey = ApiKeyRow
 
 export interface Tag {
   id: string

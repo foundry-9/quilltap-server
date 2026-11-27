@@ -1,138 +1,85 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
-import { useAsyncOperation } from '@/hooks/useAsyncOperation'
-import { fetchJson } from '@/lib/fetch-helpers'
-import { PromptTemplate } from '../types'
+import { useState, useCallback } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { usePromptTemplatesQuery } from '@/lib/hooks/use-profiles'
+import { PromptTemplate, TemplateFormData } from '../types'
+
+const NO_TEMPLATES: PromptTemplate[] = []
 
 /**
- * Hook for managing prompt templates data and operations
+ * Prompt templates for the Settings card: the shared list
+ * (`usePromptTemplatesQuery`) plus save and delete, each of which re-reads it.
  */
 export function usePrompts() {
-  const [templates, setTemplates] = useState<PromptTemplate[]>([])
+  const queryClient = useQueryClient()
   const [success, setSuccess] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
-  // Async operation hooks
-  const fetchOp = useAsyncOperation<PromptTemplate[]>()
-  const saveOp = useAsyncOperation<PromptTemplate>()
-  const deleteOp = useAsyncOperation<void>()
+  const templatesQuery = usePromptTemplatesQuery<PromptTemplate>()
+  const templates = templatesQuery.data ?? NO_TEMPLATES
+  const { refetch } = templatesQuery
+  const fetchError = templatesQuery.error
+    ? apiErrorMessage(templatesQuery.error, 'Failed to fetch templates')
+    : null
 
-  /**
-   * Fetch all prompt templates from the server
-   * Note: Empty dependency array since fetchOp.execute is stable
-   */
-  const fetchTemplates = useCallback(async () => {
-    const result = await fetchOp.execute(async () => {
-      const response = await fetchJson<{ templates: PromptTemplate[]; count: number }>('/api/v1/prompt-templates')
-      if (!response.ok) {
-        throw new Error(response.error || 'Failed to fetch templates')
-      }
-      return response.data?.templates || []
-    })
-    if (result) {
-      setTemplates(result)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchOp is a fresh object each render, but its execute is a stable useCallback
-  }, []) // fetchOp.execute is stable (empty deps in useAsyncOperation)
+  const refreshTemplates = () => queryClient.invalidateQueries({ queryKey: queryKeys.promptTemplates.all })
 
-  /**
-   * Save a template (create or update)
-   * Note: Empty dependency array since saveOp.execute is stable
-   */
-  const saveTemplate = useCallback(
-    async (formData: { name: string; content: string; description: string }, editingId?: string) => {
+  const saveMutation = useMutation({
+    mutationFn: async ({ formData, editingId }: { formData: TemplateFormData; editingId?: string }) => {
+      const saved = await apiFetch<{ template?: PromptTemplate }>(
+        editingId ? `/api/v1/prompt-templates/${editingId}` : '/api/v1/prompt-templates',
+        {
+          method: editingId ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        },
+      )
+      // A save that answers without the row is a failure, not a quiet success.
+      if (!saved.template) throw new Error('No data returned from server')
+      return { template: saved.template }
+    },
+    onSuccess: refreshTemplates,
+    onError: (err) => console.error('Failed to save prompt template', { error: apiErrorMessage(err, 'Operation failed') }),
+  })
 
-      const result = await saveOp.execute(async () => {
-        if (editingId) {
-          // Update existing template
-          const response = await fetchJson<{ template: PromptTemplate }>(
-            `/api/v1/prompt-templates/${editingId}`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(formData),
-            }
-          )
+  const deleteMutation = useMutation({
+    mutationFn: (templateId: string) =>
+      apiFetch(`/api/v1/prompt-templates/${templateId}`, { method: 'DELETE' }),
+    onSuccess: refreshTemplates,
+    onError: (err) => console.error('Failed to delete prompt template', { error: apiErrorMessage(err, 'Operation failed') }),
+  })
 
-          if (!response.ok) {
-            throw new Error(response.error || 'Failed to update template')
-          }
+  /** Re-read the list (the load error's Retry). */
+  const retryFetch = useCallback(() => {
+    void refetch()
+  }, [refetch])
 
-          if (!response.data?.template) {
-            throw new Error('No data returned from server')
-          }
-
-          return response.data.template
-        } else {
-          // Create new template
-          const response = await fetchJson<{ template: PromptTemplate }>('/api/v1/prompt-templates', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData),
-          })
-
-          if (!response.ok) {
-            throw new Error(response.error || 'Failed to create template')
-          }
-
-          if (!response.data?.template) {
-            throw new Error('No data returned from server')
-          }
-
-          return response.data.template
-        }
-      })
-
-      if (result) {
-        if (editingId) {
-          // Update existing in list
-          setTemplates(prev => prev.map(t => (t.id === result.id ? result : t)))
-          setSuccess('Template updated successfully')
-        } else {
-          // Add new to list
-          setTemplates(prev => [...prev, result])
-          setSuccess('Template created successfully')
-        }
-
-        setTimeout(() => setSuccess(null), 3000)
-        return result
-      }
-
+  /** Save a template (create, or update `editingId`). Resolves the saved row, or null on failure. */
+  const saveTemplate = async (formData: TemplateFormData, editingId?: string): Promise<PromptTemplate | null> => {
+    try {
+      const { template } = await saveMutation.mutateAsync({ formData, editingId })
+      setSuccess(editingId ? 'Template updated successfully' : 'Template created successfully')
+      setTimeout(() => setSuccess(null), 3000)
+      return template
+    } catch {
       return null
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveOp is a fresh object each render, but its execute is a stable useCallback
-    [] // saveOp.execute is stable (empty deps in useAsyncOperation)
-  )
+    }
+  }
 
-  /**
-   * Delete a template
-   * Note: Empty dependency array since deleteOp.execute is stable
-   */
-  const deleteTemplate = useCallback(
-    async (templateId: string) => {
-
-      const result = await deleteOp.execute(async () => {
-        const response = await fetchJson<void>(`/api/v1/prompt-templates/${templateId}`, {
-          method: 'DELETE',
-        })
-
-        if (!response.ok) {
-          throw new Error(response.error || 'Failed to delete template')
-        }
-      })
-
-      if (result !== null) {
-        setTemplates(prev => prev.filter(t => t.id !== templateId))
-        setSuccess('Template deleted successfully')
-        setDeleteConfirm(null)
-        setTimeout(() => setSuccess(null), 3000)
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deleteOp is a fresh object each render, but its execute is a stable useCallback
-    [] // deleteOp.execute is stable (empty deps in useAsyncOperation)
-  )
+  const deleteTemplate = async (templateId: string) => {
+    try {
+      await deleteMutation.mutateAsync(templateId)
+      setSuccess('Template deleted successfully')
+      setDeleteConfirm(null)
+      setTimeout(() => setSuccess(null), 3000)
+    } catch {
+      // The failure is shown from deleteError.
+    }
+  }
 
   /**
    * Copy template content to clipboard
@@ -149,44 +96,21 @@ export function usePrompts() {
     }
   }, [])
 
-  /**
-   * Clear success message
-   */
-  const clearSuccess = useCallback(() => {
-    setSuccess(null)
-  }, [])
-
-  // Memoize the return value to prevent unnecessary re-renders
-  return useMemo(
-    () => ({
-      templates,
-      success,
-      copiedId,
-      deleteConfirm,
-      fetchOp,
-      saveOp,
-      deleteOp,
-      fetchTemplates,
-      saveTemplate,
-      deleteTemplate,
-      copyToClipboard,
-      clearSuccess,
-      setDeleteConfirm,
-      setCopiedId,
-    }),
-    [
-      templates,
-      success,
-      copiedId,
-      deleteConfirm,
-      fetchOp,
-      saveOp,
-      deleteOp,
-      fetchTemplates,
-      saveTemplate,
-      deleteTemplate,
-      copyToClipboard,
-      clearSuccess,
-    ]
-  )
+  return {
+    templates,
+    success,
+    copiedId,
+    deleteConfirm,
+    loading: templatesQuery.isLoading,
+    fetchError,
+    retryFetch,
+    saving: saveMutation.isPending,
+    saveError: saveMutation.error ? apiErrorMessage(saveMutation.error, 'Failed to save template') : null,
+    deleting: deleteMutation.isPending,
+    deleteError: deleteMutation.error ? apiErrorMessage(deleteMutation.error, 'Failed to delete template') : null,
+    saveTemplate,
+    deleteTemplate,
+    copyToClipboard,
+    setDeleteConfirm,
+  }
 }

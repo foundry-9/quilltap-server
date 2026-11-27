@@ -62,8 +62,6 @@ export function ProfileModal({
     baseUrl: profile?.baseUrl || '',
     modelName: profile?.modelName || '',
     dimensions: profile?.dimensions?.toString() || '',
-    truncateToDimensions: profile?.truncateToDimensions?.toString() || '',
-    normalizeL2: profile?.normalizeL2 ?? true,
     isDefault: profile?.isDefault || false,
   })
 

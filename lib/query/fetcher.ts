@@ -47,19 +47,22 @@ export async function apiFetch<T = unknown>(url: string, init?: RequestInit): Pr
  *
  * The v1 API answers a failure with `{ error }` (see `@/lib/api/responses`), so
  * an `ApiFetchError`'s parsed `info` carries the sentence a person should read;
- * `message` is accepted as the older shape. Anything that is not an
- * `ApiFetchError` falls back to its own `Error.message`, and a non-Error to the
- * caller's `fallback` — which is where each surface says what it could not do.
+ * `message` is accepted as the older shape. An `ApiFetchError` whose body held
+ * no such sentence (an empty or non-JSON answer) falls back to the caller's
+ * `fallback` — which is where each surface says what it could not do — rather
+ * than to the error's own "Request to <url> failed: 500" text, which is for
+ * logs. Any other `Error` keeps its own message, and a non-Error gets the
+ * `fallback`.
  */
 export function apiErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiFetchError) {
     const info = err.info
     if (info && typeof info === 'object') {
       const record = info as Record<string, unknown>
-      if (typeof record.error === 'string') return record.error
-      if (typeof record.message === 'string') return record.message
+      if (typeof record.error === 'string' && record.error) return record.error
+      if (typeof record.message === 'string' && record.message) return record.message
     }
-    return err.message
+    return fallback
   }
   if (err instanceof Error) return err.message
   return fallback

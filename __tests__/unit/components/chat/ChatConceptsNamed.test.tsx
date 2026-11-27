@@ -9,7 +9,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 
 import { ChatConceptsNamed } from '@/components/chat/ChatConceptsNamed'
 import { requestMessageReveal } from '@/lib/chat/message-navigation'
-import type { ChatAbsentMention } from '@/hooks/useAbsentMentions'
+import type { ChatAbsentMention } from '@/hooks/useChatMentions'
 import type { AtlasMention } from '@/lib/schemas/atlas.types'
 
 // react-markdown and remark-gfm are ESM-only; the Atlas card renders through them.

@@ -16,7 +16,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { showErrorToast, showInfoToast, showSuccessToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
-import { describeRetryRefusal } from '../concierge-retry'
+import { describeRetryFailure } from '../concierge-retry'
 
 export interface ConciergeRetryController {
   retryPicture: (toolMessageId: string) => Promise<void>
@@ -29,12 +29,6 @@ async function postRetry(chatId: string, body: Record<string, unknown>): Promise
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-}
-
-async function errorFrom(res: Response, fallback: string): Promise<string> {
-  const info = await res.json().catch(() => null)
-  const refusal = res.status === 409 ? describeRetryRefusal(info?.error) : null
-  return refusal || info?.error || fallback
 }
 
 export function useConciergeRetry(
@@ -52,7 +46,7 @@ export function useConciergeRetry(
     try {
       const res = await postRetry(chatId, { toolMessageId })
       if (!res.ok) {
-        throw new Error(await errorFrom(res, 'The uncensored desk could not produce the picture'))
+        throw new Error(await describeRetryFailure(res, 'The uncensored desk could not produce the picture'))
       }
       await fetchChat()
       showSuccessToast('The uncensored desk has delivered the picture')
@@ -67,7 +61,7 @@ export function useConciergeRetry(
     try {
       const res = await postRetry(chatId, { kind: 'background' })
       if (!res.ok) {
-        throw new Error(await errorFrom(res, 'Failed to queue the backdrop'))
+        throw new Error(await describeRetryFailure(res, 'Failed to queue the backdrop'))
       }
       showSuccessToast('Backdrop commissioned from the uncensored desk')
       notifyQueueChange()

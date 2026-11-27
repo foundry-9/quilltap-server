@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach } from '@jest/globals'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QuickHideProvider, useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useSession } from '@/components/providers/session-provider'
+import { createTestQueryClient } from '../helpers/renderWithQuery'
+import { QueryClientProvider } from '@tanstack/react-query'
 
 const STORAGE_KEY = 'quilltap.quickHide.activeTags'
 const defaultTags = [
@@ -14,11 +16,13 @@ const defaultTags = [
 const useSessionMock = useSession as jest.MockedFunction<typeof useSession>
 const fetchMock = global.fetch as jest.Mock
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <QuickHideProvider>{children}</QuickHideProvider>
-)
-
 const renderQuickHideHook = async () => {
+  const queryClient = createTestQueryClient()
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      <QuickHideProvider>{children}</QuickHideProvider>
+    </QueryClientProvider>
+  )
   const hook = renderHook(() => useQuickHide(), { wrapper })
   await waitFor(() => expect(hook.result.current.loading).toBe(false))
   return hook

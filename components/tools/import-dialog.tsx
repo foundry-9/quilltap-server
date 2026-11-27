@@ -1,13 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { WizardModal } from '@/components/ui/WizardModal'
+import { WizardModal, wizardStep } from '@/components/ui/WizardModal'
 import { useImportData } from './import-export/hooks/useImportData'
-import {
-  LoadingSpinner,
-  WizardLoadingStep,
-  WizardErrorStep,
-} from './import-export/components'
+import { Spinner } from '@/components/ui/Spinner'
+import { WizardErrorStep } from './import-export/components'
+import { IMPORT_STEPS } from './import-export/types'
+import { previewHasMemories } from './import-export/utils'
 import {
   ImportFileStep,
   ImportPreviewStep,
@@ -38,23 +37,6 @@ export function ImportDialog({
 
   if (!isOpen) return null
 
-  const getStepNumber = (): number => {
-    switch (state.step) {
-      case 'file':
-        return 1
-      case 'preview':
-        return 2
-      case 'options':
-        return 3
-      case 'importing':
-        return 4
-      case 'complete':
-        return 5
-      default:
-        return 1
-    }
-  }
-
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
@@ -77,23 +59,17 @@ export function ImportDialog({
     actions.handleFileDrop(e)
   }
 
-  // Check if preview has memories
-  const hasMemories = Boolean(
-    state.preview?.entities?.memories &&
-    (state.preview.entities.memories as { count?: number }).count &&
-    (state.preview.entities.memories as { count?: number }).count! > 0
-  )
+  const hasMemories = previewHasMemories(state.preview)
 
   return (
     <WizardModal
       onClose={handleClose}
       title="Import Data"
-      step={{ current: getStepNumber(), total: 5 }}
+      step={wizardStep(IMPORT_STEPS, state.step === 'error' ? 'importing' : state.step)}
       busy={state.importing}
       done={state.step === 'complete'}
       onBack={actions.handleBack}
       backDisabled={state.step === 'file'}
-      hideActions={state.step === 'importing'}
       primary={
         state.step === 'options'
           ? {
@@ -101,7 +77,7 @@ export function ImportDialog({
               disabled: state.importing,
               label: state.importing ? (
                 <>
-                  <LoadingSpinner />
+                  <Spinner className="w-6 h-6" />
                   Importing...
                 </>
               ) : (
@@ -113,7 +89,7 @@ export function ImportDialog({
               disabled: (state.step === 'file' && !state.exportData) || state.loadingPreview,
               label: state.loadingPreview ? (
                 <>
-                  <LoadingSpinner />
+                  <Spinner className="w-6 h-6" />
                   Loading...
                 </>
               ) : (
@@ -155,11 +131,6 @@ export function ImportDialog({
           onImportMemoriesChange={actions.setImportMemories}
           hasMemories={hasMemories}
         />
-      )}
-
-      {/* Step 4: Importing */}
-      {state.step === 'importing' && (
-        <WizardLoadingStep message="Importing data..." />
       )}
 
       {/* Step 5: Complete */}

@@ -10,10 +10,10 @@
  * @module components/settings/appearance/components/ThemeBrowser
  */
 
-import { useState, useCallback, useEffect, useId } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useCallback, useId } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
-import { apiFetch } from '@/lib/query/fetcher'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -46,6 +46,9 @@ interface RegistrySource {
   publicKey?: string
 }
 
+const EMPTY_SOURCES: RegistrySource[] = []
+const EMPTY_THEMES: RegistryTheme[] = []
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 /**
@@ -53,26 +56,15 @@ interface RegistrySource {
  */
 export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
   const id = useId()
+  const queryClient = useQueryClient()
   // Expand/collapse state
   const [isExpanded, setIsExpanded] = useState(false)
-
-  // Registry themes
-  const [themes, setThemes] = useState<RegistryTheme[]>([])
-  const [isLoadingThemes, setIsLoadingThemes] = useState(false)
-  const [themesError, setThemesError] = useState<string | null>(null)
-
-  // Registry sources
-  const [sources, setSources] = useState<RegistrySource[]>([])
-  const [isLoadingSources, setIsLoadingSources] = useState(false)
 
   // Search
   const [searchQuery, setSearchQuery] = useState('')
 
   // Installing state per theme
   const [installingThemes, setInstallingThemes] = useState<Set<string>>(new Set())
-
-  // Refreshing registry indexes
-  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Status message
   const [status, setStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
@@ -82,100 +74,92 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
   const [newSourceName, setNewSourceName] = useState('')
   const [newSourceUrl, setNewSourceUrl] = useState('')
   const [newSourceKey, setNewSourceKey] = useState('')
-  const [isAddingSource, setIsAddingSource] = useState(false)
 
   // ── Data fetching ──────────────────────────────────────────────────────
 
-  const { data: sourcesData, isPending: isLoadingSourcesData, refetch: mutateSources } = useQuery({
+  const { data: sourcesData, isPending: isLoadingSources, refetch: fetchSources } = useQuery({
     queryKey: queryKeys.themes.registrySources,
     queryFn: ({ signal }) => apiFetch<{ sources: RegistrySource[] }>('/api/v1/themes?action=registry-sources', { signal }),
     enabled: isExpanded,
   })
 
-  const { data: themesData, isPending: isLoadingThemesData, error: themesLoadError, refetch: mutateThemes } = useQuery({
+  const { data: themesData, isPending: isLoadingThemes, error: themesLoadError, refetch: fetchThemes } = useQuery({
     queryKey: queryKeys.themes.registry,
     queryFn: ({ signal }) => apiFetch<{ themes: RegistryTheme[] }>('/api/v1/themes?action=registry', { signal }),
     enabled: isExpanded,
   })
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Query data must sync to local state that's also mutated by action handlers (filter/delete/update)
-    setIsLoadingSources(isLoadingSourcesData)
-  }, [isLoadingSourcesData])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Query data must sync to local state that's also mutated by action handlers (filter/delete/update)
-    setIsLoadingThemes(isLoadingThemesData)
-    if (themesLoadError) {
-      setThemesError(themesLoadError instanceof Error ? themesLoadError.message : 'Failed to load themes')
-    } else {
-      setThemesError(null)
-    }
-  }, [isLoadingThemesData, themesLoadError])
-
-  useEffect(() => {
-    if (sourcesData?.sources) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Query data must sync to local state that's also mutated by action handlers (filter/delete/update)
-      setSources(sourcesData.sources)
-    }
-  }, [sourcesData])
-
-  useEffect(() => {
-    if (themesData?.themes) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Query data must sync to local state that's also mutated by action handlers (filter/delete/update)
-      setThemes(themesData.themes)
-    }
-  }, [themesData])
-
-  const fetchSources = useCallback(() => mutateSources(), [mutateSources])
-  const fetchThemes = useCallback(() => mutateThemes(), [mutateThemes])
+  const sources = sourcesData?.sources ?? EMPTY_SOURCES
+  const themes = themesData?.themes ?? EMPTY_THEMES
+  const themesError = themesLoadError
+    ? (themesLoadError instanceof Error ? themesLoadError.message : 'Failed to load themes')
+    : null
 
   // ── Actions ────────────────────────────────────────────────────────────
 
+  const refreshMutation = useMutation({
+    mutationFn: () => apiFetch('/api/v1/themes?action=refresh', { method: 'POST' }),
+  })
+  const { mutateAsync: refreshAsync } = refreshMutation
+  const isRefreshing = refreshMutation.isPending
+  const installMutation = useMutation({
+    mutationFn: ({ themeId, registryUrl }: { themeId: string; registryUrl: string }) =>
+      apiFetch('/api/v1/themes?action=install-registry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ themeId, registryUrl }),
+      }),
+  })
+  const { mutateAsync: installAsync } = installMutation
+  const addSourceMutation = useMutation({
+    mutationFn: (body: Record<string, string>) =>
+      apiFetch('/api/v1/themes?action=add-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+  })
+  const { mutateAsync: addSourceAsync } = addSourceMutation
+  const isAddingSource = addSourceMutation.isPending
+  const removeSourceMutation = useMutation({
+    mutationFn: (name: string) =>
+      apiFetch('/api/v1/themes?action=remove-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }),
+  })
+  const { mutateAsync: removeSourceAsync } = removeSourceMutation
+
   const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true)
     setStatus(null)
     try {
-      const response = await fetch('/api/v1/themes?action=refresh', { method: 'POST' })
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.error || 'Failed to refresh registries')
-      }
+      await refreshAsync()
       await fetchThemes()
       setStatus({ message: 'Registry indexes refreshed successfully', type: 'success' })
     } catch (err) {
       setStatus({
-        message: err instanceof Error ? err.message : 'Failed to refresh registries',
+        message: apiErrorMessage(err, 'Failed to refresh registries'),
         type: 'error',
       })
-    } finally {
-      setIsRefreshing(false)
     }
-  }, [fetchThemes])
+  }, [refreshAsync, fetchThemes])
 
   const handleInstall = useCallback(async (themeId: string, registryUrl: string) => {
     setInstallingThemes((prev) => new Set(prev).add(themeId))
     setStatus(null)
     try {
-      const response = await fetch('/api/v1/themes?action=install-registry', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ themeId, registryUrl }),
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        throw new Error(result.error || 'Installation failed')
-      }
+      await installAsync({ themeId, registryUrl })
       setStatus({ message: `Theme "${themeId}" installed successfully`, type: 'success' })
-      // Mark theme as installed locally
-      setThemes((prev) =>
-        prev.map((t) => (t.id === themeId ? { ...t, installed: true } : t))
+      // Mark the theme as installed in the cached registry listing
+      queryClient.setQueryData<{ themes: RegistryTheme[] }>(queryKeys.themes.registry, (prev) =>
+        prev && { ...prev, themes: prev.themes.map((t) => (t.id === themeId ? { ...t, installed: true } : t)) },
       )
       // Refresh the main theme list
       await onRefreshThemes?.()
     } catch (err) {
       setStatus({
-        message: err instanceof Error ? err.message : 'Failed to install theme',
+        message: apiErrorMessage(err, 'Failed to install theme'),
         type: 'error',
       })
     } finally {
@@ -185,26 +169,17 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
         return next
       })
     }
-  }, [onRefreshThemes])
+  }, [installAsync, queryClient, onRefreshThemes])
 
   const handleAddSource = useCallback(async () => {
     if (!newSourceName.trim() || !newSourceUrl.trim()) return
-    setIsAddingSource(true)
     setStatus(null)
     try {
       const body: Record<string, string> = { name: newSourceName.trim(), url: newSourceUrl.trim() }
       if (newSourceKey.trim()) {
         body.publicKey = newSourceKey.trim()
       }
-      const response = await fetch('/api/v1/themes?action=add-source', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to add source')
-      }
+      await addSourceAsync(body)
       setStatus({ message: `Source "${newSourceName}" added successfully`, type: 'success' })
       setNewSourceName('')
       setNewSourceUrl('')
@@ -214,36 +189,26 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
       await fetchThemes()
     } catch (err) {
       setStatus({
-        message: err instanceof Error ? err.message : 'Failed to add source',
+        message: apiErrorMessage(err, 'Failed to add source'),
         type: 'error',
       })
-    } finally {
-      setIsAddingSource(false)
     }
-  }, [newSourceName, newSourceUrl, newSourceKey, fetchSources, fetchThemes])
+  }, [newSourceName, newSourceUrl, newSourceKey, addSourceAsync, fetchSources, fetchThemes])
 
   const handleRemoveSource = useCallback(async (name: string) => {
     setStatus(null)
     try {
-      const response = await fetch('/api/v1/themes?action=remove-source', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to remove source')
-      }
+      await removeSourceAsync(name)
       setStatus({ message: `Source "${name}" removed`, type: 'success' })
       await fetchSources()
       await fetchThemes()
     } catch (err) {
       setStatus({
-        message: err instanceof Error ? err.message : 'Failed to remove source',
+        message: apiErrorMessage(err, 'Failed to remove source'),
         type: 'error',
       })
     }
-  }, [fetchSources, fetchThemes])
+  }, [removeSourceAsync, fetchSources, fetchThemes])
 
   // ── Filtering ──────────────────────────────────────────────────────────
 
@@ -334,7 +299,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
               placeholder="Search themes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border qt-border-default qt-bg-card qt-text placeholder:qt-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
+              className="qt-input pl-10"
             />
           </div>
 
@@ -421,6 +386,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                       onClick={() => handleRemoveSource(source.name)}
                       className="ml-0.5 qt-text-secondary hover:qt-text-destructive transition-colors"
                       title={`Remove ${source.name}`}
+                      aria-label={`Remove ${source.name}`}
                     >
                       <Icon name="close" className="w-3 h-3" />
                     </button>
@@ -454,7 +420,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                       placeholder="e.g. Community"
                       value={newSourceName}
                       onChange={(e) => setNewSourceName(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-md border qt-border-default qt-bg-default qt-text placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
+                      className="qt-input"
                     />
                   </div>
                   <div>
@@ -467,7 +433,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                       placeholder="https://registry.example.com/themes"
                       value={newSourceUrl}
                       onChange={(e) => setNewSourceUrl(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-md border qt-border-default qt-bg-default qt-text placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
+                      className="qt-input"
                     />
                   </div>
                 </div>
@@ -481,7 +447,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                     placeholder="For signature verification"
                     value={newSourceKey}
                     onChange={(e) => setNewSourceKey(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-md border qt-border-default qt-bg-default qt-text placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
+                    className="qt-input"
                   />
                 </div>
                 <div className="flex items-center gap-2 justify-end">

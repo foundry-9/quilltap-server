@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { useRoleplayTemplatesQuery } from '@/lib/hooks/use-profiles'
 import type { LexicalEditor } from 'lexical'
 import { FORMAT_TEXT_COMMAND, $getSelection, $isRangeSelection, $createTextNode, $createParagraphNode, $getRoot } from 'lexical'
 import { $isCodeNode, $createCodeNode } from '@lexical/code'
@@ -188,8 +189,17 @@ export default function FormattingToolbar({
   onToggleSource,
   narrationDelimiters,
 }: FormattingToolbarProps) {
-  const [template, setTemplate] = useState<RoleplayTemplateWithDelimiters | null>(null)
-  const [loadingTemplate, setLoadingTemplate] = useState(false)
+  // The chat's template, read from the shared template list (which carries
+  // the delimiter fields), so every toolbar shares one cached read.
+  const selectTemplate = useCallback(
+    (rows: RoleplayTemplateWithDelimiters[]) => rows.find((t) => t.id === roleplayTemplateId) ?? null,
+    [roleplayTemplateId],
+  )
+  const { data: templateData, isLoading: loadingTemplate } = useRoleplayTemplatesQuery<
+    RoleplayTemplateWithDelimiters,
+    RoleplayTemplateWithDelimiters | null
+  >({ enabled: !!roleplayTemplateId, select: selectTemplate })
+  const template = roleplayTemplateId ? templateData ?? null : null
   const [inCodeBlock, setInCodeBlock] = useState(false)
 
   // Track whether the cursor is inside a code block
@@ -207,39 +217,6 @@ export default function FormattingToolbar({
       })
     })
   }, [editor])
-
-  // Fetch template info when roleplayTemplateId changes
-  useEffect(() => {
-    if (!roleplayTemplateId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch with dependency tracking
-      setTemplate(null)
-      return
-    }
-
-    const fetchTemplate = async () => {
-      try {
-        setLoadingTemplate(true)
-
-        const response = await fetch(`/api/v1/roleplay-templates/${roleplayTemplateId}`)
-        if (response.ok) {
-          const data = await response.json()
-          setTemplate(data)
-        } else {
-          setTemplate(null)
-        }
-      } catch (error) {
-        console.error('[FormattingToolbar] Error fetching template', {
-          roleplayTemplateId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        setTemplate(null)
-      } finally {
-        setLoadingTemplate(false)
-      }
-    }
-
-    fetchTemplate()
-  }, [roleplayTemplateId])
 
   // ── Source mode textarea helpers ──────────────────────────────────
 

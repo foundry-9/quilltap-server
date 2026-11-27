@@ -170,25 +170,18 @@ describe('ProviderOptionsPanel', () => {
     expect(onSet).toHaveBeenCalledWith('aBool', true)
   })
 
-  it('emits a directive callback for fields tagged with affects', () => {
+  it('writes a field tagged with affects back as an ordinary parameter', () => {
     const onSet = jest.fn()
-    const onDirective = jest.fn()
     render(
       <ProviderOptionsPanel
         schema={SCHEMA}
         parameters={{}}
         fetchedModels={[]}
         onSetParameter={onSet}
-        onDirective={onDirective}
       />
     )
     fireEvent.click(screen.getByLabelText('Directive'))
     expect(onSet).toHaveBeenCalledWith('directiveBool', true)
-    expect(onDirective).toHaveBeenCalledWith(
-      'modelInput',
-      expect.objectContaining({ key: 'directiveBool' }),
-      true
-    )
   })
 
   it('renders multi-enum entries from fetched models, capped at max', () => {

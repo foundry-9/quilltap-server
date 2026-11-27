@@ -1,7 +1,9 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo } from 'react'
 import { useSession } from '@/components/providers/session-provider'
+import { useTagsQuery } from '@/lib/hooks/use-tags'
+import { booleanCodec, usePersistentState, type PersistentStateCodec } from '@/hooks/usePersistentState'
 import { conciergeStateUsesUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 
 interface QuickHideTag {
@@ -31,7 +33,6 @@ interface QuickHideContextValue {
   toggleIncludeAutonomousRooms: () => void
   toggleHideSalonImages: () => void
   clearAllHidden: () => void
-  refresh: () => Promise<void>
   shouldHideByIds: (tagIds?: Array<string | null | undefined>) => boolean
   /**
    * THE quick-hide rule for a chat, in one place. "Dangerous Chats" hides
@@ -49,131 +50,50 @@ const SALON_IMAGES_STORAGE_KEY = 'quilltap.quickHide.hideSalonImages'
 
 const QuickHideContext = createContext<QuickHideContextValue | null>(null)
 
-async function fetchQuickHideTags(): Promise<QuickHideTag[]> {
-  const res = await fetch('/api/v1/tags', { cache: 'no-store' })
-  if (!res.ok) {
-    throw new Error('Failed to load tags')
-  }
-
-  const data = await res.json()
-  const allTags = data.tags || []
-  const filtered = allTags.filter((tag: any) => Boolean(tag.quickHide))
-  return filtered.map((tag: any) => ({ id: tag.id as string, name: tag.name as string }))
+/** The hidden tag ids, stored as a JSON array of strings. */
+const tagIdSetCodec: PersistentStateCodec<Set<string>> = {
+  parse: (raw) => {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? new Set(parsed.filter((id): id is string => typeof id === 'string')) : undefined
+  },
+  serialize: (ids) => JSON.stringify(Array.from(ids)),
 }
+
+/** The tags marked for the quick-hide menu, from the shared tag list. */
+function toQuickHideTags(tags: Array<{ id: string; name: string; quickHide?: boolean }>): QuickHideTag[] {
+  return tags.filter((tag) => Boolean(tag.quickHide)).map((tag) => ({ id: tag.id, name: tag.name }))
+}
+
+const NO_TAGS: QuickHideTag[] = []
 
 export function QuickHideProvider({ children }: { children: React.ReactNode }) {
   const { status } = useSession()
-  const [quickHideTags, setQuickHideTags] = useState<QuickHideTag[]>([])
-  const [hiddenTagIds, setHiddenTagIds] = useState<Set<string>>(new Set())
-  const [hideDangerousChats, setHideDangerousChats] = useState(false)
-  const [includeAutonomousRooms, setIncludeAutonomousRooms] = useState(false)
-  const [hideSalonImages, setHideSalonImages] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [storageReady, setStorageReady] = useState(false)
-
-  const loadTags = useCallback(async () => {
-    if (status !== 'authenticated') {
-      setLoading(false)
-      if (status === 'unauthenticated') {
-        setQuickHideTags([])
-      }
-      return
-    }
-
-    try {
-      setLoading(true)
-      const tags = await fetchQuickHideTags()
-      setQuickHideTags(tags)
-      setHiddenTagIds(prev => {
-        const allowed = new Set(tags.map(tag => tag.id))
-        const next = new Set([...prev].filter(id => allowed.has(id)))
-        return next.size === prev.size ? prev : next
-      })
-    } catch (error) {
-      console.warn('Unable to load quick-hide tags', { error: error instanceof Error ? error.message : String(error) })
-      setQuickHideTags([])
-    } finally {
-      setLoading(false)
-    }
-  }, [status])
+  const authenticated = status === 'authenticated'
+  const tagsQuery = useTagsQuery({ enabled: authenticated, select: toQuickHideTags })
+  const loadedTags = authenticated ? tagsQuery.data : undefined
+  const quickHideTags = loadedTags ?? NO_TAGS
+  const loading = tagsQuery.isLoading
+  const [hiddenTagIds, setHiddenTagIds] = usePersistentState(STORAGE_KEY, new Set<string>(), tagIdSetCodec)
+  const [hideDangerousChats, setHideDangerousChats] = usePersistentState(DANGER_STORAGE_KEY, false, booleanCodec)
+  const [includeAutonomousRooms, setIncludeAutonomousRooms] = usePersistentState(AUTONOMOUS_STORAGE_KEY, false, booleanCodec)
+  const [hideSalonImages, setHideSalonImages] = usePersistentState(SALON_IMAGES_STORAGE_KEY, false, booleanCodec)
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads quick-hide tags whenever session status changes; loadTags is also exposed as refresh(), so results live in local state
-    loadTags()
-  }, [loadTags])
+    if (tagsQuery.error) {
+      console.warn('Unable to load quick-hide tags', { error: tagsQuery.error.message })
+    }
+  }, [tagsQuery.error])
 
-  // localStorage read must happen after hydration; a lazy useState initializer
-  // would cause an SSR mismatch (server renders with defaults, client with
-  // localStorage values).
+  // A hidden tag that is no longer a quick-hide tag stops hiding anything.
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed)) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- see comment above
-          setHiddenTagIds(new Set(parsed.filter((id) => typeof id === 'string')))
-        }
-      }
-      const dangerRaw = window.localStorage.getItem(DANGER_STORAGE_KEY)
-      if (dangerRaw === 'true') {
-        setHideDangerousChats(true)
-      }
-      const autoRaw = window.localStorage.getItem(AUTONOMOUS_STORAGE_KEY)
-      if (autoRaw === 'true') {
-        setIncludeAutonomousRooms(true)
-      }
-      if (window.localStorage.getItem(SALON_IMAGES_STORAGE_KEY) === 'true') {
-        setHideSalonImages(true)
-      }
-    } catch (error) {
-      console.warn('Unable to load quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
-    } finally {
-      setStorageReady(true)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!storageReady || typeof window === 'undefined') {
-      return
-    }
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(hiddenTagIds)))
-      window.localStorage.setItem(DANGER_STORAGE_KEY, hideDangerousChats ? 'true' : 'false')
-      window.localStorage.setItem(AUTONOMOUS_STORAGE_KEY, includeAutonomousRooms ? 'true' : 'false')
-      window.localStorage.setItem(SALON_IMAGES_STORAGE_KEY, hideSalonImages ? 'true' : 'false')
-    } catch (error) {
-      console.warn('Unable to persist quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
-    }
-  }, [hiddenTagIds, hideDangerousChats, includeAutonomousRooms, hideSalonImages, storageReady])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const handler = (event: StorageEvent) => {
-      if (event.key === STORAGE_KEY && event.newValue) {
-        try {
-          const parsed = JSON.parse(event.newValue)
-          if (Array.isArray(parsed)) {
-            setHiddenTagIds(new Set(parsed.filter((id) => typeof id === 'string')))
-          }
-        } catch {
-          // ignore
-        }
-      }
-      if (event.key === DANGER_STORAGE_KEY && event.newValue) {
-        setHideDangerousChats(event.newValue === 'true')
-      }
-      if (event.key === AUTONOMOUS_STORAGE_KEY && event.newValue) {
-        setIncludeAutonomousRooms(event.newValue === 'true')
-      }
-      if (event.key === SALON_IMAGES_STORAGE_KEY && event.newValue) {
-        setHideSalonImages(event.newValue === 'true')
-      }
-    }
-    window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
-  }, [])
+    if (!loadedTags) return
+    // Prunes the stored selection against the tag list once it arrives.
+    setHiddenTagIds(prev => {
+      const allowed = new Set(loadedTags.map(tag => tag.id))
+      const next = new Set([...prev].filter(id => allowed.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [loadedTags, setHiddenTagIds])
 
   const toggleTag = useCallback((tagId: string) => {
     setHiddenTagIds((prev) => {
@@ -186,19 +106,19 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
       }
       return next
     })
-  }, [])
+  }, [setHiddenTagIds])
 
   const toggleHideDangerousChats = useCallback(() => {
     setHideDangerousChats(prev => !prev)
-  }, [])
+  }, [setHideDangerousChats])
 
   const toggleIncludeAutonomousRooms = useCallback(() => {
     setIncludeAutonomousRooms(prev => !prev)
-  }, [])
+  }, [setIncludeAutonomousRooms])
 
   const toggleHideSalonImages = useCallback(() => {
     setHideSalonImages(prev => !prev)
-  }, [])
+  }, [setHideSalonImages])
 
   const clearAllHidden = useCallback(() => {
     setHiddenTagIds(new Set())
@@ -206,7 +126,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
     setHideSalonImages(false)
     // Note: includeAutonomousRooms is an "include" toggle (adds items),
     // not a "hide" toggle, so it is not reset by Clear All Hidden.
-  }, [])
+  }, [setHiddenTagIds, setHideDangerousChats, setHideSalonImages])
 
   const shouldHideByIds = useCallback(
     (tagIds?: Array<string | null | undefined>) => {
@@ -249,11 +169,10 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
       toggleIncludeAutonomousRooms,
       toggleHideSalonImages,
       clearAllHidden,
-      refresh: loadTags,
       shouldHideByIds,
       shouldHideChat,
     }),
-    [quickHideTags, hiddenTagIds, hideDangerousChats, includeAutonomousRooms, hideSalonImages, loading, toggleTag, toggleHideDangerousChats, toggleIncludeAutonomousRooms, toggleHideSalonImages, clearAllHidden, loadTags, shouldHideByIds, shouldHideChat]
+    [quickHideTags, hiddenTagIds, hideDangerousChats, includeAutonomousRooms, hideSalonImages, loading, toggleTag, toggleHideDangerousChats, toggleIncludeAutonomousRooms, toggleHideSalonImages, clearAllHidden, shouldHideByIds, shouldHideChat]
   )
 
   return <QuickHideContext.Provider value={value}>{children}</QuickHideContext.Provider>

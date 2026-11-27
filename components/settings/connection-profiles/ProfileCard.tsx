@@ -1,7 +1,7 @@
 import { forwardRef } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ProfileCard as BaseProfileCard, ProfileCardBadge } from '@/components/ui/ProfileCard'
+import { SettingsCard, type SettingsCardBadge } from '@/components/ui/SettingsCard'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import { getProfileAttachmentSupportDescription } from '@/lib/llm/connection-profile-utils'
@@ -109,7 +109,7 @@ function ProfileCardContent({
   const isMissingApiKey = providerRequiresApiKey && !profile.apiKey
 
   // Build badges array
-  const badges: ProfileCardBadge[] = []
+  const badges: SettingsCardBadge[] = []
   if (profile.isDefault) {
     badges.push({ text: 'Default', variant: 'default' })
   }
@@ -132,7 +132,7 @@ function ProfileCardContent({
   }
 
   return (
-    <BaseProfileCard
+    <SettingsCard
       title={profile.name}
       subtitle={`${profile.provider} • ${profile.modelName}`}
       badges={badges}
@@ -204,7 +204,7 @@ function ProfileCardContent({
           ))}
         </div>
       )}
-    </BaseProfileCard>
+    </SettingsCard>
   )
 }
 

@@ -212,10 +212,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -233,10 +231,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -253,10 +249,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           noActiveChars,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -273,10 +267,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           onlyPersona,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -293,10 +285,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -321,10 +311,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -353,10 +341,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -378,10 +364,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -403,10 +387,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -438,10 +420,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -467,10 +447,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           stateWithQueue,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -504,10 +482,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
-          'p3', // user participant id
-          participantData,
+          'p3',
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -539,10 +515,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           noActiveChars,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -570,10 +544,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -603,10 +575,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -633,10 +603,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -663,10 +631,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -698,7 +664,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
-          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          TEST_CHAT_ID, participantsAsBase, turnState, 'p3',
           setTurnState, setTurnSelectionResult, triggerContinueMode,
         )
       )
@@ -723,7 +689,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
-          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          TEST_CHAT_ID, participantsAsBase, turnState, 'p3',
           setTurnState, setTurnSelectionResult, triggerContinueMode,
           ['p1'], // impersonating Alice
         )
@@ -746,7 +712,7 @@ describe('useTurnManagement', () => {
     it('refuses an LLM seat the human is not speaking as', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
-          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          TEST_CHAT_ID, participantsAsBase, turnState, 'p3',
           setTurnState, setTurnSelectionResult, triggerContinueMode,
         )
       )
@@ -766,7 +732,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
-          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          TEST_CHAT_ID, participantsAsBase, turnState, 'p3',
           setTurnState, setTurnSelectionResult, triggerContinueMode,
         )
       )
@@ -783,7 +749,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
-          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          TEST_CHAT_ID, participantsAsBase, turnState, 'p3',
           setTurnState, setTurnSelectionResult, triggerContinueMode,
           ['p1'], // the "next speaker" is a seat the human is impersonating
         )
@@ -801,7 +767,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
-          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          TEST_CHAT_ID, participantsAsBase, turnState, 'p3',
           setTurnState, setTurnSelectionResult, triggerContinueMode,
         )
       )
@@ -821,10 +787,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -845,10 +809,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           currentTurnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -872,10 +834,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
-          null, // no user participant
-          participantData,
+          null,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -901,10 +861,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           [],
-          charactersMap,
           turnState,
           null,
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -923,10 +881,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           stateWithDuplicates,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -947,10 +903,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode
@@ -983,10 +937,8 @@ describe('useTurnManagement', () => {
           useTurnManagement(
             TEST_CHAT_ID,
             participantsAsBase,
-            charactersMap,
             state,
             'p3',
-            participantData,
             setTurnState,
             setTurnSelectionResult,
             triggerContinueMode
@@ -1022,10 +974,8 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
           turnState,
           'p3',
-          participantData,
           setTurnState,
           setTurnSelectionResult,
           triggerContinueMode

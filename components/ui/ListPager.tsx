@@ -21,7 +21,7 @@ export interface ListPagerProps {
   noun: string
 }
 
-export function pageCountOf(total: number, pageSize: number): number {
+function pageCountOf(total: number, pageSize: number): number {
   return Math.max(1, Math.ceil(total / pageSize))
 }
 

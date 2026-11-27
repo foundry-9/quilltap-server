@@ -21,9 +21,9 @@
  * route. Anchors with no tab equivalent (new-chat, detail pages, external
  * links) are left untouched and navigate normally. Only active on `/workspace`.
  *
- * The rail / recent-chat items still carry their own `openTab` handlers; because
- * `openTab` de-dupes (a second call just focuses the existing tab), the brief
- * overlap is idempotent and harmless.
+ * The rail items still carry their own `openTab` handlers; because `openTab`
+ * de-dupes (a second call just focuses the existing tab), the brief overlap is
+ * idempotent and harmless. A link elsewhere needs no handler of its own.
  *
  * Programmatic navigations (`router.push`) don't dispatch an anchor click and
  * are handled separately via {@link useWorkspaceNavigate}.
@@ -35,8 +35,7 @@ import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
-import { characterChatActionFromHref, parseHrefToIntent } from '@/lib/navigation/route-to-intent'
-import { requestMessageReveal, revealRequestFromSalonHref } from '@/lib/chat/message-navigation'
+import { openHrefInWorkspace } from '@/components/workspace/open-href-in-workspace'
 
 export function WorkspaceLinkInterceptor() {
   const ws = useWorkspaceOptional()
@@ -78,21 +77,13 @@ export function WorkspaceLinkInterceptor() {
         return
       }
 
-      const intent = parseHrefToIntent(href)
-      if (!intent) return // no tab equivalent → navigate normally
-
       // preventDefault BEFORE the anchor's own handler so Next's <Link> skips its
-      // client navigation (it only pushes when !e.defaultPrevented).
-      e.preventDefault()
-      openTab(intent.kind, intent.payload)
-      // A character link carrying `?action=chat` also pops the New Chat modal
-      // with the character preselected.
-      const chatCharacterId = characterChatActionFromHref(href)
-      if (chatCharacterId) openNewChat?.({ characterId: chatCharacterId })
-      // A `?msg=` on a Salon link (a Message search result) is not part of the
-      // tab — the tab is the chat — but a one-off request to its Salon.
-      const reveal = revealRequestFromSalonHref(href)
-      if (reveal) requestMessageReveal(reveal.chatId, reveal.messageId)
+      // client navigation (it only pushes when !e.defaultPrevented). Opening the
+      // tab is synchronous, so the prevent lands before <Link> looks.
+      if (!openHrefInWorkspace(href, (kind, payload) => {
+        e.preventDefault()
+        return openTab(kind, payload)
+      }, openNewChat)) return // no tab equivalent → navigate normally
     }
 
     document.addEventListener('click', onClick, true) // capture

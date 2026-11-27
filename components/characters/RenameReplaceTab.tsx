@@ -37,6 +37,18 @@ interface RenamePreviewResponse {
   summary: RenameSummary
 }
 
+interface RenameReplacementBody {
+  oldValue: string
+  newValue: string
+  caseSensitive: boolean
+}
+
+interface RenameRequestBody {
+  dryRun: boolean
+  additionalReplacements: RenameReplacementBody[]
+  primaryRename?: RenameReplacementBody
+}
+
 interface RenameReplaceTabProps {
   characterId: string
   characterName: string
@@ -75,36 +87,41 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
     )
   }, [])
 
+  /**
+   * The `?action=rename` body for the inputs on screen: the filled-in extra
+   * pairs, plus the primary rename only when a new name is given.
+   */
+  const buildRenameBody = useCallback(
+    (dryRun: boolean): RenameRequestBody => ({
+      dryRun,
+      additionalReplacements: additionalReplacements
+        .filter(r => r.oldValue.trim() && r.newValue.trim())
+        .map(r => ({
+          oldValue: r.oldValue,
+          newValue: r.newValue,
+          caseSensitive: r.caseSensitive,
+        })),
+      ...(newName.trim() && {
+        primaryRename: {
+          oldValue: characterName,
+          newValue: newName.trim(),
+          caseSensitive,
+        },
+      }),
+    }),
+    [additionalReplacements, newName, characterName, caseSensitive],
+  )
+
   const handlePreview = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     setPreview(null)
 
     try {
-      const body: any = {
-        dryRun: true,
-        additionalReplacements: additionalReplacements
-          .filter(r => r.oldValue.trim() && r.newValue.trim())
-          .map(r => ({
-            oldValue: r.oldValue,
-            newValue: r.newValue,
-            caseSensitive: r.caseSensitive,
-          })),
-      }
-
-      // Only include primary rename if new name is provided
-      if (newName.trim()) {
-        body.primaryRename = {
-          oldValue: characterName,
-          newValue: newName.trim(),
-          caseSensitive,
-        }
-      }
-
       const res = await fetch(`/api/v1/characters/${characterId}?action=rename`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildRenameBody(true)),
       })
 
       if (!res.ok) {
@@ -121,7 +138,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
     } finally {
       setIsLoading(false)
     }
-  }, [characterId, characterName, newName, caseSensitive, additionalReplacements])
+  }, [characterId, buildRenameBody])
 
   const handleExecute = useCallback(async () => {
     if (!preview) return
@@ -139,29 +156,10 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
     setError(null)
 
     try {
-      const body: any = {
-        dryRun: false,
-        additionalReplacements: additionalReplacements
-          .filter(r => r.oldValue.trim() && r.newValue.trim())
-          .map(r => ({
-            oldValue: r.oldValue,
-            newValue: r.newValue,
-            caseSensitive: r.caseSensitive,
-          })),
-      }
-
-      if (newName.trim()) {
-        body.primaryRename = {
-          oldValue: characterName,
-          newValue: newName.trim(),
-          caseSensitive,
-        }
-      }
-
       const res = await fetch(`/api/v1/characters/${characterId}?action=rename`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildRenameBody(false)),
       })
 
       if (!res.ok) {
@@ -189,7 +187,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
     } finally {
       setIsExecuting(false)
     }
-  }, [characterId, characterName, newName, caseSensitive, additionalReplacements, preview, onRenameComplete])
+  }, [characterId, buildRenameBody, preview, onRenameComplete])
 
   const hasValidInput = newName.trim() || additionalReplacements.some(r => r.oldValue.trim() && r.newValue.trim())
 

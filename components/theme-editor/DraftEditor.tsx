@@ -29,12 +29,10 @@ import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { triggerDownload } from '@/lib/download-utils'
 import { THEME_CHOICES, type ThemeTokensDocument, type TokenDef } from '@/lib/themes/engine/client'
-import { jsonEqual } from '@/lib/hooks/use-draft'
-import { createEditorStore, type EditorStore } from './editor-store'
-import { OpenGalleryButton, paneOfTab, useOpenSpecimenGallery } from '@/components/theme-specimens/OpenGalleryButton'
+import type { EditorStore } from './editor-store'
+import { paneOfTab, useOpenSpecimenGallery } from '@/components/theme-specimens/OpenGalleryButton'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
-import { InspectToggle } from '@/components/theme-inspect/InspectToggle'
 import { useInspectOptional, type EditorBridge } from '@/components/theme-inspect/InspectProvider'
 import { LazyRow } from './LazyRow'
 import { TokenRow, type EditFn } from './TokenRow'
@@ -42,7 +40,7 @@ import { PrimitivesPanel } from './PrimitivesPanel'
 import { DraftResourcesContext } from './controls'
 import { SectionJump } from '@/components/ui/SectionJump'
 import { assetSectionViews, type AssetSectionView } from './assets/model'
-import { DraftOperationsContext, reloadAfterConflict, useDraftOperationsState } from './assets/use-draft-operations'
+import { DraftOperationsContext, useDraftOperationsState } from './assets/use-draft-operations'
 import { FontsSection } from './assets/FontsSection'
 import { ImagesSection } from './assets/ImagesSection'
 import { IconsSection } from './assets/IconsSection'
@@ -51,231 +49,40 @@ import { FilesPanel } from './assets/FilesPanel'
 import { StylesSection, type StylesStatus } from './assets/StylesSection'
 import {
   EDITOR_GROUPS,
-  EMPTY_HISTORY,
-  analyse,
   buildPreview,
   draftResources,
   filterPrimitiveRows,
   isFiltering,
   primitiveRows,
-  recordEdit,
-  redoStep,
   sectionViews,
   setChoice,
   tokenLocation,
   tokenRowDomId,
-  undoStep,
-  type EditHistory,
   type EditorFilter,
   type EditorLevel,
   type EditorMode,
-  type EditorSnapshot,
   type SectionView,
 } from './model'
 import {
   exportThemeDraft,
   installThemeDraft,
-  saveThemeDraft,
   themeDraftAction,
   type DraftDetail,
   type DraftExportForm,
   type DraftInstallResult,
-  type ThemeDraftSave,
 } from './use-theme-drafts'
-import { applyChangeSet } from '@/lib/themes/assist/change-set'
-import type { CalliopeProposalActions } from './calliope/CalliopePanel'
-import { CalliopeAvatar } from './calliope/CalliopeAvatar'
+import { useDraftSaver } from './use-draft-saver'
+import { useEditing } from './use-editing'
+import { seekFrames } from './seek-frames'
+import { DraftHeader, DraftIssueList } from './DraftHeader'
 import { CalliopeHandOffContext, type CalliopeHandOff } from './calliope/context'
-import { issueHandOffText } from './calliope/hand-off'
-import { keepProposal, tryProposal, type TriedProposal } from './calliope/api'
+import type { TriedProposal } from './calliope/api'
+import { useCalliopeProposalActions } from './calliope/use-proposal-actions'
 
 // Her panel (and the markdown it renders) loads only when she is first called for.
 const CalliopePanel = lazy(() => import('./calliope/CalliopePanel').then((m) => ({ default: m.CalliopePanel })))
 
-const SAVE_DELAY_MS = 700
-
 const EMPTY_TOKENS: ThemeTokensDocument = { primitives: {}, tokens: {}, choices: {} } as ThemeTokensDocument
-
-type Pending = Omit<ThemeDraftSave, 'revision' | 'manifestRevision' | 'stylesRevision'>
-
-/**
- * The save queue for one draft: edits merge into one pending body, a timer
- * sends it, one PUT is in flight at a time, and each carries the newest
- * revision seen.
- */
-function useDraftSaver(detail: DraftDetail, onConflict: (fresh: DraftDetail) => void) {
-  const queryClient = useQueryClient()
-  const latest = useRef(detail)
-  const pending = useRef<Pending>({})
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const inFlight = useRef<Promise<void> | null>(null)
-  const [saving, setSaving] = useState(false)
-  const onConflictRef = useRef(onConflict)
-
-  useEffect(() => {
-    onConflictRef.current = onConflict
-  }, [onConflict])
-
-  useEffect(() => {
-    // A newer read (realtime refresh, our own save) carries the newer revision.
-    if (
-      detail.revision !== latest.current.revision ||
-      detail.manifestRevision !== latest.current.manifestRevision ||
-      detail.updatedAt !== latest.current.updatedAt
-    ) {
-      latest.current = detail
-    }
-  }, [detail])
-
-  /** Take a draft a save or an operation returned as the newest, ahead of the render that shows it. */
-  const adopt = useCallback(
-    (fresh: DraftDetail) => {
-      latest.current = fresh
-      queryClient.setQueryData(queryKeys.themeDrafts.detail(fresh.id), fresh)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.themeDrafts.list })
-    },
-    [queryClient],
-  )
-
-  const send = useCallback(
-    async (keepalive: boolean): Promise<void> => {
-      if (inFlight.current) await inFlight.current
-      const body = { ...pending.current }
-      pending.current = {}
-      // A stylesheet removed since the edit was queued has nothing to save it to.
-      if (body.css !== undefined && !latest.current.styles) delete body.css
-      if (Object.keys(body).length === 0) return
-      const id = latest.current.id
-      const run = (async () => {
-        setSaving(true)
-        try {
-          const fresh = await saveThemeDraft(
-            id,
-            {
-              ...body,
-              revision: latest.current.revision,
-              manifestRevision: latest.current.manifestRevision,
-              stylesRevision: latest.current.styles?.revision,
-            },
-            { keepalive },
-          )
-          adopt(fresh)
-        } catch (err) {
-          if (err instanceof ApiFetchError && err.status === 409) {
-            await reloadAfterConflict(id, adopt, onConflictRef.current)
-          } else {
-            showErrorToast(apiErrorMessage(err, 'The atelier could not save the draft.'))
-          }
-        } finally {
-          setSaving(false)
-        }
-      })()
-      inFlight.current = run
-      try {
-        await run
-      } finally {
-        if (inFlight.current === run) inFlight.current = null
-      }
-    },
-    [adopt],
-  )
-
-  const queue = useCallback(
-    (part: Pending) => {
-      pending.current = { ...pending.current, ...part }
-      if (timer.current) clearTimeout(timer.current)
-      timer.current = setTimeout(() => {
-        timer.current = null
-        void send(false)
-      }, SAVE_DELAY_MS)
-    },
-    [send],
-  )
-
-  const flush = useCallback(
-    (keepalive = false) => {
-      if (timer.current) {
-        clearTimeout(timer.current)
-        timer.current = null
-      }
-      return send(keepalive)
-    },
-    [send],
-  )
-
-  /** The newest draft seen: what an operation reads its manifest revision from. */
-  const current = useCallback(() => latest.current, [])
-
-  return { queue, flush, saving, current, adopt }
-}
-
-export type DraftSaver = ReturnType<typeof useDraftSaver>
-
-/**
- * The editing state around the draft's tokens: the store rows read, the one
- * `edit` every row calls, and undo and redo. An edit is a function from the
- * snapshot to a tokens document; it is recorded in the history (successive
- * edits of one key, a colour drag, as one step) and becomes the draft.
- */
-function useEditing(tokens: ThemeTokensDocument, setTokens: (next: ThemeTokensDocument) => void, mode: EditorMode) {
-  const { resolved, findings } = useMemo(() => analyse(tokens), [tokens])
-  const snapshot = useMemo<EditorSnapshot>(() => ({ tokens, resolved, findings, mode }), [tokens, resolved, findings, mode])
-  const [store] = useState<EditorStore>(() => createEditorStore(snapshot))
-  const [history, setHistory] = useState<EditHistory>(EMPTY_HISTORY)
-
-  // What the latest edit produced, ahead of the render that shows it (a colour drag outruns renders).
-  const current = useRef<{ tokens: ThemeTokensDocument; history: EditHistory }>({ tokens, history })
-  useLayoutEffect(() => {
-    current.current = { tokens, history }
-    store.set(snapshot)
-  }, [tokens, history, snapshot, store])
-
-  const apply = useCallback(
-    (next: ThemeTokensDocument, nextHistory: EditHistory) => {
-      current.current = { tokens: next, history: nextHistory }
-      setHistory(nextHistory)
-      setTokens(next)
-    },
-    [setTokens],
-  )
-
-  const edit = useCallback<EditFn>(
-    (key, change) => {
-      const before = current.current.tokens
-      const shown = store.get()
-      const base = shown.tokens === before ? shown : { ...shown, tokens: before, ...analyse(before) }
-      const after = change(base)
-      if (after === before || jsonEqual(after, before)) return
-      apply(after, recordEdit(current.current.history, before, key, Date.now()))
-    },
-    [store, apply],
-  )
-
-  const undo = useCallback(() => {
-    const step = undoStep(current.current.history, current.current.tokens)
-    if (step) apply(step.doc, step.history)
-  }, [apply])
-  const redo = useCallback(() => {
-    const step = redoStep(current.current.history, current.current.tokens)
-    if (step) apply(step.doc, step.history)
-  }, [apply])
-  const forget = useCallback(() => {
-    current.current = { ...current.current, history: EMPTY_HISTORY }
-    setHistory(EMPTY_HISTORY)
-  }, [])
-
-  return {
-    store,
-    resolved,
-    findings,
-    edit,
-    undo,
-    redo,
-    forget,
-    canUndo: history.past.length > 0,
-    canRedo: history.future.length > 0,
-  }
-}
 
 /** Whether a key press belongs to a field with its own undo (text being typed). */
 function hasOwnUndo(target: EventTarget | null): boolean {
@@ -289,6 +96,9 @@ function hasOwnUndo(target: EventTarget | null): boolean {
 const FIRST_SECTION = EDITOR_GROUPS.find((g) => g.essential.length > 0)?.id
 
 const sectionDomId = (prefix: string, id: string) => `${prefix}-section-${id}`
+
+/** `set` with `id` in it — the same set when it already is. */
+const withMember = (set: ReadonlySet<string>, id: string): ReadonlySet<string> => (set.has(id) ? set : new Set([...set, id]))
 
 /** The id of the list item that holds a token's row, mounted or not. */
 const tokenRowSlotId = (name: string) => `${tokenRowDomId(name)}-slot`
@@ -596,9 +406,9 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
   const assetSections = useMemo(() => assetSectionViews(filter), [filter])
   const isSectionOpen = (id: string) => openSections.has(id)
   const toggle = (set: ReadonlySet<string>, id: string, open: boolean) => {
+    if (open) return withMember(set, id)
     const next = new Set(set)
-    if (open) next.add(id)
-    else next.delete(id)
+    next.delete(id)
     return next
   }
   const setSectionOpen = (id: string, open: boolean) => setOpenSections((prev) => toggle(prev, id, open))
@@ -622,25 +432,23 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
   const goToToken = useCallback((name: string): boolean => {
     const where = tokenLocation(name)
     if (!where) return false
-    const add = (prev: ReadonlySet<string>) => (prev.has(where.sectionId) ? prev : new Set([...prev, where.sectionId]))
+    const add = (prev: ReadonlySet<string>) => withMember(prev, where.sectionId)
     setQuery('')
     setChangedOnly(false)
     setLevel(where.level)
     setOpenSections(add)
     if (where.advanced) setOpenAdvanced(add)
     // The row mounts once its section is open and its slot comes near the viewport (LazyRow).
-    let frames = 0
-    const seek = () => {
+    seekFrames(() => {
       const row = document.getElementById(tokenRowDomId(name))
       if (row) {
         row.scrollIntoView({ block: 'start' })
         row.focus({ preventScroll: true })
-        return
+        return true
       }
       document.getElementById(tokenRowSlotId(name))?.scrollIntoView({ block: 'center' })
-      if (++frames < GO_TO_TOKEN_FRAMES) requestAnimationFrame(seek)
-    }
-    requestAnimationFrame(seek)
+      return false
+    }, GO_TO_TOKEN_FRAMES)
     return true
   }, [])
   // What the inspector may ask of the editor (Spec H, Stage 2): a token's row, a rule in the stylesheet, the gallery.
@@ -668,18 +476,14 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
     bringForward()
     setQuery('')
     setChangedOnly(false)
-    setOpenSections((prev) => (prev.has('asset-styles') ? prev : new Set([...prev, 'asset-styles'])))
-    let frames = 0
-    const seek = () => {
+    setOpenSections((prev) => withMember(prev, 'asset-styles'))
+    seekFrames(() => {
       const insert = cssInsertRef.current
-      if (insert) {
-        document.getElementById(sectionDomId(sectionsId, 'asset-styles'))?.scrollIntoView({ block: 'start' })
-        insert(`\n${selector} {\n  \n}\n`)
-        return
-      }
-      if (++frames < WRITE_CSS_FRAMES) requestAnimationFrame(seek)
-    }
-    requestAnimationFrame(seek)
+      if (!insert) return false
+      document.getElementById(sectionDomId(sectionsId, 'asset-styles'))?.scrollIntoView({ block: 'start' })
+      insert(`\n${selector} {\n  \n}\n`)
+      return true
+    }, WRITE_CSS_FRAMES)
   }, [sectionsId, bringForward])
   const beginStylesheet = useCallback(async () => {
     const result = await operations.run((manifestRevision, id) =>
@@ -701,57 +505,19 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
     [bringForward, setCalliopeOpen, setCalliopeSeed],
   )
   const handOff = useMemo<CalliopeHandOff>(() => ({ ask: askCalliope }), [askCalliope])
-  const stopTrying = useCallback(() => setTried(null), [])
-  const proposalActions = useMemo<CalliopeProposalActions>(
-    () => ({
-      tryingId: tried?.proposalId ?? null,
-      onStopTrying: stopTrying,
-      onTry: async (chatId, proposal) => {
-        // She judged the saved draft: send what is typed first.
-        await flushAll()
-        try {
-          setTried(await tryProposal(chatId, proposal.id))
-          setPreviewing(true)
-        } catch (err) {
-          showErrorToast(apiErrorMessage(err, 'The proposal could not be tried.'))
-        }
-      },
-      onKeep: async (chatId, proposal) => {
-        await flushAll()
-        let operations
-        try {
-          operations = (await keepProposal(chatId, proposal.id)).operations
-        } catch (err) {
-          showErrorToast(apiErrorMessage(err, 'The proposal could not be kept.'))
-          return
-        }
-        setTried(null)
-        const css = hasStylesheet ? cssRef.current : null
-        const applied = applyChangeSet({ tokens: editing.store.get().tokens, css }, { operations })
-        if (!applied.ok) {
-          showErrorToast(`The proposal could not be applied: ${applied.reason}`)
-          return
-        }
-        // Tokens, primitives and choices: one edit, so one undo step.
-        if (applied.tokensChanged) {
-          edit(`calliope:${proposal.id}`, (snapshot) => {
-            const again = applyChangeSet({ tokens: snapshot.tokens, css }, { operations })
-            return again.ok ? again.tokens : snapshot.tokens
-          })
-        }
-        // The stylesheet: through its own save (begun first when the draft has none).
-        if (applied.cssChanged && applied.css !== null) {
-          if (!hasStylesheet && !(await beginStylesheet())) {
-            showErrorToast('The proposal\u2019s stylesheet could not be begun; its tokens were kept.')
-            return
-          }
-          onCssChange(applied.css)
-        }
-        showSuccessToast(`Kept \u201c${proposal.title}\u201d.`)
-      },
-    }),
-    [tried, stopTrying, flushAll, hasStylesheet, editing.store, edit, beginStylesheet, onCssChange],
-  )
+  const resumePreview = useCallback(() => setPreviewing(true), [])
+  const proposalActions = useCalliopeProposalActions({
+    tried,
+    setTried,
+    resumePreview,
+    flushAll,
+    hasStylesheet,
+    cssRef,
+    store: editing.store,
+    edit,
+    beginStylesheet,
+    onCssChange,
+  })
 
   const bridge = useMemo<EditorBridge>(
     () => ({ draftName: manifestName, resolved: editing.resolved, goToToken: goToTokenFromInspector, hasStylesheet, writeCss, beginStylesheet, openGallery, askCalliope }),
@@ -893,85 +659,24 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
     <DraftResourcesContext.Provider value={resources}>
     <CalliopeHandOffContext.Provider value={handOff}>
       <div className={`${calliopeOpen ? 'max-w-7xl' : 'max-w-5xl'} mx-auto p-4 space-y-4`}>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <button type="button" className="qt-button qt-button-ghost qt-button-sm" onClick={back}>
-            <Icon name="arrow-left" className="w-4 h-4" />
-            <span className="ml-1">All drafts</span>
-          </button>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="qt-text-xs qt-text-muted" aria-live="polite">
-              {saver.saving ? 'Saving…' : 'All changes saved'}
-            </span>
-            <div role="group" aria-label="Mode to edit and show in this tab" className="flex">
-              {(['light', 'dark'] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={mode === m}
-                  className={`qt-button qt-button-sm ${mode === m ? 'qt-button-primary' : 'qt-button-secondary'}`}
-                  onClick={() => onModeChange(m)}
-                >
-                  <Icon name={m === 'light' ? 'sun' : 'moon'} className="w-4 h-4" />
-                  <span className="ml-1">{m === 'light' ? 'Light' : 'Dark'}</span>
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="qt-button qt-button-secondary qt-button-sm"
-              onClick={() => {
-                if (previewing) void flushAll()
-                setPreviewing((p) => !p)
-              }}
-            >
-              <Icon name={previewing ? 'eye-off' : 'eye'} className="w-4 h-4" />
-              <span className="ml-1">{previewing ? 'Stop preview' : 'Resume preview'}</span>
-            </button>
-            <OpenGalleryButton />
-            <InspectToggle />
-            <button
-              type="button"
-              aria-pressed={calliopeOpen}
-              className={`qt-button qt-button-sm ${calliopeOpen ? 'qt-button-primary' : 'qt-button-secondary'}`}
-              onClick={() => setCalliopeOpen((o) => !o)}
-            >
-              <CalliopeAvatar className="w-5 h-5" />
-              <span className="ml-1">Calliope</span>
-            </button>
-            <button
-              type="button"
-              className="qt-button qt-button-secondary qt-button-sm"
-              onClick={() => void exportDraftFile('draft')}
-              disabled={exporting !== null || errors.length > 0}
-              aria-describedby={errors.length > 0 ? `${nameId}-errors` : undefined}
-              title="Save this draft as a .qtap-theme file, originals and all, to open again in an Atelier"
-            >
-              <Icon name="download" className="w-4 h-4" />
-              <span className="ml-1">{exporting === 'draft' ? 'Exporting…' : 'Export draft'}</span>
-            </button>
-            <button
-              type="button"
-              className="qt-button qt-button-secondary qt-button-sm"
-              onClick={() => void exportDraftFile('theme')}
-              disabled={exporting !== null || errors.length > 0}
-              aria-describedby={errors.length > 0 ? `${nameId}-errors` : undefined}
-              title="Save the finished theme as a .qtap-theme file: WebP pictures, WOFF2 fonts, nothing unused"
-            >
-              <Icon name="download" className="w-4 h-4" />
-              <span className="ml-1">{exporting === 'theme' ? 'Exporting…' : 'Export theme'}</span>
-            </button>
-            <button
-              type="button"
-              className="qt-button qt-button-primary qt-button-sm"
-              onClick={install}
-              disabled={installing || errors.length > 0}
-              aria-describedby={errors.length > 0 ? `${nameId}-errors` : undefined}
-            >
-              <Icon name="download" className="w-4 h-4" />
-              <span className="ml-1">{installing ? 'Installing…' : 'Install'}</span>
-            </button>
-          </div>
-        </div>
+        <DraftHeader
+          onBack={() => void back()}
+          saving={saver.saving}
+          mode={mode}
+          onModeChange={onModeChange}
+          previewing={previewing}
+          onTogglePreview={() => {
+            if (previewing) void flushAll()
+            setPreviewing((p) => !p)
+          }}
+          calliopeOpen={calliopeOpen}
+          onToggleCalliope={() => setCalliopeOpen((o) => !o)}
+          exporting={exporting}
+          onExport={(form) => void exportDraftFile(form)}
+          installing={installing}
+          onInstall={() => void install()}
+          errorsId={errors.length > 0 ? `${nameId}-errors` : null}
+        />
 
         <div className="qt-card p-4 space-y-3">
           <div>
@@ -1017,16 +722,7 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
         {errors.length > 0 && (
           <div id={`${nameId}-errors`} className="qt-alert-error" role="status">
             <p className="font-medium">Install and export wait until these are mended:</p>
-            <ul className="list-disc pl-5 mt-1 qt-text-small">
-              {errors.map((e, i) => (
-                <li key={i}>
-                  {e.message}{' '}
-                  <button type="button" className="qt-inline-link qt-text-xs" onClick={() => askCalliope(issueHandOffText(e))}>
-                    Ask Calliope
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <DraftIssueList issues={errors} onAsk={askCalliope} className="list-disc pl-5 mt-1 qt-text-small" />
           </div>
         )}
         {warnings.length > 0 && (
@@ -1034,16 +730,12 @@ export function DraftEditor({ detail, mode, onModeChange, onBack, navigatorRef }
             <summary className="qt-text-small cursor-pointer">
               {warnings.length} {warnings.length === 1 ? 'warning' : 'warnings'} at the last save
             </summary>
-            <ul className="list-disc pl-5 mt-2 qt-text-small space-y-1">
-              {warnings.map((w, i) => (
-                <li key={i} className="break-words">
-                  {w.message}{' '}
-                  <button type="button" className="qt-inline-link qt-text-xs" onClick={() => askCalliope(issueHandOffText(w))}>
-                    Ask Calliope
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <DraftIssueList
+              issues={warnings}
+              onAsk={askCalliope}
+              className="list-disc pl-5 mt-2 qt-text-small space-y-1"
+              itemClassName="break-words"
+            />
           </details>
         )}
         {installErrors && (

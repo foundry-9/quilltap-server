@@ -2,14 +2,12 @@
  * Type definitions for embedding profiles
  */
 
+import type { ApiKeyRow } from '@/lib/hooks/use-profiles'
+
 export type EmbeddingProvider = 'OPENAI' | 'OLLAMA' | 'OPENROUTER' | 'NANOGPT' | 'BUILTIN'
 
-export interface ApiKey {
-  id: string
-  label: string
-  provider: string
-  isActive: boolean
-}
+/** An API key row, as every settings list reads it. */
+export type ApiKey = ApiKeyRow
 
 export interface EmbeddingModel {
   id: string
@@ -67,8 +65,6 @@ export interface EmbeddingProfileFormData {
   baseUrl: string
   modelName: string
   dimensions: string
-  truncateToDimensions: string
-  normalizeL2: boolean
   isDefault: boolean
 }
 

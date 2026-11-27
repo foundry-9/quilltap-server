@@ -34,11 +34,11 @@ export default function ConnectionProfilesTab() {
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
   const [autoConfiguringId, setAutoConfiguringId] = useState<string | null>(null)
 
-  // Trigger auto-association on mount (fire and forget)
+  // Trigger auto-association on mount (fire and forget). The callback is
+  // stable, so this runs once.
   useEffect(() => {
     triggerAutoAssociate()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire-and-forget once on mount; triggerAutoAssociate is a stable useCallback
-  }, [])
+  }, [triggerAutoAssociate])
 
   const handleModalSuccess = useCallback(() => {
     void refreshAfterSave()
@@ -114,7 +114,6 @@ export default function ConnectionProfilesTab() {
         profiles={profiles}
         cheapDefaultProfileId={cheapDefaultProfileId}
         providers={providers}
-        showForm={false}
         deleteConfirming={deleteConfirming}
         isDeleting={deleting}
         onEdit={openEdit}

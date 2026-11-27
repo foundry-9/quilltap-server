@@ -22,7 +22,7 @@
 
 import { useEffect, useRef } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { $getRoot } from 'lexical'
+import { $getRoot, type EditorState } from 'lexical'
 import { changedBlockIndices } from '@/lib/doc-edit/line-diff'
 import type { LinePosition } from './DocumentGutter'
 
@@ -36,11 +36,11 @@ interface DocumentChangeTrackerProps {
 }
 
 /**
- * Read current block text contents from a Lexical editor state.
+ * Read the block text contents of a Lexical editor state.
  */
-function readBlockTexts(editor: ReturnType<typeof useLexicalComposerContext>[0]): string[] {
+function readBlockTexts(editorState: EditorState): string[] {
   let blockTexts: string[] = []
-  editor.getEditorState().read(() => {
+  editorState.read(() => {
     const root = $getRoot()
     blockTexts = root.getChildren().map((node) => node.getTextContent())
   })
@@ -62,7 +62,7 @@ export default function DocumentChangeTracker({
   // the saved content, so capturing block texts here gives us an apples-to-apples
   // comparison target that avoids markdown-vs-plain-text mismatches.
   useEffect(() => {
-    baselineBlockTextsRef.current = readBlockTexts(editor)
+    baselineBlockTextsRef.current = readBlockTexts(editor.getEditorState())
 
     // Baseline just changed — content matches, so no changed lines
     onChangedLines(new Set())
@@ -76,12 +76,7 @@ export default function DocumentChangeTracker({
       }
 
       debounceTimerRef.current = setTimeout(() => {
-        // Read block text contents from the editor state
-        let blockTexts: string[] = []
-        editorState.read(() => {
-          const root = $getRoot()
-          blockTexts = root.getChildren().map((node) => node.getTextContent())
-        })
+        const blockTexts = readBlockTexts(editorState)
 
         const baselineTexts = baselineBlockTextsRef.current
 

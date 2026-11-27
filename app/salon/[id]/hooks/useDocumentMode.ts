@@ -12,10 +12,12 @@
  * @module app/salon/[id]/hooks/useDocumentMode
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { formatAutosaveNotification } from '@/lib/doc-edit/unified-diff'
 import { showErrorToast } from '@/lib/toast'
+import { apiErrorMessage } from '@/lib/query/fetcher'
 import type { Chat, Message } from '../types'
+import { absorbsFirstChange, DocumentSaver, documentWriteOutcome, type DocumentSaverOptions } from './document-saver'
 import {
   closeDocumentForChat,
   deleteDocumentForChat,
@@ -71,7 +73,6 @@ export interface OpenDocEntry {
   document: ActiveDocument
   isDirty: boolean
   isSaving: boolean
-  isLLMEditing: boolean
   contentVersion: number
   attentionTop: number | null
   focusRequest: FocusRequest | null
@@ -142,18 +143,17 @@ export interface UseDocumentModeReturn {
   toggleFocusMode: () => void
 }
 
-const AUTOSAVE_DEBOUNCE_MS = 30000
-
 /** Toast shown when a close or rename is held because the store refused a save. */
 export const UNSAVED_EDITS_MESSAGE =
   "The Librarian could not file your latest changes, so the document stays open with them intact. Do try again in a moment."
 
-function isMarkdownDocument(document: Pick<ActiveDocument, 'filePath'>): boolean {
-  const dot = document.filePath.lastIndexOf('.')
-  if (dot < 0) return false
-  const ext = document.filePath.slice(dot).toLowerCase()
-  return ext === '.md' || ext === '.markdown'
+/** What a chat's `write-document` answers with. */
+interface DocumentWriteResponse {
+  mtime?: number
+  librarianMessage?: Message | null
 }
+
+type ChatDocumentSaver = DocumentSaver<ActiveDocument, DocumentWriteResponse>
 
 function getDocumentModeState(
   source: Partial<{ documentMode: DocumentMode; dividerPosition: number }> | null | undefined,
@@ -166,23 +166,15 @@ function getDocumentModeState(
 
 /**
  * Map an open-document error from the API into a single-line user-facing
- * message. The server returns a JSON body whose `error` field is the raw
- * message; if parsing fails, we fall back to the original text.
+ * message: the server's `{ error }` sentence, made friendlier for a missing
+ * file.
  */
 function friendlyOpenDocumentError(
-  rawMessage: string,
+  error: unknown,
   filePath: string | undefined,
   title: string | undefined,
 ): string {
-  let serverMessage = rawMessage
-  try {
-    const parsed = JSON.parse(rawMessage) as { error?: string }
-    if (parsed && typeof parsed.error === 'string' && parsed.error.length > 0) {
-      serverMessage = parsed.error
-    }
-  } catch {
-    // rawMessage isn't JSON — leave it alone.
-  }
+  const serverMessage = apiErrorMessage(error, 'Failed to open document')
 
   if (/^File not found/i.test(serverMessage)) {
     const target = filePath || title
@@ -199,17 +191,9 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
   const [documentMode, setDocumentMode] = useState<DocumentMode>('normal')
   const [dividerPosition, setDividerPositionState] = useState(45)
 
-  // Per-document refs keyed by chat_documents row id. Mirror the single-doc
-  // hook's refs, one slot per open document.
-  const contentRefs = useRef(new Map<string, string>())
-  // Last-saved content per doc, to distinguish real edits from Lexical re-sync.
-  const savedContentRefs = useRef(new Map<string, string>())
-  const autosaveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
-  // The save running for each document, so a second call joins it.
-  const inFlightSaves = useRef(new Map<string, Promise<boolean>>())
-  // When true, the next handleContentChange for this doc is Lexical's
-  // post-remount re-serialization and is adopted as the baseline, not flagged dirty.
-  const absorbNextRefs = useRef(new Map<string, boolean>())
+  // One save machine per open document, keyed by chat_documents row id: the
+  // pane's text, the last-saved text, the autosave timer and the save in flight.
+  const savers = useRef(new Map<string, ChatDocumentSaver>())
   // Scroll position map keyed by file path — persists across document re-opens.
   const scrollPositionsRef = useRef(new Map<string, number>())
 
@@ -218,17 +202,15 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
   const openDocsRef = useRef<OpenDocEntry[]>([])
   const focusedDocIdRef = useRef<string | null>(null)
   const onLibrarianMessageRef = useRef(onLibrarianMessage)
+  const chatIdRef = useRef(chatId)
 
   useEffect(() => { openDocsRef.current = openDocs }, [openDocs])
   useEffect(() => { focusedDocIdRef.current = focusedDocId }, [focusedDocId])
   useEffect(() => { onLibrarianMessageRef.current = onLibrarianMessage }, [onLibrarianMessage])
+  useEffect(() => { chatIdRef.current = chatId }, [chatId])
 
   const clearTimerFor = useCallback((docId: string) => {
-    const t = autosaveTimers.current.get(docId)
-    if (t) {
-      clearTimeout(t)
-      autosaveTimers.current.delete(docId)
-    }
+    savers.current.get(docId)?.cancelAutosave()
   }, [])
 
   const updateEntry = useCallback((docId: string, updater: (e: OpenDocEntry) => OpenDocEntry) => {
@@ -274,20 +256,19 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
    */
   const applyDocContent = useCallback((doc: ActiveDocument, incrementVersion = true) => {
     const content = doc.content || ''
-    contentRefs.current.set(doc.id, content)
-    savedContentRefs.current.set(doc.id, content)
-    // Empty content has nothing for Lexical to re-serialize, so its editor may
-    // never emit the post-remount change the absorb flag waits for — a lingering
-    // flag would then swallow the user's first real edit as the "saved"
-    // baseline (showing Saved without ever writing).
-    absorbNextRefs.current.set(doc.id, incrementVersion ? isMarkdownDocument(doc) && content !== '' : false)
+    let saver = savers.current.get(doc.id)
+    if (!saver) {
+      const docId = doc.id
+      saver = new DocumentSaver(() => saverOptionsRef.current(docId))
+      savers.current.set(docId, saver)
+    }
+    saver.reset(content, incrementVersion ? absorbsFirstChange(doc.filePath, content) : false)
 
     setOpenDocs(prev => {
       const buildEntry = (existing?: OpenDocEntry): OpenDocEntry => ({
         document: doc,
         isDirty: false,
         isSaving: existing?.isSaving ?? false,
-        isLLMEditing: existing?.isLLMEditing ?? false,
         contentVersion: incrementVersion ? (existing?.contentVersion ?? 0) + 1 : (existing?.contentVersion ?? 0),
         attentionTop: existing?.attentionTop ?? null,
         focusRequest: existing?.focusRequest ?? null,
@@ -301,10 +282,8 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
 
   /** Remove a document's entry + refs and repair the focused-document pointer. */
   const removeEntry = useCallback((docId: string) => {
-    clearTimerFor(docId)
-    contentRefs.current.delete(docId)
-    savedContentRefs.current.delete(docId)
-    absorbNextRefs.current.delete(docId)
+    savers.current.get(docId)?.dispose()
+    savers.current.delete(docId)
 
     const order = openDocsRef.current
     const idx = order.findIndex(e => e.document.id === docId)
@@ -316,148 +295,80 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
       const neighbor = remaining[Math.min(Math.max(idx, 0), remaining.length - 1)]
       setFocusedDocId(neighbor ? neighbor.document.id : null)
     }
-  }, [clearTimerFor])
+  }, [])
 
   // ---- Save / edit (per document) ----------------------------------------
 
   /** Whether the pane holds text that has not been written to the store. */
   const hasUnsavedEdits = useCallback((docId: string) => {
-    return (contentRefs.current.get(docId) ?? '') !== (savedContentRefs.current.get(docId) ?? '')
+    return savers.current.get(docId)?.hasUnsavedEdits() ?? false
   }, [])
+
+  // What each document's saver writes through and reports to. Every piece is
+  // stable but the chat id, which it reads through its ref at the moment of use.
+  const saverOptionsRef = useRef((docId: string): DocumentSaverOptions<ActiveDocument, DocumentWriteResponse> => ({
+    logPrefix: '[DocumentMode]',
+    current: () => openDocsRef.current.find(e => e.document.id === docId)?.document ?? null,
+    write: async (doc, { content, saved, mtime }) => {
+      // Generate the diff client-side so the server can post a single Librarian
+      // save announcement with the human-readable diff in the same round-trip.
+      const diffContent = formatAutosaveNotification(saved, content, doc.displayTitle || doc.filePath) || undefined
+      const res = await requestDocumentWrite(chatIdRef.current, {
+        filePath: doc.filePath,
+        scope: doc.scope,
+        mountPoint: doc.mountPoint,
+        content,
+        mtime,
+        diffContent,
+      })
+      return documentWriteOutcome<DocumentWriteResponse>(res)
+    },
+    read: (doc) => readDocumentContentForChat(chatIdRef.current, {
+      filePath: doc.filePath,
+      scope: doc.scope,
+      mountPoint: doc.mountPoint,
+    }),
+    setSaving: (saving) => {
+      setOpenDocs(prev => prev.map(e => (e.document.id === docId ? { ...e, isSaving: saving } : e)))
+    },
+    onSaved: (_content, data, stillDirty) => {
+      updateEntry(docId, e => ({ ...e, isDirty: stillDirty, document: { ...e.document, mtime: data.mtime } }))
+      const notifyLibrarian = onLibrarianMessageRef.current
+      if (notifyLibrarian && data.librarianMessage) {
+        notifyLibrarian(data.librarianMessage as Message)
+      }
+    },
+    onConflict: (doc, latest, hadLocalEdits) => {
+      // With no pending edits, silently adopt the stored version; otherwise
+      // keep the unsaved content and just refresh mtime.
+      if (!hadLocalEdits) {
+        applyDocContent({ ...doc, content: latest.content || '', mtime: latest.mtime })
+      } else {
+        updateEntry(docId, e => ({ ...e, document: { ...e.document, mtime: latest.mtime } }))
+      }
+    },
+  }))
 
   /**
    * Write a document's unsaved text. Resolves `true` when nothing unsaved
    * remains, `false` when a write was refused (a 409 or any error) and the
-   * edits are still only in the pane.
-   *
-   * One save runs per document at a time; a call while one is in flight joins
-   * it. Text typed while a write is in flight is written by the same run
-   * before it resolves (#174) — the success path records what it actually
-   * sent, never marks later edits as saved.
+   * edits are still only in the pane (#174, #175 — see DocumentSaver).
    */
   const saveDocument = useCallback((docId: string): Promise<boolean> => {
-    const inFlight = inFlightSaves.current.get(docId)
-    if (inFlight) return inFlight
-
-    const run = (async (): Promise<boolean> => {
-      const entry = openDocsRef.current.find(e => e.document.id === docId)
-      if (!entry || !hasUnsavedEdits(docId)) return true
-      const doc = entry.document
-      let mtime = doc.mtime
-
-      setOpenDocs(prev => prev.map(e => (e.document.id === docId ? { ...e, isSaving: true } : e)))
-      try {
-        while (hasUnsavedEdits(docId)) {
-          // Generate the diff client-side so the server can post a single Librarian
-          // save announcement with the human-readable diff in the same round-trip.
-          const oldContentForDiff = savedContentRefs.current.get(docId) ?? ''
-          const newContentForDiff = contentRefs.current.get(docId) ?? ''
-          const diffContent = formatAutosaveNotification(
-            oldContentForDiff,
-            newContentForDiff,
-            doc.displayTitle || doc.filePath,
-          ) || undefined
-
-          const res = await requestDocumentWrite(chatId, {
-            filePath: doc.filePath,
-            scope: doc.scope,
-            mountPoint: doc.mountPoint,
-            content: newContentForDiff,
-            mtime,
-            diffContent,
-          })
-
-          if (res.status === 409) {
-            // The file was written elsewhere (likely the LLM) while we had it open.
-            // Re-read the disk content. If the user has no pending edits, silently
-            // adopt the server version; otherwise keep the unsaved content and just
-            // refresh mtime so the next save can succeed.
-            const hadLocalEdits = hasUnsavedEdits(docId)
-            try {
-              const latest = await readDocumentContent(doc.filePath, doc.scope, doc.mountPoint)
-              if (!hadLocalEdits) {
-                applyDocContent({ ...doc, content: latest.content || '', mtime: latest.mtime })
-              } else {
-                updateEntry(docId, e => ({ ...e, document: { ...e.document, mtime: latest.mtime } }))
-              }
-              console.warn('[DocumentMode] Document changed on disk during save; reloaded mtime', {
-                filePath: doc.filePath,
-                hadLocalEdits,
-              })
-            } catch (reloadError) {
-              console.warn('[DocumentMode] Failed to reload document after save conflict', reloadError)
-            }
-            return !hadLocalEdits
-          }
-
-          if (!res.ok) {
-            const bodyText = await res.text().catch(() => '')
-            console.warn('[DocumentMode] Failed to save document', { status: res.status, body: bodyText })
-            return false
-          }
-
-          const data = await res.json()
-          // Record what was sent as saved — not whatever the pane holds now.
-          savedContentRefs.current.set(docId, newContentForDiff)
-          mtime = data.mtime
-          const stillDirty = hasUnsavedEdits(docId)
-          updateEntry(docId, e => ({ ...e, isDirty: stillDirty, document: { ...e.document, mtime: data.mtime } }))
-
-          const notifyLibrarian = onLibrarianMessageRef.current
-          if (notifyLibrarian && data.librarianMessage) {
-            notifyLibrarian(data.librarianMessage as Message)
-          }
-        }
-        return true
-      } catch (error) {
-        console.error('[DocumentMode] Failed to save document', error)
-        return false
-      } finally {
-        setOpenDocs(prev => prev.map(e => (e.document.id === docId ? { ...e, isSaving: false } : e)))
-      }
-    })()
-
-    inFlightSaves.current.set(docId, run)
-    void run.finally(() => {
-      if (inFlightSaves.current.get(docId) === run) inFlightSaves.current.delete(docId)
-    })
-    return run
-  }, [chatId, readDocumentContent, applyDocContent, updateEntry, hasUnsavedEdits])
+    return savers.current.get(docId)?.save() ?? Promise.resolve(true)
+  }, [])
 
   const handleContentChange = useCallback((docId: string, content: string) => {
-    contentRefs.current.set(docId, content)
     updateEntry(docId, e => ({ ...e, document: { ...e.document, content } }))
-
-    // First change after an external state load is Lexical's normalized
-    // re-serialization of the just-loaded content. Adopt it as the saved
-    // baseline so the status reads "Saved" and byte-exact comparisons work.
-    if (absorbNextRefs.current.get(docId)) {
-      absorbNextRefs.current.set(docId, false)
-      savedContentRefs.current.set(docId, content)
-      updateEntry(docId, e => ({ ...e, isDirty: false }))
-      return
-    }
-
-    if (content === (savedContentRefs.current.get(docId) ?? '')) {
-      updateEntry(docId, e => ({ ...e, isDirty: false }))
-      return
-    }
-
-    updateEntry(docId, e => ({ ...e, isDirty: true }))
-
-    // Debounce autosave.
-    clearTimerFor(docId)
-    autosaveTimers.current.set(docId, setTimeout(() => {
-      saveDocument(docId)
-    }, AUTOSAVE_DEBOUNCE_MS))
-  }, [updateEntry, clearTimerFor, saveDocument])
+    const change = savers.current.get(docId)?.change(content) ?? 'clean'
+    // An absorbed change is Lexical's normalized re-serialization of just-loaded
+    // content, adopted as the saved baseline so the status reads "Saved".
+    updateEntry(docId, e => ({ ...e, isDirty: change === 'dirty' }))
+  }, [updateEntry])
 
   const flushSave = useCallback((docId: string) => {
-    clearTimerFor(docId)
-    if (hasUnsavedEdits(docId)) {
-      void saveDocument(docId)
-    }
-  }, [clearTimerFor, saveDocument, hasUnsavedEdits])
+    savers.current.get(docId)?.flush()
+  }, [])
 
   // ---- Open / close / rename / delete ------------------------------------
 
@@ -491,7 +402,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
       // trigger Next's red-screen overlay for a recoverable miss (e.g. the
       // picker pointed at a file since deleted from the vault).
       const rawMessage = error instanceof Error ? error.message : String(error)
-      const toastMessage = friendlyOpenDocumentError(rawMessage, params.filePath, params.title)
+      const toastMessage = friendlyOpenDocumentError(error, params.filePath, params.title)
       showErrorToast(toastMessage)
       console.warn('[DocumentMode] Failed to open document', { rawMessage, params })
       return null
@@ -607,7 +518,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
         if (existing?.isDirty) continue
         const contentData = await readDocumentContent(rec.filePath, rec.scope, rec.mountPoint)
         const fresh = contentData.content || ''
-        if (existing && !contentData.viewer === !existing.document.viewer && fresh === (savedContentRefs.current.get(rec.id) ?? '')) {
+        if (existing && !contentData.viewer === !existing.document.viewer && fresh === (savers.current.get(rec.id)?.savedContent ?? '')) {
           // Unchanged on disk — just refresh mtime/title without a remount.
           updateEntry(rec.id, e => ({
             ...e,
@@ -652,7 +563,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
       try {
         const data = await readDocumentContent(doc.filePath, doc.scope, doc.mountPoint)
         const fresh = data.content || ''
-        if (fresh !== (savedContentRefs.current.get(doc.id) ?? '')) {
+        if (fresh !== (savers.current.get(doc.id)?.savedContent ?? '')) {
           applyDocContent({ ...doc, content: fresh, mtime: data.mtime })
         } else {
           updateEntry(doc.id, e => ({ ...e, document: { ...e.document, mtime: data.mtime } }))
@@ -719,7 +630,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
   }, [])
 
   const getBaselineContent = useCallback((docId: string): string => {
-    return savedContentRefs.current.get(docId) ?? ''
+    return savers.current.get(docId)?.savedContent ?? ''
   }, [])
 
   // ---- Layout (legacy single-pane conveniences) --------------------------
@@ -759,10 +670,9 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
 
   // Cleanup all autosave timers on unmount.
   useEffect(() => {
-    const timers = autosaveTimers.current
+    const open = savers.current
     return () => {
-      for (const t of timers.values()) clearTimeout(t)
-      timers.clear()
+      for (const saver of open.values()) saver.dispose()
     }
   }, [])
 
@@ -790,11 +700,13 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
   const focusedDocument =
     openDocs.find(e => e.document.id === focusedDocId)?.document ?? openDocs[0]?.document ?? null
 
-  return {
+  const documentActive = openDocs.length > 0
+
+  return useMemo<UseDocumentModeReturn>(() => ({
     openDocs,
     focusedDocId,
     setFocusedDoc,
-    documentActive: openDocs.length > 0,
+    documentActive,
     openDocument,
     closeDocument,
     renameDocument,
@@ -815,5 +727,30 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     dividerPosition,
     setDividerPosition,
     toggleFocusMode,
-  }
+  }), [
+    openDocs,
+    focusedDocId,
+    setFocusedDoc,
+    documentActive,
+    openDocument,
+    closeDocument,
+    renameDocument,
+    deleteDocument,
+    handleContentChange,
+    flushSave,
+    saveDocument,
+    setDocAttentionTop,
+    clearDocFocusRequest,
+    handleLLMEditEnd,
+    reloadFromServer,
+    handleDocFocus,
+    getScrollPosition,
+    setScrollPosition,
+    getBaselineContent,
+    documentMode,
+    focusedDocument,
+    dividerPosition,
+    setDividerPosition,
+    toggleFocusMode,
+  ])
 }

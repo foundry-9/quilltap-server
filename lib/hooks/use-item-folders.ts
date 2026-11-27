@@ -131,7 +131,7 @@ export function itemFolderRefreshKeys(kind: ItemKind): readonly QueryKey[] {
 }
 
 /** The cache identity of a container's folder tree: its encoded `scope:id`. */
-export function itemFolderTierKey(container: ItemContainer | null): string {
+function itemFolderTierKey(container: ItemContainer | null): string {
   return container ? encodeWardrobeContainer(container) : 'none'
 }
 

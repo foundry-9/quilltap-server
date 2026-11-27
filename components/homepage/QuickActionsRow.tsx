@@ -12,28 +12,15 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
 import { CreateProjectDialog } from '@/app/prospero/components'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { useCreateProject } from '@/lib/hooks/use-projects'
 
 export function QuickActionsRow() {
   const [projectDialogOpen, setProjectDialogOpen] = useState(false)
 
+  const createProject = useCreateProject()
+
   const handleProjectCreate = async (name: string, description: string | null) => {
-    try {
-      const res = await fetch('/api/v1/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description }),
-      })
-      if (res.ok) {
-        setProjectDialogOpen(false)
-        showSuccessToast('Project created successfully!')
-      } else {
-        showErrorToast('Failed to create project')
-      }
-    } catch (err) {
-      console.error('Failed to create project:', err)
-      showErrorToast('Failed to create project')
-    }
+    if (await createProject(name, description)) setProjectDialogOpen(false)
   }
 
   return (

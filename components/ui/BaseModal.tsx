@@ -108,7 +108,7 @@ const ModalTitleContext = createContext<string | null>(null)
  * The id the enclosing BaseModal's `aria-labelledby` points at. For a
  * `headerless` modal that labels itself some other way than `<ModalTitle>`.
  */
-export function useModalTitleId(): string | null {
+function useModalTitleId(): string | null {
   return useContext(ModalTitleContext)
 }
 

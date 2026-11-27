@@ -1,6 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -79,41 +82,22 @@ export function HelpTopicReader({
 }: HelpTopicReaderProps) {
   const internalRef = useRef<HTMLDivElement>(null)
   const readerRef = scrollContainerRef || internalRef
-  const [content, setContent] = useState<string | null>(null)
-  const [title, setTitle] = useState<string>('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchDocument() {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await fetch(`/api/v1/help-docs/${encodeURIComponent(documentId)}`)
-        if (!res.ok) {
-          throw new Error(res.status === 404 ? 'Document not found' : 'Failed to load document')
-        }
-        const data = await res.json()
-        if (!cancelled) {
-          setContent(data.document.content)
-          setTitle(data.document.title)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load document')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    fetchDocument()
-    return () => { cancelled = true }
-  }, [documentId])
+  const docQuery = useQuery({
+    queryKey: queryKeys.helpDocs.doc(documentId),
+    queryFn: ({ signal }) =>
+      apiFetch<{ document: { content: string; title: string } }>(
+        `/api/v1/help-docs/${encodeURIComponent(documentId)}`,
+        { signal },
+      ),
+  })
+  const content = docQuery.data?.document.content ?? null
+  const title = docQuery.data?.document.title ?? ''
+  const loading = docQuery.isPending
+  const error = docQuery.error
+    ? docQuery.error instanceof ApiFetchError && docQuery.error.status === 404
+      ? 'Document not found'
+      : 'Failed to load document'
+    : null
 
   // Scroll reader to restored position or top when document changes
   useEffect(() => {

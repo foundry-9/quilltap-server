@@ -16,6 +16,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { DocumentStoreBrowser } from '@/components/document-browser/DocumentStoreBrowser'
 import type { DocumentEntry } from '@/components/document-browser/useDocumentStoreSource'
 import { Icon } from '@/components/ui/icon'
@@ -23,6 +24,8 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { MAX_RECENT_DOCUMENTS } from '@/lib/chat-documents/constants'
 import { showErrorToast } from '@/lib/toast'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 interface DocumentPickerModalProps {
   isOpen: boolean
@@ -77,6 +80,12 @@ interface LibraryTarget {
   mountType: 'filesystem' | 'obsidian' | 'database'
 }
 
+interface AccessibleStoresResponse {
+  stores?: AccessibleStore[]
+  projectLibrary?: LibraryTarget | null
+  generalLibrary?: LibraryTarget | null
+}
+
 interface RecentDocument {
   id: string
   filePath: string
@@ -99,73 +108,49 @@ export default function DocumentPickerModal({
 }: Readonly<DocumentPickerModalProps>) {
   const [step, setStep] = useState<'source' | 'browse'>('source')
   const [selectedMountPoint, setSelectedMountPoint] = useState<MountPoint | null>(null)
-  const [accessibleStores, setAccessibleStores] = useState<AccessibleStore[]>([])
-  // The project's own store and Quilltap General, behind the "Project
-  // library" and "General library" buttons. Each button is hidden while its
-  // store is missing.
-  const [projectLibrary, setProjectLibrary] = useState<LibraryTarget | null>(null)
-  const [generalLibrary, setGeneralLibrary] = useState<LibraryTarget | null>(null)
-  const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([])
-  const [loading, setLoading] = useState(false)
   // "Look everywhere" widens the store accordions beyond this chat's reach to
   // every enabled store (character vaults of all characters, all doc stores).
   const [lookEverywhere, setLookEverywhere] = useState(false)
 
-  const fetchAccessibleStores = async (all: boolean) => {
-    try {
-      setLoading(true)
-      const res = await fetch(chatId
-        ? `/api/v1/chats/${chatId}?action=accessible-stores${all ? '&all=true' : ''}`
-        : '/api/v1/documents?action=accessible-stores')
-      if (res.ok) {
-        const data = await res.json()
-        setAccessibleStores(data.stores || [])
-        setProjectLibrary(data.projectLibrary ?? null)
-        setGeneralLibrary(data.generalLibrary ?? null)
-      }
-    } catch (error) {
-      console.error('[DocumentPickerModal] Failed to fetch accessible stores', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Both reads are taken afresh each time the picker opens (staleTime 0); a
+  // failed read leaves the shelves empty, as it always has.
+  const storesQuery = useQuery({
+    queryKey: chatId
+      ? queryKeys.chats.accessibleStores(chatId, lookEverywhere)
+      : queryKeys.documents.accessibleStores(),
+    queryFn: ({ signal }) =>
+      apiFetch<AccessibleStoresResponse>(
+        chatId
+          ? `/api/v1/chats/${chatId}?action=accessible-stores${lookEverywhere ? '&all=true' : ''}`
+          : '/api/v1/documents?action=accessible-stores',
+        { signal },
+      ),
+    enabled: isOpen,
+    staleTime: 0,
+  })
+  const { data: recentData } = useQuery({
+    queryKey: chatId ? queryKeys.chats.recentDocuments(chatId) : queryKeys.documents.recentDocuments(),
+    queryFn: ({ signal }) =>
+      apiFetch<{ documents?: RecentDocument[] }>(
+        chatId ? `/api/v1/chats/${chatId}?action=recent-documents` : '/api/v1/documents?action=recent-documents',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal },
+      ),
+    enabled: isOpen,
+    staleTime: 0,
+  })
 
-  const fetchRecentDocuments = async () => {
-    try {
-      const url = chatId
-        ? `/api/v1/chats/${chatId}?action=recent-documents`
-        : '/api/v1/documents?action=recent-documents'
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setRecentDocuments(data.documents || [])
-      }
-    } catch (error) {
-      console.error('[DocumentPickerModal] Failed to fetch recent documents', error)
-    }
-  }
-
-  // Recent documents — fetched when the modal opens.
   useEffect(() => {
-    if (isOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch when modal opens; parent renders unconditionally
-      fetchRecentDocuments()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch function is stable
-  }, [isOpen])
+    if (storesQuery.error) console.error('[DocumentPickerModal] Failed to fetch accessible stores', storesQuery.error)
+  }, [storesQuery.error])
 
-  // Accessible stores — refetched when the modal opens or the "look everywhere"
-  // scope toggles.
-  useEffect(() => {
-    if (isOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch; parent renders unconditionally
-      fetchAccessibleStores(lookEverywhere)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch function is stable
-  }, [isOpen, lookEverywhere])
+  const accessibleStores = useMemo(() => storesQuery.data?.stores ?? [], [storesQuery.data])
+  // The project's own store and Quilltap General, behind the "Project
+  // library" and "General library" buttons. Each button is hidden while its
+  // store is missing.
+  const projectLibrary = storesQuery.data?.projectLibrary ?? null
+  const generalLibrary = storesQuery.data?.generalLibrary ?? null
+  const recentDocuments = recentData?.documents ?? []
+  const loading = storesQuery.isFetching
 
   // Reset state when modal closes
   useEffect(() => {
@@ -174,8 +159,6 @@ export default function DocumentPickerModal({
       setStep('source')
       setSelectedMountPoint(null)
       setLookEverywhere(false)
-      setProjectLibrary(null)
-      setGeneralLibrary(null)
     }
   }, [isOpen])
 

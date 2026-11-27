@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { EmptyStatePanel } from '@/components/ui/EmptyState'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -231,7 +232,7 @@ export function SalonListView() {
       )}
 
       {visibleChats.length === 0 ? (
-        <div className="chat-empty-state mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
+        <EmptyStatePanel className="chat-empty-state">
           <p className="mb-4 text-lg qt-text-small">No chats yet</p>
           <Link
             href="/salon/new"
@@ -239,7 +240,7 @@ export function SalonListView() {
           >
             Start a new chat
           </Link>
-        </div>
+        </EmptyStatePanel>
       ) : (
         <div className="chat-card-stack space-y-4">
           {visibleChats.map((chat) => (

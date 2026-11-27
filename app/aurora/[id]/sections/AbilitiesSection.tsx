@@ -110,7 +110,6 @@ export function AbilitiesSection() {
         <CanDrawDiagramsToggle
           checked={character.canDrawDiagrams ?? false}
           style={character.diagramStyle ?? 'handDrawn'}
-          saving={false}
           disabled={readOnly}
           onChange={(canDrawDiagrams) => void save({ canDrawDiagrams }, 'The diagram setting could not be saved.')}
           onStyleChange={(diagramStyle) => void save({ diagramStyle }, 'The diagram style could not be saved.')}
@@ -142,7 +141,6 @@ export function AbilitiesSection() {
         />
         <CanChooseOutfitToggle
           checked={character.canChooseOutfit ?? false}
-          saving={false}
           disabled={readOnly}
           onChange={(canChooseOutfit) =>
             void save({ canChooseOutfit }, 'The opening-outfit setting could not be saved.')

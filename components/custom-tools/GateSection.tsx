@@ -19,12 +19,16 @@
  * that holds decides the gate.
  */
 
-import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { CONTAINMENT_KEYS, ORDERING_KEYS, type ComparatorKey } from '@/lib/pascal/custom-tool.types'
+import { SegmentedRadioGroup, segmentedButtonClass } from '@/components/ui/SegmentedRadioGroup'
+import { COMPARATOR_KEYS, CONTAINMENT_KEYS, ORDERING_KEYS, type ComparatorKey } from '@/lib/pascal/custom-tool.types'
 import {
+  EQUALITY_COMPARATORS,
+  comparatorsForType,
   gateConditionSlotKey,
-  groupsOf,
+  issuesAt,
+  legalInventoryStateTest,
+  legalNumberTest,
   nextDraftId,
   reseatOperandForComparator,
   type DraftGateCondition,
@@ -35,8 +39,10 @@ import {
 import { COMPARATOR_LABELS } from './comparator-labels'
 import { LiteralOperandField } from './LiteralOperandField'
 import { INVENTORY_STATE_VALUES } from '@/lib/pascal/inventory-subjects'
-import { ConditionGroups } from './ConditionGroups'
+import { ConditionGroups, useLineSlotGuard } from './ConditionGroups'
 import { AggregateKeyField } from './AggregateKeyField'
+import { IssueLines } from './IssueLines'
+import { FailSoftHint, SubjectKeyField, progressKeyTitle } from './chip-parts'
 
 interface GateSectionProps {
   draft: ToolDraft
@@ -59,41 +65,35 @@ const MODE_OPTIONS: Array<{ mode: GateMode; label: string; title: string }> = [
   },
 ]
 
-/** Every comparator is on offer: a metadata key's stored type is unknowable here. */
-const COMPARATORS: ComparatorKey[] = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains']
-
 /**
- * What each subject may be asked: a state is = / ≠, a count is a number. An
- * aggregate offers everything; whether its key is a list or a number is the
- * validator's to flag, beside the chip.
+ * What each subject may be asked: a state is = / ≠, a count is a number.
+ * Everything else offers every comparator — a metadata key's stored type is
+ * unknowable here, and whether an aggregate's key is a list or a number is
+ * the validator's to flag, beside the chip.
  */
-function comparatorsFor(subject: DraftGateCondition['subject']): ComparatorKey[] {
-  if (subject === 'inventory') return ['eq', 'neq']
-  if (subject === 'inventoryCount') return ['gt', 'gte', 'lt', 'lte', 'eq', 'neq']
-  return COMPARATORS
+function comparatorsFor(subject: DraftGateCondition['subject']): readonly ComparatorKey[] {
+  if (subject === 'inventory') return EQUALITY_COMPARATORS
+  if (subject === 'inventoryCount') return comparatorsForType('number')
+  return COMPARATOR_KEYS
 }
 
 /** The same chip on a new subject, its comparator and operand made legal there. */
 function withSubject(condition: DraftGateCondition, subject: DraftGateCondition['subject']): DraftGateCondition {
   if (subject === 'inventory') {
-    const comparator = condition.comparator === 'neq' ? 'neq' : 'eq'
-    const keep =
-      condition.operand.kind === 'string' &&
-      (INVENTORY_STATE_VALUES as readonly string[]).includes(condition.operand.text)
-    return { ...condition, subject, comparator, operand: keep ? condition.operand : { kind: 'string', text: 'equipped' } }
+    return { ...condition, subject, ...legalInventoryStateTest(condition.comparator, condition.operand) }
   }
   if (subject === 'inventoryCount') {
-    const comparator = CONTAINMENT_KEYS.has(condition.comparator) ? 'gte' : condition.comparator
-    const operand = condition.operand.kind === 'number' ? condition.operand : { kind: 'number' as const, text: '1' }
-    return { ...condition, subject, comparator, operand }
+    return {
+      ...condition,
+      subject,
+      ...legalNumberTest(condition.comparator, condition.operand, { comparator: 'gte', text: '1' }),
+    }
   }
   return { ...condition, subject }
 }
 
 export function GateSection({ draft, issues, onChange, disabled = false }: Readonly<GateSectionProps>) {
-  const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null)
-
-  const gateIssues = issues.filter((issue) => issue.severity === 'error' && issue.where.section === 'gate')
+  const gateIssues = issuesAt(issues, 'error', (where) => where.section === 'gate')
   const sectionErrors = gateIssues
     .filter((issue) => issue.where.section === 'gate' && issue.where.conditionId === undefined)
     .map((issue) => issue.message)
@@ -105,8 +105,22 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
 
   const setConditions = (gateConditions: DraftGateCondition[]) => onChange({ ...draft, gateConditions })
 
+  // One comparator object carries each key once, so a duplicate key+comparator
+  // pair on one line is blocked at the door rather than silently overwriting
+  // its twin. Another line is another object, and may repeat it.
+  const {
+    notice: duplicateNotice,
+    clearNotice,
+    update: updateCondition,
+  } = useLineSlotGuard(
+    draft.gateConditions,
+    setConditions,
+    (a, b) => a.subject === b.subject && gateConditionSlotKey(a) === gateConditionSlotKey(b),
+    (next) => `A line of the gate can test “${next.key}” with ${COMPARATOR_LABELS[next.comparator]} only once.`
+  )
+
   const setMode = (gateMode: GateMode) => {
-    setDuplicateNotice(null)
+    clearNotice()
     // Conditions survive a mode change, exactly as the roll fields survive a
     // form change: flipping "only if" to "not if" is the commonest edit there
     // is, and retyping the tests to make it would be a poor joke.
@@ -114,7 +128,7 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
   }
 
   const addCondition = () => {
-    setDuplicateNotice(null)
+    clearNotice()
     setConditions([
       ...draft.gateConditions,
       {
@@ -127,23 +141,8 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
     ])
   }
 
-  const updateCondition = (id: string, next: DraftGateCondition) => {
-    // One comparator object carries each key once, so a duplicate key+comparator
-    // pair on one line is blocked at the door rather than silently overwriting
-    // its twin. Another line is another object, and may repeat it.
-    const slot = gateConditionSlotKey(next)
-    const line = groupsOf(draft.gateConditions).find((group) => group.some((c) => c.id === id)) ?? []
-    const collision = line.some((c) => c.id !== id && c.subject === next.subject && gateConditionSlotKey(c) === slot)
-    if (collision) {
-      setDuplicateNotice(`A line of the gate can test “${next.key}” with ${COMPARATOR_LABELS[next.comparator]} only once.`)
-      return
-    }
-    setDuplicateNotice(null)
-    setConditions(draft.gateConditions.map((c) => (c.id === id ? next : c)))
-  }
-
   const deleteCondition = (id: string) => {
-    setDuplicateNotice(null)
+    clearNotice()
     setConditions(draft.gateConditions.filter((c) => c.id !== id))
   }
 
@@ -157,24 +156,15 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
             progressions, or what they carry in this chat — the only things known before a roll exists.
           </p>
         </div>
-        <div className="flex rounded overflow-hidden border" role="radiogroup" aria-label="Availability">
-          {MODE_OPTIONS.map((option) => (
-            <button
-              key={option.mode}
-              type="button"
-              role="radio"
-              aria-checked={draft.gateMode === option.mode}
-              onClick={() => setMode(option.mode)}
-              disabled={disabled}
-              title={option.title}
-              className={`px-3 py-1 text-sm ${
-                draft.gateMode === option.mode ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedRadioGroup
+          ariaLabel="Availability"
+          className="flex rounded overflow-hidden border"
+          options={MODE_OPTIONS.map((option) => ({ value: option.mode, label: option.label, title: option.title }))}
+          value={draft.gateMode}
+          onSelect={setMode}
+          disabled={disabled}
+          optionClassName={segmentedButtonClass('sm')}
+        />
       </div>
 
       {draft.gateMode === 'none' ? (
@@ -194,7 +184,7 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
             conditions={draft.gateConditions}
             disabled={disabled}
             onJoinerChange={(id, joiner) => {
-              setDuplicateNotice(null)
+              clearNotice()
               setConditions(draft.gateConditions.map((c) => (c.id === id ? { ...c, joiner } : c)))
             }}
             renderChip={(condition) => (
@@ -209,11 +199,7 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
           />
 
           {duplicateNotice && <p className="text-xs qt-text-destructive">{duplicateNotice}</p>}
-          {sectionErrors.map((message) => (
-            <p key={message} className="text-xs qt-text-destructive">
-              {message}
-            </p>
-          ))}
+          <IssueLines errors={sectionErrors} />
 
           <button
             type="button"
@@ -277,10 +263,9 @@ function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonl
           disabled={disabled}
         />
       ) : (
-        <input
-          type="text"
+        <SubjectKeyField
           value={condition.key}
-          onChange={(e) => onChange({ ...condition, key: e.target.value })}
+          onChange={(key) => onChange({ ...condition, key })}
           placeholder={
             condition.subject === 'progress'
               ? 'cannon.complete'
@@ -289,11 +274,10 @@ function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonl
                 : "key on the character's fact sheet"
           }
           disabled={disabled}
-          className={`qt-input w-44 text-sm ${condition.key.trim() === '' ? 'qt-input-error' : ''}`}
-          aria-label={condition.subject === 'progress' ? 'Progress key' : inventorySubject ? 'Inventory object reference' : 'Metadata key'}
+          ariaLabel={condition.subject === 'progress' ? 'Progress key' : inventorySubject ? 'Inventory object reference' : 'Metadata key'}
           title={
             condition.subject === 'progress'
-              ? 'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity, public. A progression they do not carry never matches.'
+              ? progressKeyTitle('never matches')
               : inventorySubject
                 ? 'An object by id, title or name, written literally — a gate has no parameters to fill a placeholder. With no character or chat, the test never matches.'
                 : "The invoking character's fact sheet — a key the character lacks never matches."
@@ -331,16 +315,13 @@ function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonl
       />
 
       {(ordering || containment) && !inventorySubject && !aggregateSubject && (
-        <span
-          className="text-xs qt-text-secondary"
+        <FailSoftHint
           title={
             ordering
               ? 'Matches only when the stored value is a number — anything else fails the test, fail-soft, never an error.'
               : 'Matches only when the stored value is text — anything else fails the test, fail-soft, never an error.'
           }
-        >
-          ⓘ
-        </span>
+        />
       )}
 
       <button

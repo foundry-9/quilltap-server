@@ -1086,12 +1086,7 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
       {readsProgress.length > 0 && (
         <p className="text-xs qt-text-secondary mt-4 leading-relaxed">
           It consults your timed progressions:{' '}
-          {readsProgress.map((id, i) => (
-            <span key={id}>
-              {i > 0 && ', '}
-              <code className="font-mono qt-text">{id}</code>
-            </span>
-          ))}
+          <CodeList values={readsProgress} />
           . A progression you are not carrying simply does not match.
         </p>
       )}
@@ -1099,12 +1094,7 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
       {writes.length > 0 && (
         <p className="text-xs qt-text-secondary mt-4 leading-relaxed">
           When it runs, this tool may also write:{' '}
-          {writes.map((target, i) => (
-            <span key={target}>
-              {i > 0 && ', '}
-              <code className="font-mono qt-text">{target}</code>
-            </span>
-          ))}
+          <CodeList values={writes} />
           . The record of what actually changed rides with the roll itself.
         </p>
       )}
@@ -1112,12 +1102,7 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
       {wardrobeLines.map((line) => (
         <p key={line.key} className="text-xs qt-text-secondary mt-4 leading-relaxed">
           {line.lead}{' '}
-          {line.values.map((value, i) => (
-            <span key={value}>
-              {i > 0 && ', '}
-              <code className="font-mono qt-text">{value}</code>
-            </span>
-          ))}
+          <CodeList values={line.values} />
           {line.key === 'clearsSlots' ? (line.values.length > 1 ? ' slots' : ' slot') : ''}
           . Only when you run it as a character — a run made as nobody dresses nobody.
         </p>
@@ -1126,12 +1111,7 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
       {readsInventory.length > 0 && (
         <p className="text-xs qt-text-secondary mt-4 leading-relaxed">
           It reads the inventory for{' '}
-          {readsInventory.map((ref, i) => (
-            <span key={ref}>
-              {i > 0 && ', '}
-              <code className="font-mono qt-text">{ref}</code>
-            </span>
-          ))}
+          <CodeList values={readsInventory} />
           . Run as nobody, it finds no inventory at all.
         </p>
       )}
@@ -1139,12 +1119,7 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
       {readsAggregates.length > 0 && (
         <p className="text-xs qt-text-secondary mt-4 leading-relaxed">
           It takes stock of everything they carry, reading{' '}
-          {readsAggregates.map((key, i) => (
-            <span key={key}>
-              {i > 0 && ', '}
-              <code className="font-mono qt-text">{key}</code>
-            </span>
-          ))}
+          <CodeList values={readsAggregates} />
           . Run as nobody, it finds no inventory at all.
         </p>
       )}
@@ -1152,16 +1127,25 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
       {inventoryLines.map((line) => (
         <p key={line.key} className="text-xs qt-text-secondary mt-4 leading-relaxed">
           {line.lead}{' '}
-          {line.values.map((value, i) => (
-            <span key={value}>
-              {i > 0 && ', '}
-              <code className="font-mono qt-text">{value}</code>
-            </span>
-          ))}
+          <CodeList values={line.values} />
           . Only when you run it as a character — a run made as nobody carries nothing.
         </p>
       ))}
     </details>
+  )
+}
+
+/** A run of names as inline code, comma-separated, for the panel's sentences. */
+function CodeList({ values }: Readonly<{ values: string[] }>) {
+  return (
+    <>
+      {values.map((value, i) => (
+        <span key={value}>
+          {i > 0 && ', '}
+          <code className="font-mono qt-text">{value}</code>
+        </span>
+      ))}
+    </>
   )
 }
 

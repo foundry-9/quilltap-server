@@ -74,14 +74,11 @@ function setup(name: GoldenStream) {
   const rendered = renderHook(() =>
     useSSEStreaming({
       chatId: 'chat-1',
-      chat: { id: 'chat-1', participants: [] } as never,
-      messages,
       setMessages: setMessages as never,
       isMultiChar: true,
       hasActiveCharacters: true,
       participantsAsBase: [],
       isPaused: false,
-      respondingParticipantId: null,
       setRespondingParticipantId: jest.fn(),
       activeTypingParticipantId: null,
       impersonatingParticipantIds: [],

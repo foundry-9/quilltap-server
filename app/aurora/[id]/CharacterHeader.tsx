@@ -23,6 +23,7 @@ import { Icon } from '@/components/ui/icon'
 import { ItemActionMenu } from '@/components/item-browser/ItemActionMenu'
 import type { AvatarDisplayStyle } from '@/lib/avatar-styles'
 import { getAvatarClasses } from '@/lib/avatar-styles'
+import { characterAvatarSrc } from '@/lib/characters/avatar-src'
 import { ageOn, dateStampIn } from '@/lib/characters/birthday'
 import { isAssistantCharacter } from '@/lib/characters/kind'
 import type { CharacterPageSection } from '@/lib/characters/page-sections'
@@ -48,24 +49,6 @@ export interface CharacterHeaderProps {
   onArchive: () => void
   onRehydrate: () => void
   onDelete: () => void
-}
-
-function avatarSrcOf(character: {
-  defaultImage?: { filepath: string; url?: string }
-  avatarUrl?: string
-  defaultImageId?: string
-}): string | null {
-  let src: string | null = null
-  if (character.defaultImage) {
-    const filepath = character.defaultImage.filepath
-    src = character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
-  } else {
-    src = character.avatarUrl || null
-  }
-  if (src && character.defaultImageId) {
-    src = `${src}${src.includes('?') ? '&' : '?'}v=${character.defaultImageId}`
-  }
-  return src
 }
 
 function Badge({ children, title }: { children: ReactNode; title?: string }) {
@@ -111,7 +94,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
   const { character, autosave, stats, groups, vault, readOnly, goToSection } = useCharacterPage()
   const [today] = useState(() => dateStampIn(Date.now()))
   const age = character.birthday ? ageOn(character.birthday, today) : null
-  const avatarSrc = avatarSrcOf(character)
+  const avatarSrc = characterAvatarSrc(character, { cacheBust: true })
   const archived = Boolean(character.archivedAt)
 
   const statLink = (section: CharacterPageSection, anchor: string) => () => goToSection(section, anchor)

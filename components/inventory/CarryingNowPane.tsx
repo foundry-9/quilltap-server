@@ -113,7 +113,6 @@ export function CarryingNowPane({
           onClose={() => setPicking(false)}
           title={`Take up — ${characterName}`}
           maxWidth="lg"
-          overlayClassName="z-[70]"
           showCloseButton
           footer={(
             <div className="flex items-center justify-end w-full">

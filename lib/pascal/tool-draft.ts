@@ -1321,6 +1321,18 @@ export interface DraftIssue {
   message: string;
 }
 
+/**
+ * The issues of one severity whose place `where` accepts — how each section
+ * of the Workbench form finds its own, in the order `validateDraft` gave them.
+ */
+export function issuesAt(
+  issues: readonly DraftIssue[],
+  severity: DraftIssue['severity'],
+  where: (place: DraftIssue['where']) => boolean
+): DraftIssue[] {
+  return issues.filter((issue) => issue.severity === severity && where(issue.where));
+}
+
 const err = (where: DraftIssue['where'], message: string): DraftIssue => ({ severity: 'error', where, message });
 const warn = (where: DraftIssue['where'], message: string): DraftIssue => ({ severity: 'warning', where, message });
 
@@ -2076,6 +2088,57 @@ export function reseatOperandForComparator<O extends ConditionOperand>(
     return { kind: 'string', text: operand.kind === 'number' ? operand.text : '' };
   }
   return operand;
+}
+
+/** The comparators a test of a known type may use: equality alone (a boolean, an Inventory state). */
+export const EQUALITY_COMPARATORS: readonly ComparatorKey[] = ['eq', 'neq'];
+/** Ordering and equality — a number cannot contain. */
+export const NUMERIC_COMPARATORS: readonly ComparatorKey[] = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'];
+/** Equality and containment — text cannot be ordered. */
+export const TEXT_COMPARATORS: readonly ComparatorKey[] = ['eq', 'neq', 'contains', 'ncontains'];
+
+/**
+ * The comparators a chip offers for a subject of `type`; `null` (a type
+ * unknowable at authoring time) offers every one.
+ */
+export function comparatorsForType(type: ValueType | null): readonly ComparatorKey[] {
+  if (type === 'string') return TEXT_COMPARATORS;
+  if (type === 'boolean') return EQUALITY_COMPARATORS;
+  if (type === 'number') return NUMERIC_COMPARATORS;
+  return COMPARATOR_KEYS;
+}
+
+/**
+ * An Inventory state test made legal: = or ≠ (anything else becomes =),
+ * against one of the four states — a literal that is not one becomes
+ * `equipped`. A parameter reference is left alone.
+ */
+export function legalInventoryStateTest<O extends ConditionOperand>(
+  comparator: ComparatorKey,
+  operand: O
+): { comparator: ComparatorKey; operand: O | Extract<LiteralOperand, { kind: 'string' }> } {
+  const nextComparator: ComparatorKey = comparator === 'neq' ? 'neq' : 'eq';
+  const valid =
+    operand.kind === 'string' && (INVENTORY_STATE_VALUES as readonly string[]).includes(operand.text);
+  if (valid || operand.kind === 'param') return { comparator: nextComparator, operand };
+  return { comparator: nextComparator, operand: { kind: 'string', text: 'equipped' } };
+}
+
+/**
+ * A numeric test made legal: containment becomes `fallback.comparator`, and
+ * a text or true/false literal becomes a number — `fallback.text` when one is
+ * given, else the text it carried (a boolean starts blank). References are
+ * left alone.
+ */
+export function legalNumberTest<O extends ConditionOperand>(
+  comparator: ComparatorKey,
+  operand: O,
+  fallback: { comparator: ComparatorKey; text?: string }
+): { comparator: ComparatorKey; operand: O | Extract<LiteralOperand, { kind: 'number' }> } {
+  const nextComparator = CONTAINMENT_KEYS.has(comparator) ? fallback.comparator : comparator;
+  if (operand.kind !== 'string' && operand.kind !== 'boolean') return { comparator: nextComparator, operand };
+  const text = fallback.text ?? (operand.kind === 'string' ? operand.text : '');
+  return { comparator: nextComparator, operand: { kind: 'number', text } };
 }
 
 /** Identity of a gate chip for duplicate detection, within its group: key + comparator. */

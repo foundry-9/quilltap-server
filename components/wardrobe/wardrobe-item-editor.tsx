@@ -57,8 +57,8 @@ interface WardrobeItemEditorProps {
    * absent) keeps the classic character-view behaviour.
    */
   container?: WardrobeContainer | null
-  /** Display name for `container`, e.g. the project or group name. */
-  containerLabel?: string
+  /** Display name for `container` (`itemContainerLabel`), e.g. the project or group name. */
+  containerLabel: string
   /** Pre-populated component IDs (used by Save-as-outfit from the Outfit Builder). */
   initialComponentItemIds?: string[]
   /** Force a starting mode (used by Save-as-outfit to open in bundle mode). */
@@ -488,14 +488,7 @@ export function WardrobeItemEditor({
         {!isEditing && sharedContainer && (
           <div>
             <span className="qt-label mb-1 block">Add to</span>
-            <p className="text-sm qt-text">
-              {containerLabel ??
-                (sharedContainer.scope === 'general'
-                  ? 'Quilltap General'
-                  : sharedContainer.scope === 'project'
-                    ? 'This project'
-                    : 'This group')}
-            </p>
+            <p className="text-sm qt-text">{containerLabel}</p>
             <p className="qt-text-xs qt-text-secondary mt-1">
               {sharedContainer.scope === 'general'
                 ? 'Every character, in every chat, can wear it.'
@@ -529,11 +522,7 @@ export function WardrobeItemEditor({
                   role="radio"
                   aria-checked={createScope === scope}
                   onClick={() => setCreateScope(scope)}
-                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                    createScope === scope
-                      ? 'qt-bg-default qt-text shadow-sm'
-                      : 'qt-text-secondary hover:qt-text'
-                  }`}
+                  className={`qt-segmented-item px-3 py-1.5 rounded text-sm font-medium transition-colors ${createScope === scope ? 'qt-segmented-item-active' : ''}`}
                 >
                   {label}
                 </button>
@@ -560,11 +549,7 @@ export function WardrobeItemEditor({
             role="tab"
             aria-selected={editorMode === 'single'}
             onClick={() => handleModeChange('single')}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              editorMode === 'single'
-                ? 'qt-bg-default qt-text shadow-sm'
-                : 'qt-text-secondary hover:qt-text'
-            }`}
+            className={`qt-segmented-item px-3 py-1.5 rounded text-sm font-medium transition-colors ${editorMode === 'single' ? 'qt-segmented-item-active' : ''}`}
           >
             Single garment
           </button>
@@ -573,11 +558,7 @@ export function WardrobeItemEditor({
             role="tab"
             aria-selected={editorMode === 'bundle'}
             onClick={() => handleModeChange('bundle')}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              editorMode === 'bundle'
-                ? 'qt-bg-default qt-text shadow-sm'
-                : 'qt-text-secondary hover:qt-text'
-            }`}
+            className={`qt-segmented-item px-3 py-1.5 rounded text-sm font-medium transition-colors ${editorMode === 'bundle' ? 'qt-segmented-item-active' : ''}`}
           >
             Outfit bundle
           </button>

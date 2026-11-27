@@ -18,7 +18,7 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
-import { orderProfilesByChatUse } from '@/lib/llm/profile-usage'
+import { orderProfilesByChatUse, resolveDefaultConnectionProfileId } from '@/lib/llm/profile-usage'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
@@ -30,6 +30,7 @@ import { OutfitSelector } from '@/components/wardrobe'
 import type { OutfitSelection } from '@/components/wardrobe'
 import type { OutfitSelectionMode } from '@/lib/schemas/wardrobe.types'
 import { Icon } from '@/components/ui/icon'
+import { Spinner } from '@/components/ui/Spinner'
 
 interface CharacterOption {
   id: string
@@ -128,17 +129,8 @@ export default function AddCharacterDialog({
   useEffect(() => {
     if (!selectedCharacterId) return
     const character = characters.find(c => c.id === selectedCharacterId)
-    const characterDefault = character?.defaultConnectionProfileId
-    const characterDefaultExists = characterDefault
-      ? connectionProfiles.some(p => p.id === characterDefault)
-      : false
-    let resolved: string | null = null
-    if (characterDefault && characterDefaultExists) {
-      resolved = characterDefault
-    } else {
-      const userDefault = connectionProfiles.find(p => p.isDefault)
-      resolved = userDefault?.id ?? connectionProfiles[0]?.id ?? null
-    }
+    const resolved = resolveDefaultConnectionProfileId(character, connectionProfiles)
+      ?? connectionProfiles[0]?.id ?? null
     if (resolved) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream selectedCharacterId changes (parent renders unconditionally)
       setSelectedConnectionProfileId(resolved)
@@ -333,10 +325,7 @@ export default function AddCharacterDialog({
             >
               {isAdding ? (
                 <>
-                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
+                  <Spinner className="h-4 w-4" />
                   Adding...
                 </>
               ) : (
@@ -351,10 +340,7 @@ export default function AddCharacterDialog({
       >
         {isLoading ? (
           <div className="qt-loading-state py-12">
-            <svg className="animate-spin h-8 w-8 qt-text-brand" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
+            <Spinner className="h-8 w-8 qt-text-brand" />
           </div>
         ) : (
           <div className="space-y-6">

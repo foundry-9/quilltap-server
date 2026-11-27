@@ -57,7 +57,6 @@ interface DocumentPaneProps {
   mode: DocumentMode
   isDirty: boolean
   isSaving: boolean
-  isLLMEditing: boolean
   /** Increments on each external content load to force editor remount */
   contentVersion: number
   roleplayTemplateId?: string | null
@@ -77,7 +76,6 @@ interface DocumentPaneProps {
   /** doc_focus tool request from the LLM */
   focusRequest?: FocusRequest | null
   onFocusResolved?: (pixelTop: number) => void
-  onFocusCleared?: () => void
   onFocusProcessed?: () => void
 }
 
@@ -222,36 +220,26 @@ function FrontmatterTable({ data }: { data: Record<string, unknown> }) {
 function DocumentEditorPlugins({
   content,
   onContentChange,
-  disabled,
   baselineContent,
   onChangedLines,
   onLinePositions,
   scrollContainerRef,
   focusRequest,
   onFocusResolved,
-  onFocusCleared,
   onFocusProcessed,
 }: {
   content: string
   onContentChange: (content: string) => void
-  disabled: boolean
   baselineContent: string
   onChangedLines: (lines: Set<number>) => void
   onLinePositions: (positions: LinePosition[], totalHeight: number) => void
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   focusRequest?: FocusRequest | null
   onFocusResolved?: (pixelTop: number) => void
-  onFocusCleared?: () => void
   onFocusProcessed?: () => void
 }) {
-  const [editor] = useLexicalComposerContext()
   const { data: composerSpellcheck } = useChatSettingsQuery((settings) => settings.composerSpellcheck)
   const spellCheck = composerSpellcheck ?? true
-
-  // Sync editable state
-  useEffect(() => {
-    editor.setEditable(!disabled)
-  }, [editor, disabled])
 
   return (
     <>
@@ -297,12 +285,11 @@ function DocumentEditorPlugins({
         onChangedLines={onChangedLines}
         onLinePositions={onLinePositions}
       />
-      {focusRequest !== undefined && onFocusResolved && onFocusCleared && onFocusProcessed && (
+      {focusRequest !== undefined && onFocusResolved && onFocusProcessed && (
         <DocumentFocusPlugin
           focusRequest={focusRequest ?? null}
           scrollContainerRef={scrollContainerRef}
           onFocusResolved={onFocusResolved}
-          onFocusCleared={onFocusCleared}
           onFocusProcessed={onFocusProcessed}
         />
       )}
@@ -315,14 +302,12 @@ function DocumentEditorPlugins({
  */
 function DocumentToolbarWrapper({
   roleplayTemplateId,
-  disabled,
   showSource,
   sourceTextareaRef,
   onContentChange,
   onToggleSource,
 }: {
   roleplayTemplateId?: string | null
-  disabled: boolean
   showSource: boolean
   sourceTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   onContentChange: (content: string) => void
@@ -335,11 +320,46 @@ function DocumentToolbarWrapper({
       <FormattingToolbar
         roleplayTemplateId={roleplayTemplateId}
         editor={editor}
-        disabled={disabled}
         showSource={showSource}
         sourceTextareaRef={sourceTextareaRef}
         setInput={onContentChange}
         onToggleSource={onToggleSource}
+      />
+    </div>
+  )
+}
+
+/**
+ * The raw-text surface: Markdown's source view and every file that is neither
+ * Markdown nor highlighted code. Its bytes go straight to and from the store.
+ */
+function DocumentTextarea({
+  ariaLabel,
+  textareaRef,
+  scrollContainerRef,
+  content,
+  onContentChange,
+  onBlur,
+  onScroll,
+}: {
+  ariaLabel: string
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  content: string
+  onContentChange: (content: string) => void
+  onBlur: () => void
+  onScroll: () => void
+}) {
+  return (
+    <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" onBlur={onBlur} onScroll={onScroll}>
+      <textarea
+        aria-label={ariaLabel}
+        ref={textareaRef}
+        className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
+        value={content}
+        onChange={(e) => onContentChange(e.target.value)}
+        spellCheck={false}
+        style={{ lineHeight: '1.6', minHeight: '100%', backgroundColor: 'var(--color-background)' }}
       />
     </div>
   )
@@ -350,7 +370,6 @@ export default function DocumentPane({
   mode,
   isDirty,
   isSaving,
-  isLLMEditing,
   contentVersion,
   roleplayTemplateId,
   attentionTop = null,
@@ -366,7 +385,6 @@ export default function DocumentPane({
   onTitleChange,
   focusRequest,
   onFocusResolved,
-  onFocusCleared,
   onFocusProcessed,
 }: DocumentPaneProps) {
   // In the tabbed workspace each document is already its own (maximizable) tab,
@@ -458,12 +476,10 @@ export default function DocumentPane({
       namespace: 'DocumentEditor',
       theme: composerTheme,
       nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, CodeHighlightNode, TableNode, TableCellNode, TableRowNode],
-      editable: !isLLMEditing,
       onError: (error: Error) => {
         console.error('[DocumentPane] Editor error:', error)
       },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- LexicalComposer reads initialConfig only at mount; later isLLMEditing changes reach the editor via editor.setEditable
     [],
   )
 
@@ -541,11 +557,6 @@ export default function DocumentPane({
   // holding the anchor or highlight) without taking the keyboard from the author.
   useEffect(() => {
     if (!codeLanguage || !focusRequest) return
-    if (focusRequest.clear_focus) {
-      onFocusCleared?.()
-      onFocusProcessed?.()
-      return
-    }
     const line = focusRequest.line ?? lineOfText(document.content, focusRequest.anchor ?? focusRequest.highlight)
     if (line) codeEditorRef.current?.revealLine(line, { focus: false })
     onFocusProcessed?.()
@@ -616,12 +627,6 @@ export default function DocumentPane({
     if (isDirty) return { label: 'Unsaved', dot: 'qt-doc-status-saving' }
     return { label: 'Saved', dot: 'qt-doc-status-saved' }
   }, [isSaving, isDirty])
-
-  // Editing indicator
-  const editingIndicator = useMemo(() => {
-    if (isLLMEditing) return 'AI editing...'
-    return null
-  }, [isLLMEditing])
 
   return (
     <div className="flex flex-col h-full">
@@ -713,7 +718,6 @@ export default function DocumentPane({
         <LexicalComposer key={contentVersion} initialConfig={initialConfig}>
           <DocumentToolbarWrapper
             roleplayTemplateId={roleplayTemplateId}
-            disabled={isLLMEditing}
             showSource={showSource}
             sourceTextareaRef={sourceTextareaRef}
             onContentChange={onContentChange}
@@ -721,18 +725,15 @@ export default function DocumentPane({
           />
 
           {showSource ? (
-            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" onBlur={onBlur} onScroll={handleScroll}>
-              <textarea
-                aria-label="Document source"
-                ref={sourceTextareaRef}
-                className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
-                value={document.content}
-                onChange={(e) => onContentChange(e.target.value)}
-                disabled={isLLMEditing}
-                spellCheck={false}
-                style={{ lineHeight: '1.6', minHeight: '100%', backgroundColor: 'var(--color-background)' }}
-              />
-            </div>
+            <DocumentTextarea
+              ariaLabel="Document source"
+              textareaRef={sourceTextareaRef}
+              scrollContainerRef={scrollContainerRef}
+              content={document.content}
+              onContentChange={onContentChange}
+              onBlur={onBlur}
+              onScroll={handleScroll}
+            />
           ) : (
             <div ref={scrollContainerRef} className="qt-doc-editor-with-gutter" onBlur={onBlur} onScroll={handleScroll}>
               <DocumentGutter
@@ -748,14 +749,12 @@ export default function DocumentPane({
                 <DocumentEditorPlugins
                   content={currentBodyContent}
                   onContentChange={handleMarkdownBodyChange}
-                  disabled={isLLMEditing}
                   baselineContent={baselineBodyContent}
                   onChangedLines={handleChangedLines}
                   onLinePositions={handleLinePositions}
                   scrollContainerRef={scrollContainerRef}
                   focusRequest={focusRequest}
                   onFocusResolved={onFocusResolved}
-                  onFocusCleared={onFocusCleared}
                   onFocusProcessed={onFocusProcessed}
                 />
               </div>
@@ -772,7 +771,6 @@ export default function DocumentPane({
             value={document.content}
             language={codeLanguage}
             onChange={onContentChange}
-            readOnly={isLLMEditing}
             ariaLabel="Document content"
             debounceMs={CODE_EDITOR_EMIT_MS}
             height="100%"
@@ -782,22 +780,14 @@ export default function DocumentPane({
       ) : (
         /* Plain-text editor for other files — no Lexical, no markdown
          * bridge, no formatting toolbar. Bytes go straight to/from disk. */
-        <div
-          ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto"
+        <DocumentTextarea
+          ariaLabel="Document content"
+          scrollContainerRef={scrollContainerRef}
+          content={document.content}
+          onContentChange={onContentChange}
           onBlur={onBlur}
           onScroll={handleScroll}
-        >
-          <textarea
-            aria-label="Document content"
-            className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
-            value={document.content}
-            onChange={(e) => onContentChange(e.target.value)}
-            disabled={isLLMEditing}
-            spellCheck={false}
-            style={{ lineHeight: '1.6', minHeight: '100%', backgroundColor: 'var(--color-background)' }}
-          />
-        </div>
+        />
       )}
 
       {/* Status Bar */}
@@ -808,13 +798,10 @@ export default function DocumentPane({
           <span className={saveStatus.dot} />
           {saveStatus.label}
         </span>
-        {editingIndicator && (
-          <span className="qt-doc-status-item ml-auto">{editingIndicator}</span>
-        )}
-        {/* Screen readers hear each completed save and the AI starting to edit,
-            not every Unsaved/Saving flicker while typing. */}
+        {/* Screen readers hear each completed save, not every Unsaved/Saving
+            flicker while typing. */}
         <span className="sr-only" role="status" aria-live="polite">
-          {editingIndicator ?? (saveStatus.label === 'Saved' ? 'Saved' : '')}
+          {saveStatus.label === 'Saved' ? 'Saved' : ''}
         </span>
       </div>
     </div>

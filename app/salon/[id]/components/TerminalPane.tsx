@@ -15,7 +15,6 @@ import type { TerminalMode } from '../hooks/useTerminalMode'
 
 interface TerminalPaneProps {
   sessionId: string
-  chatId: string
   mode: TerminalMode
   onToggleFocusMode: () => void
   /** Hide the pane but leave the PTY alive (the inline embed becomes interactive again). */
@@ -26,7 +25,6 @@ interface TerminalPaneProps {
 
 export function TerminalPane({
   sessionId,
-  chatId: _chatId,
   mode,
   onToggleFocusMode,
   onHidePane,

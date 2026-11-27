@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { apiErrorMessage, apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { postChatAction } from './chat-actions'
 import { queryKeys } from '@/lib/query/keys'
 import { useRealtimeFallbackPoll, useRealtimeRefetchInterval, useRealtimeTopic } from '@/hooks/useRealtime'
 import { showErrorToast, showInfoToast } from '@/lib/toast'
@@ -52,12 +53,12 @@ export function useSalonAvatars({
     snapshotAvatarUrl: string | null
   }) => {
     try {
-      const res = await fetch(`/api/v1/chats/${id}`, { cache: 'no-store' })
-      if (!res.ok) return
-      const data = await res.json()
+      const data = await apiFetch<{ chat?: { participants?: Array<{ character?: { id?: string; avatarUrl?: string | null } }> } }>(
+        `/api/v1/chats/${id}`, { cache: 'no-store' },
+      )
       // Check the enriched participant avatar URL — this changes when avatarOverrides update
       const updatedParticipant = data.chat?.participants?.find(
-        (p: { character?: { id?: string } }) => p.character?.id === watch.characterId
+        (p) => p.character?.id === watch.characterId
       )
       const newAvatarUrl = updatedParticipant?.character?.avatarUrl ?? null
       if (newAvatarUrl && newAvatarUrl !== watch.snapshotAvatarUrl) {
@@ -105,20 +106,14 @@ export function useSalonAvatars({
     const name = participant?.character?.name || 'Unknown'
     if (!characterId) return
     try {
-      const res = await fetch(`/api/v1/chats/${id}?action=regenerate-avatar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterId }),
-      })
-      if (res.ok) {
-        showInfoToast(`Avatar regeneration queued for ${name}`)
-        startAvatarPoll(characterId)
-      } else {
-        const data = await res.json().catch(() => ({}))
-        showErrorToast(data.error || 'Failed to regenerate avatar')
-      }
-    } catch {
-      showErrorToast('Failed to regenerate avatar')
+      await postChatAction(id, 'regenerate-avatar', { characterId })
+      showInfoToast(`Avatar regeneration queued for ${name}`)
+      startAvatarPoll(characterId)
+    } catch (err) {
+      // The server's sentence when it gave one; a network fault says only this.
+      showErrorToast(err instanceof ApiFetchError
+        ? apiErrorMessage(err, 'Failed to regenerate avatar')
+        : 'Failed to regenerate avatar')
     }
   }, [chat?.participants, id, startAvatarPoll])
 
@@ -159,6 +154,30 @@ export function useSalonAvatars({
   const chatParticipants = chat?.participants
   const offSceneCharacters = chat?.offSceneCharacters
   const chatUser = chat?.user
+  // The participant helpers are stable callbacks; the object holding them is
+  // not, so the memo below names the helpers.
+  const { getParticipantById, getFirstUserCharacter, getFirstCharacter } = participants
+
+  /**
+   * A character named by id — a seated participant (wearing the face of the
+   * moment) else an off-scene card — or undefined when neither knows them.
+   */
+  const castMemberAvatar = useCallback((characterId: string, message: Message) => {
+    const participant = chatParticipants?.find(p => p.character?.id === characterId)
+    if (participant?.character) {
+      return {
+        name: participant.character.name,
+        characterId: participant.character.id,
+        title: participant.character.title ?? null,
+        ...faceAt(participant.character, message),
+      }
+    }
+    const offScene = offSceneCharacters?.find(c => c.id === characterId)
+    if (offScene) {
+      return { name: offScene.name, title: offScene.title, avatarUrl: offScene.avatarUrl, defaultImage: null }
+    }
+    return undefined
+  }, [chatParticipants, offSceneCharacters, faceAt])
 
   const getMessageAvatar = useCallback((message: Message) => {
     // Ad-hoc announcement bubble (Insert Announcement composer button), or a
@@ -167,25 +186,8 @@ export function useSalonAvatars({
     // systemSender: when both are set, the named speaker wears the bubble.
     if (message.customAnnouncer) {
       if (message.customAnnouncer.kind === 'character' && message.customAnnouncer.characterId) {
-        const charId = message.customAnnouncer.characterId
-        const participant = chatParticipants?.find(p => p.character?.id === charId)
-        if (participant?.character) {
-          return {
-            name: participant.character.name,
-            characterId: participant.character.id,
-            title: participant.character.title ?? null,
-            ...faceAt(participant.character, message),
-          }
-        }
-        const offScene = offSceneCharacters?.find(c => c.id === charId)
-        if (offScene) {
-          return {
-            name: offScene.name,
-            title: offScene.title,
-            avatarUrl: offScene.avatarUrl,
-            defaultImage: null,
-          }
-        }
+        const known = castMemberAvatar(message.customAnnouncer.characterId, message)
+        if (known) return known
         // Character no longer exists; render with a placeholder name so the
         // bubble is still legible.
         return { name: 'Off-scene character', title: null, avatarUrl: null, defaultImage: null }
@@ -218,24 +220,13 @@ export function useSalonAvatars({
         return { name: 'Brahma', title: null, avatarUrl: '/images/avatars/brahma-avatar.webp', defaultImage: null }
       }
       if (answererId) {
-        const participant = chatParticipants?.find(p => p.character?.id === answererId)
-        if (participant?.character) {
-          return {
-            name: participant.character.name,
-            characterId: participant.character.id,
-            title: participant.character.title ?? null,
-            ...faceAt(participant.character, message),
-          }
-        }
-        const offScene = offSceneCharacters?.find(c => c.id === answererId)
-        if (offScene) {
-          return { name: offScene.name, title: offScene.title, avatarUrl: offScene.avatarUrl, defaultImage: null }
-        }
+        const known = castMemberAvatar(answererId, message)
+        if (known) return known
       }
       return { name: 'Carina', title: null, avatarUrl: null, defaultImage: null }
     }
     if (message.participantId) {
-      const participant = participants.getParticipantById(message.participantId)
+      const participant = getParticipantById(message.participantId)
       if (participant) {
         if (participant.type === 'CHARACTER' && participant.character) {
           return { name: participant.character.name, characterId: participant.character.id, title: participant.character.title, ...faceAt(participant.character, message) }
@@ -243,20 +234,20 @@ export function useSalonAvatars({
       }
     }
     if (message.role === 'USER') {
-      const userChar = participants.getFirstUserCharacter()
+      const userChar = getFirstUserCharacter()
       if (userChar) {
         return { name: userChar.name, characterId: userChar.id, title: userChar.title, ...faceAt(userChar, message) }
       } else if (chatUser) {
         return { name: chatUser.name || 'User', title: null, avatarUrl: chatUser.image ?? null, defaultImage: null }
       }
     } else if (message.role === 'ASSISTANT') {
-      const character = participants.getFirstCharacter()
+      const character = getFirstCharacter()
       if (character) {
         return { name: character.name, characterId: character.id, title: character.title, ...faceAt(character, message) }
       }
     }
     return null
-  }, [participants, chatUser, chatParticipants, offSceneCharacters, faceAt])
+  }, [getParticipantById, getFirstUserCharacter, getFirstCharacter, chatUser, castMemberAvatar, faceAt])
 
   return { handleRegenerateAvatar, getMessageAvatar }
 }

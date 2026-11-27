@@ -1,6 +1,6 @@
 'use client'
 
-import type { ChatSettings } from './types'
+import { DEFAULT_COMPOSER_EMOJI, type ChatSettings } from './types'
 import { SettingsToggleRow } from './components/SettingsToggleRow'
 
 export interface ComposerEmojiSettingsProps {
@@ -14,7 +14,7 @@ export function ComposerEmojiSettings({
   saving,
   onChange,
 }: ComposerEmojiSettingsProps) {
-  const enabled = settings.composerEmoji ?? true
+  const enabled = settings.composerEmoji ?? DEFAULT_COMPOSER_EMOJI
 
   return (
     <SettingsToggleRow

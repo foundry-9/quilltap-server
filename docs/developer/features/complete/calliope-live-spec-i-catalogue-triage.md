@@ -173,7 +173,7 @@ Pieces of an element that is itself a candidate, already a hook, or not proposed
 | `qt-pascal` | `pascal-result` | app/salon/[id]/components/system-message-labels +3 |
 | `qt-qtap` | `qtap-doc` | components/qtap/QtapLink |
 | `qt-queue` | `queue-badge-group` | components/layout/queue-status-badges |
-| `qt-rp` | `rp-annotation-button` `rp-annotation-toolbar` | components/chat/FormattingToolbar +1; components/chat/RoleplayAnnotationButtons |
+| `qt-rp` | `rp-annotation-button` | components/chat/FormattingToolbar +1 |
 | `qt-settings` | `settings-attention` `settings-attention-chip` `settings-persona-badge` `settings-provider-card-add` `settings-provider-card-body` `settings-provider-card-chevron` `settings-provider-card-header` `settings-provider-card-summary` `settings-provider-card-title` `settings-provider-kind-badge` `settings-provider-profile-list` `settings-provider-profile-model` `settings-provider-profile-row` `settings-rail-select` | components/settings/AttentionStrip; components/settings/PersonaBadge; components/settings/cards/providers-by-provider |
 | `qt-slide` | `slide-over-overlay` | components/ui/SlideOverPanel |
 | `qt-source` | `source-mode-textarea` | app/salon/[id]/components/ChatComposer |

@@ -125,3 +125,18 @@ export function orderProfilesByChatUse<T>(profiles: readonly T[]): T[] {
   // the counters riding along untyped from the API) can be passed as is.
   return [...profiles].sort((a, b) => compareByChatUse(a as ProfileUsageCounters, b as ProfileUsageCounters))
 }
+
+/**
+ * The connection profile a character is seated on by default: the
+ * character's own default while it still names a profile in the list, then
+ * the profile marked `isDefault`. Null when neither applies — each picker
+ * supplies its own last resort (the first profile, "as is", none).
+ */
+export function resolveDefaultConnectionProfileId(
+  character: { defaultConnectionProfileId?: string | null } | null | undefined,
+  profiles: ReadonlyArray<{ id: string; isDefault?: boolean | null }>,
+): string | null {
+  const characterDefault = character?.defaultConnectionProfileId
+  if (characterDefault && profiles.some((p) => p.id === characterDefault)) return characterDefault
+  return profiles.find((p) => p.isDefault)?.id ?? null
+}

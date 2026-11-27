@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useApiKeysQuery, useImageProfilesQuery } from '@/lib/hooks/use-profiles'
+import { useApiKeysQuery, useImageProfilesQuery, type ApiKeyRow, type ImageProfileRow } from '@/lib/hooks/use-profiles'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { useModalState } from '@/hooks/useModalState'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -18,25 +18,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import { SettingsCard, SettingsCardBadge, SettingsCardMetadata } from '@/components/ui/SettingsCard'
 
-interface ApiKey {
-  id: string
-  label: string
-  provider: string
-  isActive: boolean
-}
-
-interface ImageProfile {
-  id: string
-  name: string
-  provider: string
-  apiKeyId?: string
-  baseUrl?: string
-  modelName: string
-  parameters: Record<string, any>
-  isDefault: boolean
-  isDangerousCompatible?: boolean
-  apiKey?: ApiKey | null
-}
+type ApiKey = ApiKeyRow
+type ImageProfile = ImageProfileRow
 
 const EMPTY_PROFILES: ImageProfile[] = []
 const EMPTY_KEYS: ApiKey[] = []

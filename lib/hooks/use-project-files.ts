@@ -11,14 +11,12 @@
  * @module lib/hooks/use-project-files
  */
 
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useEnvelopeSelect, type EntityListOptions } from './use-profiles'
+import { useEnvelopeListQuery, type EntityListOptions } from './use-profiles'
 
 const unwrapFiles = <F,>(data: { files?: F[] }) => data.files
 
-export function projectFilesUrl(projectId: string): string {
+function projectFilesUrl(projectId: string): string {
   return `/api/v1/projects/${projectId}?action=list-files`
 }
 
@@ -26,13 +24,11 @@ export function useProjectFilesQuery<F = { id: string }, R = F[]>(
   projectId: string,
   options?: EntityListOptions<F, R>,
 ) {
-  const select = useEnvelopeSelect<{ files?: F[] }, F, R>(unwrapFiles, options?.select)
-  return useQuery({
+  return useEnvelopeListQuery<{ files?: F[] }, F, R>({
     queryKey: queryKeys.projects.files(projectId),
-    queryFn: ({ signal }) => apiFetch<{ files?: F[] }>(projectFilesUrl(projectId), { signal }),
-    select,
+    url: projectFilesUrl(projectId),
+    unwrap: unwrapFiles,
+    options,
     enabled: (options?.enabled ?? true) && !!projectId,
-    staleTime: options?.staleTime,
-    refetchOnMount: options?.refetchOnMount,
   })
 }

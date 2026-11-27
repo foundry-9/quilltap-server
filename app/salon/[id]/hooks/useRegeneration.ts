@@ -31,7 +31,8 @@ import { showErrorToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ResponseStatus } from './useSSEStreaming'
 import { parseFrame } from '@/lib/chat/stream-frames'
-import { describeRetryRefusal } from '../concierge-retry'
+import { describeRetryFailure } from '../concierge-retry'
+import { splitSseBuffer } from '@/components/agent-stream/parse-agent-stream'
 
 /** What the message row needs to render a line that is being re-rolled. */
 export interface RegenerationState {
@@ -133,9 +134,7 @@ export function useRegeneration(): RegenerationController {
       if (!res.ok) {
         // The stream never opened, so the body is an ordinary JSON error. A
         // 409 is the Concierge declining a "Try uncensored" — say why in words.
-        const info = await res.json().catch(() => null)
-        const refusal = res.status === 409 ? describeRetryRefusal(info?.error) : null
-        throw new Error(refusal || info?.error || 'Failed to generate alternative response')
+        throw new Error(await describeRetryFailure(res, 'Failed to generate alternative response'))
       }
 
       const reader = res.body?.getReader()
@@ -152,11 +151,10 @@ export function useRegeneration(): RegenerationController {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        buffered += decoder.decode(value, { stream: true })
-        const lines = buffered.split('\n')
-        buffered = lines.pop() ?? ''
+        const split = splitSseBuffer(buffered, decoder.decode(value, { stream: true }))
+        buffered = split.rest
 
-        for (const line of lines) {
+        for (const line of split.lines) {
           if (!line.startsWith('data: ')) continue
           const frame = parseFrame(line.slice(6))
           if (!frame) continue

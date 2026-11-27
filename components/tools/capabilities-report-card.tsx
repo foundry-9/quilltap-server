@@ -320,6 +320,7 @@ export function CapabilitiesReportCard() {
                     disabled={loadingReportId === report.id}
                     className="qt-button qt-button-icon qt-button-secondary p-2"
                     title="View Report"
+                    aria-label="View Report"
                   >
                     <Icon name="eye" className="w-4 h-4" />
                   </button>
@@ -329,6 +330,7 @@ export function CapabilitiesReportCard() {
                     download={report.filename}
                     className="qt-button qt-button-icon qt-button-primary p-2"
                     title="Download Report"
+                    aria-label="Download Report"
                   >
                     <Icon name="download" className="w-4 h-4" />
                   </a>
@@ -337,6 +339,7 @@ export function CapabilitiesReportCard() {
                     onClick={() => handleDeleteReport(report)}
                     className="qt-button qt-button-icon qt-button-destructive p-2"
                     title="Delete Report"
+                    aria-label="Delete Report"
                   >
                     <Icon name="trash" className="w-4 h-4" />
                   </button>

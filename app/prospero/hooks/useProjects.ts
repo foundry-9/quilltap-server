@@ -16,7 +16,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useProjectsQuery } from '@/lib/hooks/use-projects'
+import { useCreateProject, useProjectsQuery } from '@/lib/hooks/use-projects'
 import type { Project, UseProjectsReturn } from '../types'
 
 type ProjectRow = Project & { _count?: { chats: number; files: number; characters: number } }
@@ -43,23 +43,7 @@ export function useProjects(): UseProjectsReturn {
     await queryClient.invalidateQueries({ queryKey: queryKeys.projects.lists })
   }, [queryClient])
 
-  const createProject = useCallback(async (name: string, description: string | null): Promise<Project | null> => {
-    try {
-      const data = await apiFetch<{ project: Project }>('/api/v1/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description }),
-      })
-      await fetchProjects()
-      showSuccessToast('Project created successfully!')
-      return data.project
-    } catch (err) {
-      const errorMsg = apiErrorMessage(err, 'Failed to create project')
-      console.error('useProjects: create error', { error: errorMsg })
-      showErrorToast(errorMsg)
-      return null
-    }
-  }, [fetchProjects])
+  const createProject = useCreateProject<Project>()
 
   const deleteProject = useCallback(async (id: string): Promise<boolean> => {
     try {

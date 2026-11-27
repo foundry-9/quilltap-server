@@ -21,11 +21,12 @@ import {
 import { useSlashCommandRunner } from '@/components/chat/useSlashCommandRunner'
 import type { ComposerSubmitOptions } from '@/components/chat/lexical/plugins/KeyboardPlugin'
 import { showInfoToast } from '@/lib/toast'
+import { isMacPlatform } from '@/lib/utils/platform'
 import type { AttachedFile, PendingToolResult } from '../types'
-import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
+import type { NarrationDelimiters } from '@/lib/schemas/template.types'
 
 // Platform detection for keyboard shortcuts
-const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
+const isMac = isMacPlatform()
 
 interface ChatComposerProps {
   id: string
@@ -81,10 +82,6 @@ interface ChatComposerProps {
   toolExecutionStatus: { tool: string; status: 'pending' | 'success' | 'error'; message: string } | null
   /** Dismiss the tool-execution notice early; it also self-expires once settled. */
   onDismissToolExecutionStatus: () => void
-  /** Patterns for styling roleplay text in preview */
-  renderingPatterns?: RenderingPattern[]
-  /** Optional dialogue detection for paragraph-level styling in preview */
-  dialogueDetection?: DialogueDetection | null
   roleplayTemplateId?: string | null
   /** The template leaves narration unmarked and quotes dialogue (`isProseTemplate`). */
   proseMode?: boolean
@@ -200,8 +197,6 @@ export function ChatComposer({
   uploadingFile,
   toolExecutionStatus,
   onDismissToolExecutionStatus,
-  renderingPatterns: _renderingPatterns,
-  dialogueDetection: _dialogueDetection,
   roleplayTemplateId,
   proseMode,
   documentEditingMode,
@@ -297,10 +292,10 @@ export function ChatComposer({
   )
 
   // Handler that triggers the file input click
-  const handleAttachFileClick = () => {
+  const handleAttachFileClick = useCallback(() => {
     fileInputRef.current?.click()
     onAttachFileClick?.()
-  }
+  }, [onAttachFileClick])
 
   // The `/` command menu runs the gutter's own handlers and the two shared tool
   // dialogs; zero-parameter tools run at once through the same routes.
@@ -314,10 +309,7 @@ export function ChatComposer({
     return {
       chatId: id,
       actions: {
-        attach: () => {
-          fileInputRef.current?.click()
-          onAttachFileClick?.()
-        },
+        attach: handleAttachFileClick,
         library: onLibraryFileClick,
         image: onStandaloneGenerateImageClick,
         announce: onInsertAnnouncementClick,
@@ -334,7 +326,7 @@ export function ChatComposer({
     }
   }, [
     id,
-    onAttachFileClick,
+    handleAttachFileClick,
     onLibraryFileClick,
     onStandaloneGenerateImageClick,
     onInsertAnnouncementClick,

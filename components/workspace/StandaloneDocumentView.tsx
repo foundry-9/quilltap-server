@@ -9,9 +9,10 @@
  * payload is the only record of the open, so saving or closing here never
  * notifies a Salon conversation.
  *
- * Mirrors the per-document mechanics of `useDocumentMode` (30s autosave
- * debounce, flush on blur, absorb-first-serialization baseline, 409 conflict
- * reload) for a single document.
+ * Saves through the same per-document save machine as `useDocumentMode`
+ * (`DocumentSaver`: 30s autosave debounce, flush on blur,
+ * absorb-first-serialization baseline, 409 conflict reload) for a single
+ * document.
  *
  * @module components/workspace/StandaloneDocumentView
  */
@@ -21,13 +22,16 @@ import DocumentPane from '@/app/salon/[id]/components/DocumentPane'
 import { DocumentViewerPane } from '@/app/salon/[id]/components/DocumentViewerPane'
 import type { DocumentViewTarget } from '@/lib/folder-browser/document-actions'
 import { UNSAVED_EDITS_MESSAGE, type ActiveDocument } from '@/app/salon/[id]/hooks/useDocumentMode'
+import {
+  absorbsFirstChange,
+  DocumentSaver,
+  documentWriteOutcome,
+} from '@/app/salon/[id]/hooks/document-saver'
 import type { DocumentStandaloneTabPayload } from '@/lib/workspace/types'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
 import { useTabCloseGuard } from '@/components/workspace/useTabCloseGuard'
 import { showErrorToast } from '@/lib/toast'
-
-const AUTOSAVE_DEBOUNCE_MS = 30000
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
@@ -50,13 +54,6 @@ async function responseError(res: Response, fallback: string): Promise<string> {
   return fallback
 }
 
-function isMarkdownPath(filePath: string): boolean {
-  const dot = filePath.lastIndexOf('.')
-  if (dot < 0) return false
-  const ext = filePath.slice(dot).toLowerCase()
-  return ext === '.md' || ext === '.markdown'
-}
-
 export function StandaloneDocumentView({ payload }: { payload: DocumentStandaloneTabPayload }) {
   const { openTab } = useWorkspace()
   const closeSelf = useCloseSelfTab()
@@ -71,14 +68,9 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
 
   // Live mirrors so the memoized save/close callbacks read current values.
   const docRef = useRef<ActiveDocument | null>(null)
-  const contentRef = useRef('')
-  const savedContentRef = useRef('')
-  // When true, the next content change is Lexical's post-remount
-  // re-serialization and is adopted as the baseline, not flagged dirty.
-  const absorbNextRef = useRef(false)
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // The save running now, so a second call joins it.
-  const inFlightSaveRef = useRef<Promise<boolean> | null>(null)
+  // The pane's text, its last-saved text, the autosave timer and the save in
+  // flight; configured with this component's callbacks below.
+  const [saver] = useState(() => new DocumentSaver<ActiveDocument, { mtime?: number }>())
   const scrollPositionsRef = useRef(new Map<string, number>())
   // The in-flight open request, shared across effect re-runs (StrictMode runs
   // the mount effect twice in dev — without this, a blank open would CREATE
@@ -92,28 +84,54 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
 
   useEffect(() => { docRef.current = doc }, [doc])
 
-  const clearAutosaveTimer = useCallback(() => {
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current)
-      autosaveTimerRef.current = null
-    }
-  }, [])
+  const clearAutosaveTimer = useCallback(() => saver.cancelAutosave(), [saver])
 
   /** Load (or reload) content into the pane, resetting the dirty baseline. */
   const adoptDocument = useCallback((next: ActiveDocument) => {
     const content = next.content || ''
-    contentRef.current = content
-    savedContentRef.current = content
-    // Empty content has nothing for Lexical to re-serialize, so its editor may
-    // never emit the post-remount change the absorb flag waits for — a lingering
-    // flag would then swallow the user's first real edit as the "saved"
-    // baseline (showing Saved without ever writing).
-    absorbNextRef.current = isMarkdownPath(next.filePath) && content !== ''
+    saver.reset(content, absorbsFirstChange(next.filePath, content))
     setBaselineContent(content)
     setIsDirty(false)
     setDoc(next)
     setContentVersion(v => v + 1)
-  }, [])
+  }, [saver])
+
+  useEffect(() => {
+    saver.configure({
+      logPrefix: '[StandaloneDocument]',
+      current: () => docRef.current,
+      write: async (current, { content, mtime }) => documentWriteOutcome(await postDocumentsAction('write-document', {
+        filePath: current.filePath,
+        scope: current.scope,
+        mountPoint: current.mountPoint ?? undefined,
+        content,
+        mtime,
+      })),
+      read: async (current) => {
+        const readRes = await postDocumentsAction('read-document', {
+          filePath: current.filePath,
+          scope: current.scope,
+          mountPoint: current.mountPoint ?? undefined,
+        })
+        return readRes.ok ? readRes.json() : null
+      },
+      setSaving: setIsSaving,
+      onSaved: (content, data, stillDirty) => {
+        setBaselineContent(content)
+        setIsDirty(stillDirty)
+        setDoc(prev => (prev ? { ...prev, mtime: data.mtime } : prev))
+      },
+      onConflict: (current, latest, hadLocalEdits) => {
+        // With no pending edits, silently adopt the stored version; otherwise
+        // keep the unsaved content and just refresh mtime.
+        if (!hadLocalEdits) {
+          adoptDocument({ ...current, content: latest.content || '', mtime: latest.mtime })
+        } else {
+          setDoc(prev => (prev ? { ...prev, mtime: latest.mtime } : prev))
+        }
+      },
+    })
+  }, [saver, adoptDocument])
 
   /**
    * Refresh this tab's payload/title in the workspace store. Same-identity
@@ -176,131 +194,25 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
   }, [])
 
   /** Whether the pane holds text that has not been written to the store. */
-  const hasUnsavedEdits = useCallback(() => contentRef.current !== savedContentRef.current, [])
+  const hasUnsavedEdits = useCallback(() => saver.hasUnsavedEdits(), [saver])
 
   /**
    * Write the pane's unsaved text. Resolves `true` when nothing unsaved
    * remains, `false` when a write was refused (a 409 or any error) and the
-   * edits are still only in the pane.
-   *
-   * One save runs at a time; a call while one is in flight joins it. Text
-   * typed while a write is in flight is written by the same run before it
-   * resolves — the success path records what it actually sent, never marks
-   * later edits as saved (the same rule as Document Mode, #174 / #175).
+   * edits are still only in the pane (#174 / #175 — see DocumentSaver).
    */
-  const saveDocument = useCallback((): Promise<boolean> => {
-    if (inFlightSaveRef.current) return inFlightSaveRef.current
-
-    const run = (async (): Promise<boolean> => {
-      const current = docRef.current
-      if (!current || !hasUnsavedEdits()) return true
-      let mtime = current.mtime
-
-      setIsSaving(true)
-      try {
-        while (hasUnsavedEdits()) {
-          const content = contentRef.current
-          const res = await postDocumentsAction('write-document', {
-            filePath: current.filePath,
-            scope: current.scope,
-            mountPoint: current.mountPoint ?? undefined,
-            content,
-            mtime,
-          })
-
-          if (res.status === 409) {
-            // The file was written elsewhere while we had it open. Re-read the
-            // disk content: with no pending edits, silently adopt the disk
-            // version; otherwise keep the unsaved content and just refresh mtime
-            // so the next save can succeed.
-            const hadLocalEdits = hasUnsavedEdits()
-            try {
-              const readRes = await postDocumentsAction('read-document', {
-                filePath: current.filePath,
-                scope: current.scope,
-                mountPoint: current.mountPoint ?? undefined,
-              })
-              if (readRes.ok) {
-                const latest = await readRes.json()
-                if (!hadLocalEdits) {
-                  adoptDocument({ ...current, content: latest.content || '', mtime: latest.mtime })
-                } else {
-                  setDoc(prev => (prev ? { ...prev, mtime: latest.mtime } : prev))
-                }
-              }
-              console.warn('[StandaloneDocument] Document changed on disk during save; reloaded mtime', {
-                filePath: current.filePath,
-                hadLocalEdits,
-              })
-            } catch (reloadError) {
-              console.warn('[StandaloneDocument] Failed to reload document after save conflict', reloadError)
-            }
-            return !hadLocalEdits
-          }
-
-          if (!res.ok) {
-            const bodyText = await res.text().catch(() => '')
-            console.warn('[StandaloneDocument] Failed to save document', { status: res.status, body: bodyText })
-            return false
-          }
-
-          const data = await res.json()
-          // Record what was sent as saved — not whatever the pane holds now.
-          savedContentRef.current = content
-          mtime = data.mtime
-          setBaselineContent(content)
-          setIsDirty(hasUnsavedEdits())
-          setDoc(prev => (prev ? { ...prev, mtime: data.mtime } : prev))
-        }
-        return true
-      } catch (error) {
-        console.error('[StandaloneDocument] Failed to save document', error)
-        return false
-      } finally {
-        setIsSaving(false)
-      }
-    })()
-
-    inFlightSaveRef.current = run
-    void run.finally(() => {
-      if (inFlightSaveRef.current === run) inFlightSaveRef.current = null
-    })
-    return run
-  }, [adoptDocument, hasUnsavedEdits])
+  const saveDocument = useCallback((): Promise<boolean> => saver.save(), [saver])
 
   const handleContentChange = useCallback((content: string) => {
-    contentRef.current = content
     setDoc(prev => (prev ? { ...prev, content } : prev))
+    const change = saver.change(content)
+    // An absorbed change is Lexical's normalized re-serialization of just-loaded
+    // content, adopted as the saved baseline so the status reads "Saved".
+    if (change === 'absorbed') setBaselineContent(content)
+    setIsDirty(change === 'dirty')
+  }, [saver])
 
-    // First change after an external load is Lexical's normalized
-    // re-serialization of the just-loaded content. Adopt it as the saved
-    // baseline so the status reads "Saved" and byte-exact comparisons work.
-    if (absorbNextRef.current) {
-      absorbNextRef.current = false
-      savedContentRef.current = content
-      setBaselineContent(content)
-      setIsDirty(false)
-      return
-    }
-
-    if (content === savedContentRef.current) {
-      setIsDirty(false)
-      return
-    }
-
-    setIsDirty(true)
-    clearAutosaveTimer()
-    autosaveTimerRef.current = setTimeout(() => {
-      void saveDocument()
-    }, AUTOSAVE_DEBOUNCE_MS)
-  }, [clearAutosaveTimer, saveDocument])
-
-  const flushSave = useCallback(() => {
-    clearAutosaveTimer()
-    if (hasUnsavedEdits()) {
-      void saveDocument()
-    }
-  }, [clearAutosaveTimer, saveDocument, hasUnsavedEdits])
+  const flushSave = useCallback(() => saver.flush(), [saver])
 
   const handleTitleChange = useCallback(async (newTitle: string) => {
     const current = docRef.current
@@ -396,13 +308,7 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
 
   // The workspace hides (never unmounts) inactive tabs, so unmount here means
   // the tab was closed or the workspace was left — flush the timer.
-  useEffect(() => {
-    return () => {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current)
-      }
-    }
-  }, [])
+  useEffect(() => () => saver.dispose(), [saver])
 
   const noop = useCallback(() => {}, [])
 
@@ -443,7 +349,6 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
       mode="split"
       isDirty={isDirty}
       isSaving={isSaving}
-      isLLMEditing={false}
       contentVersion={contentVersion}
       baselineContent={baselineContent}
       getScrollPosition={getScrollPosition}

@@ -18,11 +18,8 @@ jest.mock('react-markdown', () => ({
 jest.mock('remark-gfm', () => ({ __esModule: true, default: () => {} }))
 const mockAtlas = jest.fn()
 const mockAbsent = jest.fn()
-jest.mock('@/hooks/useAtlasMentions', () => ({
-  useAtlasMentions: (...args: unknown[]) => mockAtlas(...args),
-}))
-jest.mock('@/hooks/useAbsentMentions', () => ({
-  useAbsentMentions: (...args: unknown[]) => mockAbsent(...args),
+jest.mock('@/hooks/useChatMentions', () => ({
+  useChatMentions: (kind: string, ...args: unknown[]) => (kind === 'atlas' ? mockAtlas(...args) : mockAbsent(...args)),
 }))
 
 const scenarioRow = {

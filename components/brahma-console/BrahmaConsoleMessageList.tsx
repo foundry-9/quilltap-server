@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { Icon } from '@/components/ui/icon'
 import MessageContent from '@/components/chat/MessageContent'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
@@ -25,6 +26,7 @@ import type { StreamingToolBatchMark, StreamingToolCall } from './hooks/useBrahm
 import { WritingOutputCard } from './WritingOutputCard'
 import { ConsoleMessageAttachments, type ConsoleAttachmentView } from './ConsoleMessageAttachments'
 import { WRITING_OUTPUT_KIND, writingOutputFilename } from '@/lib/brahma-console/writing-output'
+import { ConsoleBubble } from '@/components/help-chat/ConsoleBubble'
 
 interface BrahmaMessage {
   id: string
@@ -106,19 +108,11 @@ function ConsoleAvatar() {
  * dialog background) to stay legible regardless of the bubble fill.
  */
 function CopyMarkdownButton({ content }: { content: string }) {
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
 
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(content)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy message', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }, [content])
+  const handleCopy = useCallback(() => {
+    void copy(content)
+  }, [copy, content])
 
   return (
     <button
@@ -282,20 +276,7 @@ export function BrahmaConsoleMessageList({
         const sentAttachments = isUser ? attachmentViews(msg) : []
 
         return (
-          <div
-            key={msg.id}
-            className={`flex items-start ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
-          >
-            {!isUser && <ConsoleAvatar />}
-
-            <svg className={`qt-help-tail ${isUser ? 'qt-help-tail-user' : 'qt-help-tail-assistant'}`} viewBox="0 0 10 16" fill="currentColor">
-              {isUser ? (
-                <path d="M0 0 L10 8 L0 16 Z" />
-              ) : (
-                <path d="M10 0 L0 8 L10 16 Z" />
-              )}
-            </svg>
-
+          <ConsoleBubble key={msg.id} side={isUser ? 'user' : 'assistant'} avatar={<ConsoleAvatar />}>
             <div
               className={`flex flex-col gap-0.5 min-w-0 ${isUser ? 'items-end' : 'items-start'}`}
               style={{ maxWidth: '80%' }}
@@ -314,18 +295,14 @@ export function BrahmaConsoleMessageList({
               {sentAttachments.length > 0 && <ConsoleMessageAttachments attachments={sentAttachments} />}
               {msg.content.trim().length > 0 && <CopyMarkdownButton content={msg.content} />}
             </div>
-          </div>
+          </ConsoleBubble>
         )
       })}
 
       {/* Streaming message — live reasoning above the prose as it arrives, with
           a status indicator while the engine works or before anything lands. */}
       {isStreaming && (
-        <div className="flex items-start flex-row">
-          <ConsoleAvatar />
-          <svg className="qt-help-tail qt-help-tail-assistant" viewBox="0 0 10 16" fill="currentColor">
-            <path d="M10 0 L0 8 L10 16 Z" />
-          </svg>
+        <ConsoleBubble side="assistant" avatar={<ConsoleAvatar />}>
           <div className="flex flex-col gap-2 min-w-0 items-start" style={{ maxWidth: '80%' }}>
             {liveSegments.map((seg, idx) => {
               if (seg.kind === 'thinking') {
@@ -368,7 +345,7 @@ export function BrahmaConsoleMessageList({
               <div className="qt-help-msg-assistant italic">Thinking…</div>
             ) : null}
           </div>
-        </div>
+        </ConsoleBubble>
       )}
 
       <div ref={endRef} />

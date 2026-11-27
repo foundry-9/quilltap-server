@@ -15,7 +15,10 @@
 
 import { useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { showPrompt } from '@/lib/alert'
+import { SegmentedRadioGroup } from '@/components/ui/SegmentedRadioGroup'
 import {
+  COMPARATOR_KEYS,
   CONTAINMENT_KEYS,
   MAX_MESSAGE_LENGTH,
   MAX_OUTCOMES,
@@ -27,8 +30,13 @@ import {
   type ValueType,
 } from '@/lib/pascal/custom-tool.types'
 import {
+  EQUALITY_COMPARATORS,
+  comparatorsForType,
   conditionSlotKey,
   groupsOf,
+  issuesAt,
+  legalInventoryStateTest,
+  legalNumberTest,
   nextDraftId,
   reseatOperandForComparator,
   subjectValueType,
@@ -43,9 +51,11 @@ import {
 import { COMPARATOR_LABELS } from './comparator-labels'
 import { LiteralOperandField } from './LiteralOperandField'
 import { INVENTORY_STATE_VALUES } from '@/lib/pascal/inventory-subjects'
-import { ConditionGroups } from './ConditionGroups'
+import { ConditionGroups, useLineSlotGuard } from './ConditionGroups'
 import { AggregateKeyField } from './AggregateKeyField'
 import { ToolFieldInterventionToggle } from './InterventionToggle'
+import { IssueLines } from './IssueLines'
+import { FailSoftHint, ParamRefSelect, RawRefBadge, SubjectKeyField, progressKeyTitle } from './chip-parts'
 
 interface OutcomesSectionProps {
   draft: ToolDraft
@@ -100,26 +110,20 @@ export function OutcomesSection({
   const nonTailCount = outcomes.length - 1
   const canAdd = outcomes.length < MAX_OUTCOMES
 
-  const outcomeErrors = (id: string, conditionId?: string): string[] =>
-    issues
-      .filter(
-        (issue) =>
-          issue.severity === 'error' &&
-          (issue.where.section === 'outcome' || issue.where.section === 'message' || issue.where.section === 'brief') &&
-          issue.where.id === id &&
-          (conditionId === undefined || (issue.where.section === 'outcome' && issue.where.conditionId === conditionId))
-      )
-      .map((issue) => issue.message)
+  const outcomeErrors = (id: string): string[] =>
+    issuesAt(
+      issues,
+      'error',
+      (where) =>
+        (where.section === 'outcome' || where.section === 'message' || where.section === 'brief') && where.id === id
+    ).map((issue) => issue.message)
 
   const messageWarnings = (id: string): string[] =>
-    issues
-      .filter(
-        (issue) =>
-          issue.severity === 'warning' &&
-          (issue.where.section === 'message' || issue.where.section === 'brief') &&
-          issue.where.id === id
-      )
-      .map((issue) => issue.message)
+    issuesAt(
+      issues,
+      'warning',
+      (where) => (where.section === 'message' || where.section === 'brief') && where.id === id
+    ).map((issue) => issue.message)
 
   const setOutcomes = (next: DraftOutcome[]) => onChange({ ...draft, outcomes: next })
 
@@ -214,15 +218,11 @@ export function OutcomesSection({
           errors={outcomeErrors(outcome.id)}
           conditionErrorIds={
             new Set(
-              issues
-                .filter(
-                  (i) =>
-                    i.severity === 'error' &&
-                    i.where.section === 'outcome' &&
-                    i.where.id === outcome.id &&
-                    i.where.conditionId !== undefined
-                )
-                .map((i) => (i.where.section === 'outcome' ? i.where.conditionId! : ''))
+              issuesAt(
+                issues,
+                'error',
+                (where) => where.section === 'outcome' && where.id === outcome.id && where.conditionId !== undefined
+              ).map((i) => (i.where.section === 'outcome' ? i.where.conditionId! : ''))
             )
           }
           warnings={messageWarnings(outcome.id)}
@@ -344,21 +344,17 @@ function OutcomeRow({
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex gap-1" role="radiogroup" aria-label="Outcome state">
-          {STATE_OPTIONS.map((option) => (
-            <button
-              key={option.state}
-              type="button"
-              role="radio"
-              aria-checked={outcome.state === option.state}
-              onClick={() => onUpdate({ state: option.state })}
-              disabled={disabled}
-              className={`${option.badge} ${outcome.state === option.state ? '' : 'opacity-40'}`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedRadioGroup
+          ariaLabel="Outcome state"
+          className="flex gap-1"
+          options={STATE_OPTIONS.map((option) => ({ value: option.state, label: option.label }))}
+          value={outcome.state}
+          onSelect={(state) => onUpdate({ state })}
+          disabled={disabled}
+          optionClassName={(state, selected) =>
+            `${STATE_OPTIONS.find((o) => o.state === state)!.badge} ${selected ? '' : 'opacity-40'}`
+          }
+        />
       </div>
 
       <MessageEditor outcome={outcome} draft={draft} disabled={disabled} onUpdate={onUpdate} />
@@ -382,16 +378,7 @@ function OutcomeRow({
         </div>
       )}
 
-      {errors.map((message) => (
-        <p key={message} className="text-xs qt-text-destructive">
-          {message}
-        </p>
-      ))}
-      {warnings.map((message) => (
-        <p key={message} className="text-xs qt-text-secondary">
-          ⚠ {message}
-        </p>
-      ))}
+      <IssueLines errors={errors} warnings={warnings} />
     </div>
   )
 }
@@ -409,23 +396,20 @@ interface ConditionListProps {
 }
 
 function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }: Readonly<ConditionListProps>) {
-  const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null)
-
   const setConditions = (conditions: DraftCondition[]) => onUpdate({ conditions })
 
-  const updateCondition = (id: string, next: DraftCondition) => {
-    // Block a change that would collide with an existing subject+comparator
-    // slot — one comparator object carries each key once (§4.4.1).
-    const slot = conditionSlotKey(next)
-    const line = groupsOf(outcome.conditions).find((group) => group.some((c) => c.id === id)) ?? []
-    const collision = line.some((c) => c.id !== id && conditionSlotKey(c) === slot)
-    if (collision) {
-      setDuplicateNotice(describeSlot(next))
-      return
-    }
-    setDuplicateNotice(null)
-    setConditions(outcome.conditions.map((c) => (c.id === id ? next : c)))
-  }
+  // A change that would collide with an existing subject+comparator slot is
+  // blocked — one comparator object carries each key once (§4.4.1).
+  const {
+    notice: duplicateNotice,
+    clearNotice,
+    update: updateCondition,
+  } = useLineSlotGuard(
+    outcome.conditions,
+    setConditions,
+    (a, b) => conditionSlotKey(a) === conditionSlotKey(b),
+    describeSlot
+  )
 
   const addCondition = () => {
     const base: DraftCondition = {
@@ -454,7 +438,7 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
   }
 
   const deleteCondition = (id: string) => {
-    setDuplicateNotice(null)
+    clearNotice()
     setConditions(outcome.conditions.filter((c) => c.id !== id))
   }
 
@@ -464,7 +448,7 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
         conditions={outcome.conditions}
         disabled={disabled}
         onJoinerChange={(id, joiner) => {
-          setDuplicateNotice(null)
+          clearNotice()
           setConditions(outcome.conditions.map((c) => (c.id === id ? { ...c, joiner } : c)))
         }}
         renderChip={(condition) => (
@@ -543,18 +527,12 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
   // An aggregate offers everything: whether its key reads as a list or a
   // number is the validator's to flag beside the chip, so typing the key never
   // yanks the comparator out from under the author.
-  const comparators: ComparatorKey[] =
+  const comparators: readonly ComparatorKey[] =
     subject.kind === 'inventory'
-      ? ['eq', 'neq']
+      ? EQUALITY_COMPARATORS
       : subject.kind === 'inventoryAggregate'
-      ? ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains']
-      : subjectType === 'string'
-      ? ['eq', 'neq', 'contains', 'ncontains']
-      : subjectType === 'boolean'
-        ? ['eq', 'neq']
-        : subjectType === null
-          ? ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains']
-          : ['gt', 'gte', 'lt', 'lte', 'eq', 'neq']
+        ? COMPARATOR_KEYS
+        : comparatorsForType(subjectType)
 
   const ordering = ORDERING_KEYS.has(condition.comparator)
   const containment = CONTAINMENT_KEYS.has(condition.comparator)
@@ -599,25 +577,23 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
     else nextSubject = { kind: 'param', name: value.slice('param:'.length) }
 
     // Re-legalize the comparator and operand for the new subject's type.
-    let nextComparator = condition.comparator
     const nextType = typeOfSubject(nextSubject)
-    if ((nextType === 'string' || nextType === 'boolean') && ORDERING_KEYS.has(nextComparator)) {
-      nextComparator = 'eq'
-    }
-    if ((nextType === 'number' || nextType === 'boolean') && CONTAINMENT_KEYS.has(nextComparator)) {
-      nextComparator = 'eq'
-    }
+    let nextComparator = condition.comparator
     let nextOperand: ConditionOperand = condition.operand
     if (nextSubject.kind === 'inventory') {
       // A state is tested with = or ≠ against one of the four states.
-      if (nextComparator !== 'eq' && nextComparator !== 'neq') nextComparator = 'eq'
-      const valid = nextOperand.kind === 'string' && (INVENTORY_STATE_VALUES as readonly string[]).includes(nextOperand.text)
-      if (!valid && nextOperand.kind !== 'param') nextOperand = { kind: 'string', text: 'equipped' }
-    }
-    if (nextType === 'boolean' && nextOperand.kind !== 'param') nextOperand = { kind: 'boolean', value: true }
-    else if (nextType === 'string' && nextOperand.kind === 'number') nextOperand = { kind: 'string', text: nextOperand.text }
-    else if (nextType === 'number' && (nextOperand.kind === 'string' || nextOperand.kind === 'boolean')) {
-      nextOperand = { kind: 'number', text: nextOperand.kind === 'string' ? nextOperand.text : '' }
+      ;({ comparator: nextComparator, operand: nextOperand } = legalInventoryStateTest(nextComparator, nextOperand))
+    } else if (nextType === 'number') {
+      ;({ comparator: nextComparator, operand: nextOperand } = legalNumberTest(nextComparator, nextOperand, {
+        comparator: 'eq',
+      }))
+    } else {
+      if ((nextType === 'string' || nextType === 'boolean') && ORDERING_KEYS.has(nextComparator)) nextComparator = 'eq'
+      if (nextType === 'boolean' && CONTAINMENT_KEYS.has(nextComparator)) nextComparator = 'eq'
+      if (nextType === 'boolean' && nextOperand.kind !== 'param') nextOperand = { kind: 'boolean', value: true }
+      else if (nextType === 'string' && nextOperand.kind === 'number') {
+        nextOperand = { kind: 'string', text: nextOperand.text }
+      }
     }
 
     onChange({ ...condition, subject: nextSubject, comparator: nextComparator, operand: nextOperand })
@@ -672,40 +648,34 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
       </select>
 
       {subject.kind === 'metadata' && (
-        <input
-          type="text"
+        <SubjectKeyField
           value={subject.key}
-          onChange={(e) => onChange({ ...condition, subject: { kind: 'metadata', key: e.target.value } })}
+          onChange={(key) => onChange({ ...condition, subject: { kind: 'metadata', key } })}
           placeholder="key on the character's fact sheet"
           disabled={disabled}
-          className={`qt-input w-44 text-sm ${subject.key.trim() === '' ? 'qt-input-error' : ''}`}
-          aria-label="Metadata key"
+          ariaLabel="Metadata key"
           title="The invoking character's fact sheet — a key the character lacks simply doesn't match."
         />
       )}
 
       {subject.kind === 'progress' && (
-        <input
-          type="text"
+        <SubjectKeyField
           value={subject.key}
-          onChange={(e) => onChange({ ...condition, subject: { kind: 'progress', key: e.target.value } })}
+          onChange={(key) => onChange({ ...condition, subject: { kind: 'progress', key } })}
           placeholder="cannon.complete"
           disabled={disabled}
-          className={`qt-input w-44 text-sm ${subject.key.trim() === '' ? 'qt-input-error' : ''}`}
-          aria-label="Progress key"
-          title={'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity, public. A progression they do not carry simply doesn\u2019t match.'}
+          ariaLabel="Progress key"
+          title={progressKeyTitle('simply doesn\u2019t match')}
         />
       )}
 
       {(subject.kind === 'inventory' || subject.kind === 'inventoryCount') && (
-        <input
-          type="text"
+        <SubjectKeyField
           value={subject.key}
-          onChange={(e) => onChange({ ...condition, subject: { kind: subject.kind, key: e.target.value } })}
+          onChange={(key) => onChange({ ...condition, subject: { kind: subject.kind, key } })}
           placeholder="Excalibur, or {{params.weapon}}"
           disabled={disabled}
-          className={`qt-input w-44 text-sm ${subject.key.trim() === '' ? 'qt-input-error' : ''}`}
-          aria-label="Inventory object reference"
+          ariaLabel="Inventory object reference"
           title="The object, by id, title or name — a template, so {{params.weapon}} lets a parameter choose. A run nobody made declines the test."
         />
       )}
@@ -741,34 +711,21 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
       />
 
       {(subject.kind === 'metadata' || subject.kind === 'progress') && (ordering || containment) && (
-        <span
-          className="text-xs qt-text-secondary"
+        <FailSoftHint
           title={
             ordering
               ? 'Matches only when the stored value is a number — anything else declines the row at run time, fail-soft, never an error.'
               : 'Matches only when the stored value is text — anything else declines the row at run time, fail-soft, never an error.'
           }
-        >
-          ⓘ
-        </span>
+        />
       )}
 
       {subject.kind === 'llm' && ordering && (
-        <span
-          className="text-xs qt-text-secondary"
-          title="Matches only when the answer reads as a number — anything else declines the row at run time, fail-soft, never an error."
-        >
-          ⓘ
-        </span>
+        <FailSoftHint title="Matches only when the answer reads as a number — anything else declines the row at run time, fail-soft, never an error." />
       )}
 
       {subject.kind === 'llm' && containment && (
-        <span
-          className="text-xs qt-text-secondary"
-          title="Searches the answer without regard to case — 'west door' finds 'the West Door'."
-        >
-          ⓘ
-        </span>
+        <FailSoftHint title="Searches the answer without regard to case — 'west door' finds 'the West Door'." />
       )}
 
       <button
@@ -828,34 +785,21 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
   return (
     <div className="flex items-center gap-1">
       {operand.kind === 'state' ? (
-        <span
-          className="qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1"
-          title="This operand draws from persistent state. Edit $state references in the raw JSON."
-        >
+        <RawRefBadge title="This operand draws from persistent state. Edit $state references in the raw JSON.">
           $state: {operand.path} → {String(operand.fallback)}
-        </span>
+        </RawRefBadge>
       ) : operand.kind === 'inventory' ? (
-        <span
-          className="qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1"
-          title="This operand draws from an object the rolling character carries. Edit $inventory references in the raw JSON."
-        >
+        <RawRefBadge title="This operand draws from an object the rolling character carries. Edit $inventory references in the raw JSON.">
           $inventory: {operand.path} → {String(operand.fallback)}
-        </span>
+        </RawRefBadge>
       ) : operand.kind === 'param' ? (
-        <select
+        <ParamRefSelect
           value={operand.name}
-          onChange={(e) => setOperand({ kind: 'param', name: e.target.value })}
+          names={eligibleParams}
+          onChange={(name) => setOperand({ kind: 'param', name })}
           disabled={disabled}
-          className="qt-select qt-select-sm w-28"
-          aria-label="Operand parameter"
-        >
-          {!eligibleParams.includes(operand.name) && <option value={operand.name}>{operand.name || '—'}</option>}
-          {eligibleParams.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
+          ariaLabel="Operand parameter"
+        />
       ) : (
         <LiteralOperandField
           operand={literal(operand)}
@@ -929,38 +873,30 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
     })
   }
 
-  const insertMetadataKey = () => {
-    // Suggest keys the author demonstrably cares about: those already tested
-    // in this tool's `when` objects (§4.4.2).
-    const testedKeys = new Set<string>()
+  /**
+   * Suggest a key the author demonstrably cares about: the first `kind` key
+   * already tested in this tool's `when` objects (§4.4.2).
+   */
+  const testedKey = (kind: 'metadata' | 'progress'): string | undefined => {
     for (const o of draft.outcomes) {
       for (const condition of o.conditions) {
-        if (condition.subject.kind === 'metadata' && condition.subject.key.trim() !== '') {
-          testedKeys.add(condition.subject.key)
-        }
+        if (condition.subject.kind === kind && condition.subject.key.trim() !== '') return condition.subject.key
       }
     }
-    const suggestion = [...testedKeys][0] ?? ''
-     
-    const key = window.prompt('Metadata key to render (any non-empty string):', suggestion)
+    return undefined
+  }
+
+  const insertMetadataKey = async () => {
+    const key = await showPrompt('Metadata key to render (any non-empty string):', testedKey('metadata') ?? '')
     if (key && key.trim() !== '') insertAtCursor(`{{metadata.${key.trim()}}}`)
     else setMenuOpen(false)
   }
 
-  const insertProgressField = () => {
-    // Same suggestion rule as metadata: offer back a progress key this tool
-    // already tests, because that is the one the author demonstrably means.
-    const testedKeys = new Set<string>()
-    for (const o of draft.outcomes) {
-      for (const condition of o.conditions) {
-        if (condition.subject.kind === 'progress' && condition.subject.key.trim() !== '') {
-          testedKeys.add(condition.subject.key)
-        }
-      }
-    }
-    const suggestion = [...testedKeys][0] ?? 'cannon.percent'
-
-    const key = window.prompt('Progress field to render, as "<progression id>.<field>":', suggestion)
+  const insertProgressField = async () => {
+    const key = await showPrompt(
+      'Progress field to render, as "<progression id>.<field>":',
+      testedKey('progress') ?? 'cannon.percent'
+    )
     if (key && key.trim() !== '') insertAtCursor(`{{progress.${key.trim()}}}`)
     else setMenuOpen(false)
   }
@@ -1006,8 +942,8 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
                   <MenuItem key={p.id} label={`Parameter: ${p.name}`} onClick={() => insertAtCursor(`{{params.${p.name}}}`)} />
                 ))}
               <MenuItem label="Character name" onClick={() => insertAtCursor('{{character}}')} />
-              <MenuItem label="Metadata key…" onClick={insertMetadataKey} />
-              <MenuItem label="Progress field…" onClick={insertProgressField} />
+              <MenuItem label="Metadata key…" onClick={() => void insertMetadataKey()} />
+              <MenuItem label="Progress field…" onClick={() => void insertProgressField()} />
               <MenuItem
                 label="Now (epoch ms)"
                 onClick={() => insertAtCursor('{{now}}')}

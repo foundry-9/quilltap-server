@@ -1,26 +1,12 @@
 'use client'
 
-import { useEffect, useId, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { getErrorMessage } from '@/lib/error-utils'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useId } from 'react'
 import { queryKeys } from '@/lib/query/keys'
-import { readErrorText } from './hooks/api-error-text'
+import { MEMORY_SETTING_DEFAULTS } from '@/lib/memory/settings-defaults'
+import type { MemoryRecallSettings } from '@/lib/schemas/settings.types'
+import { useMemorySettingsDocument } from './hooks/useMemorySettingsDocument'
 
-type ScopePolicy = 'down-weight' | 'exclude'
-
-interface RecallConfig {
-  scopePolicy: ScopePolicy
-  expandRelated: boolean
-  perTurnConversationSummaries: boolean
-}
-
-const DEFAULT_CONFIG: RecallConfig = {
-  scopePolicy: 'down-weight',
-  expandRelated: false,
-  perTurnConversationSummaries: false,
-}
+type ScopePolicy = MemoryRecallSettings['scopePolicy']
 
 const RECALL_CONFIG_URL = '/api/v1/memories?action=recall-config'
 
@@ -49,74 +35,27 @@ const SCOPE_POLICY_OPTIONS: ReadonlyArray<{
  * recall path; see lib/memory/recall-tags.ts.
  */
 export function MemoryRecallCard() {
-  const queryClient = useQueryClient()
   const id = useId()
-  const [config, setConfig] = useState<RecallConfig>(DEFAULT_CONFIG)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const {
-    data: loaded,
-    isLoading: loading,
-    error: loadError,
-  } = useQuery({
+  const { config, setConfig, loading, saving, error, save } = useMemorySettingsDocument<MemoryRecallSettings>({
     queryKey: queryKeys.memories.recallConfig,
-    queryFn: ({ signal }) =>
-      apiFetch<{ settings?: Partial<RecallConfig> }>(RECALL_CONFIG_URL, { signal }),
+    url: RECALL_CONFIG_URL,
+    defaults: MEMORY_SETTING_DEFAULTS.recall,
+    noun: 'recall settings',
   })
-
-  // Seed the editable form from the server's settings whenever a fresh read lands.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the form is local state seeded from the query
-    if (loaded?.settings) setConfig({ ...DEFAULT_CONFIG, ...loaded.settings })
-  }, [loaded])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- surface the read failure in the shared error line
-    if (loadError) setError(readErrorText(loadError, 'Failed to load recall settings'))
-  }, [loadError])
-
-  const saveConfig = async (next: Partial<RecallConfig>) => {
-    setSaving(true)
-    setError(null)
-    try {
-      const response = await fetch(RECALL_CONFIG_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(next),
-      })
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to save recall settings')
-      }
-      const data = await response.json()
-      // Re-seed the cached read, so a remount within the stale time shows
-      // (and could re-save) the saved values rather than the pre-save ones.
-      queryClient.setQueryData(queryKeys.memories.recallConfig, data)
-      setConfig({ ...DEFAULT_CONFIG, ...data.settings })
-      showSuccessToast('Recall settings saved')
-    } catch (err) {
-      const msg = getErrorMessage(err, 'Failed to save recall settings')
-      setError(msg)
-      showErrorToast(msg)
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const handleScopePolicyChange = (value: ScopePolicy) => {
     setConfig(c => ({ ...c, scopePolicy: value }))
-    void saveConfig({ scopePolicy: value })
+    void save({ scopePolicy: value })
   }
 
   const handleExpandRelatedChange = (value: boolean) => {
     setConfig(c => ({ ...c, expandRelated: value }))
-    void saveConfig({ expandRelated: value })
+    void save({ expandRelated: value })
   }
 
   const handlePerTurnConversationsChange = (value: boolean) => {
     setConfig(c => ({ ...c, perTurnConversationSummaries: value }))
-    void saveConfig({ perTurnConversationSummaries: value })
+    void save({ perTurnConversationSummaries: value })
   }
 
   if (loading) {

@@ -8,6 +8,7 @@ import {
   counterIncrementsFor,
   orderProfilesByChatUse,
   readProfileUsage,
+  resolveDefaultConnectionProfileId,
   tallyTokens,
   zeroProfileUsageCounters,
 } from '@/lib/llm/profile-usage'
@@ -101,5 +102,24 @@ describe('estimateCost with prompt-cache traffic', () => {
       .toEqual({ promptCostPer1M: 3, completionCostPer1M: 15, cacheReadCostPer1M: expect.closeTo(0.3), cacheWriteCostPer1M: expect.closeTo(3.75) })
     expect(parseOpenRouterPricing({ prompt: '0.000001', completion: '0.000002', inputCacheRead: '0.0000001' }))
       .toEqual({ promptCostPer1M: 1, completionCostPer1M: 2, cacheReadCostPer1M: expect.closeTo(0.1), cacheWriteCostPer1M: null })
+  })
+})
+
+describe('resolveDefaultConnectionProfileId', () => {
+  const profiles = [{ id: 'a' }, { id: 'b', isDefault: true }, { id: 'c' }]
+
+  it("prefers the character's own default while it is still listed", () => {
+    expect(resolveDefaultConnectionProfileId({ defaultConnectionProfileId: 'c' }, profiles)).toBe('c')
+  })
+
+  it("falls back to the operator's default when the character's is gone or unset", () => {
+    expect(resolveDefaultConnectionProfileId({ defaultConnectionProfileId: 'gone' }, profiles)).toBe('b')
+    expect(resolveDefaultConnectionProfileId({ defaultConnectionProfileId: null }, profiles)).toBe('b')
+    expect(resolveDefaultConnectionProfileId(undefined, profiles)).toBe('b')
+  })
+
+  it('answers null when nothing applies, leaving the last resort to the caller', () => {
+    expect(resolveDefaultConnectionProfileId({ defaultConnectionProfileId: 'gone' }, [{ id: 'a' }])).toBeNull()
+    expect(resolveDefaultConnectionProfileId({}, [])).toBeNull()
   })
 })

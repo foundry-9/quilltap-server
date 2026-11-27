@@ -46,7 +46,7 @@ function capturesFixed(style: CSSStyleDeclaration): boolean {
  * The nearest ancestor of `el` that captures `position: fixed`, or null when
  * the viewport is the containing block.
  */
-export function fixedContainingBlock(el: HTMLElement): HTMLElement | null {
+function fixedContainingBlock(el: HTMLElement): HTMLElement | null {
   for (let node = el.parentElement; node && node !== document.documentElement; node = node.parentElement) {
     if (capturesFixed(window.getComputedStyle(node))) return node
   }

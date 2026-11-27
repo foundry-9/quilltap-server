@@ -68,6 +68,7 @@ export function GroupCard({ group, onClick, onDelete, onOpen }: GroupCardProps) 
           onClick={(e) => { e.stopPropagation(); onDelete() }}
           className="qt-button-destructive qt-shadow-sm"
           title="Delete group"
+          aria-label={`Delete ${group.name}`}
         >
           <Icon name="trash" className="w-5 h-5" />
         </button>

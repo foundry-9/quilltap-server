@@ -1,8 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { WizardStepIndicator } from './WizardStepIndicator'
-import type { WizardStep } from './useProviderWizardState'
+import { WizardStepIndicator } from '@/components/ui/WizardStepIndicator'
+import { WIZARD_STEPS, STEP_LABELS, type WizardStep } from './useProviderWizardState'
+
+const INDICATOR_STEPS = WIZARD_STEPS.map((step) => ({ key: step, label: STEP_LABELS[step] }))
 
 interface WizardLayoutProps {
   currentStep: WizardStep
@@ -26,7 +28,7 @@ export function WizardLayout({
   return (
     <div className="qt-auth-page flex items-center justify-center min-h-screen p-4">
       <div className="qt-card max-w-2xl w-full p-6 space-y-6">
-        <WizardStepIndicator currentStep={currentStep} />
+        <WizardStepIndicator steps={INDICATOR_STEPS} current={WIZARD_STEPS.indexOf(currentStep)} />
 
         {(title || subtitle) && (
           <div>

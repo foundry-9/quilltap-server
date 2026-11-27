@@ -1,12 +1,12 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useApiKeysQuery, useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
+import { useApiKeysQuery, useConnectionProfilesQuery, useProvidersQuery } from '@/lib/hooks/use-profiles'
 import { showErrorToast } from '@/lib/toast'
 import type { ConnectionProfile, ApiKey, ProviderConfig } from '../types'
 
@@ -26,11 +26,7 @@ export function useConnectionProfiles() {
   const queryClient = useQueryClient()
   const profilesQuery = useConnectionProfilesQuery<ConnectionProfile>({ refetchOnMount: 'always' })
   const { data: apiKeys = EMPTY_KEYS } = useApiKeysQuery<ApiKey>()
-  const { data: providers = EMPTY_PROVIDERS } = useQuery({
-    queryKey: queryKeys.providers.all,
-    queryFn: ({ signal }) => apiFetch<{ providers?: ProviderConfig[] }>('/api/v1/providers', { signal }),
-    select: (data) => data.providers ?? EMPTY_PROVIDERS,
-  })
+  const { data: providers = EMPTY_PROVIDERS } = useProvidersQuery<ProviderConfig>()
   const { data: cheapDefaultProfileId = null } = useChatSettingsQuery(
     (settings) => settings.cheapLLMSettings?.defaultCheapProfileId ?? null,
   )

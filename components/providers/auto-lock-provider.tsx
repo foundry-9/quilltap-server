@@ -1,6 +1,18 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/query/fetcher';
+import { queryKeys } from '@/lib/query/keys';
+import { showWarningToast } from '@/lib/toast';
+
+interface LockConfig {
+  hasUserPassphrase: boolean;
+  autoLockMinutes: number | null;
+}
+
+/** How long the idle warning stays up. */
+const WARNING_TOAST_MS = 30000;
 
 /**
  * AutoLockProvider
@@ -10,7 +22,8 @@ import { useEffect, useRef, useCallback } from 'react';
  * passphrase and enabled auto-lock in settings.
  *
  * The provider:
- * 1. Fetches lock config from GET /api/v1/system/unlock on mount
+ * 1. Reads lock config from GET /api/v1/system/unlock (`queryKeys.system.unlock`,
+ *    the same entry the Auto-Lock settings card reads and refreshes on save)
  * 2. Tracks DOM activity events (throttled to once per 30s)
  * 3. Checks idle time every 60s
  * 4. Shows a warning toast 1 minute before locking
@@ -18,26 +31,33 @@ import { useEffect, useRef, useCallback } from 'react';
  */
 export function AutoLockProvider() {
   const lastActivityRef = useRef<number>(0);
-  const configRef = useRef<{ hasUserPassphrase: boolean; autoLockMinutes: number | null } | null>(null);
+  const configRef = useRef<LockConfig | null>(null);
   const warningShownRef = useRef(false);
   const lockingRef = useRef(false);
   const throttleTimerRef = useRef<number | null>(null);
+  // Inactive on the setup and unlock pages, as decided when the app mounts.
+  const [active] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname;
+    return !(path.startsWith('/setup') || path === '/unlock');
+  });
 
-  const fetchConfig = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/system/unlock');
-      if (!res.ok) return;
-      const data = await res.json();
-      configRef.current = {
-        hasUserPassphrase: data.hasUserPassphrase ?? false,
-        autoLockMinutes: data.autoLockMinutes ?? null,
-      };
-      // Reset warning state when config changes
-      warningShownRef.current = false;
-    } catch {
-      // Silently ignore — will retry on next settings change event
-    }
-  }, []);
+  const { data: unlockData } = useQuery({
+    queryKey: queryKeys.system.unlock,
+    queryFn: ({ signal }) =>
+      apiFetch<{ hasUserPassphrase?: boolean; autoLockMinutes?: number | null }>('/api/v1/system/unlock', { signal }),
+    enabled: active,
+  });
+
+  useEffect(() => {
+    if (!unlockData) return;
+    configRef.current = {
+      hasUserPassphrase: unlockData.hasUserPassphrase ?? false,
+      autoLockMinutes: unlockData.autoLockMinutes ?? null,
+    };
+    // Reset warning state when config changes
+    warningShownRef.current = false;
+  }, [unlockData]);
 
   const handleActivity = useCallback(() => {
     // Throttle: only update lastActivity at most once per 30s
@@ -74,30 +94,13 @@ export function AutoLockProvider() {
     window.location.href = '/unlock';
   }, []);
 
-  const showWarningToast = useCallback(() => {
+  const showIdleWarning = useCallback(() => {
     if (warningShownRef.current) return;
     warningShownRef.current = true;
-
-    // Create a toast notification
-    const toast = document.createElement('div');
-    toast.className = 'fixed bottom-4 right-4 z-[9999] qt-card p-4 qt-shadow-lg border qt-border max-w-sm animate-in slide-in-from-bottom-2';
-    toast.innerHTML = `
-      <div class="flex items-start gap-3">
-        <div class="flex-1">
-          <p class="qt-text-small font-semibold">Auto-Lock Warning</p>
-          <p class="qt-text-xs qt-text-muted mt-1">Quilltap will lock in approximately one minute due to inactivity. Move the mouse or press a key to remain.</p>
-        </div>
-        <button onclick="this.closest('div.fixed').remove()" class="qt-button qt-button-ghost text-xs px-2 py-1">Dismiss</button>
-      </div>
-    `;
-    document.body.appendChild(toast);
-
-    // Auto-remove after 30 seconds
-    setTimeout(() => {
-      if (toast.parentNode) {
-        toast.remove();
-      }
-    }, 30000);
+    showWarningToast(
+      'Auto-Lock Warning: Quilltap will lock in approximately one minute due to inactivity. Move the mouse or press a key to remain.',
+      WARNING_TOAST_MS,
+    );
   }, []);
 
   useEffect(() => {
@@ -105,21 +108,7 @@ export function AutoLockProvider() {
     lastActivityRef.current = Date.now();
 
     // Skip on setup and unlock pages
-    if (typeof window !== 'undefined') {
-      const path = window.location.pathname;
-      if (path.startsWith('/setup') || path === '/unlock') {
-        return;
-      }
-    }
-
-    // Fetch initial config
-    fetchConfig();
-
-    // Listen for settings changes
-    const handleSettingsChanged = () => {
-      fetchConfig();
-    };
-    window.addEventListener('quilltap-autolock-settings-changed', handleSettingsChanged);
+    if (!active) return;
 
     // Activity event listeners
     const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'] as const;
@@ -141,12 +130,11 @@ export function AutoLockProvider() {
       if (idleMs >= lockThresholdMs) {
         triggerLock();
       } else if (idleMs >= warningThresholdMs && !warningShownRef.current) {
-        showWarningToast();
+        showIdleWarning();
       }
     }, 60000);
 
     return () => {
-      window.removeEventListener('quilltap-autolock-settings-changed', handleSettingsChanged);
       for (const event of events) {
         document.removeEventListener(event, handleActivity, { capture: true });
       }
@@ -155,7 +143,7 @@ export function AutoLockProvider() {
         window.clearTimeout(throttleTimerRef.current);
       }
     };
-  }, [fetchConfig, handleActivity, triggerLock, showWarningToast]);
+  }, [active, handleActivity, triggerLock, showIdleWarning]);
 
   // Headless — renders nothing
   return null;

@@ -1904,13 +1904,14 @@
      ========================================================================== */
 
   /**
-   * All spinner variants share these base styles
+   * All spinner variants share these base styles. The ring of `qt-spinner` and
+   * `qt-spinner-lg` (track and indicator colours, border width) is drawn once,
+   * in `_utilities.css`; only the small spinner draws its own here.
    */
   .qt-spinner,
   .qt-spinner-sm,
   .qt-spinner-lg {
     @apply animate-spin;
-    @apply border-2 border-current border-t-transparent;
     @apply rounded-full;
   }
 
@@ -1927,6 +1928,7 @@
 
   .qt-spinner-sm {
     @apply w-4 h-4;
+    @apply border-2 border-current border-t-transparent;
   }
 
   .qt-spinner-lg {

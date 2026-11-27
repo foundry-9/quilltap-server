@@ -17,8 +17,7 @@
 import { useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
-import { parseHrefToIntent } from '@/lib/navigation/route-to-intent'
-import { requestMessageReveal, revealRequestFromSalonHref } from '@/lib/chat/message-navigation'
+import { openHrefInWorkspace } from '@/components/workspace/open-href-in-workspace'
 
 export function useWorkspaceNavigate(): (href: string) => void {
   const ws = useWorkspaceOptional()
@@ -26,15 +25,7 @@ export function useWorkspaceNavigate(): (href: string) => void {
   const router = useRouter()
   return useCallback(
     (href: string) => {
-      if (ws && pathname === '/workspace') {
-        const intent = parseHrefToIntent(href)
-        if (intent) {
-          ws.openTab(intent.kind, intent.payload)
-          const reveal = revealRequestFromSalonHref(href)
-          if (reveal) requestMessageReveal(reveal.chatId, reveal.messageId)
-          return
-        }
-      }
+      if (ws && pathname === '/workspace' && openHrefInWorkspace(href, ws.openTab)) return
       router.push(href)
     },
     [ws, pathname, router]

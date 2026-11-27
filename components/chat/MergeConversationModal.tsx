@@ -20,7 +20,7 @@
 
 import { useMemo, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { formatRelativeDate } from '@/lib/format-time'
@@ -107,7 +107,7 @@ export function MergeConversationModal({
   })
 
   const { data: outfitData, isLoading: outfitLoading } = useQuery({
-    queryKey: [...queryKeys.chats.detail(selectedSource?.id ?? 'none'), 'outfit-summary'],
+    queryKey: queryKeys.wardrobe.outfitSummary(selectedSource?.id ?? 'none'),
     queryFn: ({ signal }) =>
       apiFetch<OutfitSummaryResponse>(
         `/api/v1/chats/${selectedSource!.id}?action=outfit-summary`,
@@ -176,21 +176,19 @@ export function MergeConversationModal({
     const includedIds = new Set(mergeCharacters.map((c) => c.id))
     setIsMerging(true)
     try {
-      const res = await fetch(`/api/v1/chats/${targetChatId}?action=merge-conversation`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceChatId: selectedSource.id,
-          characterIds: mergeCharacters.map((c) => c.id),
-          // Only send outfit choices for characters actually coming across.
-          outfitSelections: outfitSelections.filter((s) => includedIds.has(s.characterId)),
-        }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to merge conversation')
-      }
-      const data = await res.json().catch(() => ({}))
+      const data = await apiFetch<{ merge?: { mergedCharacterIds?: string[] } } | undefined>(
+        `/api/v1/chats/${targetChatId}?action=merge-conversation`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceChatId: selectedSource.id,
+            characterIds: mergeCharacters.map((c) => c.id),
+            // Only send outfit choices for characters actually coming across.
+            outfitSelections: outfitSelections.filter((s) => includedIds.has(s.characterId)),
+          }),
+        },
+      )
       const count = data?.merge?.mergedCharacterIds?.length ?? mergeCharacters.length
       showSuccessToast(
         count === 1
@@ -201,7 +199,7 @@ export function MergeConversationModal({
       await onMerged()
       onClose()
     } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'Failed to merge conversation')
+      showErrorToast(apiErrorMessage(error, '') || 'Failed to merge conversation')
     } finally {
       setIsMerging(false)
     }

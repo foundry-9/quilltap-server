@@ -2,13 +2,12 @@
  * Unit tests for LoadingState component
  */
 
-import { describe, it, expect } from '@jest/globals'
 import { render, screen } from '@testing-library/react'
 import React from 'react'
 import LoadingState from '@/components/ui/LoadingState'
 
 describe('LoadingState', () => {
-  it('renders with default spinner variant', () => {
+  it('renders a spinner by default', () => {
     const { container } = render(
       <LoadingState />
     )
@@ -33,33 +32,13 @@ describe('LoadingState', () => {
     expect(screen.getByText('Saving your changes...')).toBeInTheDocument()
   })
 
-  it('renders spinner variant with spinner icon', () => {
+  it('renders the spinner beside the message', () => {
     const { container } = render(
-      <LoadingState variant="spinner" message="Loading" />
+      <LoadingState message="Loading" />
     )
 
     expect(container.querySelector('.qt-spinner')).toBeInTheDocument()
     expect(screen.getByText('Loading')).toBeInTheDocument()
-  })
-
-  it('renders text variant without spinner', () => {
-    const { container } = render(
-      <LoadingState variant="text" message="Loading..." />
-    )
-
-    expect(container.querySelector('.qt-spinner')).not.toBeInTheDocument()
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
-  })
-
-  it('renders dots variant with animated dots', () => {
-    render(
-      <LoadingState variant="dots" message="Processing" />
-    )
-
-    expect(screen.getByText('Processing')).toBeInTheDocument()
-    // Dots variant includes three animated dots
-    const dots = screen.getByText('Processing').parentElement
-    expect(dots?.querySelector('.animate-bounce')).toBeInTheDocument()
   })
 
   it('applies custom className', () => {
@@ -80,27 +59,9 @@ describe('LoadingState', () => {
     expect(wrapper).toHaveClass('qt-loading-state')
   })
 
-  it('applies qt-text-secondary to message in spinner variant', () => {
+  it('applies qt-text-secondary to message', () => {
     const { container } = render(
-      <LoadingState variant="spinner" message="Loading" />
-    )
-
-    const message = container.querySelector('.qt-text-secondary')
-    expect(message).toBeInTheDocument()
-  })
-
-  it('applies qt-text-secondary to message in text variant', () => {
-    const { container } = render(
-      <LoadingState variant="text" message="Loading" />
-    )
-
-    const message = container.querySelector('.qt-text-secondary')
-    expect(message).toBeInTheDocument()
-  })
-
-  it('applies qt-text-secondary to message in dots variant', () => {
-    const { container } = render(
-      <LoadingState variant="dots" message="Loading" />
+      <LoadingState message="Loading" />
     )
 
     const message = container.querySelector('.qt-text-secondary')
@@ -109,16 +70,16 @@ describe('LoadingState', () => {
 
   it('applies primary color to spinner', () => {
     const { container } = render(
-      <LoadingState variant="spinner" />
+      <LoadingState />
     )
 
     const spinner = container.querySelector('.qt-spinner')
     expect(spinner).toHaveClass('qt-text-brand')
   })
 
-  it('does not render message in spinner variant when not provided', () => {
+  it('does not render message when not provided', () => {
     const { container } = render(
-      <LoadingState variant="spinner" message="" />
+      <LoadingState message="" />
     )
 
     // Only the spinner should be present, no message paragraph

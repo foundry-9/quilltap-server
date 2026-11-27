@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals'
-import { render, screen, waitFor, cleanup, act } from '@testing-library/react'
+import { screen, waitFor, cleanup, act } from '@testing-library/react'
 import { AutoLockProvider } from '@/components/providers/auto-lock-provider'
+import { queryKeys } from '@/lib/query/keys'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
+
+const render = (ui: React.ReactElement) => renderWithQuery(ui)
 
 function jsonResponse(data: unknown, ok = true): Response {
   return {
@@ -35,20 +39,22 @@ describe('AutoLockProvider', () => {
     window.history.pushState({}, '', '/')
   })
 
-  it('fetches config on mount and when settings change', async () => {
+  it('reads config on mount and again when the settings card refreshes it', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ hasUserPassphrase: true, autoLockMinutes: 5 })
     )
 
-    render(<AutoLockProvider />)
+    const { queryClient } = render(<AutoLockProvider />)
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1)
-      expect(fetchMock).toHaveBeenCalledWith('/api/v1/system/unlock')
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/system/unlock')
     })
+    await waitFor(() => expect(queryClient.getQueryData(queryKeys.system.unlock)).toBeDefined())
 
+    // The settings card refreshes the shared entry when it saves.
     act(() => {
-      window.dispatchEvent(new Event('quilltap-autolock-settings-changed'))
+      void queryClient.invalidateQueries({ queryKey: queryKeys.system.unlock })
     })
 
     await waitFor(() => {
@@ -86,28 +92,30 @@ describe('AutoLockProvider', () => {
       jsonResponse({ hasUserPassphrase: true, autoLockMinutes: 2 })
     )
 
-    render(<AutoLockProvider />)
+    const { queryClient } = render(<AutoLockProvider />)
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1)
-    })
+    await waitFor(() => expect(queryClient.getQueryData(queryKeys.system.unlock)).toBeDefined())
 
     act(() => {
       now = 60000
       jest.advanceTimersByTime(60000)
     })
+    // The toast region renders its first toast a beat after it is created.
+    act(() => {
+      jest.advanceTimersByTime(100)
+    })
 
-    expect(screen.getByText('Auto-Lock Warning')).toBeInTheDocument()
+    expect(screen.getByText(/Auto-Lock Warning/)).toBeInTheDocument()
     expect(
       screen.getByText(/approximately one minute due to inactivity/i)
     ).toBeInTheDocument()
 
     act(() => {
-      now = 90000
+      now = 90100
       jest.advanceTimersByTime(30000)
     })
 
-    expect(screen.queryByText('Auto-Lock Warning')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Auto-Lock Warning/)).not.toBeInTheDocument()
   })
 
   it('does not show a warning when auto-lock is disabled', async () => {
@@ -126,6 +134,6 @@ describe('AutoLockProvider', () => {
       jest.advanceTimersByTime(300000)
     })
 
-    expect(screen.queryByText('Auto-Lock Warning')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Auto-Lock Warning/)).not.toBeInTheDocument()
   })
 })

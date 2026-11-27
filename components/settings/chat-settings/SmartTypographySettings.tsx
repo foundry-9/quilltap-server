@@ -11,11 +11,12 @@
  * Sibling of the Text Replacement card, and reads as one on purpose.
  */
 
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { smartTypographyStep } from '@/lib/smart-typography/engine'
 import type { ChatSettings, SmartTypographySettings as SmartTypographySettingsValue } from './types'
 import { DEFAULT_SMART_TYPOGRAPHY_SETTINGS } from './types'
 import { SettingsToggleRow } from './components/SettingsToggleRow'
+import { useTryItTextarea } from './hooks/useTryItTextarea'
 
 export interface SmartTypographySettingsProps {
   settings: ChatSettings
@@ -37,10 +38,7 @@ export function SmartTypographySettings({
   const ellipsis = current.ellipsis ?? true
   const punctuationWarnings = current.punctuationWarnings ?? true
 
-  const [tryItText, setTryItText] = useState('')
-  const tryItRef = useRef<HTMLTextAreaElement>(null)
-  /** Pending cursor position to set after a substitution-triggered re-render. */
-  const tryItPendingCursor = useRef<number | null>(null)
+  const { text: tryText, setText: setTryText, ref: tryRef, rewrite: rewriteTry } = useTryItTextarea()
 
   const handleTryItKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     // The ENGINE is shared with the live plugin, so the preview cannot disagree
@@ -70,21 +68,9 @@ export function SmartTypographySettings({
     const deleteFrom = start - result.deleteBefore
     const newValue = value.slice(0, deleteFrom) + result.insert + value.slice(start)
     const cursor = deleteFrom + result.insert.length
-    tryItPendingCursor.current = cursor
-    setTryItText(newValue)
+    rewriteTry(newValue, cursor)
   }
 
-  // After a substitution-triggered re-render, restore the cursor position.
-  // A plain state change otherwise leaves the cursor at end-of-textarea.
-  useEffect(() => {
-    if (tryItPendingCursor.current === null) return
-    const pos = tryItPendingCursor.current
-    tryItPendingCursor.current = null
-    const ta = tryItRef.current
-    if (!ta) return
-    ta.selectionStart = pos
-    ta.selectionEnd = pos
-  }, [tryItText])
 
   return (
     <div className="space-y-4">
@@ -157,9 +143,9 @@ export function SmartTypographySettings({
         </div>
         <textarea
           aria-label="Try smart typography"
-          ref={tryItRef}
-          value={tryItText}
-          onChange={(e) => setTryItText(e.target.value)}
+          ref={tryRef}
+          value={tryText}
+          onChange={(e) => setTryText(e.target.value)}
           onKeyDown={handleTryItKeyDown}
           rows={3}
           className="qt-input w-full"

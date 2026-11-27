@@ -10,6 +10,7 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { booleanCodec, usePersistentState } from '@/hooks/usePersistentState'
 
 interface ContentWidthContextValue {
   /** Whether wide mode is enabled */
@@ -32,53 +33,9 @@ const WIDE_PAGE_WIDTH = '100%'
 const ContentWidthContext = createContext<ContentWidthContextValue | null>(null)
 
 export function ContentWidthProvider({ children }: { children: React.ReactNode }) {
-  const [isWide, setIsWide] = useState(false)
-  const [storageReady, setStorageReady] = useState(false)
+  // Read after hydration, written back on change, synced across tabs.
+  const [isWide, setIsWide] = usePersistentState(STORAGE_KEY, false, booleanCodec)
   const [canApplyWide, setCanApplyWide] = useState(false)
-
-  // Load from localStorage on mount. The localStorage read must happen after
-  // hydration; a lazy useState initializer would cause an SSR mismatch
-  // (server renders with default, client with localStorage value).
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY)
-      if (raw === 'true') {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- see comment above
-        setIsWide(true)
-      }
-    } catch (error) {
-      console.warn('Unable to load content width preference', {
-        error: error instanceof Error ? error.message : String(error)
-      })
-    } finally {
-      setStorageReady(true)
-    }
-  }, [])
-
-  // Persist to localStorage when changed
-  useEffect(() => {
-    if (!storageReady || typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(STORAGE_KEY, String(isWide))
-    } catch (error) {
-      console.warn('Unable to persist content width preference', {
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
-  }, [isWide, storageReady])
-
-  // Cross-tab sync via storage event
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const handler = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY || event.newValue === null) return
-      const newValue = event.newValue === 'true'
-      setIsWide(newValue)
-    }
-    window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
-  }, [])
 
   // Track viewport width to determine if wide mode can apply
   useEffect(() => {
@@ -116,15 +73,12 @@ export function ContentWidthProvider({ children }: { children: React.ReactNode }
   }, [isWide, canApplyWide])
 
   const toggleWidth = useCallback(() => {
-    setIsWide(prev => {
-      const next = !prev
-      return next
-    })
-  }, [])
+    setIsWide(prev => !prev)
+  }, [setIsWide])
 
   const setWidth = useCallback((wide: boolean) => {
     setIsWide(wide)
-  }, [])
+  }, [setIsWide])
 
   const value = useMemo<ContentWidthContextValue>(
     () => ({

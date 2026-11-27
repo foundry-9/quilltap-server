@@ -20,6 +20,7 @@ import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import type { RegenerationState } from '../hooks/useRegeneration'
 import type { ConciergeRetryHandlers } from '../concierge-retry'
 import { useDeferredMeasureRef } from '../hooks/useDeferredMeasureRef'
+import type { MessageAvatarInfo } from './message-row/types'
 
 interface VirtualizedMessageListProps {
   /** Flat (post-tool-grouping) message list. Still needed for the TOOL-row
@@ -54,8 +55,6 @@ interface VirtualizedMessageListProps {
   streaming: boolean
   streamingContent: string
   waitingForResponse: boolean
-  userParticipantId: string | null
-  respondingParticipantId: string | null
   /** Chat ID for terminal embed rendering */
   chatId: string
   // Message actions - signatures match useMessageActions return type
@@ -79,12 +78,6 @@ interface VirtualizedMessageListProps {
    */
   regeneration: RegenerationState | null
   onRegenerate: (messageId: string) => void
-  turnManagement: {
-    handleNudge: (participantId: string) => void | Promise<void>
-    handleQueue: (participantId: string) => void
-    handleDequeue: (participantId: string) => void
-    handleContinue: () => void
-  }
   // Handlers
   setEditContent: (content: string) => void
   onOverrideDangerFlag: (messageId: string) => void
@@ -93,7 +86,6 @@ interface VirtualizedMessageListProps {
    * Lantern's refused backdrop. Absent on a Locked chat, which hides the buttons.
    */
   conciergeRetry?: ConciergeRetryHandlers
-  onRemoveCharacter: (participantId: string) => void
   onReattribute: (messageId: string) => void
   onImageClick: (filepath: string, filename: string, fileId?: string) => void
   /** Opens the SaveImageDialog for one image attachment on a message. */
@@ -108,12 +100,7 @@ interface VirtualizedMessageListProps {
   getRespondingCharacter: () => CharacterData | undefined
   shouldShowAvatars: () => boolean
   getFirstCharacter: () => CharacterData | null | undefined
-  getMessageAvatar: (message: Message) => {
-    name: string
-    title?: string | null
-    avatarUrl?: string | null
-    defaultImage?: { id: string; filepath: string; url?: string } | null
-  } | null
+  getMessageAvatar: (message: Message) => MessageAvatarInfo | null
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
   /** Character id → name, for naming a Staff bar's `customAnnouncer` */
@@ -170,17 +157,13 @@ export function VirtualizedMessageList({
   streaming,
   streamingContent,
   waitingForResponse,
-  userParticipantId,
-  respondingParticipantId,
   chatId,
   regeneration,
   onRegenerate,
   messageActions,
-  turnManagement,
   setEditContent,
   onOverrideDangerFlag,
   conciergeRetry,
-  onRemoveCharacter,
   onReattribute,
   onImageClick,
   onSaveImage,
@@ -322,17 +305,14 @@ export function VirtualizedMessageList({
                     message={message}
                     character={getCharacterForMessage(messageForAvatar)}
                     headerAvatar={headerAvatar}
-                    onImageClick={(filepath, filename, fileId) => {
-                      onImageClick(filepath, filename, fileId)
-                    }}
+                    onImageClick={onImageClick}
                     onTryUncensored={conciergeRetry?.onRetryPicture}
                   />
                 </div>
               )
             }
 
-            const messageAvatarData = shouldShowAvatars() ? getMessageAvatar(message) : null
-            const messageAvatar = messageAvatarData as any
+            const messageAvatar = shouldShowAvatars() ? getMessageAvatar(message) : null
 
             return (
               <div
@@ -374,7 +354,6 @@ export function VirtualizedMessageList({
                   turnState={turnState}
                   streaming={streaming}
                   waitingForResponse={waitingForResponse}
-                  userParticipantId={userParticipantId}
                   tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
                   conciergeDisplay={conciergeDisplay}
                   onOverrideDangerFlag={onOverrideDangerFlag}
@@ -393,16 +372,8 @@ export function VirtualizedMessageList({
                   onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
                   onCopyContent={messageActions.copyMessageContent}
                   onResend={messageActions.resendMessage}
-                  onImageClick={(filepath, filename, fileId) => {
-                    onImageClick(filepath, filename, fileId)
-                  }}
+                  onImageClick={onImageClick}
                   onSaveImage={onSaveImage}
-                  onHandleNudge={turnManagement.handleNudge}
-                  onHandleQueue={turnManagement.handleQueue}
-                  onHandleDequeue={turnManagement.handleDequeue}
-                  onHandleTalkativenessChange={() => {}}
-                  onHandleRemoveCharacter={onRemoveCharacter}
-                  onHandleContinue={turnManagement.handleContinue}
                   onReattribute={onReattribute}
                   hasLLMLogs={messagesWithLogs.has(message.id)}
                   onViewLLMLogs={onViewLLMLogs}

@@ -23,7 +23,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -58,12 +58,15 @@ export function findViolations(files, read) {
 }
 
 function main() {
-  const files = execFileSync('git', ['ls-files', '--', 'app/*.tsx', 'components/*.tsx'], {
-    cwd: REPO_ROOT,
-    encoding: 'utf8',
-  })
+  // Tracked files plus new ones not yet added, minus any deleted in the working
+  // tree: the gate judges what is on disk, before as well as after staging.
+  const files = execFileSync(
+    'git',
+    ['ls-files', '--cached', '--others', '--exclude-standard', '--', 'app/*.tsx', 'components/*.tsx'],
+    { cwd: REPO_ROOT, encoding: 'utf8' },
+  )
     .split('\n')
-    .filter(Boolean)
+    .filter((file) => file && existsSync(path.join(REPO_ROOT, file)))
 
   const violations = findViolations(files, (file) => readFileSync(path.join(REPO_ROOT, file), 'utf8'))
 

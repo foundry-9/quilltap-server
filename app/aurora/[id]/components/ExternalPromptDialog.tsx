@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 
@@ -42,7 +42,7 @@ export function ExternalPromptDialog({
   onCancel,
   onGenerated,
 }: ExternalPromptDialogProps) {
-  const [systemPromptId, setSystemPromptId] = useState('')
+  const [pickedSystemPromptId, setPickedSystemPromptId] = useState('')
   const [scenarioId, setScenarioId] = useState('')
   const [maxTokens, setMaxTokens] = useState(4000)
   const [generating, setGenerating] = useState(false)
@@ -57,14 +57,10 @@ export function ExternalPromptDialog({
   const defaultProfileId = (profiles.find((p) => p.isDefault) ?? profiles[0])?.id ?? ''
   const connectionProfileId = pickedProfileId || defaultProfileId
 
-  // Pre-select default system prompt
-  useEffect(() => {
-    if (systemPrompts && systemPrompts.length > 0 && !systemPromptId) {
-      const defaultPrompt = systemPrompts.find(sp => sp.isDefault)
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream systemPrompts changes (parent renders unconditionally)
-      setSystemPromptId(defaultPrompt?.id || systemPrompts[0].id)
-    }
-  }, [systemPrompts, systemPromptId])
+  // The default system prompt (the server keeps exactly one flagged) is
+  // preselected until the user picks one.
+  const defaultSystemPromptId = systemPrompts?.find((sp) => sp.isDefault)?.id ?? ''
+  const systemPromptId = pickedSystemPromptId || defaultSystemPromptId
 
   const handleGenerate = async () => {
     if (!connectionProfileId || !systemPromptId) return
@@ -153,7 +149,7 @@ export function ExternalPromptDialog({
             <select
               id="ext-system-prompt"
               value={systemPromptId}
-              onChange={(e) => setSystemPromptId(e.target.value)}
+              onChange={(e) => setPickedSystemPromptId(e.target.value)}
               className={selectClasses}
             >
               <option value="">Select a system prompt</option>

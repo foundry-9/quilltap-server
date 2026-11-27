@@ -3,8 +3,70 @@
 import { useId, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
+import type { DbKeyState as ServerDbKeyState } from '@/lib/startup/dbkey';
 
-type DbKeyState = 'resolved' | 'needs-setup' | 'needs-passphrase' | 'needs-vault-storage' | 'loading';
+type DbKeyState = ServerDbKeyState | 'loading';
+
+/** The passphrase rule both forms enforce: optional, but confirmed and 8+ characters when given. */
+function passphraseError(passphrase: string, confirmPassphrase: string): string | null {
+  if (passphrase && passphrase !== confirmPassphrase) return 'Passphrases do not match';
+  if (passphrase && passphrase.length < 8) return 'Passphrase must be at least 8 characters';
+  return null;
+}
+
+interface PassphraseFieldsProps {
+  fieldId: string;
+  passphrase: string;
+  confirmPassphrase: string;
+  onPassphraseChange: (value: string) => void;
+  onConfirmChange: (value: string) => void;
+  disabled: boolean;
+  /** The line under the passphrase field */
+  hint: string;
+}
+
+/** The optional passphrase and, once one is typed, its confirmation. */
+function PassphraseFields({
+  fieldId,
+  passphrase,
+  confirmPassphrase,
+  onPassphraseChange,
+  onConfirmChange,
+  disabled,
+  hint,
+}: PassphraseFieldsProps) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <label htmlFor={`${fieldId}-f0`} className="qt-text-label block mb-1">Passphrase (optional)</label>
+        <input
+          id={`${fieldId}-f0`}
+          type="password"
+          value={passphrase}
+          onChange={(e) => onPassphraseChange(e.target.value)}
+          placeholder="Leave empty for no passphrase"
+          className="qt-input w-full p-2"
+          disabled={disabled}
+        />
+        <p className="qt-text-xs qt-text-muted mt-1">{hint}</p>
+      </div>
+      {passphrase && (
+        <div>
+          <label htmlFor={`${fieldId}-f1`} className="qt-text-label block mb-1">Confirm passphrase</label>
+          <input
+            id={`${fieldId}-f1`}
+            type="password"
+            value={confirmPassphrase}
+            onChange={(e) => onConfirmChange(e.target.value)}
+            placeholder="Confirm your passphrase"
+            className="qt-input w-full p-2"
+            disabled={disabled}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SetupPage() {
   const fieldId = useId();
@@ -83,13 +145,9 @@ export default function SetupPage() {
   const handleSetup = async () => {
     setError('');
 
-    if (passphrase && passphrase !== confirmPassphrase) {
-      setError('Passphrases do not match');
-      return;
-    }
-
-    if (passphrase && passphrase.length < 8) {
-      setError('Passphrase must be at least 8 characters');
+    const invalid = passphraseError(passphrase, confirmPassphrase);
+    if (invalid) {
+      setError(invalid);
       return;
     }
 
@@ -121,13 +179,9 @@ export default function SetupPage() {
   const handleStore = async () => {
     setError('');
 
-    if (passphrase && passphrase !== confirmPassphrase) {
-      setError('Passphrases do not match');
-      return;
-    }
-
-    if (passphrase && passphrase.length < 8) {
-      setError('Passphrase must be at least 8 characters');
+    const invalid = passphraseError(passphrase, confirmPassphrase);
+    if (invalid) {
+      setError(invalid);
       return;
     }
 
@@ -217,37 +271,15 @@ export default function SetupPage() {
               Quilltap needs an encryption key to protect your API keys and sensitive data.
               One will be generated automatically. You can optionally protect it with a passphrase.
             </p>
-            <div className="space-y-3">
-              <div>
-                <label htmlFor={`${fieldId}-f0`} className="qt-text-label block mb-1">Passphrase (optional)</label>
-                <input
-                  id={`${fieldId}-f0`}
-                  type="password"
-                  value={passphrase}
-                  onChange={(e) => setPassphrase(e.target.value)}
-                  placeholder="Leave empty for no passphrase"
-                  className="qt-input w-full p-2"
-                  disabled={loading}
-                />
-                <p className="qt-text-xs qt-text-muted mt-1">
-                  If set, you will need to enter this passphrase each time Quilltap starts.
-                </p>
-              </div>
-              {passphrase && (
-                <div>
-                  <label htmlFor={`${fieldId}-f1`} className="qt-text-label block mb-1">Confirm passphrase</label>
-                  <input
-                    id={`${fieldId}-f1`}
-                    type="password"
-                    value={confirmPassphrase}
-                    onChange={(e) => setConfirmPassphrase(e.target.value)}
-                    placeholder="Confirm your passphrase"
-                    className="qt-input w-full p-2"
-                    disabled={loading}
-                  />
-                </div>
-              )}
-            </div>
+            <PassphraseFields
+              fieldId={fieldId}
+              passphrase={passphrase}
+              confirmPassphrase={confirmPassphrase}
+              onPassphraseChange={setPassphrase}
+              onConfirmChange={setConfirmPassphrase}
+              disabled={loading}
+              hint="If set, you will need to enter this passphrase each time Quilltap starts."
+            />
             {error && <p className="qt-alert qt-alert-error text-sm">{error}</p>}
             <button
               onClick={handleSetup}
@@ -266,37 +298,15 @@ export default function SetupPage() {
               Your encryption key is set via environment variable. Store it in an encrypted .dbkey file
               so Quilltap can start without the environment variable in the future.
             </p>
-            <div className="space-y-3">
-              <div>
-                <label htmlFor={`${fieldId}-f2`} className="qt-text-label block mb-1">Passphrase (optional)</label>
-                <input
-                  id={`${fieldId}-f2`}
-                  type="password"
-                  value={passphrase}
-                  onChange={(e) => setPassphrase(e.target.value)}
-                  placeholder="Leave empty for no passphrase"
-                  className="qt-input w-full p-2"
-                  disabled={loading}
-                />
-                <p className="qt-text-xs qt-text-muted mt-1">
-                  If set, you will need this passphrase when starting without the environment variable.
-                </p>
-              </div>
-              {passphrase && (
-                <div>
-                  <label htmlFor={`${fieldId}-f3`} className="qt-text-label block mb-1">Confirm passphrase</label>
-                  <input
-                    id={`${fieldId}-f3`}
-                    type="password"
-                    value={confirmPassphrase}
-                    onChange={(e) => setConfirmPassphrase(e.target.value)}
-                    placeholder="Confirm your passphrase"
-                    className="qt-input w-full p-2"
-                    disabled={loading}
-                  />
-                </div>
-              )}
-            </div>
+            <PassphraseFields
+              fieldId={fieldId}
+              passphrase={passphrase}
+              confirmPassphrase={confirmPassphrase}
+              onPassphraseChange={setPassphrase}
+              onConfirmChange={setConfirmPassphrase}
+              disabled={loading}
+              hint="If set, you will need this passphrase when starting without the environment variable."
+            />
             {error && <p className="qt-alert qt-alert-error text-sm">{error}</p>}
             <div className="flex gap-2">
               <button

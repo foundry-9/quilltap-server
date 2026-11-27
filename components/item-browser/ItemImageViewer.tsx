@@ -15,10 +15,10 @@
  * delete, which knows nothing about the item's links or its current-picture
  * pointer (bug 194), and refreshes the kind's queries.
  *
- * It sits at `z-[90]`, above the browser dialogs (`z-[60]`) and the item
- * editors (`z-[70]`/`z-[80]`); the save dialog it opens rides at `z-[100]`,
- * and while that dialog is up the viewer leaves the keyboard alone so Escape
- * closes only the dialog.
+ * It is a lightbox, not a `BaseModal`, so it sits at `z-[90]`, above every
+ * dialog (one z-index, stacked by DOM order); the save dialog it opens rides
+ * at `z-[100]` to clear it, and while that dialog is up the viewer leaves the
+ * keyboard alone so Escape closes only the dialog.
  *
  * Design of record: docs/developer/features/complete/wardrobe-item-images.md
  *

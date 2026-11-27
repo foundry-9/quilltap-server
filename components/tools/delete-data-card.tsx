@@ -5,33 +5,41 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { Icon } from '@/components/ui/icon'
 import { WizardModal } from '@/components/ui/WizardModal'
+import type { DeleteSummary } from '@/lib/backup/restore-service'
+import { Spinner } from '@/components/ui/Spinner'
 
-interface DeleteSummary {
-  characters: number
-  chats: number
-  tags: number
-  files: number
-  memories: number
-  apiKeys: number
-  backups: number
-  personas?: number
-  archiveBundles?: number
-  archiveBundlesKept?: boolean
-  profiles: {
-    connection: number
-    image: number
-    embedding: number
-  }
-  templates?: {
-    prompt: number
-    roleplay: number
-  }
-  sync?: {
-    instances: number
-    mappings: number
-    operations: number
-    syncApiKeys: number
-  }
+/** The counted rows of a delete summary, in display order (templates follow separately). */
+const SUMMARY_ROWS: ReadonlyArray<{ label: string; count: (summary: DeleteSummary) => number }> = [
+  { label: 'Characters', count: (s) => s.characters },
+  { label: 'Chats', count: (s) => s.chats },
+  { label: 'Projects', count: (s) => s.projects },
+  { label: 'Tags', count: (s) => s.tags },
+  { label: 'Files', count: (s) => s.files },
+  { label: 'Memories', count: (s) => s.memories },
+  { label: 'API Keys', count: (s) => s.apiKeys },
+  { label: 'Backups', count: (s) => s.backups },
+  { label: 'Connection Profiles', count: (s) => s.profiles.connection },
+  { label: 'Image Profiles', count: (s) => s.profiles.image },
+  { label: 'Embedding Profiles', count: (s) => s.profiles.embedding },
+]
+
+const TEMPLATE_ROWS: ReadonlyArray<{ label: string; count: (summary: DeleteSummary) => number }> = [
+  { label: 'Prompt Templates', count: (s) => s.templates.prompt },
+  { label: 'Roleplay Templates', count: (s) => s.templates.roleplay },
+]
+
+/** Everything the deletion removes (archive bundles are reported apart). */
+function getTotalCount(summary: DeleteSummary): number {
+  return [...SUMMARY_ROWS, ...TEMPLATE_ROWS].reduce((sum, row) => sum + row.count(summary), 0)
+}
+
+function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between">
+      <span className="qt-text-secondary">{label}</span>
+      <span className="qt-text-primary">{value}</span>
+    </div>
+  )
 }
 
 export function DeleteDataCard() {
@@ -120,30 +128,6 @@ export function DeleteDataCard() {
       console.error('Data deletion failed', { error: errorMessage })
       showErrorToast(errorMessage)
     }
-  }
-
-  const getTotalCount = (summary: DeleteSummary): number => {
-    // `personas` and `sync` are legacy shape — the current API never returns
-    // them, and an undefined addend turned the whole total into NaN.
-    return (
-      summary.characters +
-      (summary.personas ?? 0) +
-      summary.chats +
-      summary.tags +
-      summary.files +
-      summary.memories +
-      summary.apiKeys +
-      summary.backups +
-      summary.profiles.connection +
-      summary.profiles.image +
-      summary.profiles.embedding +
-      (summary.templates?.prompt ?? 0) +
-      (summary.templates?.roleplay ?? 0) +
-      (summary.sync?.instances ?? 0) +
-      (summary.sync?.mappings ?? 0) +
-      (summary.sync?.operations ?? 0) +
-      (summary.sync?.syncApiKeys ?? 0)
-    )
   }
 
   return (
@@ -243,10 +227,7 @@ export function DeleteDataCard() {
           <>
             {loading ? (
               <div className="qt-loading-state">
-                <svg className="w-8 h-8 animate-spin qt-text-secondary" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
+                <Spinner className="w-8 h-8 qt-text-secondary" />
               </div>
             ) : preview ? (
               <div className="space-y-4">
@@ -254,84 +235,18 @@ export function DeleteDataCard() {
                   The following data will be permanently deleted:
                 </p>
                 <div className="qt-bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="qt-text-secondary">Characters</span>
-                    <span className="qt-text-primary">{preview.characters}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="qt-text-secondary">Chats</span>
-                    <span className="qt-text-primary">{preview.chats}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="qt-text-secondary">Tags</span>
-                    <span className="qt-text-primary">{preview.tags}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="qt-text-secondary">Files</span>
-                    <span className="qt-text-primary">{preview.files}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="qt-text-secondary">Memories</span>
-                    <span className="qt-text-primary">{preview.memories}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="qt-text-secondary">API Keys</span>
-                    <span className="qt-text-primary">{preview.apiKeys}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="qt-text-secondary">Backups</span>
-                    <span className="qt-text-primary">{preview.backups}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="qt-text-secondary">Connection Profiles</span>
-                    <span className="qt-text-primary">{preview.profiles.connection}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="qt-text-secondary">Image Profiles</span>
-                    <span className="qt-text-primary">{preview.profiles.image}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="qt-text-secondary">Embedding Profiles</span>
-                    <span className="qt-text-primary">{preview.profiles.embedding}</span>
-                  </div>
-                  {preview.templates && (preview.templates.prompt > 0 || preview.templates.roleplay > 0) && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="qt-text-secondary">Prompt Templates</span>
-                        <span className="qt-text-primary">{preview.templates.prompt}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="qt-text-secondary">Roleplay Templates</span>
-                        <span className="qt-text-primary">{preview.templates.roleplay}</span>
-                      </div>
-                    </>
-                  )}
-                  {preview.sync && (preview.sync.instances > 0 || preview.sync.mappings > 0 || preview.sync.operations > 0) && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="qt-text-secondary">Sync Instances (reset)</span>
-                        <span className="qt-text-primary">{preview.sync.instances}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="qt-text-secondary">Sync Mappings</span>
-                        <span className="qt-text-primary">{preview.sync.mappings}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="qt-text-secondary">Sync Operations</span>
-                        <span className="qt-text-primary">{preview.sync.operations}</span>
-                      </div>
-                      <div className="text-xs qt-text-secondary mt-1 italic">
-                        Sync instances will be reset (not deleted) - you can sync again to restore data from remote
-                      </div>
-                    </>
-                  )}
-                  {(preview.archiveBundles ?? 0) > 0 && (
-                    <div className="flex justify-between">
-                      <span className="qt-text-secondary">Archived Character Bundles</span>
-                      <span className="qt-text-primary">
-                        {preview.archiveBundles} {keepArchives ? '(kept)' : ''}
-                      </span>
-                    </div>
+                  {SUMMARY_ROWS.map((row) => (
+                    <SummaryRow key={row.label} label={row.label} value={row.count(preview)} />
+                  ))}
+                  {TEMPLATE_ROWS.some((row) => row.count(preview) > 0) &&
+                    TEMPLATE_ROWS.map((row) => (
+                      <SummaryRow key={row.label} label={row.label} value={row.count(preview)} />
+                    ))}
+                  {preview.archiveBundles > 0 && (
+                    <SummaryRow
+                      label="Archived Character Bundles"
+                      value={`${preview.archiveBundles} ${keepArchives ? '(kept)' : ''}`}
+                    />
                   )}
                   <div className="border-t qt-border-default pt-2 mt-2">
                     <div className="flex justify-between font-semibold">
@@ -340,7 +255,7 @@ export function DeleteDataCard() {
                     </div>
                   </div>
                 </div>
-                {(preview.archiveBundles ?? 0) > 0 && (
+                {preview.archiveBundles > 0 && (
                   <div className="qt-bg-muted/50 border qt-border-default rounded-lg p-3 space-y-2">
                     <label className="flex items-start gap-2 cursor-pointer">
                       <input
@@ -399,10 +314,7 @@ export function DeleteDataCard() {
 
         {step === 'deleting' && (
           <div className="flex flex-col items-center justify-center py-8 space-y-4">
-            <svg className="w-12 h-12 animate-spin qt-text-destructive" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
+            <Spinner className="w-12 h-12 qt-text-destructive" />
             <p className="qt-text-small">Deleting all data...</p>
           </div>
         )}
@@ -417,7 +329,7 @@ export function DeleteDataCard() {
             <p className="text-center qt-text-small">
               Successfully deleted {getTotalCount(deleteSummary)} items from your account.
             </p>
-            {deleteSummary.archiveBundlesKept && (deleteSummary.archiveBundles ?? 0) > 0 && (
+            {deleteSummary.archiveBundlesKept && deleteSummary.archiveBundles > 0 && (
               <p className="text-center qt-text-xs">
                 {deleteSummary.archiveBundles} archived-character{' '}
                 {deleteSummary.archiveBundles === 1 ? 'bundle remains' : 'bundles remain'} on the

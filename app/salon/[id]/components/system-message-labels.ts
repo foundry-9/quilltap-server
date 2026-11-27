@@ -1,6 +1,7 @@
 import type { Message } from '../types'
 import { staffDisplayName } from '@/lib/chat/staff-display-names'
 import { isEstablishedFactAnnouncement } from '@/lib/chat/established-fact'
+import { formatValue } from '@/lib/pascal/expressions'
 
 const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'project-context': 'project information',
@@ -59,10 +60,6 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'background-refused': 'backdrop refused',
 }
 
-export function getSystemSenderDisplayName(sender: Message['systemSender']): string {
-  return staffDisplayName(sender)
-}
-
 /**
  * The name on a Staff message's bar. A Staff row that also carries a
  * `customAnnouncer` — a Pascal outcome whose tool sets `announceAsCharacter` —
@@ -82,7 +79,7 @@ export function getAnnouncementSenderName(
     const name = announcer.displayName?.trim()
     if (name) return name
   }
-  return getSystemSenderDisplayName(message.systemSender)
+  return staffDisplayName(message.systemSender)
 }
 
 /**
@@ -220,7 +217,7 @@ export function getInterventionSummary(message: Pick<Message, 'systemSender' | '
   const record = meta?.intervention
   if (message.systemSender !== 'pascal' || !meta || !record || record.changed.length === 0) return null
   const { dealt } = record
-  const show = (v: unknown) => (typeof v === 'number' && !Number.isInteger(v) ? String(Number(v.toPrecision(4))) : String(v))
+  const show = (v: unknown) => (typeof v === 'number' ? formatValue(v) : String(v))
   const parts = record.changed.map((key) => {
     if (key.startsWith('params.')) {
       const name = key.slice('params.'.length)
@@ -379,8 +376,8 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
     'project-and-general-context': 'low',
     announcement: 'low',
     '*': 'low',
-    // TODO: "mentioned characters not in the chat" is a *medium* example with no
-    // current systemKind. Add its kind here when a writer emits it.
+    // "Mentioned characters not in the chat" would rank medium, but no writer
+    // emits a kind for it today, so it has no row here.
   },
   commonplaceBook: {
     'memory-recap': 'low',

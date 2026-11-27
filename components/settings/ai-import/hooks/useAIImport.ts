@@ -17,7 +17,6 @@ import type {
   WizardUIStep,
   AIImportStepName,
   StepProgress,
-  AIImportOptions,
   UploadedSourceFile,
   AIImportGenerationState,
 } from '../types';
@@ -117,11 +116,6 @@ export function useAIImport() {
     }
   }, [currentStep]);
 
-  const goToStep = useCallback((step: WizardUIStep) => {
-    setCurrentStep(step);
-    setError(null);
-  }, []);
-
   // File upload
   const uploadFiles = useCallback(async (files: File[]) => {
     setUploading(true);
@@ -165,7 +159,7 @@ export function useAIImport() {
 
   // Generation
   const startGeneration = useCallback(
-    async (regenerateSteps?: AIImportStepName[]) => {
+    async () => {
       setGeneration((prev) => ({
         ...prev,
         generating: true,
@@ -184,8 +178,6 @@ export function useAIImport() {
           sourceText,
           includeMemories,
           includeChats,
-          existingResult: regenerateSteps ? generation.stepResults : undefined,
-          regenerateSteps,
         };
 
         const response = await fetch('/api/v1/system/tools?action=ai-import-stream', {
@@ -292,7 +284,7 @@ export function useAIImport() {
         console.error('AI Import generation failed', { error: errorMessage });
       }
     },
-    [profileId, uploadedFiles, sourceText, includeMemories, includeChats, generation.stepResults]
+    [profileId, uploadedFiles, sourceText, includeMemories, includeChats]
   );
 
   // Import the generated .qtap data. Returns the result (including the created
@@ -374,7 +366,8 @@ export function useAIImport() {
     setImportResult(null);
   }, []);
 
-  // Go back to add more material (preserves existing results)
+  // Go back to add more material. The sources and the last result are kept;
+  // the next Generate runs the whole pipeline again over everything supplied.
   const addMoreMaterial = useCallback(() => {
     setCurrentStep(1);
     setError(null);
@@ -420,7 +413,6 @@ export function useAIImport() {
     // Navigation
     nextStep,
     prevStep,
-    goToStep,
 
     // Actions
     reset,

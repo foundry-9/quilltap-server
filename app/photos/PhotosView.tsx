@@ -18,8 +18,9 @@ import { UncensoredBadge } from '@/components/images/UncensoredBadge';
 import type { GenerationModeration } from '@/lib/schemas/file.types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from '@/lib/query/fetcher';
+import { EmptyStatePanel } from '@/components/ui/EmptyState';
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import { ApiFetchError, apiFetch } from '@/lib/query/fetcher';
 import { queryKeys } from '@/lib/query/keys';
 import type { PhotoAlbumKind, PhotoAlbumOption } from '@/lib/photos/photo-album-options';
 import { showConfirmation } from '@/lib/alert';
@@ -104,17 +105,13 @@ function buildListParams(albumId: string, query: string, offset: number): string
 }
 
 export function PhotosView() {
-  const [entries, setEntries] = useState<GalleryEntry[]>([]);
-  const [total, setTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [selected, setSelected] = useState<GalleryEntry | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [albumId, setAlbumId] = useState<string>(MY_PHOTOS);
+  const queryClient = useQueryClient();
 
   const { data: albumData } = useQuery({
     queryKey: queryKeys.photos.albums(),
@@ -135,74 +132,64 @@ export function PhotosView() {
     return Array.from(groups.entries());
   }, [albums]);
 
-  // Each new search/clear bumps the fetch generation so a stale in-flight
-  // load-more from the previous query can't clobber the new page.
-  const fetchGenerationRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const bgStyle = useSubsystemBackgroundStyle('lantern');
 
-  // First-page fetch, shared by the on-search-change effect and the tab
-  // re-activation refresh. `silent` keeps the current grid on screen (no
-  // loading flip) while the fresh page loads.
-  const fetchFirstPage = useCallback(async (opts?: { silent?: boolean }) => {
-    const generation = ++fetchGenerationRef.current;
-    if (!opts?.silent) setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/v1/photos?${buildListParams(albumId, appliedQuery, 0)}`);
-      if (!res.ok) {
-        throw new Error(`Failed to load gallery (${res.status})`);
+  // The gallery, a page at a time. The album and the applied search are the
+  // key, so a page for an earlier search can never land in a newer one; the
+  // previous grid stays up while a new search's first page loads.
+  const listKey = queryKeys.photos.list({ album: albumId, q: appliedQuery.trim() });
+  const listQuery = useInfiniteQuery({
+    queryKey: listKey,
+    queryFn: async ({ pageParam, signal }) => {
+      try {
+        return await apiFetch<ListResponse>(`/api/v1/photos?${buildListParams(albumId, appliedQuery, pageParam)}`, { signal });
+      } catch (err) {
+        if (err instanceof ApiFetchError) {
+          throw new Error(pageParam === 0 ? `Failed to load gallery (${err.status})` : `Failed to load more (${err.status})`);
+        }
+        throw err;
       }
-      const json: ListResponse = await res.json();
-      if (generation !== fetchGenerationRef.current) return;
-      setEntries(json.entries ?? []);
-      setTotal(json.total ?? json.entries?.length ?? 0);
-      setHasMore(Boolean(json.hasMore));
-    } catch (err) {
-      if (generation !== fetchGenerationRef.current) return;
-      setError(err instanceof Error ? err.message : 'Failed to load gallery');
-    } finally {
-      if (generation === fetchGenerationRef.current) setLoading(false);
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.hasMore ? pages.reduce((n, page) => n + (page.entries?.length ?? 0), 0) : undefined,
+    placeholderData: keepPreviousData,
+  });
+  const { data, hasNextPage, isFetchingNextPage: loadingMore, fetchNextPage, refetch } = listQuery;
+  const loading = listQuery.isPending || listQuery.isPlaceholderData;
+  const hasMore = Boolean(hasNextPage);
+
+  // Pages appended in order. Defensive de-dupe: if the underlying ordering
+  // shifted (a save happened mid-scroll), the same linkId could appear twice.
+  const entries = useMemo<GalleryEntry[]>(() => {
+    const seen = new Set<string>();
+    const out: GalleryEntry[] = [];
+    for (const page of data?.pages ?? []) {
+      for (const entry of page.entries ?? []) {
+        if (seen.has(entry.linkId)) continue;
+        seen.add(entry.linkId);
+        out.push(entry);
+      }
     }
-  }, [albumId, appliedQuery]);
+    return out;
+  }, [data]);
+  const lastPage = data?.pages[data.pages.length - 1];
+  const total = lastPage
+    ? (typeof lastPage.total === 'number' ? lastPage.total : entries.length)
+    : 0;
+  const error = deleteError ?? (listQuery.error ? listQuery.error.message || 'Failed to load gallery' : null);
 
-  // Initial / on-search-or-album-change fetch.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount/search change; the flags it flips are loading/error bookkeeping inside async fetchFirstPage()
-    void fetchFirstPage();
-  }, [fetchFirstPage]);
-
-  // Navigating back to this tab restarts the gallery from a fresh first page
-  // (silently — the current grid stays up while it loads).
+  // Navigating back to this tab re-reads the gallery in place (silently — the
+  // current grid stays up while it loads).
   useOnTabActivated(() => {
-    void fetchFirstPage({ silent: true });
+    void refetch();
   });
 
   const loadMore = useCallback(async () => {
     if (loadingMore || loading || !hasMore) return;
-    const generation = fetchGenerationRef.current;
-    setLoadingMore(true);
-    try {
-      const res = await fetch(`/api/v1/photos?${buildListParams(albumId, appliedQuery, entries.length)}`);
-      if (!res.ok) throw new Error(`Failed to load more (${res.status})`);
-      const json: ListResponse = await res.json();
-      if (generation !== fetchGenerationRef.current) return;
-      const incoming = json.entries ?? [];
-      setEntries(prev => {
-        // Defensive de-dupe: if the underlying ordering shifted (a save
-        // happened mid-scroll), the same linkId could appear twice.
-        const seen = new Set(prev.map(e => e.linkId));
-        const fresh = incoming.filter(e => !seen.has(e.linkId));
-        return [...prev, ...fresh];
-      });
-      setHasMore(Boolean(json.hasMore));
-      if (typeof json.total === 'number') setTotal(json.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load more');
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [albumId, appliedQuery, entries.length, hasMore, loading, loadingMore]);
+    await fetchNextPage();
+  }, [hasMore, loading, loadingMore, fetchNextPage]);
 
   // IntersectionObserver — fires loadMore when the sentinel scrolls into
   // view. rootMargin pre-loads the next page before the user hits the
@@ -225,6 +212,7 @@ export function PhotosView() {
   const handleSearch = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
+      setDeleteError(null);
       setAppliedQuery(query);
     },
     [query]
@@ -240,16 +228,26 @@ export function PhotosView() {
           const json = await res.json().catch(() => ({}));
           throw new Error(json?.error || `Failed to delete (${res.status})`);
         }
-        setEntries(prev => prev.filter(e => e.linkId !== linkId));
-        setTotal(prev => Math.max(0, prev - 1));
+        queryClient.setQueryData<InfiniteData<ListResponse, number>>(listKey, (prev) =>
+          prev && {
+            ...prev,
+            pages: prev.pages.map((page) => ({
+              ...page,
+              entries: (page.entries ?? []).filter(e => e.linkId !== linkId),
+              total: typeof page.total === 'number' ? Math.max(0, page.total - 1) : page.total,
+            })),
+          }
+        );
         if (selected?.linkId === linkId) setSelected(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to delete');
+        setDeleteError(err instanceof Error ? err.message : 'Failed to delete');
       } finally {
         setDeleting(null);
       }
     },
-    [album, selected]
+    // `listKey` is rebuilt each render from albumId and appliedQuery.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- albumId and appliedQuery are listKey's inputs
+    [album, selected, queryClient, albumId, appliedQuery]
   );
 
   const counterLabel = useMemo(() => {
@@ -285,6 +283,7 @@ export function PhotosView() {
               className="qt-select w-auto min-w-[14rem]"
               value={albumId}
               onChange={(e) => {
+                setDeleteError(null);
                 setAlbumId(e.target.value);
                 setSelected(null);
               }}
@@ -356,7 +355,7 @@ export function PhotosView() {
       )}
 
       {emptyState && appliedQuery && (
-        <div className="mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-16 text-center qt-shadow-sm">
+        <EmptyStatePanel spacious>
           <h2 className="qt-heading-3 mb-3">Nothing matches that search</h2>
           <p className="qt-text-small max-w-md mx-auto">
             No photo&rsquo;s prompt, caption, scene, or tags pair convincingly with &ldquo;{appliedQuery}&rdquo;. Try a different phrasing or clear the search to browse everything.
@@ -371,11 +370,11 @@ export function PhotosView() {
           >
             Clear search ↺
           </button>
-        </div>
+        </EmptyStatePanel>
       )}
 
       {emptyState && !appliedQuery && (
-        <div className="mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-16 text-center qt-shadow-sm">
+        <EmptyStatePanel spacious>
           <h2 className="qt-heading-3 mb-3">Nothing pinned to the wall yet</h2>
           <p className="qt-text-small max-w-md mx-auto">
             Save an image from any chat — the &ldquo;Save image&rdquo; button on a message tucks it into the album of your choice, and it&rsquo;ll appear here the moment it&rsquo;s filed.
@@ -383,7 +382,7 @@ export function PhotosView() {
           <Link href="/salon" className="qt-link mt-6 inline-block text-sm">
             Take me to the Salon →
           </Link>
-        </div>
+        </EmptyStatePanel>
       )}
 
       {entries.length > 0 && (

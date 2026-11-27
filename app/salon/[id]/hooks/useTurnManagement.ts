@@ -12,8 +12,8 @@ import {
   removeFromQueue,
   isUserDrivenSeat,
 } from '@/lib/chat/turn-manager'
-import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
-import type { ParticipantData } from '@/components/chat/ParticipantCard'
+import type { ChatParticipantBase } from '@/lib/schemas/types'
+import { postChatAction } from './chat-actions'
 
 export interface TurnManagementActions {
   handleNudge: (participantId: string) => void | Promise<void>
@@ -79,18 +79,7 @@ async function callTurnAction(
       body.participantId = participantId
     }
 
-    const res = await fetch(`/api/v1/chats/${chatId}?action=${TURN_ACTION_NAMES[action]}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}))
-      throw new Error(errorData.error || `Turn action failed (${res.status})`)
-    }
-
-    return await res.json()
+    return await postChatAction<TurnActionResponse>(chatId, TURN_ACTION_NAMES[action], body)
   } catch (error) {
     console.error('[TurnManagement] API call failed', { action, participantId, error })
     return null
@@ -126,10 +115,8 @@ function applyServerResponse(
 export function useTurnManagement(
   chatId: string,
   participantsAsBase: ChatParticipantBase[],
-  charactersMap: Map<string, Character>,
   turnState: TurnState,
   userParticipantId: string | null,
-  participantData: ParticipantData[],
   setTurnState: (state: TurnState) => void,
   setTurnSelectionResult: (result: TurnSelectionResult | null) => void,
   triggerContinueMode: (participantId: string, nudge?: boolean) => Promise<void>,

@@ -1,6 +1,6 @@
 'use client'
 
-import type { ChatSettings } from './types'
+import { DEFAULT_COMPOSER_SPELLCHECK, type ChatSettings } from './types'
 import { SettingsToggleRow } from './components/SettingsToggleRow'
 
 export interface ComposerSpellcheckSettingsProps {
@@ -14,7 +14,7 @@ export function ComposerSpellcheckSettings({
   saving,
   onChange,
 }: ComposerSpellcheckSettingsProps) {
-  const enabled = settings.composerSpellcheck ?? true
+  const enabled = settings.composerSpellcheck ?? DEFAULT_COMPOSER_SPELLCHECK
 
   return (
     <SettingsToggleRow

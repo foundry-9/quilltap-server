@@ -11,8 +11,33 @@
  * chips is a two-state toggle; flipping it splits or merges lines.
  */
 
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { groupsOf, type ConditionJoiner } from '@/lib/pascal/tool-draft'
+
+/**
+ * The one-key-per-line rule, for both chip lists. One comparator object
+ * carries each key once, so an edit that would put a chip on the same slot as
+ * another chip of its line is refused and `describe`d in `notice`; another
+ * line is another object, and may repeat it.
+ */
+export function useLineSlotGuard<C extends { id: string; joiner?: ConditionJoiner }>(
+  conditions: readonly C[],
+  setConditions: (next: C[]) => void,
+  sameSlot: (a: C, b: C) => boolean,
+  describe: (next: C) => string,
+) {
+  const [notice, setNotice] = useState<string | null>(null)
+  const update = (id: string, next: C) => {
+    const line = groupsOf(conditions).find((group) => group.some((c) => c.id === id)) ?? []
+    if (line.some((c) => c.id !== id && sameSlot(c, next))) {
+      setNotice(describe(next))
+      return
+    }
+    setNotice(null)
+    setConditions(conditions.map((c) => (c.id === id ? next : c)))
+  }
+  return { notice, clearNotice: () => setNotice(null), update }
+}
 
 interface JoinerToggleProps {
   joiner: ConditionJoiner

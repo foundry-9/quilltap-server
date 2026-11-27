@@ -1,13 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { WizardModal } from '@/components/ui/WizardModal'
+import { WizardModal, wizardStep } from '@/components/ui/WizardModal'
 import { useExportData } from './import-export/hooks/useExportData'
-import { ENTITY_TYPE_LABELS } from './import-export/types'
+import { EXPORT_STEPS, EXPORT_STEPS_WITH_OPTIONS, supportsMemories } from './import-export/types'
+import { Spinner } from '@/components/ui/Spinner'
 import {
-  LoadingSpinner,
   WizardLoadingStep,
-  WizardCompleteStep,
   WizardErrorStep,
 } from './import-export/components'
 import {
@@ -15,7 +14,6 @@ import {
   ExportSelectStep,
   ExportOptionsStep,
 } from './import-export/steps'
-import type { ExportEntityType } from '@/lib/export/types'
 
 export function ExportDialog({
   isOpen,
@@ -24,6 +22,7 @@ export function ExportDialog({
   isOpen: boolean
   onClose: () => void
 }) {
+  // A finished export closes the dialog: the download is the confirmation.
   const { state, actions } = useExportData({
     isOpen,
     onSuccess: onClose,
@@ -40,41 +39,9 @@ export function ExportDialog({
 
   if (!isOpen) return null
 
-  const getStepNumber = (): number => {
-    switch (state.step) {
-      case 'type':
-        return 1
-      case 'select':
-        return 2
-      case 'options':
-        return 3
-      case 'exporting':
-        return 4
-      case 'complete':
-        return 5
-      default:
-        return 1
-    }
-  }
-
-  const getTotalSteps = (): number => {
-    if (
-      state.step === 'exporting' ||
-      state.step === 'complete' ||
-      state.step === 'error'
-    ) {
-      return 5
-    }
-
-    if (
-      state.entityType === 'characters' ||
-      state.entityType === 'chats'
-    ) {
-      return state.step === 'type' || state.step === 'select' ? 5 : 4
-    }
-
-    return 4
-  }
+  // A failed export counts as the exporting step it failed at.
+  const stepOrder = supportsMemories(state.entityType) ? EXPORT_STEPS_WITH_OPTIONS : EXPORT_STEPS
+  const step = wizardStep(stepOrder, state.step === 'error' ? 'exporting' : state.step)
 
   const filteredEntities = state.availableEntities.filter((entity) =>
     entity.name.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -82,7 +49,7 @@ export function ExportDialog({
 
   const isExportStep =
     state.step === 'options' ||
-    (state.step === 'select' && !!state.entityType && !['characters', 'chats'].includes(state.entityType))
+    (state.step === 'select' && !!state.entityType && !supportsMemories(state.entityType))
   const nothingSelected =
     state.step === 'select' && state.scope === 'selected' && state.selectedIds.length === 0
 
@@ -90,9 +57,8 @@ export function ExportDialog({
     <WizardModal
       onClose={handleClose}
       title="Export Data"
-      step={{ current: getStepNumber(), total: getTotalSteps() }}
+      step={step}
       busy={state.exporting}
-      done={state.step === 'complete'}
       onBack={actions.handleBack}
       backDisabled={state.step === 'type'}
       hideActions={state.step === 'exporting'}
@@ -103,7 +69,7 @@ export function ExportDialog({
               disabled: state.exporting || nothingSelected,
               label: state.exporting ? (
                 <>
-                  <LoadingSpinner />
+                  <Spinner className="w-6 h-6" />
                   Exporting...
                 </>
               ) : (
@@ -153,14 +119,6 @@ export function ExportDialog({
       {/* Step 4: Exporting */}
       {state.step === 'exporting' && (
         <WizardLoadingStep message="Creating export..." />
-      )}
-
-      {/* Step 5: Complete */}
-      {state.step === 'complete' && (
-        <WizardCompleteStep
-          title="Export Complete"
-          description="Your data has been successfully exported and downloaded."
-        />
       )}
 
       {/* Error State */}

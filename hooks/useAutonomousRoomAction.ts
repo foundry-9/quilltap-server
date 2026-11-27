@@ -12,9 +12,15 @@
  * turn. onMutate applies the optimistic patch, onError rolls back, onSettled
  * revalidates — the TanStack equivalent of SWR's
  * mutate(post, { optimisticData, rollbackOnError, revalidate }).
+ *
+ * `run(chatId, verb)` is the click handler: it marks that room busy (so its
+ * buttons disable) until the POST settles. A failure is logged under
+ * `errorLabel` and otherwise silent — the rolled-back state is the signal.
  */
 
+import { useCallback, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 
 export type AutonomousRoomActionVerb = 'start' | 'pause' | 'stop' | 'resume'
@@ -29,12 +35,13 @@ interface CachedRoom {
 
 export function useAutonomousRoomAction(errorLabel: string) {
   const queryClient = useQueryClient()
-  return useMutation({
+  const [busyChatId, setBusyChatId] = useState<string | null>(null)
+  const mutation = useMutation({
     mutationFn: async ({ chatId, verb }: { chatId: string; verb: AutonomousRoomActionVerb }) => {
-      const res = await fetch(`/api/v1/chats/${chatId}/autonomous-room?action=${verb}`, { method: 'POST' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        throw new Error(body?.error || `Failed to ${verb}`)
+      try {
+        await apiFetch(`/api/v1/chats/${chatId}/autonomous-room?action=${verb}`, { method: 'POST' })
+      } catch (err) {
+        throw new Error(apiErrorMessage(err, `Failed to ${verb}`))
       }
     },
     onMutate: async ({ chatId, verb }) => {
@@ -56,4 +63,21 @@ export function useAutonomousRoomAction(errorLabel: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.system.autonomousRooms })
     },
   })
+  const { mutateAsync } = mutation
+
+  const run = useCallback(
+    async (chatId: string, verb: AutonomousRoomActionVerb): Promise<void> => {
+      setBusyChatId(chatId)
+      try {
+        await mutateAsync({ chatId, verb })
+      } catch {
+        // Already logged in the mutation's onError handler.
+      } finally {
+        setBusyChatId(null)
+      }
+    },
+    [mutateAsync],
+  )
+
+  return { run, busyChatId }
 }

@@ -34,11 +34,11 @@ export default function EmbeddingProfilesTab() {
     handleSuccess: handleModalSuccess,
   } = useModalState<EmbeddingProfile>(() => refreshProfiles())
 
-  // Trigger auto-association on mount (fire and forget)
+  // Trigger auto-association on mount (fire and forget). The callback is
+  // stable, so this runs once.
   useEffect(() => {
     triggerAutoAssociate()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire-and-forget once on mount; triggerAutoAssociate is a stable useCallback
-  }, [])
+  }, [triggerAutoAssociate])
 
   const handleEdit = (profile: EmbeddingProfile) => openModal(profile)
   const handleOpenModal = () => openModal()
@@ -77,6 +77,7 @@ export default function EmbeddingProfilesTab() {
       <ProfileList
         profiles={profiles}
         onEdit={handleEdit}
+        onAdd={handleOpenModal}
         onProfilesChange={refreshProfiles}
       />
 

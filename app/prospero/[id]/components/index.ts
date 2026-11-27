@@ -20,7 +20,6 @@ export { InventoryCard } from './InventoryCard'
 export { AtlasCard } from './AtlasCard'
 
 // Legacy tab components (kept for backwards compatibility)
-export { ProjectTabs } from './ProjectTabs'
 export { ChatsTab } from './ChatsTab'
 export { FilesTab } from './FilesTab'
 export { CharactersTab } from './CharactersTab'

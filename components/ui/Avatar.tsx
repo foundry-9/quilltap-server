@@ -92,7 +92,7 @@ export function getAvatarSrc(src: string | AvatarImageSource | null | undefined)
   }
 
   if (src.avatarUrl) {
-    return src.avatarUrl.startsWith('/') ? src.avatarUrl : src.avatarUrl
+    return src.avatarUrl
   }
 
   return null

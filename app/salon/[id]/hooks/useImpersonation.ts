@@ -2,28 +2,34 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import type { ParticipantData } from '@/components/chat/ParticipantCard'
+import { apiErrorMessage } from '@/lib/query/fetcher'
+import { postChatAction } from './chat-actions'
 import type { Chat } from '../types'
 import type { SelectLLMProfileDialogState } from './useModalState'
 
 interface UseImpersonationParams {
   chatId: string
   chat: Chat | null
-  participantData: ParticipantData[]
   fetchChat: () => Promise<void>
   setSelectLLMProfileDialogState: (state: SelectLLMProfileDialogState | null) => void
+}
+
+/** What the impersonation actions answer with. */
+interface ImpersonationResponse {
+  impersonatingParticipantIds?: string[]
+  activeTypingParticipantId?: string | null
 }
 
 export function useImpersonation({
   chatId,
   chat,
-  participantData,
   fetchChat,
   setSelectLLMProfileDialogState,
 }: UseImpersonationParams) {
   const [impersonatingParticipantIds, setImpersonatingParticipantIds] = useState<string[]>([])
   const [activeTypingParticipantId, setActiveTypingParticipantId] = useState<string | null>(null)
   const [allLLMPauseTurnCount, setAllLLMPauseTurnCount] = useState(0)
+  const chatParticipants = chat?.participants
 
   // Initialize/sync impersonation state from chat metadata
   useEffect(() => {
@@ -48,34 +54,23 @@ export function useImpersonation({
   }, [chat?.impersonatingParticipantIds, chat?.activeTypingParticipantId, chat?.allLLMPauseTurnCount])
 
   const handleStartImpersonation = useCallback(async (participantId: string) => {
-    const participant = participantData.find(p => p.id === participantId)
+    const participant = chatParticipants?.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'Character'
 
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=impersonate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participantId }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to start impersonation')
-      }
-
-      const data = await res.json()
+      const data = await postChatAction<ImpersonationResponse>(chatId, 'impersonate', { participantId })
 
       setImpersonatingParticipantIds(data.impersonatingParticipantIds || [])
       setActiveTypingParticipantId(data.activeTypingParticipantId || participantId)
 
       showSuccessToast(`Now speaking as ${characterName}`)
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to start impersonation')
+      showErrorToast(apiErrorMessage(err, 'Failed to start impersonation'))
     }
-  }, [chatId, participantData])
+  }, [chatId, chatParticipants])
 
   const handleStopImpersonation = useCallback(async (participantId: string) => {
-    const participant = participantData.find(p => p.id === participantId)
+    const participant = chatParticipants?.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'Character'
 
     // Check if we need to show the LLM profile selection dialog
@@ -96,45 +91,23 @@ export function useImpersonation({
     }
 
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=stop-impersonate`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participantId }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to stop impersonation')
-      }
-
-      const data = await res.json()
+      const data = await postChatAction<ImpersonationResponse>(chatId, 'stop-impersonate', { participantId }, 'DELETE')
 
       setImpersonatingParticipantIds(data.impersonatingParticipantIds || [])
       setActiveTypingParticipantId(data.activeTypingParticipantId || null)
 
       showSuccessToast(`Stopped speaking as ${characterName}`)
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to stop impersonation')
+      showErrorToast(apiErrorMessage(err, 'Failed to stop impersonation'))
     }
-  }, [chatId, participantData, setSelectLLMProfileDialogState])
+  }, [chatId, chatParticipants, setSelectLLMProfileDialogState])
 
   const handleConfirmStopImpersonation = useCallback(async (participantId: string, connectionProfileId: string) => {
-    const participant = participantData.find(p => p.id === participantId)
+    const participant = chatParticipants?.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'Character'
 
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=stop-impersonate`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participantId, newConnectionProfileId: connectionProfileId }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to stop impersonation')
-      }
-
-      const data = await res.json()
+      const data = await postChatAction<ImpersonationResponse>(chatId, 'stop-impersonate', { participantId, newConnectionProfileId: connectionProfileId }, 'DELETE')
 
       setImpersonatingParticipantIds(data.impersonatingParticipantIds || [])
       setActiveTypingParticipantId(data.activeTypingParticipantId || null)
@@ -143,31 +116,20 @@ export function useImpersonation({
 
       await fetchChat()
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to assign LLM profile')
+      showErrorToast(apiErrorMessage(err, 'Failed to stop impersonation'))
     }
-  }, [chatId, participantData, fetchChat])
+  }, [chatId, chatParticipants, fetchChat])
 
   const handleSetActiveSpeaker = useCallback(async (participantId: string) => {
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=set-active-speaker`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participantId }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to set active speaker')
-      }
-
-      const data = await res.json()
+      const data = await postChatAction<ImpersonationResponse>(chatId, 'set-active-speaker', { participantId })
       setActiveTypingParticipantId(participantId)
 
       if (data.impersonatingParticipantIds) {
         setImpersonatingParticipantIds(data.impersonatingParticipantIds)
       }
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to set active speaker')
+      showErrorToast(apiErrorMessage(err, 'Failed to set active speaker'))
     }
   }, [chatId])
 

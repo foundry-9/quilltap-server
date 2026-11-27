@@ -17,7 +17,7 @@
  * @module components/custom-tools/InventoryEffectFields
  */
 
-import { Icon } from '@/components/ui/icon'
+import type { ReactNode } from 'react'
 import { InventoryPicture } from '@/components/inventory/inventory-glyph'
 import { inventoryPickRule } from '@/components/inventory/inventory-reference-picker'
 import { inventoryOriginLabel } from '@/lib/inventory/container'
@@ -29,6 +29,8 @@ import {
   type InventoryEffectAction,
 } from '@/lib/pascal/custom-tool.types'
 import type { DraftInventoryGesture, WardrobeVantage } from '@/lib/pascal/tool-draft'
+import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
+import { ReferenceRows } from './ReferenceRows'
 
 const INVENTORY_ACTIONS: ReadonlyArray<{ value: InventoryEffectAction; label: string; title: string }> = [
   { value: 'equip', label: 'equip', title: 'The rolling character takes up these objects (or kits)' },
@@ -62,13 +64,6 @@ export function InventoryEffectFields({
   onChoose,
 }: Readonly<InventoryEffectFieldsProps>) {
   const set = (partial: Partial<DraftInventoryGesture>) => onChange({ ...gesture, ...partial })
-  const items = gesture.items.length > 0 ? gesture.items : ['']
-  const setItem = (index: number, value: string) => set({ items: items.map((item, i) => (i === index ? value : item)) })
-  const removeItem = (index: number) => {
-    const next = items.filter((_, i) => i !== index)
-    set({ items: next.length > 0 ? next : [''] })
-  }
-
   const resolveRow = (ref: string) =>
     vantage.kind === 'none' || ref.includes('{{')
       ? undefined
@@ -77,93 +72,56 @@ export function InventoryEffectFields({
         )?.item ??
         resolveInventoryRef(ref, pool, NO_EQUIPPED, { includeArchetypes: true, includeArchived: true })[0]?.item
 
-  const renderRow = (ref: string, index: number) => {
-    const item = resolveRow(ref)
-    const trash = (
-      <button
-        type="button"
-        className="qt-button qt-button-ghost qt-button-sm"
-        onClick={() => removeItem(index)}
-        disabled={disabled || items.length <= 1}
-        title="Remove this object"
-      >
-        <Icon name="trash" className="w-4 h-4" />
-      </button>
-    )
-    if (item) {
-      const byId = ref.trim() === item.id
-      const refusal = inventoryPickRule(item, gesture.action)
-      const origin = inventoryOriginLabel(item.origin)
-      return (
-        <div key={index} className="space-y-1">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="flex flex-1 min-w-48 items-center gap-2 rounded border qt-border-default px-2 py-1 text-left hover:opacity-80"
-              onClick={() => onChoose(index, item.id)}
-              disabled={disabled}
-              aria-label={`Object ${index + 1}: ${inventoryLabel(item)} — choose another`}
-              data-testid="inventory-reference-chip"
-            >
-              <InventoryPicture item={item} size={28} />
-              <span className="min-w-0 flex-1 space-y-0.5">
-                <span className="block break-words text-sm qt-text">{inventoryDisplayName(item)}</span>
-                <span className="flex flex-wrap items-center gap-1">
-                  {item.isArchetype && <span className="qt-badge qt-badge-info">archetype</span>}
-                  {item.kind === 'kit' && <span className="qt-badge qt-badge-outline">kit</span>}
-                  {origin && <span className="qt-badge qt-badge-secondary">{origin}</span>}
-                  {item.archivedAt && <span className="qt-badge qt-badge-secondary">archived</span>}
-                </span>
-              </span>
-            </button>
-            <button
-              type="button"
-              className="qt-button qt-button-ghost qt-button-sm"
-              onClick={() => setItem(index, byId ? inventoryLabel(item) : item.id)}
-              disabled={disabled}
-              title={byId ? 'Referenced by id — click to name it instead' : 'Referenced by name — click to use its id'}
-            >
-              {byId ? 'by id' : 'by name'}
-            </button>
-            {trash}
-          </div>
-          {refusal && <p className="text-xs qt-text-secondary">⚠ {refusal}</p>}
-        </div>
-      )
-    }
-
-    const templated = ref.includes('{{')
-    const unresolved = !templated && vantage.kind !== 'none' && poolFetched && ref.trim() !== ''
+  const renderResolved = ({
+    item,
+    ref,
+    index,
+    trash,
+    setRef,
+  }: {
+    item: ResolvedInventoryItem
+    ref: string
+    index: number
+    trash: ReactNode
+    setRef: (value: string) => void
+  }) => {
+    const byId = ref.trim() === item.id
+    const refusal = inventoryPickRule(item, gesture.action)
+    const origin = inventoryOriginLabel(item.origin)
     return (
       <div key={index} className="space-y-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <input
-            type="text"
-            value={ref}
-            maxLength={MAX_INVENTORY_REF_LENGTH}
-            onChange={(e) => setItem(index, e.target.value)}
-            placeholder={index === 0 ? (gesture.action === 'pick_up' ? 'magic bow' : 'Excalibur') : '{{params.loot}}'}
-            disabled={disabled}
-            className={`qt-input flex-1 min-w-48 ${hasErrors ? 'qt-input-error' : ''}`}
-            aria-label={`Object ${index + 1}`}
-          />
-          {unresolved && (
-            <span className="qt-badge qt-badge-secondary" data-testid="inventory-reference-unresolved">
-              not in {vantageName ?? 'this inventory'}
-            </span>
-          )}
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            className="qt-button qt-button-secondary qt-button-sm"
-            onClick={() => onChoose(index, null)}
+            className="flex flex-1 min-w-48 items-center gap-2 rounded border qt-border-default px-2 py-1 text-left hover:opacity-80"
+            onClick={() => onChoose(index, item.id)}
             disabled={disabled}
-            title="Browse the inventory and pick an object"
+            aria-label={`Object ${index + 1}: ${inventoryLabel(item)} — choose another`}
+            data-testid="inventory-reference-chip"
           >
-            Choose…
+            <InventoryPicture item={item} size={28} />
+            <span className="min-w-0 flex-1 space-y-0.5">
+              <span className="block break-words text-sm qt-text">{inventoryDisplayName(item)}</span>
+              <span className="flex flex-wrap items-center gap-1">
+                {item.isArchetype && <span className="qt-badge qt-badge-info">archetype</span>}
+                {item.kind === 'kit' && <span className="qt-badge qt-badge-outline">kit</span>}
+                {origin && <span className="qt-badge qt-badge-secondary">{origin}</span>}
+                {item.archivedAt && <span className="qt-badge qt-badge-secondary">archived</span>}
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="qt-button qt-button-ghost qt-button-sm"
+            onClick={() => setRef(byId ? inventoryLabel(item) : item.id)}
+            disabled={disabled}
+            title={byId ? 'Referenced by id — click to name it instead' : 'Referenced by name — click to use its id'}
+          >
+            {byId ? 'by id' : 'by name'}
           </button>
           {trash}
         </div>
-        {templated && <p className="qt-hint">chosen at run time</p>}
+        {refusal && <p className="text-xs qt-text-secondary">⚠ {refusal}</p>}
       </div>
     )
   }
@@ -201,24 +159,28 @@ export function InventoryEffectFields({
         )}
       </div>
 
-      <div className="space-y-1">
-        {items.map((ref, index) => renderRow(ref, index))}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="qt-button qt-button-ghost qt-button-sm"
-            onClick={() => set({ items: [...items, ''] })}
-            disabled={disabled || items.length >= MAX_INVENTORY_EFFECT_ITEMS}
-            title={items.length >= MAX_INVENTORY_EFFECT_ITEMS ? `At most ${MAX_INVENTORY_EFFECT_ITEMS} objects` : undefined}
-          >
-            <Icon name="plus" className="w-3.5 h-3.5" />
-            Add object
-          </button>
-          <span className="qt-hint">
-            an id, title or name — <code className="font-mono">{'{{params.x}}'}</code> lets a parameter choose
-          </span>
-        </div>
-      </div>
+      <ReferenceRows
+        refs={gesture.items}
+        onChange={(next) => set({ items: next })}
+        resolve={resolveRow}
+        isTemplated={(ref) => ref.includes('{{')}
+        renderResolved={renderResolved}
+        canFlagUnresolved={vantage.kind !== 'none' && poolFetched}
+        unresolvedText={`not in ${vantageName ?? 'this inventory'}`}
+        unresolvedTestId="inventory-reference-unresolved"
+        onChoose={(index) => onChoose(index, null)}
+        max={MAX_INVENTORY_EFFECT_ITEMS}
+        maxLength={MAX_INVENTORY_REF_LENGTH}
+        hasErrors={hasErrors}
+        disabled={disabled}
+        placeholder={(index) => (index === 0 ? (gesture.action === 'pick_up' ? 'magic bow' : 'Excalibur') : '{{params.loot}}')}
+        inputLabel={(index) => `Object ${index + 1}`}
+        removeTitle="Remove this object"
+        chooseTitle="Browse the inventory and pick an object"
+        addLabel="Add object"
+        atMaxTitle={`At most ${MAX_INVENTORY_EFFECT_ITEMS} objects`}
+        hintLead="an id, title or name"
+      />
     </div>
   )
 }

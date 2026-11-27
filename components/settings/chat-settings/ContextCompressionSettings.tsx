@@ -14,6 +14,16 @@ import {
   ContextCompressionSettings,
   DEFAULT_CONTEXT_COMPRESSION_SETTINGS,
 } from './types'
+import { ContextCompressionSettingsSchema } from '@/lib/schemas/settings.types'
+
+// The server's bounds for each dial (`ContextCompressionSettingsSchema`).
+const bounds = (field: 'windowSize' | 'compressionTargetTokens' | 'projectContextReinjectInterval') => {
+  const n = ContextCompressionSettingsSchema.shape[field].unwrap()
+  return { min: n.minValue ?? 0, max: n.maxValue ?? Number.MAX_SAFE_INTEGER }
+}
+const WINDOW = bounds('windowSize')
+const COMPRESSION_TARGET = bounds('compressionTargetTokens')
+const PROJECT_CONTEXT = bounds('projectContextReinjectInterval')
 
 interface ContextCompressionSettingsProps {
   settings: ChatSettings
@@ -36,12 +46,12 @@ export function ContextCompressionSettingsComponent({
   const [localWindowSize, setLocalWindowSize] = useState(compressionSettings.windowSize)
   const [localCompressionTarget, setLocalCompressionTarget] = useState(compressionSettings.compressionTargetTokens)
   // System prompt compression removed — only message history is compressed
-  const [localProjectContextInterval, setLocalProjectContextInterval] = useState(compressionSettings.projectContextReinjectInterval ?? 5)
+  const [localProjectContextInterval, setLocalProjectContextInterval] = useState(compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval)
 
   // Use local value while dragging, otherwise use settings value (for external updates)
   const displayWindowSize = dragging === 'window' ? localWindowSize : compressionSettings.windowSize
   const displayCompressionTarget = dragging === 'compression' ? localCompressionTarget : compressionSettings.compressionTargetTokens
-  const displayProjectContextInterval = dragging === 'projectContext' ? localProjectContextInterval : (compressionSettings.projectContextReinjectInterval ?? 5)
+  const displayProjectContextInterval = dragging === 'projectContext' ? localProjectContextInterval : (compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval)
 
   const handleEnabledChange = (enabled: boolean) => {
     onUpdate({ enabled })
@@ -53,8 +63,7 @@ export function ContextCompressionSettingsComponent({
   }
 
   const handleWindowSizeChange = (windowSize: number) => {
-    // Clamp value between 3 and 10
-    const clampedValue = Math.min(10, Math.max(3, windowSize))
+    const clampedValue = Math.min(WINDOW.max, Math.max(WINDOW.min, windowSize))
     setLocalWindowSize(clampedValue)
   }
 
@@ -71,8 +80,7 @@ export function ContextCompressionSettingsComponent({
   }
 
   const handleCompressionTargetChange = (compressionTargetTokens: number) => {
-    // Clamp value between 300 and 2000
-    const clampedValue = Math.min(2000, Math.max(300, compressionTargetTokens))
+    const clampedValue = Math.min(COMPRESSION_TARGET.max, Math.max(COMPRESSION_TARGET.min, compressionTargetTokens))
     setLocalCompressionTarget(clampedValue)
   }
 
@@ -86,27 +94,27 @@ export function ContextCompressionSettingsComponent({
 
   const handleProjectContextIntervalStart = () => {
     setDragging('projectContext')
-    setLocalProjectContextInterval(compressionSettings.projectContextReinjectInterval ?? 5)
+    setLocalProjectContextInterval(compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval)
   }
 
   const handleProjectContextIntervalChange = (interval: number) => {
-    // Minimum is windowSize (no point sending more often than window), max is 20
+    // Minimum is windowSize (no point sending more often than window)
     // 0 means disabled (only on initial message)
     const minValue = displayWindowSize
-    const clampedValue = interval === 0 ? 0 : Math.min(20, Math.max(minValue, interval))
+    const clampedValue = interval === 0 ? 0 : Math.min(PROJECT_CONTEXT.max, Math.max(minValue, interval))
     setLocalProjectContextInterval(clampedValue)
   }
 
   const handleProjectContextIntervalCommit = () => {
     setDragging(null)
-    if (localProjectContextInterval !== (compressionSettings.projectContextReinjectInterval ?? 5)) {
+    if (localProjectContextInterval !== (compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval)) {
       onUpdate({ projectContextReinjectInterval: localProjectContextInterval })
     }
   }
 
   // When window size changes, ensure project context interval is still valid
   const handleWindowSizeChangeWithValidation = (windowSize: number) => {
-    const clampedValue = Math.min(10, Math.max(3, windowSize))
+    const clampedValue = Math.min(WINDOW.max, Math.max(WINDOW.min, windowSize))
     setLocalWindowSize(clampedValue)
     // If project context interval is now below the new window size, adjust it
     if (localProjectContextInterval !== 0 && localProjectContextInterval < clampedValue) {
@@ -121,7 +129,7 @@ export function ContextCompressionSettingsComponent({
       updates.windowSize = localWindowSize
     }
     // Also update project context interval if it's now invalid
-    const currentInterval = compressionSettings.projectContextReinjectInterval ?? 5
+    const currentInterval = compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval
     if (currentInterval !== 0 && currentInterval < localWindowSize) {
       updates.projectContextReinjectInterval = localWindowSize
     }
@@ -176,8 +184,8 @@ export function ContextCompressionSettingsComponent({
           <input
             id={`${id}-window`}
             type="range"
-            min={3}
-            max={10}
+            min={WINDOW.min}
+            max={WINDOW.max}
             value={displayWindowSize}
             onMouseDown={handleWindowSizeStart}
             onTouchStart={handleWindowSizeStart}
@@ -188,8 +196,8 @@ export function ContextCompressionSettingsComponent({
             className="qt-range w-full"
           />
           <div className="flex justify-between qt-text-xs qt-text-secondary mt-1">
-            <span>3 (more aggressive)</span>
-            <span>10 (more context)</span>
+            <span>{WINDOW.min} (more aggressive)</span>
+            <span>{WINDOW.max} (more context)</span>
           </div>
           <p className="qt-text-xs qt-text-secondary mt-2">
             Number of recent messages to keep in full context. Messages older than this are compressed.
@@ -207,8 +215,8 @@ export function ContextCompressionSettingsComponent({
           <input
             id={`${id}-compression`}
             type="range"
-            min={300}
-            max={2000}
+            min={COMPRESSION_TARGET.min}
+            max={COMPRESSION_TARGET.max}
             step={100}
             value={displayCompressionTarget}
             onMouseDown={handleCompressionTargetStart}
@@ -220,8 +228,8 @@ export function ContextCompressionSettingsComponent({
             className="qt-range w-full"
           />
           <div className="flex justify-between qt-text-xs qt-text-secondary mt-1">
-            <span>300 (minimal)</span>
-            <span>2000 (detailed)</span>
+            <span>{COMPRESSION_TARGET.min} (minimal)</span>
+            <span>{COMPRESSION_TARGET.max} (detailed)</span>
           </div>
           <p className="qt-text-xs qt-text-secondary mt-2">
             Target token count for compressed conversation history.
@@ -240,7 +248,7 @@ export function ContextCompressionSettingsComponent({
             id={`${id}-project-context`}
             type="range"
             min={displayWindowSize}
-            max={20}
+            max={PROJECT_CONTEXT.max}
             value={displayProjectContextInterval === 0 ? displayWindowSize : displayProjectContextInterval}
             onMouseDown={handleProjectContextIntervalStart}
             onTouchStart={handleProjectContextIntervalStart}
@@ -252,7 +260,7 @@ export function ContextCompressionSettingsComponent({
           />
           <div className="flex justify-between qt-text-xs qt-text-secondary mt-1">
             <span>{displayWindowSize} (minimum)</span>
-            <span>20 (less frequent)</span>
+            <span>{PROJECT_CONTEXT.max} (less frequent)</span>
           </div>
           <p className="qt-text-xs qt-text-secondary mt-2">
             How often to re-inject project instructions into the system prompt. Set to the window size to ensure

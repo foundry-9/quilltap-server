@@ -2012,14 +2012,6 @@
      ========================================================================== */
 
   /**
-   * Roleplay annotation toolbar - horizontal row of annotation buttons
-   */
-  .qt-rp-annotation-toolbar {
-    @apply flex items-center gap-2 px-3 py-2;
-    border-bottom: 1px solid var(--qt-chat-composer-border);
-  }
-
-  /**
    * Base annotation button style
    */
   .qt-rp-annotation-button {
@@ -2039,31 +2031,6 @@
 
   .qt-rp-annotation-button:disabled {
     @apply opacity-50 cursor-not-allowed;
-  }
-
-  /**
-   * Narration button - slate/gray
-   */
-  .qt-rp-annotation-button-narration {
-    background: var(--qt-rp-button-narration-bg);
-    color: var(--qt-rp-button-narration-fg);
-  }
-
-  /**
-   * Internal monologue button - purple
-   */
-  .qt-rp-annotation-button-internal {
-    background: var(--qt-rp-button-internal-bg);
-    color: var(--qt-rp-button-internal-fg);
-  }
-
-  /**
-   * OOC (Out of Character) button - green/black terminal style
-   */
-  .qt-rp-annotation-button-ooc {
-    background: var(--qt-rp-button-ooc-bg);
-    color: var(--qt-rp-button-ooc-fg);
-    font-family: var(--font-mono);
   }
 
   /* ==========================================================================

@@ -4,72 +4,76 @@
  * State management for the search and replace wizard.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { useDialogState } from '@/hooks/useDialogState';
 import type {
   SearchReplaceScope,
   SearchReplacePreview,
   SearchReplaceResult,
+  SearchReplaceState,
   UseSearchReplaceReturn,
-  WizardStep,
 } from '../types';
 import { WIZARD_STEPS } from '../types';
 
 interface UseSearchReplaceOptions {
+  /** The modal's open flag: the wizard starts over whenever it closes */
+  isOpen: boolean;
   initialScope?: SearchReplaceScope;
   onComplete?: (result: SearchReplaceResult) => void;
 }
 
-export function useSearchReplace(
-  options: UseSearchReplaceOptions = {}
-): UseSearchReplaceReturn {
-  const { initialScope, onComplete } = options;
+/** The wizard's state on opening: a pre-selected scope skips the scope step. */
+function initialStateFor(initialScope: SearchReplaceScope | undefined): SearchReplaceState {
+  return {
+    currentStep: initialScope ? 'search' : 'scope',
+    scope: initialScope || null,
+    searchText: '',
+    replaceText: '',
+    includeMessages: true,
+    includeMemories: true,
+    confirmed: false,
+    preview: null,
+    loadingPreview: false,
+    previewError: null,
+    executing: false,
+    executionPhase: '',
+    result: null,
+    error: null,
+  };
+}
 
-  // Wizard state
-  const [currentStep, setCurrentStep] = useState<WizardStep['id']>(
-    initialScope ? 'search' : 'scope'
-  );
+export function useSearchReplace(options: UseSearchReplaceOptions): UseSearchReplaceReturn {
+  const { isOpen, initialScope, onComplete } = options;
 
-  // Form state
-  const [scope, setScope] = useState<SearchReplaceScope | null>(initialScope || null);
-  const [searchText, setSearchText] = useState('');
-  const [replaceText, setReplaceText] = useState('');
-  const [includeMessages, setIncludeMessages] = useState(true);
-  const [includeMemories, setIncludeMemories] = useState(true);
-  const [confirmed, setConfirmed] = useState(false);
-
-  // Preview state
-  const [preview, setPreview] = useState<SearchReplacePreview | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-
-  // Execution state
-  const [executing, setExecuting] = useState(false);
-  const [executionPhase, setExecutionPhase] = useState('');
-  const [result, setResult] = useState<SearchReplaceResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Callers commonly pass an inline object literal (`{ type: 'chat', chatId }`)
+  // for initialScope, so its reference changes every render; useDialogState
+  // keeps the latest initial state in a ref, so `reset` stays stable.
+  const { state, setState, setField, reset } = useDialogState<SearchReplaceState>({
+    isOpen,
+    initialState: initialStateFor(initialScope),
+  });
+  const {
+    currentStep,
+    scope,
+    searchText,
+    replaceText,
+    includeMessages,
+    includeMemories,
+    confirmed,
+    preview,
+  } = state;
 
   // Debounce timer ref
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Track the latest initialScope without churning callback identities.
-  // Callers commonly pass an inline object literal (`{ type: 'chat', chatId }`),
-  // so the reference changes every parent render. Reading through a ref keeps
-  // `reset` stable so the close-modal effect in SearchReplaceModal doesn't loop.
-  const initialScopeRef = useRef(initialScope);
-  useEffect(() => {
-    initialScopeRef.current = initialScope;
-  }, [initialScope]);
-
-
   // Fetch preview when search text changes (debounced)
   const fetchPreview = useCallback(async () => {
     if (!scope || !searchText.trim()) {
-      setPreview(null);
+      setField('preview', null);
       return;
     }
 
-    setLoadingPreview(true);
-    setPreviewError(null);
+    setState((prev) => ({ ...prev, loadingPreview: true, previewError: null }));
 
     try {
       const response = await fetch('/api/v1/search-replace?action=preview', {
@@ -89,16 +93,16 @@ export function useSearchReplace(
         throw new Error(data.error || 'Failed to fetch preview');
       }
 
-      const data = await response.json();
-      setPreview(data);
+      const data: SearchReplacePreview = await response.json();
+      setField('preview', data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch preview';
-      setPreviewError(message);
+      setField('previewError', message);
       console.error('[useSearchReplace] Preview fetch error', { error: message });
     } finally {
-      setLoadingPreview(false);
+      setField('loadingPreview', false);
     }
-  }, [scope, searchText, replaceText, includeMessages, includeMemories]);
+  }, [scope, searchText, replaceText, includeMessages, includeMemories, setState, setField]);
 
   // Debounced preview fetch
   useEffect(() => {
@@ -124,10 +128,13 @@ export function useSearchReplace(
       return;
     }
 
-    setExecuting(true);
-    setError(null);
-    setCurrentStep('processing');
-    setExecutionPhase('Starting...');
+    setState((prev) => ({
+      ...prev,
+      executing: true,
+      error: null,
+      currentStep: 'processing',
+      executionPhase: 'Starting...',
+    }));
 
     try {
       const response = await fetch('/api/v1/search-replace?action=execute', {
@@ -148,20 +155,17 @@ export function useSearchReplace(
       }
 
       const data: SearchReplaceResult = await response.json();
-      setResult(data);
-      setCurrentStep('results');
+      setState((prev) => ({ ...prev, result: data, currentStep: 'results' }));
 
       onComplete?.(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to execute search/replace';
-      setError(message);
-      setCurrentStep('results');
+      setState((prev) => ({ ...prev, error: message, currentStep: 'results' }));
       console.error('[useSearchReplace] Execute error', { error: message });
     } finally {
-      setExecuting(false);
-      setExecutionPhase('');
+      setState((prev) => ({ ...prev, executing: false, executionPhase: '' }));
     }
-  }, [scope, searchText, replaceText, includeMessages, includeMemories, onComplete]);
+  }, [scope, searchText, replaceText, includeMessages, includeMemories, onComplete, setState]);
 
   // Navigation
   const nextStep = useCallback(() => {
@@ -175,37 +179,18 @@ export function useSearchReplace(
         return;
       }
 
-      setCurrentStep(nextStepId);
+      setField('currentStep', nextStepId);
     }
-  }, [currentStep, execute]);
+  }, [currentStep, execute, setField]);
 
   const prevStep = useCallback(() => {
     const currentIndex = WIZARD_STEPS.findIndex(s => s.id === currentStep);
     if (currentIndex > 0) {
       const prevStepId = WIZARD_STEPS[currentIndex - 1].id;
-      setCurrentStep(prevStepId);
-      setConfirmed(false); // Reset confirmation when going back
+      // Reset confirmation when going back
+      setState((prev) => ({ ...prev, currentStep: prevStepId, confirmed: false }));
     }
-  }, [currentStep]);
-
-  // Reset
-  const reset = useCallback(() => {
-    const initial = initialScopeRef.current;
-    setCurrentStep(initial ? 'search' : 'scope');
-    setScope(initial || null);
-    setSearchText('');
-    setReplaceText('');
-    setIncludeMessages(true);
-    setIncludeMemories(true);
-    setConfirmed(false);
-    setPreview(null);
-    setLoadingPreview(false);
-    setPreviewError(null);
-    setExecuting(false);
-    setExecutionPhase('');
-    setResult(null);
-    setError(null);
-  }, []);
+  }, [currentStep, setState]);
 
   // Computed values
   const canProceed = (() => {
@@ -233,33 +218,19 @@ export function useSearchReplace(
   })();
 
   return {
-    // State
-    currentStep,
-    scope,
-    searchText,
-    replaceText,
-    includeMessages,
-    includeMemories,
-    confirmed,
-    preview,
-    loadingPreview,
-    previewError,
-    executing,
-    executionPhase,
-    result,
-    error,
+    ...state,
 
     // Computed
     canProceed,
     canGoBack,
 
     // Actions
-    setScope,
-    setSearchText,
-    setReplaceText,
-    setIncludeMessages,
-    setIncludeMemories,
-    setConfirmed,
+    setScope: (value) => setField('scope', value),
+    setSearchText: (value) => setField('searchText', value),
+    setReplaceText: (value) => setField('replaceText', value),
+    setIncludeMessages: (value) => setField('includeMessages', value),
+    setIncludeMemories: (value) => setField('includeMemories', value),
+    setConfirmed: (value) => setField('confirmed', value),
     nextStep,
     prevStep,
     fetchPreview,

@@ -10,6 +10,18 @@ export interface WizardPrimaryAction {
   disabled?: boolean
 }
 
+/**
+ * The "Step N of M" line for a wizard whose steps run in a fixed order: the
+ * step's place in `order`, counted from one (an unlisted step counts as the
+ * first), out of the length of `order`.
+ */
+export function wizardStep<TStep extends string>(
+  order: ReadonlyArray<TStep>,
+  step: TStep,
+): { current: number; total: number } {
+  return { current: Math.max(order.indexOf(step), 0) + 1, total: order.length }
+}
+
 export interface WizardModalProps {
   /** Defaults to true — the tools wizards are mounted only while open */
   isOpen?: boolean

@@ -158,31 +158,16 @@ export function buildToolHierarchy(availableTools: AvailableTool[]): ToolGroup[]
 }
 
 /**
- * Extract all group IDs and subgroup IDs from tool hierarchy for auto-expansion
+ * Every group id and subgroup pattern in a tool hierarchy, for expansion state.
  */
-export function extractAllGroupIds(tools: AvailableTool[]): { groupIds: Set<string>; subgroupIds: Set<string> } {
+export function collectGroupIds(hierarchy: ToolGroup[]): { groupIds: Set<string>; subgroupIds: Set<string> } {
   const groupIds = new Set<string>()
   const subgroupIds = new Set<string>()
-
-  // Built-in tools group
-  groupIds.add('built-in')
-
-  // Built-in category groups
-  for (const tool of tools) {
-    if (tool.source === 'built-in' && tool.category && BUILT_IN_CATEGORY_GROUPS[tool.category]) {
-      groupIds.add(`built-in:${tool.category}`)
+  for (const group of hierarchy) {
+    groupIds.add(group.id)
+    for (const subgroup of group.subgroups) {
+      subgroupIds.add(makeSubgroupPattern(subgroup.pluginName, subgroup.id))
     }
   }
-
-  // Plugin groups and subgroups
-  for (const tool of tools) {
-    if (tool.source === 'plugin' && tool.pluginName) {
-      groupIds.add(`plugin:${tool.pluginName}`)
-      if (tool.subgroupId) {
-        subgroupIds.add(`plugin:${tool.pluginName}:subgroup:${tool.subgroupId}`)
-      }
-    }
-  }
-
   return { groupIds, subgroupIds }
 }

@@ -76,7 +76,7 @@ function isModifiedClick(event: MouseEvent): boolean {
   return event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
 }
 
-export function useActiveSalon(): ActiveSalon | null {
+function useActiveSalon(): ActiveSalon | null {
   const ws = useWorkspaceOptional()
   const pathname = usePathname()
   const inWorkspace = ws !== null && pathname === '/workspace'

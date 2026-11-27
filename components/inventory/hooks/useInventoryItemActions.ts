@@ -2,8 +2,9 @@
 
 /**
  * The Inventory browser's row actions and the overlays they open: the
- * editor, the folder picker, the cross-tier transfer, the instantiate
- * picker and the picture viewer — plus the three warnings the spec asks for:
+ * editor, the folder picker, the cross-tier transfer and the instantiate
+ * picker (the picture viewer is the editor's own) — plus the three warnings
+ * the spec asks for:
  *
  *   - **Detach**: "This object will stop following *Magic bow*…";
  *   - **Delete an archetype in use**: the count and the holders, with

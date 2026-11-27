@@ -7,14 +7,14 @@
  * Shows availability status for context-dependent tools.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useDraft } from '@/lib/hooks/use-draft'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { ToolSettingsContent } from '@/components/tools/tool-settings'
+import { useToolSettingsDraft } from '@/components/tools/tool-settings/useToolSettingsDraft'
 import type { AvailableTool } from '@/components/tools/tool-settings'
 
 interface ChatToolSettingsModalProps {
@@ -29,11 +29,6 @@ interface ChatToolSettingsModalProps {
 }
 
 const EMPTY_TOOLS: AvailableTool[] = []
-
-/** A list as a stable, comparable value (order and duplicates do not matter). */
-function sortedUnique(values: Iterable<string>): string[] {
-  return Array.from(new Set(values)).sort()
-}
 
 export default function ChatToolSettingsModal({
   isOpen,
@@ -59,21 +54,20 @@ export default function ChatToolSettingsModal({
   // Drafts of the chat's two lists. A chat refetch hands in new arrays with
   // the same values; the draft adopts a server change only while the
   // operator has not edited, so unsaved toggles survive it.
-  const serverTools = useMemo(() => sortedUnique(disabledTools), [disabledTools])
-  const serverGroups = useMemo(() => sortedUnique(disabledToolGroups), [disabledToolGroups])
-  const [draftTools, setDraftTools, toolsDraft] = useDraft(serverTools)
-  const [draftGroups, setDraftGroups, groupsDraft] = useDraft(serverGroups)
-  const localDisabledTools = useMemo(() => new Set(draftTools), [draftTools])
-  const localDisabledGroups = useMemo(() => new Set(draftGroups), [draftGroups])
-  const setLocalDisabledTools = useCallback((next: Set<string>) => setDraftTools(sortedUnique(next)), [setDraftTools])
-  const setLocalDisabledGroups = useCallback((next: Set<string>) => setDraftGroups(sortedUnique(next)), [setDraftGroups])
+  const draft = useToolSettingsDraft(disabledTools, disabledToolGroups)
+  const {
+    disabledTools: localDisabledTools,
+    disabledGroups: localDisabledGroups,
+    setDisabledTools: setLocalDisabledTools,
+    setDisabledGroups: setLocalDisabledGroups,
+  } = draft
   const [saving, setSaving] = useState(false)
 
   // Save changes
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
-      const response = await fetch(`/api/v1/chats/${chatId}?action=update-tool-settings`, {
+      await apiFetch(`/api/v1/chats/${chatId}?action=update-tool-settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,28 +76,22 @@ export default function ChatToolSettingsModal({
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to save tool settings')
-      }
-
       showSuccessToast('Tool settings saved')
       onSuccess?.(Array.from(localDisabledTools), Array.from(localDisabledGroups))
       onClose()
     } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'Failed to save tool settings')
+      showErrorToast(apiErrorMessage(error, 'Failed to save tool settings'))
       console.error('Error saving tool settings:', error)
     } finally {
       setSaving(false)
     }
   }, [chatId, localDisabledTools, localDisabledGroups, onSuccess, onClose])
 
-  const hasChanges = () => toolsDraft.dirty || groupsDraft.dirty
+  const hasChanges = () => draft.dirty
 
   // Dismissing discards the unsaved toggles (the modal stays mounted).
   const handleDismiss = () => {
-    toolsDraft.reset()
-    groupsDraft.reset()
+    draft.reset()
     onClose()
   }
 

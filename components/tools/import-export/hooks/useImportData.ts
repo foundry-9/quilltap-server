@@ -3,7 +3,8 @@
 import { useCallback } from 'react'
 import { getErrorMessage } from '@/lib/error-utils'
 import { useDialogStateWithFileInput } from '@/hooks/useDialogState'
-import type { ImportState, ImportStep } from '../types'
+import type { ImportState, ImportStep, ImportPreviewUI } from '../types'
+import { previewHasMemories } from '../utils'
 import type { QuilltapExport, ConflictStrategy } from '@/lib/export/types'
 
 interface UseImportDataOptions {
@@ -191,36 +192,27 @@ export function useImportData({
   }, [setState])
 
   const loadPreview = useCallback(
-    async (exportData: QuilltapExport, file: File | null) => {
+    async (file: File) => {
       setState((prev) => ({ ...prev, loadingPreview: true, error: null }))
 
       try {
-        let response: Response
-        if (file) {
-          // Use FormData with the original file to avoid re-serializing large JSON
-          const formData = new FormData()
-          formData.append('file', file)
-          response = await fetch('/api/v1/system/tools?action=import-preview', {
-            method: 'POST',
-            body: formData,
-          })
-        } else {
-          response = await fetch('/api/v1/system/tools?action=import-preview', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ exportData }),
-          })
-        }
+        // Send the original file as FormData rather than re-serializing large JSON
+        const formData = new FormData()
+        formData.append('file', file)
+        const response = await fetch('/api/v1/system/tools?action=import-preview', {
+          method: 'POST',
+          body: formData,
+        })
 
         if (!response.ok) {
           const data = await response.json()
           throw new Error(data.error || 'Failed to load preview')
         }
 
-        const preview = await response.json()
+        const preview: ImportPreviewUI = await response.json()
 
         // Auto-enable memory import when the export contains memories
-        const hasMemories = preview?.entities?.memories?.count > 0
+        const hasMemories = previewHasMemories(preview)
 
         setState((prev) => ({
           ...prev,
@@ -253,15 +245,13 @@ export function useImportData({
     const currentStep = state.step
     let nextStep: ImportStep = currentStep
 
+    // The options step's forward action is handleImport, not Next.
     switch (currentStep) {
       case 'file':
         nextStep = 'preview'
         break
       case 'preview':
         nextStep = 'options'
-        break
-      case 'options':
-        nextStep = 'importing'
         break
       default:
         return
@@ -270,8 +260,9 @@ export function useImportData({
     setState((prev) => ({ ...prev, step: nextStep }))
 
     // Load preview when moving to preview step
-    if (currentStep === 'file' && state.exportData) {
-      await loadPreview(state.exportData, state.selectedFile)
+    // (A file is chosen and parsed together, so exportData implies selectedFile.)
+    if (currentStep === 'file' && state.selectedFile) {
+      await loadPreview(state.selectedFile)
     }
   }, [state.step, state.exportData, state.selectedFile, loadPreview, setState])
 
@@ -298,39 +289,24 @@ export function useImportData({
   }, [setState])
 
   const handleImport = useCallback(async () => {
-    if (!state.exportData) return
+    // A file is chosen and parsed together, so exportData implies selectedFile.
+    if (!state.exportData || !state.selectedFile) return
 
     setState((prev) => ({ ...prev, importing: true, error: null }))
 
     try {
-      let response: Response
-      if (state.selectedFile) {
-        // Use FormData with the original file to avoid re-serializing large JSON
-        const formData = new FormData()
-        formData.append('file', state.selectedFile)
-        formData.append('options', JSON.stringify({
-          selectedIds: state.selectedEntityIds,
-          conflictStrategy: state.conflictStrategy,
-          importMemories: state.importMemories,
-        }))
-        response = await fetch('/api/v1/system/tools?action=import-execute', {
-          method: 'POST',
-          body: formData,
-        })
-      } else {
-        response = await fetch('/api/v1/system/tools?action=import-execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            exportData: state.exportData,
-            options: {
-              selectedIds: state.selectedEntityIds,
-              conflictStrategy: state.conflictStrategy,
-              importMemories: state.importMemories,
-            },
-          }),
-        })
-      }
+      // Send the original file as FormData rather than re-serializing large JSON
+      const formData = new FormData()
+      formData.append('file', state.selectedFile)
+      formData.append('options', JSON.stringify({
+        selectedIds: state.selectedEntityIds,
+        conflictStrategy: state.conflictStrategy,
+        importMemories: state.importMemories,
+      }))
+      const response = await fetch('/api/v1/system/tools?action=import-execute', {
+        method: 'POST',
+        body: formData,
+      })
 
       if (!response.ok) {
         const data = await response.json()

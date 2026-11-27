@@ -38,6 +38,19 @@ export type ExportStep = 'type' | 'select' | 'options' | 'exporting' | 'complete
 // Import dialog steps
 export type ImportStep = 'file' | 'preview' | 'options' | 'importing' | 'complete' | 'error'
 
+/** Whether an export type carries memories, and so has the options step. */
+export const supportsMemories = (type: ExportEntityType | null): boolean =>
+  type === 'characters' || type === 'chats'
+
+/** The export wizard's steps, in order, for a type with an options step (characters, chats). */
+export const EXPORT_STEPS_WITH_OPTIONS: ReadonlyArray<ExportStep> = ['type', 'select', 'options', 'exporting', 'complete']
+
+/** The export wizard's steps, in order, for every other type. */
+export const EXPORT_STEPS: ReadonlyArray<ExportStep> = ['type', 'select', 'exporting', 'complete']
+
+/** The import wizard's steps, in order. */
+export const IMPORT_STEPS: ReadonlyArray<ImportStep> = ['file', 'preview', 'options', 'importing', 'complete']
+
 // Entity type labels for UI
 export const ENTITY_TYPE_LABELS: Record<ExportEntityType, string> = {
   characters: 'Characters',

@@ -1,8 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useProvidersQuery } from '@/lib/hooks/use-profiles'
 import type { PluginIconData } from '@/components/image-profiles/ProviderIcon'
 
 interface ProviderInfo {
@@ -14,12 +12,8 @@ interface ProviderInfo {
   type: string
 }
 
-interface ProvidersResponse {
-  providers?: Array<Record<string, unknown>>
-}
-
-function mapProviders(data: ProvidersResponse): ProviderInfo[] {
-  return (data.providers || []).map((p) => ({
+function mapProviders(rows: Array<Record<string, unknown>>): ProviderInfo[] {
+  return rows.map((p) => ({
     id: p.id as string,
     name: p.name as string,
     displayName: (p.displayName as string) || (p.name as string),
@@ -32,17 +26,15 @@ function mapProviders(data: ProvidersResponse): ProviderInfo[] {
 const EMPTY_PROVIDERS: ProviderInfo[] = []
 
 /**
- * Hook to fetch and cache the list of available providers with their icon data.
- * Backed by the shared TanStack Query cache (dedups by key across components);
- * a long staleTime keeps its "fetch once, share everywhere" reference-data feel.
+ * The list of available providers with their icon data — a narrowing `select`
+ * over the shared providers list (`useProvidersQuery`); a long staleTime keeps
+ * its "fetch once, share everywhere" reference-data feel.
  */
 export function useProviders() {
-  const { data: providers = EMPTY_PROVIDERS, isLoading: loading } = useQuery({
-    queryKey: queryKeys.providers.all,
-    queryFn: ({ signal }) => apiFetch<ProvidersResponse>('/api/v1/providers', { signal }),
-    select: mapProviders,
-    staleTime: Infinity,
-  })
+  const { data: providers = EMPTY_PROVIDERS, isLoading: loading } = useProvidersQuery<
+    Record<string, unknown>,
+    ProviderInfo[]
+  >({ select: mapProviders, staleTime: Infinity })
 
   return {
     providers,

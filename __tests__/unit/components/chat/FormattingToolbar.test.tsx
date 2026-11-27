@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import React, { useRef, useState } from 'react'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 
 const mockEditor = {
   registerUpdateListener: jest.fn(() => () => {}),
@@ -58,7 +59,7 @@ describe('FormattingToolbar', () => {
   })
 
   it('wraps selected text with bold markers in source mode', async () => {
-    render(<ToolbarHarness initialValue="Hello" />)
+    renderWithQuery(<ToolbarHarness initialValue="Hello" />)
 
     const textarea = screen.getByTestId('composer') as HTMLTextAreaElement
     textarea.focus()
@@ -72,7 +73,7 @@ describe('FormattingToolbar', () => {
   })
 
   it('prefixes the current line for heading buttons in source mode', async () => {
-    render(<ToolbarHarness initialValue="Hello" />)
+    renderWithQuery(<ToolbarHarness initialValue="Hello" />)
 
     const textarea = screen.getByTestId('composer') as HTMLTextAreaElement
     textarea.focus()
@@ -86,7 +87,7 @@ describe('FormattingToolbar', () => {
   })
 
   it('inserts a fenced code block when there is no selection in source mode', async () => {
-    render(<ToolbarHarness initialValue="Hello" />)
+    renderWithQuery(<ToolbarHarness initialValue="Hello" />)
 
     const textarea = screen.getByTestId('composer') as HTMLTextAreaElement
     textarea.focus()
@@ -100,7 +101,7 @@ describe('FormattingToolbar', () => {
   })
 
   it('wraps selected text with narration delimiters in source mode', async () => {
-    render(<ToolbarHarness initialValue="Hello" narrationDelimiters={['<<', '>>']} />)
+    renderWithQuery(<ToolbarHarness initialValue="Hello" narrationDelimiters={['<<', '>>']} />)
 
     const textarea = screen.getByTestId('composer') as HTMLTextAreaElement
     textarea.focus()

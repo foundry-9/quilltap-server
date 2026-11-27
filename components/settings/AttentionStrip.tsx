@@ -25,7 +25,7 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useApiKeysQuery } from '@/lib/hooks/use-profiles'
+import { useApiKeysQuery, useProvidersQuery } from '@/lib/hooks/use-profiles'
 import { usePluginsQuery } from '@/lib/hooks/use-plugins'
 import { getSettingsCard, settingsCardHref, type SettingsGroupId } from '@/lib/settings/registry'
 import { useChatSettingsContext } from '@/components/settings/chat-settings/ChatSettingsProvider'
@@ -111,11 +111,7 @@ export function useAttentionChips(): { chips: AttentionChip[]; ready: boolean } 
     useChatSettingsContext()
 
   const apiKeys = useApiKeysQuery<ApiKeyRow>()
-  const providers = useQuery({
-    queryKey: queryKeys.providers.all,
-    queryFn: ({ signal }) => apiFetch<{ providers?: ProviderRow[] }>('/api/v1/providers', { signal }),
-    staleTime: Infinity,
-  })
+  const providers = useProvidersQuery<ProviderRow>({ staleTime: Infinity })
   const backfill = useQuery({
     queryKey: queryKeys.memories.backfillProgress,
     queryFn: ({ signal }) =>
@@ -145,7 +141,7 @@ export function useAttentionChips(): { chips: AttentionChip[]; ready: boolean } 
 
     const troubled = findTroubledProfiles({
       apiKeys: apiKeys.data,
-      providers: providers.data?.providers,
+      providers: providers.data,
       connectionProfiles: connectionProfiles as ProfileRow[],
       imageProfiles: imageProfiles as ProfileRow[],
       embeddingProfiles: embeddingProfiles as ProfileRow[],

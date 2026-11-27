@@ -235,7 +235,12 @@ function initialOverridesFrom(options: UseNewChatOptions): NewChatOverrides {
   return overrides
 }
 
-function seat(character: Character, controlledBy: 'llm' | 'user', profiles: ConnectionProfile[]): SelectedCharacter {
+/**
+ * A character's seat as it first enters the cast: an LLM seat takes the
+ * character's own connection profile (else the most-used one) and their
+ * default system prompt; the operator's chair takes neither.
+ */
+export function seat(character: Character, controlledBy: 'llm' | 'user', profiles: ConnectionProfile[]): SelectedCharacter {
   if (controlledBy === 'user') {
     return { character, connectionProfileId: '', selectedSystemPromptId: null, controlledBy }
   }

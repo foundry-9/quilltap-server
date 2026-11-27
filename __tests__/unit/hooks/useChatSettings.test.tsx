@@ -66,7 +66,7 @@ describe('useChatSettings — optimistic update', () => {
     })
 
     // Optimistic write landed...
-    expect(result.current.settings?.composerSpellcheck).toBe(true)
+    await waitFor(() => expect(result.current.settings?.composerSpellcheck).toBe(true))
     // ...and no extra GET to settings/chat was issued (no revalidation).
     expect(countSettingsGets(mockFetch)).toBe(getsBefore)
   })
@@ -89,7 +89,8 @@ describe('useChatSettings — optimistic update', () => {
     )
     expect(put).toBeDefined()
     expect(JSON.parse(String((put![1] as RequestInit).body))).toEqual({ [field]: 'profile-1' })
-    expect((result.current.settings as unknown as Record<string, unknown>)?.[field]).toBe('profile-1')
+    await waitFor(() =>
+      expect((result.current.settings as unknown as Record<string, unknown>)?.[field]).toBe('profile-1'))
     expect(countSettingsGets(mockFetch)).toBe(getsBefore)
   })
 
@@ -117,7 +118,7 @@ describe('useChatSettings — optimistic update', () => {
     expect(second.conciergeSettings.preScreen).toMatchObject({ enabled: true, threshold: 0.7, scanTextChat: true })
     expect(second.conciergeSettings.autoSwitchAfterRefusals).toBe(5)
     expect(second.conciergeSettings.enabled).toBe(true)
-    expect(result.current.settings?.conciergeSettings?.preScreen.enabled).toBe(true)
+    await waitFor(() => expect(result.current.settings?.conciergeSettings?.preScreen.enabled).toBe(true))
   })
 
   it('handleWardrobeImageProfileChange PUTs the designated profile, and null for the default', async () => {
@@ -132,7 +133,8 @@ describe('useChatSettings — optimistic update', () => {
     await act(async () => {
       await result.current.handleWardrobeImageProfileChange('profile-1')
     })
-    expect(result.current.settings?.wardrobeImageSettings).toEqual({ imageProfileId: 'profile-1', generateFromTools: false })
+    await waitFor(() =>
+      expect(result.current.settings?.wardrobeImageSettings).toEqual({ imageProfileId: 'profile-1', generateFromTools: false }))
 
     await act(async () => {
       await result.current.handleWardrobeImageProfileChange(null)
@@ -155,7 +157,8 @@ describe('useChatSettings — optimistic update', () => {
       await result.current.handleWardrobeImageGenerateFromToolsChange(true)
     })
 
-    expect(result.current.settings?.wardrobeImageSettings).toEqual({ imageProfileId: 'profile-1', generateFromTools: true })
+    await waitFor(() =>
+      expect(result.current.settings?.wardrobeImageSettings).toEqual({ imageProfileId: 'profile-1', generateFromTools: true }))
     const lastPut = mockFetch.mock.calls
       .filter(([url, init]: [string, RequestInit | undefined]) => url === '/api/v1/settings/chat' && init?.method === 'PUT')
       .map(([, init]) => JSON.parse(String((init as RequestInit).body)))

@@ -11,8 +11,9 @@
  * of "open terminal", not an externally-driven modal.
  */
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { showErrorToast } from '@/lib/toast'
+import { apiErrorMessage } from '@/lib/query/fetcher'
 import type { Chat } from '../types'
 import {
   type TerminalMode,
@@ -173,8 +174,7 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
       const fc = fetchChatRef.current
       if (fc) await fc()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to spawn terminal'
-      showErrorToast(message)
+      showErrorToast(apiErrorMessage(error, 'Failed to spawn terminal session'))
     }
   }, [chatId, enterModeWithSession, closeTerminalPicker])
 
@@ -188,8 +188,7 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
       }
       await enterModeWithSession(sessionId)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to attach session'
-      showErrorToast(message)
+      showErrorToast(apiErrorMessage(error, 'Failed to load terminal session'))
     }
   }, [enterModeWithSession, closeTerminalPicker])
 
@@ -236,8 +235,7 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
       try {
         await killTerminalSessionApi(sessionId)
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to terminate session'
-        showErrorToast(message)
+        showErrorToast(apiErrorMessage(error, 'Failed to terminate session'))
       }
     }
   }, [activeTerminalSessionId, persist])
@@ -254,23 +252,33 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
     void persist({ rightPaneVerticalSplit: clamped })
   }, [persist])
 
-  return {
+  return useMemo<UseTerminalModeReturn>(() => ({
     terminalMode,
     activeTerminalSessionId,
     rightPaneVerticalSplit,
-
     showTerminalPicker,
     pickerSessions,
     closeTerminalPicker,
-
     requestOpen,
     attachExistingSession,
     spawnNewSession,
-
     hidePane,
     killTerminal,
-
     toggleFocusMode,
     setRightPaneVerticalSplit,
-  }
+  }), [
+    terminalMode,
+    activeTerminalSessionId,
+    rightPaneVerticalSplit,
+    showTerminalPicker,
+    pickerSessions,
+    closeTerminalPicker,
+    requestOpen,
+    attachExistingSession,
+    spawnNewSession,
+    hidePane,
+    killTerminal,
+    toggleFocusMode,
+    setRightPaneVerticalSplit,
+  ])
 }

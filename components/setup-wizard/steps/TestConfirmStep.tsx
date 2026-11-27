@@ -163,7 +163,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
 
     try {
       // 1. Create main connection profile
-      const mainProfile = await createConnectionProfile({
+      await createConnectionProfile({
         name: `${chatProvider?.displayName || state.chatConfig.provider} - ${state.chatConfig.model}`,
         provider: state.chatConfig.provider,
         apiKeyId: state.apiKeys[state.chatConfig.provider]?.apiKeyId,
@@ -187,9 +187,8 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
       }
 
       // 3. Create embedding profile if configured
-      let embeddingProfileId: string | undefined
       if (state.embeddingConfig) {
-        const embProfile = await createEmbeddingProfile({
+        await createEmbeddingProfile({
           name: `${embeddingProvider?.displayName || state.embeddingConfig.provider} - ${state.embeddingConfig.model}`,
           provider: state.embeddingConfig.provider,
           apiKeyId: state.apiKeys[state.embeddingConfig.provider]?.apiKeyId,
@@ -198,13 +197,11 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
           dimensions: state.embeddingConfig.dimensions,
           isDefault: true,
         })
-        embeddingProfileId = embProfile.id
       }
 
       // 4. Create image profile if configured
-      let imageProfileId: string | undefined
       if (state.imageConfig) {
-        const imgProfile = await createImageProfile({
+        await createImageProfile({
           name: `${imageProvider?.displayName || state.imageConfig.provider} - ${state.imageConfig.model}`,
           provider: state.imageConfig.provider,
           apiKeyId: state.apiKeys[state.imageConfig.provider]?.apiKeyId,
@@ -212,23 +209,12 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
           modelName: state.imageConfig.model,
           isDefault: true,
         })
-        imageProfileId = imgProfile.id
       }
 
       // 5. Update chat settings with cheap LLM strategy
       await updateChatSettings({
         strategy: state.cheapConfig.strategy,
         userDefinedProfileId: cheapProfileId,
-      })
-
-      // 6. Dispatch created profile IDs
-      dispatch({
-        type: 'SET_CREATED_PROFILE_IDS',
-        ids: {
-          connectionProfileId: mainProfile.id,
-          embeddingProfileId,
-          imageProfileId,
-        },
       })
 
       // Every picker and settings view now has new rows to show.

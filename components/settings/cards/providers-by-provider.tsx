@@ -22,7 +22,14 @@ import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useApiKeysQuery, useConnectionProfilesQuery, useEmbeddingProfilesQuery, useImageProfilesQuery } from '@/lib/hooks/use-profiles'
+import {
+  useApiKeysQuery,
+  useConnectionProfilesQuery,
+  useEmbeddingProfilesQuery,
+  useEmbeddingProviderNamesQuery,
+  useImageProfilesQuery,
+  useProvidersQuery,
+} from '@/lib/hooks/use-profiles'
 import { getErrorMessage } from '@/lib/error-utils'
 import { providerAcceptsApiKey } from '@/lib/llm/api-key-support'
 import LoadingState from '@/components/ui/LoadingState'
@@ -107,22 +114,15 @@ export function ProvidersByProvider({ focusProvider }: { focusProvider?: string 
   const connectionQuery = useConnectionProfilesQuery<ConnectionProfile>({ refetchOnMount: 'always' })
   const imageQuery = useImageProfilesQuery<ImageProfile>({ refetchOnMount: 'always' })
   const embeddingQuery = useEmbeddingProfilesQuery<EmbeddingProfile>({ refetchOnMount: 'always' })
-  const providersQuery = useQuery({
-    queryKey: queryKeys.providers.all,
-    queryFn: ({ signal }) => apiFetch<{ providers: ProviderListing[] }>('/api/v1/providers', { signal }),
-  })
-  const embeddingProviderNamesQuery = useQuery({
-    queryKey: queryKeys.embeddingProfiles.providerNames,
-    queryFn: ({ signal }) =>
-      apiFetch<{ providers: string[] }>('/api/v1/embedding-profiles?action=list-providers', { signal }),
-  })
+  const providersQuery = useProvidersQuery<ProviderListing>()
+  const embeddingProviderNamesQuery = useEmbeddingProviderNamesQuery()
 
   const apiKeys = keysQuery.data ?? EMPTY
   const connectionProfiles = connectionQuery.data ?? EMPTY
   const imageProfiles = imageQuery.data ?? EMPTY
   const embeddingProfiles = embeddingQuery.data ?? EMPTY
-  const providers = providersQuery.data?.providers ?? EMPTY
-  const embeddingProviderNames = embeddingProviderNamesQuery.data?.providers
+  const providers = providersQuery.data ?? EMPTY
+  const embeddingProviderNames = embeddingProviderNamesQuery.data
 
   const groups = useMemo(() => {
     const grouped = groupByProvider({

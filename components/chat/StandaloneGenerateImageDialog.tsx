@@ -4,9 +4,12 @@ import { useState, useRef } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 import { BaseModal } from '@/components/ui/BaseModal'
+import { apiErrorMessage } from '@/lib/query/fetcher'
+import { insertAtCursor, useGenerateImage } from '@/components/images/generate-image'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { useEntitySearch } from './useEntitySearch'
 import { EntitySearchDropdown } from './EntitySearchDropdown'
+import { Spinner } from '@/components/ui/Spinner'
 
 interface Participant {
   id: string
@@ -36,30 +39,17 @@ export default function StandaloneGenerateImageDialog({
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
   const [imageCount, setImageCount] = useState(1)
-  const [isGenerating, setIsGenerating] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
 
   const entitySearch = useEntitySearch(isOpen)
 
+  const generate = useGenerateImage(selectedProfileId)
+  const isGenerating = generate.isPending
+
   const insertPlaceholder = (text: string) => {
     const textarea = promptRef.current
     if (!textarea) return
-
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const before = prompt.substring(0, start)
-    const after = prompt.substring(end)
-
-    const placeholder = `{{${text}}}`
-    const newPrompt = before + placeholder + after
-    setPrompt(newPrompt)
-
-    // Set cursor position after the inserted placeholder
-    setTimeout(() => {
-      textarea.focus()
-      const newPosition = start + placeholder.length
-      textarea.setSelectionRange(newPosition, newPosition)
-    }, 0)
+    setPrompt(insertAtCursor(textarea, text))
   }
 
   const handleGenerate = async () => {
@@ -73,36 +63,15 @@ export default function StandaloneGenerateImageDialog({
       return
     }
 
-    setIsGenerating(true)
-
     try {
-      const response = await fetch(`/api/v1/image-profiles/${selectedProfileId}?action=generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt,
-          chatId,
-          count: imageCount,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        const errorMessage = errorData.message || errorData.error || 'Failed to generate image'
-        showErrorToast(errorMessage)
-        return
-      }
-
-      const data = await response.json()
+      const data = await generate.mutateAsync({ prompt, chatId, count: imageCount })
 
       if (data.success && data.data && data.data.length > 0) {
         showSuccessToast(`Generated ${data.data.length} image(s) - attached to next message`)
         // Use the expanded prompt from the API response, or fall back to user's prompt
         const finalPrompt = data.expandedPrompt || prompt
         setPrompt('')
-        onImagesGenerated?.(data.data.map((img: any) => ({
+        onImagesGenerated?.(data.data.map((img) => ({
           id: img.id,
           filename: img.filename,
           filepath: img.filepath,
@@ -113,15 +82,7 @@ export default function StandaloneGenerateImageDialog({
         showErrorToast('No images generated')
       }
     } catch (error) {
-      // Only log unexpected errors, not API errors
-      if (error instanceof Error) {
-        showErrorToast(error.message)
-      } else {
-        console.error('Unexpected error during image generation', { error: String(error) })
-        showErrorToast('Failed to generate image')
-      }
-    } finally {
-      setIsGenerating(false)
+      showErrorToast(apiErrorMessage(error, 'Failed to generate image'))
     }
   }
 
@@ -165,10 +126,7 @@ export default function StandaloneGenerateImageDialog({
         >
           {isGenerating ? (
             <>
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
+              <Spinner className="h-4 w-4" />
               Generating...
             </>
           ) : (

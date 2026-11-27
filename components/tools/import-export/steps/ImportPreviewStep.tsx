@@ -1,6 +1,6 @@
 'use client'
 
-import { LoadingSpinner } from '../components/LoadingSpinner'
+import { Spinner } from '@/components/ui/Spinner'
 import { ENTITY_TYPE_LABELS } from '../types'
 import { toExportEntityType } from '../utils'
 import { formatDateTime } from '@/lib/format-time'
@@ -53,7 +53,7 @@ export function ImportPreviewStep({
   if (loading) {
     return (
       <div className="flex justify-center py-8">
-        <LoadingSpinner />
+        <Spinner className="w-6 h-6" />
       </div>
     )
   }

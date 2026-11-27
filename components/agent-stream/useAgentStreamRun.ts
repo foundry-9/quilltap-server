@@ -19,8 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   applyAgentStreamEvent,
   EMPTY_AGENT_TOOL_CALL_STATE,
-  parseAgentSseLine,
-  splitSseBuffer,
+  readAgentSse,
   type AgentStreamEvent,
   type AgentStreamToolCall,
   type AgentToolCallState,
@@ -91,47 +90,40 @@ export function useAgentStreamRun<TInput, T>({ url, readDone, messages }: AgentS
         return fail(data?.error || words.cannotBegin(res.status))
       }
 
-      const reader = res.body?.getReader()
-      if (!reader) return fail(words.noBody)
+      if (!res.body) return fail(words.noBody)
 
-      const decoder = new TextDecoder()
-      let buffer = ''
+      let outcome: T | null = null
+      let finished = false
+      await readAgentSse(res, (event) => {
+        const nextToolState = applyAgentStreamEvent(toolStateRef.current, event)
+        if (nextToolState !== toolStateRef.current) {
+          toolStateRef.current = nextToolState
+          setState((prev) => ({ ...prev, toolCalls: nextToolState.toolCalls }))
+        }
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const split = splitSseBuffer(buffer, decoder.decode(value, { stream: true }))
-        buffer = split.rest
+        // Cumulative per turn — replace, not append.
+        if (typeof event.reasoning === 'string') {
+          const reasoning = event.reasoning
+          setState((prev) => ({ ...prev, reasoning }))
+        }
 
-        for (const line of split.lines) {
-          const event = parseAgentSseLine(line)
-          if (!event) continue
+        if (event.error) {
+          fail(String(event.error))
+          finished = true
+          return true
+        }
 
-          const nextToolState = applyAgentStreamEvent(toolStateRef.current, event)
-          if (nextToolState !== toolStateRef.current) {
-            toolStateRef.current = nextToolState
-            setState((prev) => ({ ...prev, toolCalls: nextToolState.toolCalls }))
-          }
-
-          // Cumulative per turn — replace, not append.
-          if (typeof event.reasoning === 'string') {
-            const reasoning = event.reasoning
-            setState((prev) => ({ ...prev, reasoning }))
-          }
-
-          if (event.error) {
-            return fail(String(event.error))
-          }
-
-          if (event.done) {
-            const result = pick(event)
-            if (result !== null) {
-              setState((prev) => ({ ...prev, phase: 'done', result, error: null }))
-              return result
-            }
+        if (event.done) {
+          const result = pick(event)
+          if (result !== null) {
+            setState((prev) => ({ ...prev, phase: 'done', result, error: null }))
+            outcome = result
+            finished = true
+            return true
           }
         }
-      }
+      })
+      if (finished) return outcome
 
       return fail(words.wentQuiet)
     } catch (error) {

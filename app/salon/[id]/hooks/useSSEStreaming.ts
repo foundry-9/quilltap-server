@@ -6,7 +6,7 @@ import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import { findActiveUserParticipant, isAllLLMChat } from '@/lib/chat/turn-manager'
-import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
+import type { Message, MessageAttachment, PendingToolResult } from '../types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import { useToolExecutionStatus } from './useToolExecutionStatus'
 import { useStreamingBuffers } from './useStreamingBuffers'
@@ -78,14 +78,11 @@ interface RunTurnStreamOptions {
 
 interface UseSSEStreamingParams {
   chatId: string
-  chat: Chat | null
-  messages: Message[]
   setMessages: (fn: Message[] | ((prev: Message[]) => Message[])) => void
   isMultiChar: boolean
   hasActiveCharacters: boolean
   participantsAsBase: ChatParticipantBase[]
   isPaused: boolean
-  respondingParticipantId: string | null
   setRespondingParticipantId: (id: string | null) => void
   /** The user-controlled participant the human is currently "Speaking As" (null = default) */
   activeTypingParticipantId: string | null

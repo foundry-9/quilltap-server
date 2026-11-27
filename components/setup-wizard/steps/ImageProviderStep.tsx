@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import type { WizardState, WizardAction, ProviderInfo } from '../useProviderWizardState'
+import { useState, useEffect, useCallback, useId } from 'react'
+import { providersWithCapability, type WizardState, type WizardAction } from '../useProviderWizardState'
 import { fetchImageModels } from '../wizard-api'
 
 interface StepProps {
@@ -10,6 +10,7 @@ interface StepProps {
 }
 
 export function ImageProviderStep({ state, dispatch }: StepProps) {
+  const headingId = useId()
   const [selectedProvider, setSelectedProvider] = useState<string>(
     state.imageConfig?.provider || ''
   )
@@ -21,11 +22,7 @@ export function ImageProviderStep({ state, dispatch }: StepProps) {
   const [error, setError] = useState<string | null>(null)
 
   // Get selected providers that have imageGeneration capability
-  const imageProviders = state.selectedProviders
-    .map((id) => state.availableProviders.find((p) => p.id === id))
-    .filter(
-      (p): p is ProviderInfo => p !== undefined && p.capabilities.imageGeneration
-    )
+  const imageProviders = providersWithCapability(state, 'imageGeneration')
 
   const loadModels = useCallback(
     async (provider: string) => {
@@ -84,9 +81,9 @@ export function ImageProviderStep({ state, dispatch }: StepProps) {
     <div className="space-y-6">
       {/* Provider list */}
       <div className="space-y-3">
-        <label className="qt-text-label">Image Provider</label>
+        <p id={`${headingId}-provider`} className="qt-text-label">Image Provider</p>
 
-        <div className="space-y-2">
+        <div className="space-y-2" role="group" aria-labelledby={`${headingId}-provider`}>
           {imageProviders.map((provider) => (
             <button
               key={provider.id}

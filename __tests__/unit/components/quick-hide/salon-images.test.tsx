@@ -13,6 +13,7 @@ import { QuickHideProvider, useQuickHide } from '@/components/providers/quick-hi
 import { ImagesHiddenProvider } from '@/components/quick-hide/images-hidden-context'
 import Avatar from '@/components/ui/Avatar'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 
 jest.mock('@/components/providers/session-provider', () => ({
   useSession: () => ({ status: 'authenticated' }),
@@ -44,7 +45,7 @@ function Probe() {
 }
 
 async function renderProbe() {
-  render(
+  renderWithQuery(
     <QuickHideProvider>
       <Probe />
     </QuickHideProvider>

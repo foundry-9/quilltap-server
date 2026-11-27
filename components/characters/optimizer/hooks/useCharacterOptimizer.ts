@@ -12,6 +12,16 @@
 import { useState, useCallback, useRef } from 'react';
 import { applyCharacterFieldUpdates } from '../../apply-character-field-updates';
 import { wardrobeCollectionUrl, wardrobeItemUrl } from '@/lib/wardrobe/wardrobe-container';
+import { parseAgentSseLine, splitSseBuffer } from '@/components/agent-stream/parse-agent-stream';
+import {
+  PHYSICAL_TEXT_FIELDS,
+  mergePhysicalDescription,
+  type PhysicalTextField,
+} from '@/app/aurora/[id]/hooks/useCharacterAutosave';
+import type { CharacterPhysicalDescription } from '@/app/aurora/[id]/types';
+
+const isPhysicalTextField = (key: string): key is PhysicalTextField =>
+  (PHYSICAL_TEXT_FIELDS as readonly string[]).includes(key);
 import type {
   OptimizerPhase,
   SuggestionDecision,
@@ -141,101 +151,96 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        // The last incomplete line stays in the buffer for the next chunk.
+        const { lines, rest } = splitSseBuffer(buffer, decoder.decode(value, { stream: true }));
+        buffer = rest;
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6));
+          const event = parseAgentSseLine(line);
+          if (!event) continue;
 
-              switch (event.type) {
-                case 'start':
-                  setLoading(true);
-                  setPhase('progress');
-                  break;
+          switch (event.type) {
+            case 'start':
+              setLoading(true);
+              setPhase('progress');
+              break;
 
-                case 'step_start':
-                  setProgressStep(event.step as string);
-                  if (event.step !== 'generating') {
-                    setProgressSubStep(null);
-                  }
-                  break;
-
-                case 'substep_start':
-                  if (event.subStep) {
-                    setProgressSubStep(event.subStep as OptimizerSubStep);
-                  }
-                  break;
-
-                case 'substep_complete':
-                  // Accumulate suggestions incrementally so the user sees the
-                  // count climb as per-item passes finish.
-                  if (Array.isArray(event.partialSuggestions)) {
-                    const partial = event.partialSuggestions as OptimizerSuggestion[];
-                    if (partial.length > 0) {
-                      const next = [...suggestionsRef.current, ...partial];
-                      suggestionsRef.current = next;
-                      setSuggestions(next);
-                    }
-                  }
-                  break;
-
-                case 'step_complete':
-                  if (event.step === 'loading') {
-                    setMemoryCount((event.memoryCount as number) ?? 0);
-                    if (event.filteredCount !== undefined) {
-                      setFilteredCount(event.filteredCount as number);
-                    }
-                  } else if (event.step === 'analyzing') {
-                    setAnalysis(event.analysis as OptimizerAnalysis);
-                  } else if (event.step === 'generating') {
-                    const newSuggestions = event.suggestions as OptimizerSuggestion[];
-                    suggestionsRef.current = newSuggestions;
-                    setSuggestions(newSuggestions);
-                    setProgressSubStep(null);
-                  }
-                  break;
-
-                case 'suggestions_file_written':
-                  setSuggestionsFilePath((event.suggestionsFilePath as string) ?? null);
-                  break;
-
-                case 'done': {
-                  const doneSuggestions = event.suggestions as OptimizerSuggestion[] | undefined;
-                  if (doneSuggestions?.length) {
-                    suggestionsRef.current = doneSuggestions;
-                    setSuggestions(doneSuggestions);
-                  }
-                  const filePath = (event.suggestionsFilePath as string | undefined) ?? null;
-                  if (filePath) setSuggestionsFilePath(filePath);
-                  setLoading(false);
-                  setProgressStep(null);
-                  setProgressSubStep(null);
-                  if (outputModeRef.current === 'suggestions-file' && filePath) {
-                    setPhase('suggestions-file-written');
-                  } else if (suggestionsRef.current.length > 0) {
-                    setPhase('review');
-                  } else {
-                    setNoSuggestionsMessage(
-                      'The dossier has been consulted most thoroughly, yet your character appears already quite splendidly rendered. No refinements were deemed necessary by our panel of discerning automata.'
-                    );
-                  }
-                  break;
-                }
-
-                case 'error':
-                  setError(
-                    (event.error as string) ??
-                      'An unforeseen calamity has befallen the refinement process.'
-                  );
-                  setLoading(false);
-                  break;
+            case 'step_start':
+              setProgressStep(event.step as string);
+              if (event.step !== 'generating') {
+                setProgressSubStep(null);
               }
-            } catch {
-              // Ignore parse errors for incomplete JSON fragments
+              break;
+
+            case 'substep_start':
+              if (event.subStep) {
+                setProgressSubStep(event.subStep as OptimizerSubStep);
+              }
+              break;
+
+            case 'substep_complete':
+              // Accumulate suggestions incrementally so the user sees the
+              // count climb as per-item passes finish.
+              if (Array.isArray(event.partialSuggestions)) {
+                const partial = event.partialSuggestions as OptimizerSuggestion[];
+                if (partial.length > 0) {
+                  const next = [...suggestionsRef.current, ...partial];
+                  suggestionsRef.current = next;
+                  setSuggestions(next);
+                }
+              }
+              break;
+
+            case 'step_complete':
+              if (event.step === 'loading') {
+                setMemoryCount((event.memoryCount as number) ?? 0);
+                if (event.filteredCount !== undefined) {
+                  setFilteredCount(event.filteredCount as number);
+                }
+              } else if (event.step === 'analyzing') {
+                setAnalysis(event.analysis as OptimizerAnalysis);
+              } else if (event.step === 'generating') {
+                const newSuggestions = event.suggestions as OptimizerSuggestion[];
+                suggestionsRef.current = newSuggestions;
+                setSuggestions(newSuggestions);
+                setProgressSubStep(null);
+              }
+              break;
+
+            case 'suggestions_file_written':
+              setSuggestionsFilePath((event.suggestionsFilePath as string) ?? null);
+              break;
+
+            case 'done': {
+              const doneSuggestions = event.suggestions as OptimizerSuggestion[] | undefined;
+              if (doneSuggestions?.length) {
+                suggestionsRef.current = doneSuggestions;
+                setSuggestions(doneSuggestions);
+              }
+              const filePath = (event.suggestionsFilePath as string | undefined) ?? null;
+              if (filePath) setSuggestionsFilePath(filePath);
+              setLoading(false);
+              setProgressStep(null);
+              setProgressSubStep(null);
+              if (outputModeRef.current === 'suggestions-file' && filePath) {
+                setPhase('suggestions-file-written');
+              } else if (suggestionsRef.current.length > 0) {
+                setPhase('review');
+              } else {
+                setNoSuggestionsMessage(
+                  'The dossier has been consulted most thoroughly, yet your character appears already quite splendidly rendered. No refinements were deemed necessary by our panel of discerning automata.'
+                );
+              }
+              break;
             }
+
+            case 'error':
+              setError(
+                (event.error as string) ??
+                  'An unforeseen calamity has befallen the refinement process.'
+              );
+              setLoading(false);
+              break;
           }
         }
       }
@@ -339,22 +344,13 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
           'personality',
           'exampleDialogues',
         ];
-        // Valid physicalDescription sub-field keys (carried on suggestion.subId).
-        const PHYSICAL_KEYS = [
-          'fullDescription',
-          'headAndShouldersPrompt',
-          'shortPrompt',
-          'mediumPrompt',
-          'longPrompt',
-          'completePrompt',
-        ];
 
         // PUT-body payload (simple fields, talkativeness, scenarios, physicalDescription).
         const updatePayload: Record<string, unknown> = {};
         // System prompts persist through their own dedicated endpoints — the
         // PUT body strips `systemPrompts`, so collect them separately.
         const scenarioUpdates: Array<{ subId: string; finalValue: string }> = [];
-        const physicalUpdates: Array<{ key: string; finalValue: string }> = [];
+        const physicalUpdates: Partial<Record<PhysicalTextField, string>> = {};
         const promptUpdates: Array<{ subId: string; finalValue: string }> = [];
         const promptCreates: Array<{ name: string; finalValue: string }> = [];
         const wardrobeUpdates: Array<{ subId: string; finalValue: string }> = [];
@@ -376,9 +372,10 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
               scenarioUpdates.push({ subId: suggestion.subId, finalValue });
             }
           } else if (field === 'physicalDescription') {
+            // The sub-field rides on suggestion.subId; anything else is ignored.
             const key = suggestion.subId;
-            if (key && PHYSICAL_KEYS.includes(key)) {
-              physicalUpdates.push({ key, finalValue });
+            if (key && isPhysicalTextField(key)) {
+              physicalUpdates[key] = finalValue;
             }
           } else if (field === 'systemPrompt') {
             if (suggestion.subId) {
@@ -407,17 +404,11 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
 
         // Physical-description refinements: the text fields of the one record,
         // changed ones replaced. The id and timestamps are the server's.
-        if (physicalUpdates.length > 0) {
-          const existingPhysical =
-            (character['physicalDescription'] as Record<string, unknown> | null | undefined) ?? null;
-          const merged: Record<string, unknown> = {};
-          for (const key of [...PHYSICAL_KEYS, 'fullDescription', 'humanoid']) {
-            if (existingPhysical && existingPhysical[key] !== undefined) merged[key] = existingPhysical[key];
-          }
-          for (const { key, finalValue } of physicalUpdates) {
-            merged[key] = finalValue;
-          }
-          updatePayload.physicalDescription = merged;
+        if (Object.keys(physicalUpdates).length > 0) {
+          updatePayload.physicalDescription = mergePhysicalDescription(
+            (character['physicalDescription'] as CharacterPhysicalDescription | null | undefined) ?? null,
+            physicalUpdates,
+          );
         }
 
         // Fan the updates out: the main PUT, then the per-item prompt and

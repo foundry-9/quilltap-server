@@ -1,11 +1,14 @@
 'use client'
 
 import { queryKeys } from '@/lib/query/keys'
+import { DataRetentionSettingsSchema } from '@/lib/schemas/settings.types'
 import { BoundedNumberInstanceSetting } from './components/BoundedNumberInstanceSetting'
 
-const DEFAULT_STALE_CHAT_DAYS = 30
-const MIN_DAYS = 1
-const MAX_DAYS = 3650
+// The server's own default and bounds (`DataRetentionSettingsSchema`).
+const DEFAULT_STALE_CHAT_DAYS = DataRetentionSettingsSchema.parse({}).staleChatDays
+const STALE_CHAT_DAYS = DataRetentionSettingsSchema.shape.staleChatDays.unwrap()
+const MIN_DAYS = STALE_CHAT_DAYS.minValue ?? 1
+const MAX_DAYS = STALE_CHAT_DAYS.maxValue ?? undefined
 
 /**
  * The instance-wide stale-chat retention window

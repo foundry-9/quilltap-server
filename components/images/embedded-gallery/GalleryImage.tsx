@@ -2,6 +2,7 @@
 
 import { UncensoredBadge } from '@/components/images/UncensoredBadge'
 import { Icon } from '@/components/ui/icon'
+import { Spinner } from '@/components/ui/Spinner'
 import type { GalleryImageProps } from './types'
 
 export function GalleryImage({
@@ -94,10 +95,7 @@ export function GalleryImage({
             title="Set as avatar"
           >
             {isUpdating ? (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
+              <Spinner className="w-4 h-4" />
             ) : (
               <Icon name="user" className="w-4 h-4" />
             )}
@@ -152,10 +150,7 @@ export function GalleryImage({
             title={isConfirmingDelete ? 'Click again to confirm delete' : deleteTitle ?? 'Delete image'}
           >
             {isDeletingImage ? (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
+              <Spinner className="w-4 h-4" />
             ) : (
               <Icon name="trash" className="w-4 h-4" />
             )}

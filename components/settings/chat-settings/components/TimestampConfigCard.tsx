@@ -13,7 +13,7 @@
  * @module components/settings/chat-settings/components/TimestampConfigCard
  */
 
-import { useEffect, useMemo, useId } from 'react'
+import { useMemo, useId } from 'react'
 import type {
   TimestampConfig,
   TimestampMode,
@@ -49,10 +49,6 @@ export function TimestampConfigCard({
     () => config ?? value ?? DEFAULT_TIMESTAMP_CONFIG,
     [config, value]
   )
-
-  // Log render in useEffect to avoid state updates during render
-  useEffect(() => {
-  }, [currentConfig, compact, disabled])
 
   const handleModeChange = (mode: TimestampMode) => {
     if (disabled) return

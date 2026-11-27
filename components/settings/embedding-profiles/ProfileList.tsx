@@ -6,16 +6,41 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
-import { ProfileCard, ProfileCardBadge, ProfileCardMetadata } from '@/components/ui/ProfileCard'
+import { SettingsCard, type SettingsCardBadge, type SettingsCardMetadata } from '@/components/ui/SettingsCard'
 import { ProviderBadge } from './ProviderBadge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { EmbeddingProfile } from './types'
 import { settingsCardHref } from '@/lib/settings/hrefs'
 
+/** A queued-job notice: what was queued, a link to the Tasks Queue, and Dismiss. */
+function QueuedNotice({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <div className="qt-alert-success">
+      <div className="flex items-center justify-between gap-4">
+        <p className="qt-label flex-1">{message}</p>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Link href={settingsCardHref('tasks-queue')} className="qt-button-ghost qt-button-sm">
+            View Tasks Queue
+          </Link>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="qt-button-ghost qt-button-sm"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface ProfileListProps {
   profiles: EmbeddingProfile[]
   onEdit: (profile: EmbeddingProfile) => void
+  /** Open a blank profile (the empty state's button). */
+  onAdd: () => void
   onProfilesChange: () => Promise<void>
 }
 
@@ -25,6 +50,7 @@ interface ProfileListProps {
 export function ProfileList({
   profiles,
   onEdit,
+  onAdd,
   onProfilesChange,
 }: ProfileListProps) {
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
@@ -141,9 +167,7 @@ export function ProfileList({
         description="Embedding profiles are used for semantic search in memories"
         action={{
           label: 'Create First Profile',
-          onClick: () => {
-            onEdit({} as EmbeddingProfile)
-          },
+          onClick: onAdd,
         }}
       />
     )
@@ -183,75 +207,27 @@ export function ProfileList({
       )}
 
       {reindexMismatchedSuccess && (
-        <div className="qt-alert-success">
-          <div className="flex items-center justify-between gap-4">
-            <p className="qt-label flex-1">{reindexMismatchedSuccess}</p>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Link href={settingsCardHref('tasks-queue')} className="qt-button-ghost qt-button-sm">
-                View Tasks Queue
-              </Link>
-              <button
-                type="button"
-                onClick={() => setReindexMismatchedSuccess(null)}
-                className="qt-button-ghost qt-button-sm"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </div>
+        <QueuedNotice message={reindexMismatchedSuccess} onDismiss={() => setReindexMismatchedSuccess(null)} />
       )}
 
       {reapplySuccess && (
-        <div className="qt-alert-success">
-          <div className="flex items-center justify-between gap-4">
-            <p className="qt-label flex-1">{reapplySuccess}</p>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Link href={settingsCardHref('tasks-queue')} className="qt-button-ghost qt-button-sm">
-                View Tasks Queue
-              </Link>
-              <button
-                type="button"
-                onClick={() => setReapplySuccess(null)}
-                className="qt-button-ghost qt-button-sm"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </div>
+        <QueuedNotice message={reapplySuccess} onDismiss={() => setReapplySuccess(null)} />
       )}
 
       {refitSuccess && (
-        <div className="qt-alert-success">
-          <div className="flex items-center justify-between gap-4">
-            <p className="qt-label flex-1">{refitSuccess}</p>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Link href={settingsCardHref('tasks-queue')} className="qt-button-ghost qt-button-sm">
-                View Tasks Queue
-              </Link>
-              <button
-                type="button"
-                onClick={() => setRefitSuccess(null)}
-                className="qt-button-ghost qt-button-sm"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </div>
+        <QueuedNotice message={refitSuccess} onDismiss={() => setRefitSuccess(null)} />
       )}
 
       <div className="qt-card-grid-auto">
         {profiles.slice().sort((a, b) => a.name.localeCompare(b.name)).map(profile => {
           // Build badges array
-          const badges: ProfileCardBadge[] = []
+          const badges: SettingsCardBadge[] = []
           if (profile.isDefault) {
             badges.push({ text: 'Default', variant: 'default' })
           }
 
           // Build metadata array
-          const metadata: ProfileCardMetadata[] = []
+          const metadata: SettingsCardMetadata[] = []
 
           // Model name (skip for BUILTIN - always tfidf-bm25-v1)
           if (profile.provider !== 'BUILTIN') {
@@ -344,7 +320,7 @@ export function ProfileList({
           }
 
           return (
-            <ProfileCard
+            <SettingsCard
               key={profile.id}
               title={profile.name}
               badges={badges}
@@ -392,7 +368,7 @@ export function ProfileList({
                   </div>
                 )}
               </div>
-            </ProfileCard>
+            </SettingsCard>
           )
         })}
       </div>

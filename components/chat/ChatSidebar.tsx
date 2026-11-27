@@ -24,8 +24,7 @@ import { useChatActions } from '@/components/providers/chat-context'
 import { CopyChatIdButton } from './CopyChatIdButton'
 import { ChatScenarioControl } from './ChatScenarioControl'
 import { ChatConceptsNamed } from './ChatConceptsNamed'
-import { useChatAtlasMentions } from '@/hooks/useAtlasMentions'
-import { useChatAbsentMentions } from '@/hooks/useAbsentMentions'
+import { useChatMentionList } from '@/hooks/useChatMentions'
 import { shouldDismissSidebarOverlay } from './sidebar-overlay-dismiss'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
@@ -153,7 +152,6 @@ export interface ChatSidebarProps {
   isGenerating: boolean
   userParticipantId: string | null
   respondingParticipantId?: string | null
-  waitingForResponse?: boolean
   isPaused?: boolean
   onTogglePause?: () => void
   /** The chat's turn mode; with `onSetTurnPosition` the pause button becomes a four-way control. */
@@ -254,7 +252,6 @@ export function ChatSidebar(props: ChatSidebarProps) {
     isGenerating,
     userParticipantId,
     respondingParticipantId,
-    waitingForResponse: _waitingForResponse,
     isPaused = false,
     onTogglePause,
     className = '',
@@ -285,8 +282,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState)
   const [openSection, setOpenSection] = useState<SectionId>('participants')
   // Absent characters and Atlas entries the chat names (the transcript's chips' own reads).
-  const absentMentions = useChatAbsentMentions(props.chatId)
-  const atlasMentions = useChatAtlasMentions(props.chatId)
+  const absentMentions = useChatMentionList('absent', props.chatId)
+  const atlasMentions = useChatMentionList('atlas', props.chatId)
   const conceptsDescription = [
     absentMentions.length > 0 ? `${absentMentions.length} character${absentMentions.length !== 1 ? 's' : ''} not here` : null,
     atlasMentions.length > 0 ? `${atlasMentions.length} from the Atlas` : null,
@@ -467,7 +464,6 @@ export function ChatSidebar(props: ChatSidebarProps) {
         isGenerating={isGenerating}
         isPaused={isPaused}
         onTogglePause={onTogglePause}
-        toggleCollapsed={handleStripExpand}
         expandSidebar={handleStripExpand}
       />
     )
@@ -670,7 +666,6 @@ interface CollapsedStripProps {
   isGenerating: boolean
   isPaused: boolean
   onTogglePause?: () => void
-  toggleCollapsed: () => void
   expandSidebar: () => void
 }
 
@@ -685,13 +680,12 @@ function CollapsedStrip({
   isGenerating,
   isPaused,
   onTogglePause,
-  toggleCollapsed,
   expandSidebar,
 }: CollapsedStripProps) {
   return (
     <div ref={rootRef} className={['qt-chat-sidebar-collapsed', ...baseClasses].join(' ')}>
       <button
-        onClick={toggleCollapsed}
+        onClick={expandSidebar}
         className="qt-chat-sidebar-toggle"
         title="Expand chat sidebar"
         aria-label="Expand chat sidebar"
@@ -728,7 +722,7 @@ function CollapsedStrip({
           const defaultImage = participant.character?.defaultImage || null
 
           const positionBadgeClass = turnEntry ? getCollapsedPositionBadgeClass(turnEntry.status) : ''
-          const participantStatus = (participant as ParticipantData & { status?: string }).status || 'active'
+          const participantStatus = participant.status || 'active'
 
           const avatarClasses = ['qt-chat-sidebar-collapsed-avatar']
           if (isInactive) {
@@ -1412,6 +1406,72 @@ interface VisibilitySectionProps {
   onSetAnswerConfirmationOverride?: (value: 'ON' | 'OFF' | null) => void
 }
 
+/** The sidebar's on/off switch: a pill with a sliding knob. */
+function Switch({
+  checked,
+  onToggle,
+  label,
+  title,
+}: {
+  checked: boolean
+  onToggle: () => void
+  label: string
+  title: string
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+        checked ? 'qt-bg-primary' : 'qt-toggle-off'
+      }`}
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      title={title}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+          checked ? 'translate-x-6' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  )
+}
+
+/** A per-chat boolean override: Inherit (null), on, or off. */
+function TriStateSelect({
+  id,
+  value,
+  onChange,
+  onLabel,
+  offLabel,
+  title,
+}: {
+  id: string
+  value: boolean | null | undefined
+  onChange: (value: boolean | null) => void
+  onLabel: string
+  offLabel: string
+  title: string
+}) {
+  return (
+    <select
+      id={id}
+      value={value === true ? 'on' : value === false ? 'off' : 'inherit'}
+      onChange={(e) => {
+        const v = e.target.value
+        onChange(v === 'on' ? true : v === 'off' ? false : null)
+      }}
+      className="qt-select qt-select-sm"
+      title={title}
+    >
+      <option value="inherit">Inherit</option>
+      <option value="on">{onLabel}</option>
+      <option value="off">{offLabel}</option>
+    </select>
+  )
+}
+
 const CORE_WHISPER_INTERVAL_OPTIONS = [
   { value: '', label: 'Inherit' },
   { value: '3', label: '3 turns' },
@@ -1449,70 +1509,40 @@ function VisibilitySection({
       {onToggleAllWhispers && (
         <div className="flex items-center justify-between">
           <span className="qt-text-secondary text-xs">All Whispers</span>
-          <button
-            onClick={onToggleAllWhispers}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              showAllWhispers ? 'qt-bg-primary' : 'qt-toggle-off'
-            }`}
-            role="switch"
-            aria-checked={!!showAllWhispers}
-            aria-label="All Whispers"
+          <Switch
+            checked={!!showAllWhispers}
+            onToggle={onToggleAllWhispers}
+            label="All Whispers"
             title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                showAllWhispers ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
+          />
         </div>
       )}
 
       {onToggleCrossCharacterVaultReads && (
         <div className="flex items-center justify-between">
           <span className="qt-text-secondary text-xs">Shared Vaults</span>
-          <button
-            onClick={onToggleCrossCharacterVaultReads}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              allowCrossCharacterVaultReads ? 'qt-bg-primary' : 'qt-toggle-off'
-            }`}
-            role="switch"
-            aria-checked={!!allowCrossCharacterVaultReads}
-            aria-label="Shared Vaults"
+          <Switch
+            checked={!!allowCrossCharacterVaultReads}
+            onToggle={onToggleCrossCharacterVaultReads}
+            label="Shared Vaults"
             title={
               allowCrossCharacterVaultReads
                 ? 'Characters may read each other’s vaults (read-only) and the results are public to the chat. Click to lock.'
                 : 'Each character’s vault is private; results from doc_* reads are whispered to the caller. Click to let them peek at each other’s dossiers.'
             }
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                allowCrossCharacterVaultReads ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
+          />
         </div>
       )}
 
       {onSetTurnSkippingEnabled && isMultiChar && (
         <div className="flex items-center justify-between pt-2 border-t qt-border-default">
           <span className="qt-text-secondary text-xs" title="When on, characters may pass a turn with a Host note when they have nothing to add, and the Skip button posts a Host note too. NULL/on is the default.">Turn Skipping</span>
-          <button
-            onClick={() => onSetTurnSkippingEnabled(turnSkippingEnabled === false ? true : false)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              turnSkippingEnabled !== false ? 'qt-bg-primary' : 'qt-toggle-off'
-            }`}
-            role="switch"
-            aria-checked={turnSkippingEnabled !== false}
-            aria-label="Turn Skipping"
+          <Switch
+            checked={turnSkippingEnabled !== false}
+            onToggle={() => onSetTurnSkippingEnabled(turnSkippingEnabled === false ? true : false)}
+            label="Turn Skipping"
             title={turnSkippingEnabled !== false ? 'Characters may pass their turn. Click to require everyone to speak.' : 'Every selected character must speak. Click to allow passing.'}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                turnSkippingEnabled !== false ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
+          />
         </div>
       )}
 
@@ -1522,20 +1552,14 @@ function VisibilitySection({
           {onSetCoreWhisperEnabled && (
             <div className="flex items-center justify-between gap-2">
               <label htmlFor={`${id}-core-whisper-offering`} className="qt-text-secondary text-xs">Offering</label>
-              <select
+              <TriStateSelect
                 id={`${id}-core-whisper-offering`}
-                value={coreWhisperEnabled === true ? 'on' : coreWhisperEnabled === false ? 'off' : 'inherit'}
-                onChange={(e) => {
-                  const v = e.target.value
-                  onSetCoreWhisperEnabled(v === 'on' ? true : v === 'off' ? false : null)
-                }}
-                className="qt-select qt-select-sm"
+                value={coreWhisperEnabled}
+                onChange={onSetCoreWhisperEnabled}
+                onLabel="Always"
+                offLabel="Never"
                 title="When does Aurora offer this chat's characters their own Core/ packet? Inherit defers to per-character and global settings."
-              >
-                <option value="inherit">Inherit</option>
-                <option value="on">Always</option>
-                <option value="off">Never</option>
-              </select>
+              />
             </div>
           )}
           {onSetCoreWhisperInterval && (
@@ -1566,20 +1590,14 @@ function VisibilitySection({
         <div className="flex flex-col gap-2 pt-2 border-t qt-border-default">
           <div className="flex items-center justify-between gap-2">
             <label htmlFor={`${id}-thinking`} className="qt-text-secondary text-xs">Thinking</label>
-            <select
+            <TriStateSelect
               id={`${id}-thinking`}
-              value={showThinking === true ? 'on' : showThinking === false ? 'off' : 'inherit'}
-              onChange={(e) => {
-                const v = e.target.value
-                onSetShowThinking(v === 'on' ? true : v === 'off' ? false : null)
-              }}
-              className="qt-select qt-select-sm"
+              value={showThinking}
+              onChange={onSetShowThinking}
+              onLabel="Show"
+              offLabel="Hide"
               title="Show reasoning models' chain-of-thought in this chat. Inherit defers to the global default. Display-only — never sent to any model."
-            >
-              <option value="inherit">Inherit</option>
-              <option value="on">Show</option>
-              <option value="off">Hide</option>
-            </select>
+            />
           </div>
         </div>
       )}

@@ -34,10 +34,6 @@ export function useGroups(): UseGroupsReturn {
     [queryClient],
   )
 
-  const fetchGroups = useCallback(async () => {
-    await invalidateGroups()
-  }, [invalidateGroups])
-
   const { mutateAsync: postGroup } = useMutation({
     mutationFn: (body: { name: string; description?: string | null }) =>
       apiFetch<{ group: Group }>('/api/v1/groups', {
@@ -90,7 +86,6 @@ export function useGroups(): UseGroupsReturn {
     groups: query.data ?? EMPTY_GROUPS,
     loading: query.isLoading,
     error: query.error ? apiErrorMessage(query.error, 'Failed to fetch groups') : null,
-    fetchGroups,
     createGroup,
     deleteGroup,
   }

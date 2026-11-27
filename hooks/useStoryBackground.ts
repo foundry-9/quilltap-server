@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useRealtimeRefetchInterval } from '@/hooks/useRealtime'
+import { useRealtimeConnected, useRealtimeRefetchInterval } from '@/hooks/useRealtime'
 
 interface StoryBackgroundState {
   backgroundUrl: string | null
@@ -44,10 +44,19 @@ export function useStoryBackground(
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const initialUrlRef = useRef<string | null>(null)
   const onBackgroundChangedRef = useRef(onBackgroundChanged)
+  // The active watch's poll is the offline fallback: while the socket is up,
+  // the finished generation's `chats` / `projects` push invalidates the query
+  // and the change effect below retires the watch.
+  const realtimeConnected = useRealtimeConnected()
+  const realtimeConnectedRef = useRef(realtimeConnected)
 
   useEffect(() => {
     onBackgroundChangedRef.current = onBackgroundChanged
   }, [onBackgroundChanged])
+
+  useEffect(() => {
+    realtimeConnectedRef.current = realtimeConnected
+  }, [realtimeConnected])
 
   // Determine which background endpoint to fetch
   let backgroundUrl_toFetch: string | null = null
@@ -110,22 +119,25 @@ export function useStoryBackground(
 
     setPolling(true)
 
-    // Poll every 5 seconds for up to 3 minutes
+    // Watch for up to 3 minutes, polling every 5 seconds while the socket is
+    // down (a push does the work while it is up).
     let pollCount = 0
     const maxPolls = 36 // 3 minutes at 5-second intervals
 
     pollingIntervalRef.current = setInterval(async () => {
       pollCount++
 
-      const result = await refetchBackground()
-      const newUrl = result.data?.backgroundUrl ?? null
+      if (!realtimeConnectedRef.current) {
+        const result = await refetchBackground()
+        const newUrl = result.data?.backgroundUrl ?? null
 
-      // Stop if we detect a change (new URL or URL appeared where there was none).
-      // The change callback belongs to the shared effect below, which sees the
-      // same transition whether it arrived by poll or by push.
-      if (newUrl !== initialUrlRef.current) {
-        stopPolling()
-        return
+        // Stop if we detect a change (new URL or URL appeared where there was none).
+        // The change callback belongs to the shared effect below, which sees the
+        // same transition whether it arrived by poll or by push.
+        if (newUrl !== initialUrlRef.current) {
+          stopPolling()
+          return
+        }
       }
 
       // Stop after max polls

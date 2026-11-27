@@ -11,21 +11,16 @@
  * @module lib/hooks/use-groups
  */
 
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useEnvelopeSelect, type EntityListOptions, type EntityRow } from './use-profiles'
+import { useEnvelopeListQuery, type EntityListOptions, type EntityRow } from './use-profiles'
 
 const unwrapGroups = <G,>(data: { groups?: G[] }) => data.groups
 
 export function useGroupsQuery<G = EntityRow, R = G[]>(options?: EntityListOptions<G, R>) {
-  const select = useEnvelopeSelect<{ groups?: G[] }, G, R>(unwrapGroups, options?.select)
-  return useQuery({
+  return useEnvelopeListQuery<{ groups?: G[] }, G, R>({
     queryKey: queryKeys.groups.list(),
-    queryFn: ({ signal }) => apiFetch<{ groups?: G[] }>('/api/v1/groups', { signal }),
-    select,
-    enabled: options?.enabled,
-    staleTime: options?.staleTime,
-    refetchOnMount: options?.refetchOnMount,
+    url: '/api/v1/groups',
+    unwrap: unwrapGroups,
+    options,
   })
 }

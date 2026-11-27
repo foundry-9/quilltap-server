@@ -33,8 +33,6 @@ interface FileBrowserProps {
   title?: string
   /** Called when a file is clicked */
   onFileClick?: (file: FileInfo) => void
-  /** Called when files are added/removed (for parent refresh) */
-  onFilesChange?: () => void
   /** Optional class name */
   className?: string
 }
@@ -51,7 +49,6 @@ interface DbFolder {
 export default function FileBrowser({
   title,
   onFileClick,
-  onFilesChange,
   className = '',
 }: Readonly<FileBrowserProps>) {
   const [files, setFiles] = useState<FileInfo[]>([])
@@ -251,7 +248,6 @@ export default function FileBrowser({
       if (res.ok) {
         setFiles(files.filter(f => f.id !== fileId))
         showSuccessToast('File deleted')
-        onFilesChange?.()
       } else if (data.details?.code === 'FILE_HAS_ASSOCIATIONS') {
         const file = files.find(f => f.id === fileId)
         setDeleteConfirmation({
@@ -285,7 +281,6 @@ export default function FileBrowser({
         setFiles(files.filter(f => f.id !== deleteConfirmation.fileId))
         showSuccessToast('File deleted')
         setDeleteConfirmation(null)
-        onFilesChange?.()
       } else {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to delete file')
@@ -312,9 +307,8 @@ export default function FileBrowser({
       if (selectedFile?.id === moveModalFile.id) {
         setSelectedFile(null)
       }
-      onFilesChange?.()
     }
-  }, [moveModalFile, selectedFile, onFilesChange])
+  }, [moveModalFile, selectedFile])
 
   const handleSync = useCallback(async () => {
     setIsSyncing(true)
@@ -542,8 +536,7 @@ export default function FileBrowser({
           onDelete={(fileId) => {
             setFiles(files.filter(f => f.id !== fileId))
             setSelectedFile(null)
-            onFilesChange?.()
-          }}
+              }}
           onMoveToProject={(fileId) => {
             const file = files.find(f => f.id === fileId)
             if (file) {

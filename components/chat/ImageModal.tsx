@@ -75,12 +75,13 @@ export default function ImageModal({
     }
   }
 
-  const handleSaveToCharacterGallery = async () => {
-    if (!fileId || !characterId) return
+  /** Keep this chat file in one character's photo album (the AI's or the user's). */
+  const saveToAlbum = async (targetId: string | undefined, albumOwner: string, logLabel: string) => {
+    if (!fileId || !targetId) return
 
     setIsTagging(true)
     try {
-      const res = await fetch(`/api/v1/characters/${characterId}/photos`, {
+      const res = await fetch(`/api/v1/characters/${targetId}/photos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileId }),
@@ -91,39 +92,20 @@ export default function ImageModal({
         throw new Error(data.error || 'Failed to save to photo album')
       }
 
-      showSuccessToast(`Saved to ${characterName || 'character'}'s photo album`)
+      showSuccessToast(`Saved to ${albumOwner}'s photo album`)
     } catch (error) {
-      console.error('Failed to save to character gallery:', { error: error instanceof Error ? error.message : String(error) })
+      console.error(`Failed to save to ${logLabel}:`, { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to save to photo album')
     } finally {
       setIsTagging(false)
     }
   }
 
-  const handleSaveToUserCharacterGallery = async () => {
-    if (!fileId || !userCharacterId) return
+  const handleSaveToCharacterGallery = () =>
+    saveToAlbum(characterId, characterName || 'character', 'character gallery')
 
-    setIsTagging(true)
-    try {
-      const res = await fetch(`/api/v1/characters/${userCharacterId}/photos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to save to photo album')
-      }
-
-      showSuccessToast(`Saved to ${userCharacterName || 'user character'}'s photo album`)
-    } catch (error) {
-      console.error('Failed to save to user character gallery:', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast(error instanceof Error ? error.message : 'Failed to save to photo album')
-    } finally {
-      setIsTagging(false)
-    }
-  }
+  const handleSaveToUserCharacterGallery = () =>
+    saveToAlbum(userCharacterId, userCharacterName || 'user character', 'user character gallery')
 
   const handleDelete = async () => {
     if (!fileId) return

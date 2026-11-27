@@ -9,21 +9,19 @@
  * /api/v1/settings/text-replacements REST endpoints).
  */
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import {
   useTextReplacementRules,
   findReplacement,
 } from '@/lib/text-replacement/useTextReplacementRules'
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types'
-import type { ChatSettings } from './types'
-
-/**
- * Word-boundary trigger characters. Mirrors the set in
- * `components/chat/lexical/plugins/TextReplacementPlugin.tsx`. Newline is
- * intentionally excluded — see the plugin for the rationale.
- */
-const TRIGGER_CHARS = new Set([' ', ' ', '\t', '.', ',', ';', ':', '!', '?', ')'])
-const isBoundaryChar = (ch: string): boolean => TRIGGER_CHARS.has(ch)
+import { TEXT_REPLACEMENT_TRIGGER_CHARS, isTextReplacementBoundary } from '@/lib/text-replacement/boundary'
+import { DEFAULT_TEXT_REPLACEMENTS_ENABLED, type ChatSettings } from './types'
+import { useTryItTextarea } from './hooks/useTryItTextarea'
+import { SettingsToggleRow } from './components/SettingsToggleRow'
 
 export interface TextReplacementSettingsProps {
   settings: ChatSettings
@@ -37,6 +35,14 @@ interface NewRuleForm {
   caseSensitive: boolean
 }
 
+const RULES_URL = '/api/v1/settings/text-replacements'
+
+/** The server's sentence, else what could not be done and the HTTP status. */
+function ruleErrorMessage(err: unknown, verb: 'add' | 'update' | 'delete'): string {
+  const fallback = err instanceof ApiFetchError ? `Failed to ${verb} rule (HTTP ${err.status})` : `Failed to ${verb} rule.`
+  return apiErrorMessage(err, fallback)
+}
+
 const EMPTY_FORM: NewRuleForm = {
   fromText: '',
   toText: '',
@@ -48,16 +54,53 @@ export function TextReplacementSettings({
   saving,
   onMasterToggleChange,
 }: TextReplacementSettingsProps) {
-  const enabled = settings.textReplacementsEnabled ?? true
-  const { rules, isLoading, mutate, compiled } = useTextReplacementRules()
+  const enabled = settings.textReplacementsEnabled ?? DEFAULT_TEXT_REPLACEMENTS_ENABLED
+  const { rules, isLoading, compiled } = useTextReplacementRules()
 
   const [form, setForm] = useState<NewRuleForm>(EMPTY_FORM)
   const [addError, setAddError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [tryItText, setTryItText] = useState('')
-  const tryItRef = useRef<HTMLTextAreaElement>(null)
-  /** Pending cursor position to set after a replacement-triggered re-render. */
-  const tryItPendingCursor = useRef<number | null>(null)
+
+  const queryClient = useQueryClient()
+  const refreshRules = () => queryClient.invalidateQueries({ queryKey: queryKeys.settings.textReplacements })
+
+  const addRule = useMutation({
+    mutationFn: (body: NewRuleForm) =>
+      apiFetch(RULES_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      setForm(EMPTY_FORM)
+      return refreshRules()
+    },
+  })
+
+  const patchRule = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<TextReplacementRule> }) =>
+      apiFetch(`${RULES_URL}/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      }),
+    onError: (err) => {
+      console.error('[TextReplacementSettings] patch failed', ruleErrorMessage(err, 'update'))
+    },
+    // On failure too: re-fetch to restore the on-screen value to whatever the server has.
+    onSettled: () => refreshRules(),
+  })
+
+  const deleteRule = useMutation({
+    mutationFn: (id: string) => apiFetch(`${RULES_URL}/${id}`, { method: 'DELETE' }),
+    onSuccess: () => refreshRules(),
+    onError: (err) => {
+      console.error('[TextReplacementSettings] delete failed', ruleErrorMessage(err, 'delete'))
+    },
+  })
+
+  const busy = addRule.isPending || patchRule.isPending || deleteRule.isPending
+
+  const { text: tryText, setText: setTryText, ref: tryRef, rewrite: rewriteTry } = useTryItTextarea()
 
   const handleTryItKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     // Mirror the plugin's bail conditions exactly so the preview is faithful
@@ -65,7 +108,7 @@ export function TextReplacementSettings({
     if (!enabled) return
     if (compiled.empty) return
     if (e.nativeEvent.isComposing) return
-    if (!TRIGGER_CHARS.has(e.key)) return
+    if (!TEXT_REPLACEMENT_TRIGGER_CHARS.has(e.key)) return
 
     const ta = e.currentTarget
     const start = ta.selectionStart
@@ -76,10 +119,10 @@ export function TextReplacementSettings({
     // Skip mid-word edits — only fire when the cursor sits at the end of a
     // word (next char is either EOF or another boundary char).
     const nextChar = value[start]
-    if (nextChar !== undefined && !isBoundaryChar(nextChar)) return
+    if (nextChar !== undefined && !isTextReplacementBoundary(nextChar)) return
 
     let wordStart = start
-    while (wordStart > 0 && !isBoundaryChar(value[wordStart - 1])) wordStart--
+    while (wordStart > 0 && !isTextReplacementBoundary(value[wordStart - 1])) wordStart--
     if (wordStart === start) return // cursor sits on a boundary
 
     const word = value.slice(wordStart, start)
@@ -91,21 +134,8 @@ export function TextReplacementSettings({
     const newValue =
       value.slice(0, wordStart) + replacement + triggerChar + value.slice(start)
     const cursor = wordStart + replacement.length + triggerChar.length
-    tryItPendingCursor.current = cursor
-    setTryItText(newValue)
+    rewriteTry(newValue, cursor)
   }
-
-  // After a replacement-triggered re-render, restore the cursor position.
-  // Plain state change otherwise leaves the cursor at end-of-textarea.
-  useEffect(() => {
-    if (tryItPendingCursor.current === null) return
-    const pos = tryItPendingCursor.current
-    tryItPendingCursor.current = null
-    const ta = tryItRef.current
-    if (!ta) return
-    ta.selectionStart = pos
-    ta.selectionEnd = pos
-  }, [tryItText])
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault()
@@ -116,88 +146,36 @@ export function TextReplacementSettings({
       setAddError('Both trigger and replacement are required.')
       return
     }
-    setBusy(true)
     try {
-      const res = await fetch('/api/v1/settings/text-replacements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fromText, toText, caseSensitive: form.caseSensitive }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `Failed to add rule (HTTP ${res.status})`)
-      }
-      setForm(EMPTY_FORM)
-      await mutate()
+      await addRule.mutateAsync({ fromText, toText, caseSensitive: form.caseSensitive })
     } catch (err) {
-      setAddError(err instanceof Error ? err.message : 'Failed to add rule.')
-    } finally {
-      setBusy(false)
+      setAddError(ruleErrorMessage(err, 'add'))
     }
   }
 
-  const handlePatch = async (id: string, patch: Partial<TextReplacementRule>) => {
-    setBusy(true)
-    try {
-      const res = await fetch(`/api/v1/settings/text-replacements/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `Failed to update rule (HTTP ${res.status})`)
-      }
-      await mutate()
-    } catch (err) {
-      console.error('[TextReplacementSettings] patch failed', err)
-      // Re-fetch to restore the on-screen value to whatever the server has.
-      await mutate()
-    } finally {
-      setBusy(false)
-    }
+  const handlePatch = (id: string, patch: Partial<TextReplacementRule>) => {
+    patchRule.mutate({ id, patch })
   }
 
-  const handleDelete = async (id: string) => {
-    setBusy(true)
-    try {
-      const res = await fetch(`/api/v1/settings/text-replacements/${id}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok && res.status !== 204) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `Failed to delete rule (HTTP ${res.status})`)
-      }
-      await mutate()
-    } catch (err) {
-      console.error('[TextReplacementSettings] delete failed', err)
-    } finally {
-      setBusy(false)
-    }
+  const handleDelete = (id: string) => {
+    deleteRule.mutate(id)
   }
 
   return (
     <div className="space-y-4">
       {/* Master toggle */}
-      <label className="qt-settings-toggle-row">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => onMasterToggleChange(e.target.checked)}
-          disabled={saving}
-          className="qt-checkbox mt-1"
-        />
-        <div className="flex-1">
-          <div className="qt-settings-section-heading">Text replacement (autocorrect)</div>
-          <div className="qt-text-small mt-1">
-            Replaces literal triggers with replacement text on word boundaries (space, tab,
-            and the usual terminal punctuation) as you type in the Salon composer and the
-            Document Mode rich editor. Pure literal matching — no snippets, no regex. One
-            Cmd/Ctrl+Z reverts a replacement. Source-mode editors (raw Markdown, plain text)
-            are unaffected.
-          </div>
-        </div>
-      </label>
+      <SettingsToggleRow
+        checked={enabled}
+        disabled={saving}
+        onChange={onMasterToggleChange}
+        heading="Text replacement (autocorrect)"
+      >
+        Replaces literal triggers with replacement text on word boundaries (space, tab,
+        and the usual terminal punctuation) as you type in the Salon composer and the
+        Document Mode rich editor. Pure literal matching — no snippets, no regex. One
+        Cmd/Ctrl+Z reverts a replacement. Source-mode editors (raw Markdown, plain text)
+        are unaffected.
+      </SettingsToggleRow>
 
       {/* Add new rule */}
       <form
@@ -291,9 +269,9 @@ export function TextReplacementSettings({
         </div>
         <textarea
           aria-label="Try text replacement"
-          ref={tryItRef}
-          value={tryItText}
-          onChange={(e) => setTryItText(e.target.value)}
+          ref={tryRef}
+          value={tryText}
+          onChange={(e) => setTryText(e.target.value)}
           onKeyDown={handleTryItKeyDown}
           rows={3}
           className="qt-input w-full"
@@ -306,8 +284,8 @@ export function TextReplacementSettings({
 
 interface RuleRowProps {
   rule: TextReplacementRule
-  onPatch: (patch: Partial<TextReplacementRule>) => Promise<void>
-  onDelete: () => Promise<void>
+  onPatch: (patch: Partial<TextReplacementRule>) => void
+  onDelete: () => void
   disabled: boolean
 }
 

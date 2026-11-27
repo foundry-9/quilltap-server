@@ -3,9 +3,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import React from 'react'
 import ApiKeyModal from '@/components/settings/api-keys/ApiKeyModal'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 
 // Mock global fetch
 const mockFetch = jest.fn()
@@ -27,7 +28,7 @@ describe('ApiKeyModal dynamic provider loading', () => {
     // Create a promise that never resolves to keep loading state
     mockFetch.mockImplementation(() => new Promise(() => {}))
 
-    render(
+    renderWithQuery(
       <ApiKeyModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
     )
 
@@ -41,6 +42,7 @@ describe('ApiKeyModal dynamic provider loading', () => {
 
   it('populates provider dropdown from API response', async () => {
     mockFetch.mockResolvedValue({
+      ok: true,
       json: () =>
         Promise.resolve({
           providers: [
@@ -68,7 +70,7 @@ describe('ApiKeyModal dynamic provider loading', () => {
         }),
     })
 
-    render(
+    renderWithQuery(
       <ApiKeyModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
     )
 
@@ -99,6 +101,7 @@ describe('ApiKeyModal dynamic provider loading', () => {
   // token); the stricter reading left no way to create such a key at all.
   it('offers a provider that accepts an API key without requiring one', async () => {
     mockFetch.mockResolvedValue({
+      ok: true,
       json: () =>
         Promise.resolve({
           providers: [
@@ -116,7 +119,7 @@ describe('ApiKeyModal dynamic provider loading', () => {
         }),
     })
 
-    render(
+    renderWithQuery(
       <ApiKeyModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
     )
 
@@ -131,7 +134,7 @@ describe('ApiKeyModal dynamic provider loading', () => {
   it('handles fetch error gracefully', async () => {
     mockFetch.mockRejectedValue(new Error('Network error'))
 
-    render(
+    renderWithQuery(
       <ApiKeyModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
     )
 
@@ -152,7 +155,7 @@ describe('ApiKeyModal dynamic provider loading', () => {
     // Create a promise that never resolves to keep loading state
     mockFetch.mockImplementation(() => new Promise(() => {}))
 
-    render(
+    renderWithQuery(
       <ApiKeyModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
     )
 
@@ -163,15 +166,16 @@ describe('ApiKeyModal dynamic provider loading', () => {
 
   it('fetches from the correct API endpoint', async () => {
     mockFetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ providers: [] }),
     })
 
-    render(
+    renderWithQuery(
       <ApiKeyModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
     )
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/providers')
+      expect(mockFetch).toHaveBeenCalledWith('/api/v1/providers', expect.anything())
     })
   })
 })

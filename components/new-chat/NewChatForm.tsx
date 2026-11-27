@@ -29,6 +29,7 @@ import type {
 } from '@/components/scenario-builder/ScenarioBuilderDialog'
 import { STAFF_AVATARS } from '@/lib/chat/staff-display-names'
 import { settingsGroupHref } from '@/lib/settings/hrefs'
+import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
 
 // Loaded on demand: the builder (and the Markdown renderer behind its thinking
 // block) stays out of this surface's bundle until the Host is asked.
@@ -416,6 +417,8 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
     [setOverrides]
   )
 
+  const singleDefaultPromptId = singleLlm ? resolveDefaultSystemPromptId(singleLlm.character) : null
+
   const showSystemPromptDropdown =
     showSingleCharacterControls &&
     singleLlm &&
@@ -509,7 +512,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
               {singleLlm.character.systemPrompts!.map((prompt) => (
                 <option key={prompt.id} value={prompt.id}>
                   {prompt.name}
-                  {prompt.isDefault ? ' (Default)' : ''}
+                  {prompt.id === singleDefaultPromptId ? ' (Default)' : ''}
                 </option>
               ))}
             </select>

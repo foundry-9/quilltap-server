@@ -51,9 +51,10 @@ const TYPE_LABELS: Readonly<Record<PrimitiveType, string>> = {
   raw: 'Anything (raw)',
 }
 
-function TypeSelect({ value, label, onChange }: { value: PrimitiveType; label: string; onChange: (t: PrimitiveType) => void }) {
+/** A primitive's type. Named by `label`, or by a `<label htmlFor={id}>` when `label` is left out. */
+function TypeSelect({ id, value, label, onChange }: { id?: string; value: PrimitiveType; label?: string; onChange: (t: PrimitiveType) => void }) {
   return (
-    <select className="qt-select qt-text-xs" value={value} aria-label={label} onChange={(e) => onChange(e.target.value as PrimitiveType)}>
+    <select id={id} className="qt-select qt-text-xs" value={value} aria-label={label} onChange={(e) => onChange(e.target.value as PrimitiveType)}>
       {PRIMITIVE_TYPES.map((t) => (
         <option key={t} value={t}>
           {TYPE_LABELS[t]}
@@ -334,13 +335,7 @@ function AddPrimitiveForm({ store, edit }: { store: EditorStore; edit: EditFn })
           <label htmlFor={typeId} className="qt-text-xs qt-text-secondary">
             Its type
           </label>
-          <select id={typeId} className="qt-select qt-text-xs" value={type} onChange={(e) => setType(e.target.value as PrimitiveType)}>
-            {PRIMITIVE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
+          <TypeSelect id={typeId} value={type} onChange={setType} />
         </div>
         <button type="submit" className="qt-button qt-button-secondary qt-button-sm" disabled={trimmed === ''}>
           <Icon name="plus" className="w-4 h-4" />

@@ -45,6 +45,7 @@ import type {
   InterventionRunView,
 } from '@/lib/pascal/intervention/view'
 import { describeSpan } from '@/lib/pascal/intervention/spans'
+import { formatValue } from '@/lib/pascal/expressions'
 
 const PREVIEW_DEBOUNCE_MS = 300
 const OUTCOME_STATES: OutcomeState[] = ['success', 'partial', 'failure', 'info']
@@ -53,11 +54,6 @@ type EffectPin = NonNullable<InterventionOverrides['effects']>[string]
 
 interface Props {
   chatId: string
-}
-
-/** Format a number the way Pascal does: integers plain, floats to 4 significant digits. */
-function formatNumber(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(Number(n.toPrecision(4)))
 }
 
 /** A row's `when`, summarised for the outcome list. */
@@ -78,7 +74,7 @@ function summarizeGroup(group: WhenObject): string {
         typeof operand === 'object' && operand !== null && '$param' in operand
           ? `params.${(operand as { $param: string }).$param}`
           : typeof operand === 'number'
-            ? formatNumber(operand)
+            ? formatValue(operand)
             : JSON.stringify(operand)
       parts.push(`${subject} ${label} ${shown}`)
     }
@@ -296,7 +292,7 @@ function HeldRun({ chatId, hold, waiting, onSettled }: Readonly<HeldRunProps>) {
         {shown.has('roll') && (
           <Section title="The roll" pinned={overrides.roll !== undefined || overrides.dice !== undefined}
             onReset={() => setOverrides((prev) => unpin(unpin(prev, 'roll'), 'dice'))}
-            dealt={dealt.rollForm === 'dice' ? dealt.diceBreakdown : formatNumber(dealt.raw)}>
+            dealt={dealt.rollForm === 'dice' ? dealt.diceBreakdown : formatValue(dealt.raw)}>
             {run.rollForm === 'dice' ? (
               <div className="flex flex-wrap gap-2 items-center">
                 {(run.diceRolls ?? []).map((face, i) => (
@@ -335,7 +331,7 @@ function HeldRun({ chatId, hold, waiting, onSettled }: Readonly<HeldRunProps>) {
         )}
 
         {shown.has('value') && run.rollForm === 'range' && (
-          <Section title="The value" pinned={overrides.value !== undefined} onReset={() => reset('value')} dealt={formatNumber(dealt.value)}>
+          <Section title="The value" pinned={overrides.value !== undefined} onReset={() => reset('value')} dealt={formatValue(dealt.value)}>
             <NumberField label="Value after modifiers" value={overrides.value ?? run.value} onChange={(n) => pin({ value: n })} />
             <SpanHint testId="intervention-value-span">
               After the modifiers, it comes to {describeSpan(run.valueSpan)}.
@@ -545,7 +541,7 @@ function SpanHint({ testId, children }: Readonly<{ testId: string; children: Rea
 function NumberField({ label, value, onChange }: Readonly<{ label: string; value: number; onChange: (n: number) => void }>) {
   // What the operator is typing, while they type; the server's figure otherwise.
   const [draft, setDraft] = useState<string | null>(null)
-  const text = draft ?? formatNumber(value)
+  const text = draft ?? formatValue(value)
   return (
     <label className="flex items-center gap-2 text-sm">
       <span className="text-xs qt-text-secondary">{label}</span>

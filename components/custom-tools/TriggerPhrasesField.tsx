@@ -14,7 +14,7 @@ import {
   MAX_TRIGGER_PHRASE_LENGTH,
   MIN_TRIGGER_PHRASE_LENGTH,
 } from '@/lib/pascal/custom-tool.types'
-import type { DraftIssue } from '@/lib/pascal/tool-draft'
+import { issuesAt, type DraftIssue } from '@/lib/pascal/tool-draft'
 
 interface TriggerPhrasesFieldProps {
   triggers: string[]
@@ -26,7 +26,7 @@ interface TriggerPhrasesFieldProps {
 export function TriggerPhrasesField({ triggers, issues, onChange, disabled = false }: Readonly<TriggerPhrasesFieldProps>) {
   const [pending, setPending] = useState('')
 
-  const triggerErrors = issues.filter((i) => i.severity === 'error' && i.where.section === 'triggers')
+  const triggerErrors = issuesAt(issues, 'error', (where) => where.section === 'triggers')
   const errorAt = (index: number) =>
     triggerErrors.find((i) => i.where.section === 'triggers' && i.where.index === index)?.message ?? null
   const listError =

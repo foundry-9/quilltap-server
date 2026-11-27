@@ -2,7 +2,7 @@
 
 import { useId } from 'react'
 import { SettingsCard } from '@/components/ui/SettingsCard'
-import type { ChatSettings } from './types'
+import { DEFAULT_AGENT_MODE_SETTINGS, type ChatSettings } from './types'
 
 export interface AgentModeSettingsProps {
   settings: ChatSettings
@@ -29,10 +29,7 @@ export function AgentModeSettings({
   onMaxTurnsChange,
 }: AgentModeSettingsProps) {
   const id = useId()
-  const agentModeSettings = settings.agentModeSettings ?? {
-    maxTurns: 10,
-    defaultEnabled: false,
-  }
+  const agentModeSettings = settings.agentModeSettings ?? DEFAULT_AGENT_MODE_SETTINGS
 
   return (
     <SettingsCard
@@ -76,7 +73,7 @@ export function AgentModeSettings({
             value={agentModeSettings.maxTurns}
             onChange={(e) => onMaxTurnsChange(parseInt(e.target.value, 10))}
             disabled={saving}
-            className="w-full max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 qt-text focus:qt-border-primary focus:outline-none focus:ring-1 qt-focus-ring"
+            className="qt-select max-w-xs"
           >
             {MAX_TURNS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>

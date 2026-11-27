@@ -64,7 +64,6 @@ export function ProviderWizard({ mode, onComplete, onCancel }: ProviderWizardPro
     isLastStep,
     hasValidChatProvider,
     allKeysValidated,
-    getProvidersWithCapability,
   } = useProviderWizardState()
 
   // In settings mode, load existing config on mount
@@ -210,8 +209,7 @@ export function ProviderWizard({ mode, onComplete, onCancel }: ProviderWizardPro
           onNext={!isLastStep ? handleNext : undefined}
           canGoNext={!isLastStep}
           nextDisabled={!canProceed()}
-          nextLabel={isSkippable ? 'Next' : 'Next'}
-          showSkip={isSkippable}
+                    showSkip={isSkippable}
           onSkip={isSkippable ? handleSkip : undefined}
           loading={state.saving}
         />

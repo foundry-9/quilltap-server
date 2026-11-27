@@ -20,7 +20,6 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import {
   AIWizardModal,
   type GeneratedCharacterData,
@@ -42,6 +41,7 @@ import {
 } from '@/components/characters/fields/types'
 import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
+import { usePromptTemplatesQuery } from '@/lib/hooks/use-profiles'
 import { DEFAULT_CHARACTER_KIND, type CharacterKind } from '@/lib/characters/kind'
 import {
   buildWizardCurrentData,
@@ -69,6 +69,8 @@ const EMPTY_PROSE: Prose = {
   scenario: '',
 }
 
+const EMPTY_TEMPLATES: PromptTemplate[] = []
+
 /** The name a create-form opening scenario is saved under. */
 const FIRST_SCENARIO_TITLE = 'Opening scene'
 
@@ -84,8 +86,15 @@ export function NewCharacterView() {
   const { profiles } = useConnectionProfiles({ order: 'chat-use' })
   const [showWizard, setShowWizard] = useState(false)
   const [showTemplateImport, setShowTemplateImport] = useState(false)
-  const [templates, setTemplates] = useState<PromptTemplate[]>([])
-  const [loadingTemplates, setLoadingTemplates] = useState(false)
+  // Read once the template picker is first opened, then kept.
+  const [templatesWanted, setTemplatesWanted] = useState(false)
+  const {
+    data: templates = EMPTY_TEMPLATES,
+    isLoading: loadingTemplates,
+    refetch: refetchTemplates,
+  } = usePromptTemplatesQuery<PromptTemplate>({
+    enabled: templatesWanted,
+  })
   // Bumped whenever fields are replaced from outside (wizard, template import)
   // so the editors remount and re-parse the new values.
   const [externalUpdateCount, setExternalUpdateCount] = useState(0)
@@ -138,22 +147,12 @@ export function NewCharacterView() {
     setExternalUpdateCount((n) => n + 1)
   }
 
-  const openTemplateImport = async () => {
+  const openTemplateImport = () => {
     setShowTemplateImport(true)
-    if (templates.length === 0) {
-      try {
-        setLoadingTemplates(true)
-        const res = await fetch('/api/v1/prompt-templates')
-        if (res.ok) {
-          const data = await res.json()
-          setTemplates(data.templates || [])
-        }
-      } catch (err) {
-        console.error('Error fetching templates', err instanceof Error ? err.message : String(err))
-      } finally {
-        setLoadingTemplates(false)
-      }
-    }
+    // A later opening reads again, so a first read that failed or came back
+    // empty is retried.
+    if (templatesWanted) void refetchTemplates()
+    else setTemplatesWanted(true)
   }
 
   const handleTemplateImport = (content: string) => {
@@ -215,11 +214,7 @@ export function NewCharacterView() {
         pendingPhysicalDescription.current = null
       }
       if (pendingWardrobeItems.current && pendingWardrobeItems.current.length > 0) {
-        const { saved, outfits } = await saveGeneratedWardrobeItems(characterId, pendingWardrobeItems.current)
-        if (saved > 0) {
-          const outfitText = outfits > 0 ? ` (including ${outfits} outfit${outfits > 1 ? 's' : ''})` : ''
-          showSuccessToast(`${saved} wardrobe item${saved > 1 ? 's' : ''} created${outfitText}`)
-        }
+        await saveGeneratedWardrobeItems(characterId, pendingWardrobeItems.current)
         pendingWardrobeItems.current = null
       }
 
@@ -275,7 +270,7 @@ export function NewCharacterView() {
             aliases={{ value: aliases, onChange: setAliases }}
             pronouns={{ value: pronouns, onChange: setPronouns }}
             birthday={{ value: birthday, onChange: setBirthday }}
-            kindSlot={<CharacterKindPicker kind={kind} saving={false} disabled={false} onChange={setKind} />}
+            kindSlot={<CharacterKindPicker kind={kind} disabled={false} onChange={setKind} />}
           />
         </section>
 

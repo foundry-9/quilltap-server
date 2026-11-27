@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
-import { patchChat, type ChatPatch } from '@/lib/chat/patch-chat'
+import { apiErrorMessage, apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { patchChat, putChatUpdate, type ChatPatch } from '@/lib/chat/patch-chat'
+import { postChatAction } from './chat-actions'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { orderProfilesByChatUse } from '@/lib/llm/profile-usage'
 import { showConfirmation } from '@/lib/alert'
@@ -11,7 +12,7 @@ import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import type { TurnState } from '@/lib/chat/turn-manager'
-import type { Chat, Message } from '../types'
+import type { Chat } from '../types'
 import type { ChatTurnMode, TurnPosition } from '@/lib/schemas/storyteller.types'
 
 /**
@@ -76,11 +77,6 @@ interface UseChatControlsParams {
   chat: Chat | null
   participantData: ParticipantData[]
   participantsAsBase: ChatParticipantBase[]
-  isMultiChar: boolean
-  isAllLLM: boolean
-  allLLMTurnCount: number
-  effectiveNextSpeakerId: string | null
-  userParticipantId: string | null
   turnState: TurnState
   /** Ref to check if streaming is active (avoids circular dependency with SSE hook) */
   streamingRef: React.MutableRefObject<boolean>
@@ -97,11 +93,6 @@ export function useChatControls({
   chat,
   participantData,
   participantsAsBase,
-  isMultiChar,
-  isAllLLM,
-  allLLMTurnCount,
-  effectiveNextSpeakerId,
-  userParticipantId,
   turnState,
   streamingRef,
   isPaused,
@@ -114,7 +105,6 @@ export function useChatControls({
   // Local state
   const [documentEditingMode, setDocumentEditingMode] = useState(false)
   const [agentModeEnabled, setAgentModeEnabled] = useState<boolean | null>(null)
-  const [storyBackgroundsEnabled, setStoryBackgroundsEnabled] = useState(false)
   const [allowCrossCharacterVaultReads, setAllowCrossCharacterVaultReads] = useState(false)
   // Per-chat Core whisper enabled override. Tri-state: null = inherit, true/false = explicit.
   const [coreWhisperEnabled, handleSetCoreWhisperEnabled] = useOptimisticChatField<boolean>(
@@ -140,9 +130,6 @@ export function useChatControls({
     chatId, 'answerConfirmationOverride', chat?.answerConfirmationOverride, 'Could not update Answer Confirmation',
   )
 
-  // Refs
-  const lastAllLLMPauseTurnCountRef = useRef<number>(0)
-
   // Sync agentModeEnabled state when chat loads, using the resolved cascade value
   const chatResolvedAgentModeEnabled = chat?.resolvedAgentModeEnabled
   useEffect(() => {
@@ -151,8 +138,6 @@ export function useChatControls({
       setAgentModeEnabled(chatResolvedAgentModeEnabled ?? null)
     }
   }, [chat, chatResolvedAgentModeEnabled])
-
-  // Sync storyBackgroundsEnabled state when chatSettings loads - handled in page via chatSettings
 
   // Reconcile the local pause flag with the server's on EVERY fetch, not only
   // when the fetched value changes. Keying this on `chat?.isPaused` alone let
@@ -183,13 +168,6 @@ export function useChatControls({
       setAllowCrossCharacterVaultReads(chat.allowCrossCharacterVaultReads)
     }
   }, [chat?.allowCrossCharacterVaultReads])
-
-  // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
-  useEffect(() => {
-    if (chat?.isPaused && isAllLLM && allLLMTurnCount > 0) {
-      lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
-    }
-  }, [chat?.isPaused, isAllLLM, allLLMTurnCount])
 
   // Fetch connection profiles for participant sidebar dropdowns, most used
   // for chat first (lib/llm/profile-usage.ts).
@@ -232,11 +210,7 @@ export function useChatControls({
     try {
       // turnMode rides beside `chat`, not in it: it is patch-only on the row
       // and has its own setter server-side.
-      await apiFetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { isPaused: false }, turnMode }),
-      })
+      await putChatUpdate(chatId, { chat: { isPaused: false }, turnMode })
       showInfoToast(turnMode === 'storyteller'
         ? 'Storyteller mode: each of your posts asks the company who wishes to answer'
         : turnMode === 'turns'
@@ -306,19 +280,10 @@ export function useChatControls({
     try {
       const newEnabled = agentModeEnabled === null || !agentModeEnabled;
 
-      const res = await fetch(`/api/v1/chats/${chatId}?action=toggle-agent-mode`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: newEnabled }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to toggle agent mode')
-      }
-
-      const data = await res.json()
-      setAgentModeEnabled(data.resolvedAgentModeEnabled ?? data.agentModeEnabled)
+      const data = await postChatAction<{ resolvedAgentModeEnabled?: boolean | null; agentModeEnabled?: boolean | null }>(
+        chatId, 'toggle-agent-mode', { enabled: newEnabled },
+      )
+      setAgentModeEnabled((data.resolvedAgentModeEnabled ?? data.agentModeEnabled) as boolean | null)
 
       const status = data.resolvedAgentModeEnabled === true
         ? 'enabled'
@@ -328,28 +293,20 @@ export function useChatControls({
 
       showSuccessToast(`Agent mode ${status}`)
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle agent mode')
+      showErrorToast(apiErrorMessage(err, 'Failed to toggle agent mode'))
     }
   }, [chatId, agentModeEnabled])
 
   const handleRegenerateBackground = useCallback(async () => {
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=regenerate-background`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to regenerate background')
-      }
+      await postChatAction(chatId, 'regenerate-background')
 
       showSuccessToast('Story background regeneration queued')
       notifyQueueChange()
 
       startBackgroundPolling()
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to regenerate background')
+      showErrorToast(apiErrorMessage(err, 'Failed to regenerate background'))
     }
   }, [chatId, startBackgroundPolling])
 
@@ -358,29 +315,16 @@ export function useChatControls({
     fetchChat()
   }, [fetchChat])
 
-  const handleReattribute = useCallback((messageId: string, messages: Message[]) => {
-    const message = messages.find(m => m.id === messageId)
-    if (message) {
-      return {
-        isOpen: true,
-        messageId,
-        currentParticipantId: message.participantId || null,
-      }
-    }
-    return null
-  }, [])
-
   const handleOverrideDangerFlag = useCallback(async (messageId: string) => {
     if (!chat) return
     try {
-      const res = await fetch(`/api/v1/chats/${chat.id}/messages/${messageId}?action=override-danger-flag`, {
+      await apiFetch(`/api/v1/chats/${chat.id}/messages/${messageId}?action=override-danger-flag`, {
         method: 'POST',
       })
-      if (res.ok) {
-        await fetchChat()
-      }
+      await fetchChat()
     } catch (err) {
-      console.error('Failed to override danger flag', err)
+      // A refusal is left unannounced, as it always was; a network fault is logged.
+      if (!(err instanceof ApiFetchError)) console.error('Failed to override danger flag', err)
     }
   }, [chat, fetchChat])
 
@@ -402,16 +346,7 @@ export function useChatControls({
     }
 
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=remove-participant`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participantId }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to remove character')
-      }
+      await postChatAction(chatId, 'remove-participant', { participantId })
 
       showSuccessToast(`${characterName} has been removed from the chat`)
 
@@ -430,150 +365,86 @@ export function useChatControls({
         showErrorToast('All characters have been removed. Add a character to continue the conversation.')
       }
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
+      showErrorToast(apiErrorMessage(err, 'Failed to remove character'))
     }
   }, [chatId, participantData, fetchChat, streamingRef, turnState.lastSpeakerId, participantsAsBase, setTurnState])
 
+  /**
+   * One `?action=update-participant` edit from the participant sidebar: send
+   * it, toast `success` when given, re-read the chat; any failure toasts the
+   * server's sentence or `failure`.
+   */
+  const updateParticipant = useCallback(async (
+    participantId: string,
+    changes: Record<string, unknown>,
+    failure: string,
+    success?: string,
+  ) => {
+    try {
+      await postChatAction(chatId, 'update-participant', {
+        updateParticipant: { participantId, ...changes },
+      })
+      if (success) showSuccessToast(success)
+      await fetchChat()
+    } catch (err) {
+      showErrorToast(apiErrorMessage(err, failure))
+    }
+  }, [chatId, fetchChat])
+
   // Handle connection profile change from participant sidebar
-  const handleConnectionProfileChange = useCallback(async (
+  const handleConnectionProfileChange = useCallback((
     participantId: string,
     profileId: string | null,
     controlledBy: 'llm' | 'user'
-  ) => {
-    try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          updateParticipant: {
-            participantId,
-            connectionProfileId: controlledBy === 'user' ? undefined : profileId,
-            controlledBy,
-          },
-        }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to update connection profile')
-      }
-
-      showSuccessToast('Connection profile updated')
-      await fetchChat()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to update connection profile')
-    }
-  }, [chatId, fetchChat])
+  ) => updateParticipant(
+    participantId,
+    { connectionProfileId: controlledBy === 'user' ? undefined : profileId, controlledBy },
+    'Failed to update connection profile',
+    'Connection profile updated',
+  ), [updateParticipant])
 
   // Handle system prompt change from participant sidebar
-  const handleSystemPromptChange = useCallback(async (
+  const handleSystemPromptChange = useCallback((
     participantId: string,
     promptId: string | null
-  ) => {
-    try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          updateParticipant: {
-            participantId,
-            selectedSystemPromptId: promptId,
-          },
-        }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to update system prompt')
-      }
-
-      showSuccessToast('System prompt updated')
-      await fetchChat()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to update system prompt')
-    }
-  }, [chatId, fetchChat])
+  ) => updateParticipant(
+    participantId,
+    { selectedSystemPromptId: promptId },
+    'Failed to update system prompt',
+    'System prompt updated',
+  ), [updateParticipant])
 
   // Replace the set of subprompts in play for one participant. The server
   // recompiles the cached identity stack when the set actually changes.
-  const handleSubpromptsChange = useCallback(async (
+  const handleSubpromptsChange = useCallback((
     participantId: string,
     subpromptIds: string[]
-  ) => {
-    try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          updateParticipant: {
-            participantId,
-            selectedSubpromptIds: subpromptIds,
-          },
-        }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to update subprompts')
-      }
-
-      showSuccessToast('Subprompts updated')
-      await fetchChat()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to update subprompts')
-    }
-  }, [chatId, fetchChat])
+  ) => updateParticipant(
+    participantId,
+    { selectedSubpromptIds: subpromptIds },
+    'Failed to update subprompts',
+    'Subprompts updated',
+  ), [updateParticipant])
 
   // Force-rebuild the cached system-prompt prefix for one participant —
   // picks up edits made to the underlying character record (manifesto,
   // personality, named systemPrompts, etc.) since the cache was last built.
   const handleRebuildSystemPrompt = useCallback(async (participantId: string) => {
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=rebuild-system-prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participantId }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to rebuild system prompt')
-      }
+      await postChatAction(chatId, 'rebuild-system-prompt', { participantId })
 
       showSuccessToast('System prompt rebuilt')
       await fetchChat()
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to rebuild system prompt')
+      showErrorToast(apiErrorMessage(err, 'Failed to rebuild system prompt'))
     }
   }, [chatId, fetchChat])
 
   // Handle participant settings change
-  const handleParticipantSettingsChange = useCallback(async (
+  const handleParticipantSettingsChange = useCallback((
     participantId: string,
     updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }
-  ) => {
-    try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          updateParticipant: {
-            participantId,
-            ...updates,
-          },
-        }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to update participant settings')
-      }
-
-      await fetchChat()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to update participant settings')
-    }
-  }, [chatId, fetchChat])
+  ) => updateParticipant(participantId, updates, 'Failed to update participant settings'), [updateParticipant])
 
   // Handle per-chat talkativeness override. Debounced so a slider drag fires
   // one request when the user releases, not on every value change.
@@ -583,34 +454,15 @@ export function useChatControls({
     const pending = talkativenessTimerRef.current[participantId]
     if (pending) clearTimeout(pending)
 
-    talkativenessTimerRef.current[participantId] = setTimeout(async () => {
+    talkativenessTimerRef.current[participantId] = setTimeout(() => {
       delete talkativenessTimerRef.current[participantId]
-      try {
-        const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            updateParticipant: {
-              participantId,
-              talkativeness: value,
-            },
-          }),
-        })
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}))
-          throw new Error(errorData.error || 'Failed to update talkativeness')
-        }
-        await fetchChat()
-      } catch (err) {
-        showErrorToast(err instanceof Error ? err.message : 'Failed to update talkativeness')
-      }
+      void updateParticipant(participantId, { talkativeness: value }, 'Failed to update talkativeness')
     }, 400)
-  }, [chatId, fetchChat])
+  }, [updateParticipant])
 
   return {
     documentEditingMode,
     agentModeEnabled,
-    storyBackgroundsEnabled, setStoryBackgroundsEnabled,
     allowCrossCharacterVaultReads,
     handleToggleCrossCharacterVaultReads,
     coreWhisperEnabled,
@@ -632,7 +484,6 @@ export function useChatControls({
     handleToggleAgentMode,
     handleRegenerateBackground,
     handleCharacterAdded,
-    handleReattribute,
     handleOverrideDangerFlag,
     handleRemoveCharacter,
     handleConnectionProfileChange,
