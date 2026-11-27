@@ -4,6 +4,12 @@
 
 ### 4.14.1
 
+#### Dependencies: npm update across root, packages and plugins (second pass)
+
+- Ran `npm update -S` in the root project, every package and every plugin. Notable bumps: `openai` 7.65, `@anthropic-ai/sdk` 1.14 (anthropic plugin), `@openrouter/sdk` 1.5.142, `dompurify` 3.5.0, `@tanstack/react-query` / `react-query-devtools` / `eslint-plugin-query` 5.108.4, `@tanstack/react-virtual` 3.14.28, `tar` 7.5.24, `@types/react` 19.3.3, `@types/node` 24.19.4, `@napi-rs/canvas` 1.2.1 (CLI)
+- The plugins now require `@quilltap/plugin-utils` ^2.7.8
+- plugin-types 2.13.1 and plugin-utils 2.7.9 published (dependency-only); patch bumps to 14 plugins (`package.json` and `manifest.json`, all but builtin-embeddings), rebuilt
+
 #### Fix: regenerating a reply forms memories from the new swipe (#236)
 
 - With the default swipe cascade (`onSwipeRegenerate` = `DELETE_MEMORIES`), regenerating a character's reply retired the memories formed from the replaced line and never extracted any from the new one, so every swipe made the character forget that exchange. `regenerateMessageAsSwipe` (`lib/services/chat-message/regenerate-swipe.service.ts`) now goes through the edit path's `regenerateEditedMessageMemories` (`message-edit-impact.ts`, new `reason: 'swipe-regenerate'` option): the turn's AUTO memories are retired and a memory extraction job re-reads the turn with the new swipe in place of the old one. `REGENERATE_MEMORIES` does the same; `KEEP_MEMORIES` still neither retires nor extracts. With no extraction profile, the old line's memories are retired as before.

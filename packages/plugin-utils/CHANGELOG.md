@@ -2,6 +2,14 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [2.7.9] - 2026-11-26
+
+Dependency update only; no code changes.
+
+### Changed
+
+- Dev dependency `openai` raised to `^7.65.0`.
+
 ## [2.7.8] - 2026-11-22
 
 Dependency update only; no code changes.
