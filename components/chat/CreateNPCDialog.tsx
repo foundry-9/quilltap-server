@@ -16,6 +16,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
+import { orderProfilesByChatUse } from '@/lib/llm/profile-usage'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 import { BaseModal } from '@/components/ui/BaseModal'
@@ -56,7 +57,7 @@ export default function CreateNPCDialog({
   const nameInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data: profilesData, isLoading } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen })
+  const { data: profilesData, isLoading } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen, select: orderProfilesByChatUse })
   const connectionProfiles = profilesData ?? EMPTY_PROFILES
 
   const selectedConnectionProfileId = pickedProfileId ?? connectionProfiles[0]?.id ?? null

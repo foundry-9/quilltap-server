@@ -19,6 +19,10 @@ interface CostData {
   totalTokens: number
   promptTokens: number
   completionTokens: number
+  /** Input tokens served from a provider's prompt cache */
+  cacheReadTokens?: number
+  /** Input tokens written into a provider's prompt cache */
+  cacheWriteTokens?: number
   estimatedCostUSD: number | null
   priceSource: string
 }
@@ -152,7 +156,24 @@ export function ChatCostSummary({
       <div className="hidden sm:flex items-center gap-1 qt-text-secondary/70">
         <span>({formatTokenCount(costData.promptTokens)} in</span>
         <span>/</span>
-        <span>{formatTokenCount(costData.completionTokens)} out)</span>
+        <span>{formatTokenCount(costData.completionTokens)} out</span>
+        {(costData.cacheReadTokens ?? 0) > 0 && (
+          <>
+            <span>/</span>
+            <span title="Input tokens served from the provider's prompt cache, priced at its cache rate">
+              {formatTokenCount(costData.cacheReadTokens ?? 0)} cached
+            </span>
+          </>
+        )}
+        {(costData.cacheWriteTokens ?? 0) > 0 && (
+          <>
+            <span>/</span>
+            <span title="Input tokens written into the provider's prompt cache, priced at its cache-write rate">
+              {formatTokenCount(costData.cacheWriteTokens ?? 0)} cache-written
+            </span>
+          </>
+        )}
+        <span>)</span>
       </div>
       {costData.estimatedCostUSD !== null && (
         <div className="flex items-center gap-1 ml-auto">

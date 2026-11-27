@@ -22,12 +22,6 @@ export interface SystemEventInput {
   estimatedCostUSD?: number | null;
 }
 
-function hasTokenUsage(event: SystemEventInput): boolean {
-  return event.promptTokens !== undefined
-    || event.completionTokens !== undefined
-    || event.totalTokens !== undefined;
-}
-
 /**
  * Create a system event and add it to a chat
  */
@@ -55,19 +49,9 @@ export async function createSystemEvent(
 
     // Add system event to chat messages
     await repos.chats.addMessage(chatId, systemEvent);
-    // Also update chat token aggregates for this operation
-    if (hasTokenUsage(event)) {
-      const { updateChatTokenAggregates } = await import('./token-tracking.service');
-      await updateChatTokenAggregates(
-        chatId,
-        {
-          promptTokens: event.promptTokens,
-          completionTokens: event.completionTokens,
-          totalTokens: event.totalTokens,
-        },
-        event.estimatedCostUSD ?? null
-      );
-    }
+    // The chat's token and cost totals are not touched here: the LLM call this
+    // event describes was already accounted in logLLMCall
+    // (usage-accounting.service.ts). The event's own figures are for display.
 
     return systemEvent;
   } catch (error) {

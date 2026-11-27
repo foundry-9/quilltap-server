@@ -4,6 +4,7 @@
 
 import type { ProviderOptionsSchema, ThinkingTurnRule } from '@quilltap/plugin-types'
 import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types'
+import type { ProfileUsageCounters } from '@/lib/llm/profile-usage'
 
 export type { ProviderOptionsSchema, ThinkingTurnRule }
 
@@ -75,7 +76,7 @@ export interface ProviderConfig {
   thinkingTurnRule?: ThinkingTurnRule | null
 }
 
-export interface ConnectionProfile {
+export interface ConnectionProfile extends ProfileUsageCounters {
   id: string
   name: string
   /** Transport — 'api' (default) or 'courier' for manual / clipboard. */
@@ -115,10 +116,6 @@ export interface ConnectionProfile {
   sortIndex?: number
   apiKey?: ApiKey | null
   tags?: EnrichedTag[]
-  messageCount?: number
-  totalTokens?: number
-  totalPromptTokens?: number
-  totalCompletionTokens?: number
 }
 
 export interface ProfileFormData {

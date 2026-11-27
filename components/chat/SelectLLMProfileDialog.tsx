@@ -11,6 +11,7 @@
 
 import { useState, useEffect } from 'react'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
+import { orderProfilesByChatUse } from '@/lib/llm/profile-usage'
 import { showErrorToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
@@ -57,7 +58,7 @@ export function SelectLLMProfileDialog({
     data: profiles = [],
     isLoading: loading,
     error: profilesError,
-  } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen })
+  } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen, select: orderProfilesByChatUse })
   const [pickedProfileId, setPickedProfileId] = useState<string>('')
 
   // Until the operator picks one: the character's default profile if it has

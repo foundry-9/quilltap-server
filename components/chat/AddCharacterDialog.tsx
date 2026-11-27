@@ -18,6 +18,7 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
+import { orderProfilesByChatUse } from '@/lib/llm/profile-usage'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
@@ -95,7 +96,7 @@ export default function AddCharacterDialog({
   // inside useEffect, event handlers, or other non-render contexts.
 
   const { data: charactersData, isLoading } = useCharactersList<CharacterOption>(undefined, { enabled: isOpen })
-  const { data: profilesData, error: profilesError } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen })
+  const { data: profilesData, error: profilesError } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen, select: orderProfilesByChatUse })
 
   const characters = useMemo(() => charactersData ?? [], [charactersData])
   const connectionProfiles = useMemo(() => profilesData ?? [], [profilesData])

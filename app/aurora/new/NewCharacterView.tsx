@@ -81,7 +81,7 @@ export function NewCharacterView() {
   const closeSelf = useCloseSelfTab()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { profiles } = useConnectionProfiles()
+  const { profiles } = useConnectionProfiles({ order: 'chat-use' })
   const [showWizard, setShowWizard] = useState(false)
   const [showTemplateImport, setShowTemplateImport] = useState(false)
   const [templates, setTemplates] = useState<PromptTemplate[]>([])

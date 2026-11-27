@@ -57872,12 +57872,14 @@ var AnthropicProvider = class _AnthropicProvider {
       finishReason: response.stop_reason ?? "stop",
       usage: {
         // Anthropic reports input_tokens SEPARATELY from cache_read_input_tokens
-        // (and cache_creation_input_tokens), so prompt/total already exclude
-        // cache reads — no subtraction needed here, unlike the OpenAI-family
-        // plugins. cacheUsage below still reports cache reads for display.
-        promptTokens: response.usage.input_tokens,
+        // and cache_creation_input_tokens. The plugin contract is "every input
+        // token except cache reads", so cache reads stay out (no subtraction,
+        // unlike the OpenAI-family plugins) and cache writes — billable
+        // cache-miss input, at a premium — are added in, as OpenRouter and
+        // NanoGPT already report them. cacheUsage still carries both.
+        promptTokens: response.usage.input_tokens + (rawUsage.cache_creation_input_tokens ?? 0),
         completionTokens: response.usage.output_tokens,
-        totalTokens: response.usage.input_tokens + response.usage.output_tokens
+        totalTokens: response.usage.input_tokens + (rawUsage.cache_creation_input_tokens ?? 0) + response.usage.output_tokens
       },
       raw: response,
       attachmentResults,
@@ -58091,12 +58093,11 @@ var AnthropicProvider = class _AnthropicProvider {
           content: "",
           done: true,
           usage: {
-            // input_tokens already excludes cache reads (Anthropic reports them
-            // separately), so prompt/total exclude cache reads with no
-            // subtraction — see sendMessage. cacheUsage reports them for display.
-            promptTokens: totalInputTokens,
+            // Every input token except cache reads: input_tokens plus cache
+            // writes — see sendMessage. cacheUsage reports both for display.
+            promptTokens: totalInputTokens + (cacheCreationInputTokens ?? 0),
             completionTokens: totalOutputTokens,
-            totalTokens: totalInputTokens + totalOutputTokens
+            totalTokens: totalInputTokens + (cacheCreationInputTokens ?? 0) + totalOutputTokens
           },
           attachmentResults,
           rawResponse: fullMessage,

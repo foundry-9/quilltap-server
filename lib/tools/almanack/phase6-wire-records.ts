@@ -22,6 +22,7 @@ import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getErrorMessage } from '@/lib/error-utils';
 import { IMAGE_SPEND_LOG_TYPES } from '@/lib/schemas/llm-log.types';
 import { mainRows, num } from './db';
+import { PROFILE_USAGE_COUNTER_FIELD_NAMES, readProfileUsage, tallyTokens, type ProfileUsageCounters } from '@/lib/llm/profile-usage';
 import type { CacheRow, ProfileLifetimeRow, ProfileWindowRow, WireRecordsInfo } from './types';
 
 const moduleLogger = logger.child({ module: 'almanack:wire-records' });
@@ -33,45 +34,26 @@ function ratio(numerator: number, denominator: number): number {
   return denominator > 0 ? numerator / denominator : 0;
 }
 
-/** Lifetime counters carried on the `connection_profiles` rows themselves. */
+/**
+ * Lifetime usage ledgers carried on the `connection_profiles` rows themselves
+ * (chat and automatic, `lib/llm/profile-usage.ts`), most calls first.
+ */
 async function collectProfileLifetime(userId: string): Promise<ProfileLifetimeRow[]> {
-  const rows = await mainRows<{
-    id: string;
-    name: string;
-    provider: string;
-    modelName: string;
-    totalTokens: number;
-    totalPromptTokens: number;
-    totalCompletionTokens: number;
-    messageCount: number;
-    updatedAt: string | null;
-  }>(
-    `SELECT "id", "name", "provider", "modelName",
-            COALESCE("totalTokens", 0)           AS totalTokens,
-            COALESCE("totalPromptTokens", 0)     AS totalPromptTokens,
-            COALESCE("totalCompletionTokens", 0) AS totalCompletionTokens,
-            COALESCE("messageCount", 0)          AS messageCount,
-            "updatedAt"
+  const columns = PROFILE_USAGE_COUNTER_FIELD_NAMES.map((field) => `COALESCE("${field}", 0) AS "${field}"`).join(', ');
+  const rows = await mainRows<{ id: string; name: string; provider: string; modelName: string } & ProfileUsageCounters>(
+    `SELECT "id", "name", "provider", "modelName", ${columns}
      FROM "connection_profiles"
-     WHERE "userId" = ?
-     ORDER BY totalTokens DESC`,
+     WHERE "userId" = ?`,
     [userId],
     'wire.profileLifetime',
   );
 
-  return rows.map(r => ({
-    id: r.id,
-    name: r.name,
-    provider: r.provider,
-    modelName: r.modelName,
-    totalTokens: num(r.totalTokens),
-    totalPromptTokens: num(r.totalPromptTokens),
-    totalCompletionTokens: num(r.totalCompletionTokens),
-    messageCount: num(r.messageCount),
-    // There is no `lastUsedAt` column; `updatedAt` moves whenever the counters
-    // are bumped, so it is the closest available proxy — and labelled as one.
-    lastTouchedAt: r.updatedAt ?? null,
-  }));
+  return rows
+    .map(r => {
+      const usage = readProfileUsage(r);
+      return { id: r.id, name: r.name, provider: r.provider, modelName: r.modelName, chat: usage.chat, automatic: usage.automatic };
+    })
+    .sort((x, y) => (y.chat.calls + y.automatic.calls) - (x.chat.calls + x.automatic.calls));
 }
 
 /**

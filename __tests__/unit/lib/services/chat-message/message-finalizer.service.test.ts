@@ -7,7 +7,6 @@ import * as memoryTriggers from '@/lib/services/chat-message/memory-trigger.serv
 import * as streaming from '@/lib/services/chat-message/streaming.service'
 import * as toolExecution from '@/lib/services/chat-message/tool-execution.service'
 import * as compressionCache from '@/lib/services/chat-message/compression-cache.service'
-import * as tokenTracking from '@/lib/services/token-tracking.service'
 import * as costEstimation from '@/lib/services/cost-estimation.service'
 import * as rngDetector from '@/lib/services/chat-message/rng-pattern-detector.service'
 import * as rngHandler from '@/lib/tools/handlers/rng-handler'
@@ -52,9 +51,6 @@ jest.mock('@/lib/services/chat-message/memory-trigger.service', () => ({
   triggerChatDangerClassification: jest.fn().mockResolvedValue(undefined),
 }))
 
-jest.mock('@/lib/services/token-tracking.service', () => ({
-  trackMessageTokenUsage: jest.fn().mockResolvedValue(undefined),
-}))
 
 jest.mock('@/lib/services/cost-estimation.service', () => ({
   estimateMessageCost: jest.fn().mockResolvedValue({ cost: 0.12, source: 'pricing-table' }),
@@ -231,13 +227,7 @@ describe('message-finalizer.service', () => {
       isMultiCharacter: false,
     }))
     expect(result.sceneTrackingContext).toBeDefined()
-    expect(tokenTracking.trackMessageTokenUsage).toHaveBeenCalledWith(
-      'chat-1',
-      'profile-1',
-      { promptTokens: 11, completionTokens: 7, totalTokens: 18 },
-      0.12,
-      'pricing-table'
-    )
+    // Usage is accounted per provider call in logLLMCall, not by the finalizer.
     expect(compressionCache.triggerAsyncCompression).toHaveBeenCalled()
     expect(streaming.encodeDoneEvent).toHaveBeenCalled()
     expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
@@ -994,10 +984,10 @@ describe('message-finalizer.service — the scripted opener', () => {
     expect(result).toEqual(expect.objectContaining({ hasContent: true, messageId: expect.any(String) }))
     // The same tail as a generated reply: the done frame, the title check (the
     // context-summary fold, which carries the auto-title and the Lantern's
-    // cue) and the danger classification. Nothing was spent, so no token tracking.
+    // cue) and the danger classification. (Usage is accounted per provider call
+    // in logLLMCall, never here.)
     expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({ messageId: result.messageId, participantId: 'participant-1' }))
     expect(memoryTriggers.triggerContextSummaryCheck).toHaveBeenCalled()
     expect(memoryTriggers.triggerChatDangerClassification).toHaveBeenCalled()
-    expect(tokenTracking.trackMessageTokenUsage).not.toHaveBeenCalled()
   })
 })

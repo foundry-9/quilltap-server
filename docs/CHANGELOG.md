@@ -2,6 +2,21 @@
 
 ## Recent Changes
 
+### 4.14.2
+
+#### Fix: usage counters and chat cost count every provider call
+
+- Usage is now counted per provider call in one place, `accountLLMCall` (`lib/services/usage-accounting.service.ts`), called from `logLLMCall` before the logging-enabled check, so counts no longer depend on LLM logging being on or on log retention. The per-surface tracking (`lib/services/token-tracking.service.ts`, removed) and the chat-total bump in `createSystemEvent` are gone.
+- Fixed undercounts: a Salon turn with tool round-trips counted only its last request (`streaming.usage` was overwritten per call); swipes and regenerations were never counted; failed failover attempts were dropped; background tasks never reached the profile's counters.
+- Connection profiles keep two ledgers, chat (`CHAT_MESSAGE`, `TOOL_CONTINUATION`) and automatic (every other log type), split by `usageCategoryOf` (`lib/schemas/llm-log.types.ts`). Each has a call count, uncached prompt, completion, cache-read and cache-write tokens. They replace `totalTokens` / `totalPromptTokens` / `totalCompletionTokens` / `messageCount`. Column list and readers: `lib/llm/profile-usage.ts`. The only writer is `ConnectionProfilesRepository.incrementUsage` (`$inc`), and the columns are patch-only.
+- Migration `split-profile-usage-counters-v1`: adds the ten columns, moves the old totals into the chat ledger, backfills the automatic ledger from whatever `llm_logs` rows are left, drops the old columns, and adds `chats.totalCacheReadTokens` / `totalCacheWriteTokens`. Old `.qtap` bundles and backups map the old fields to the chat ledger in `seedLegacyConnectionProfileFields`.
+- Chat cost: every call with a `chatId` adds its tokens (`ChatsRepository.addCallUsage`) and then its cost (`addEstimatedCost`). Both use `$inc`. Cost used to be read-then-set, so in the job child all but the last call of a job were lost. The chat usage columns are now patch-only. `$inc` in the SQLite translator now does `COALESCE(col, 0) + ?`, so a NULL `estimatedCostUSD` can be incremented.
+- Cache tokens are priced. `ModelPricing` gains `cacheReadCostPer1M` / `cacheWriteCostPer1M`, parsed from OpenRouter (`parseOpenRouterPricing`). `estimateCallCost` fills missing cache rates from OpenRouter's public data for the same model, and prices any rate still unknown at the input rate instead of zero. The cost summary shows cached and cache-written tokens.
+- Anthropic plugin 1.0.74: `promptTokens` now includes `cache_creation_input_tokens`, which matches the plugin rule (every input token except cache reads) that OpenRouter and NanoGPT already follow. Cache writes were missing from Anthropic token totals. Autonomous-room token budgets now count Anthropic cache writes as well.
+- The character wizard and AI import now record `connectionProfileId` on their log rows. They, and the vision description call, log before their completeness checks, so a truncated answer is still counted. Several direct provider call sites now pass `cacheUsage`.
+- Chat profile pickers list the profiles most used for chat first (`orderProfilesByChatUse`): new chat, add character, new NPC, switching a participant's profile, the participant sidebar, and a character's default profile. The Settings list keeps its manual order. The profile card shows a Chat line and an Automatic line, each with calls and tokens.
+- Tests: `__tests__/unit/lib/services/usage-accounting.service.test.ts`, `__tests__/unit/lib/llm/profile-usage.test.ts`, `__tests__/unit/migrations/split-profile-usage-counters.test.ts`, `__tests__/unit/plugins/anthropic-usage-cache-tokens.test.ts`, plus cases in `llm-logging.service.test.ts` and `connection-profile-legacy-fields.test.ts`.
+
 ### 4.14.1
 
 #### Dependencies: npm update across root, packages and plugins (second pass)

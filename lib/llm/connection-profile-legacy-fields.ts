@@ -33,6 +33,9 @@
  * holding a *reference*: a hand-edited bundle can name the profile itself,
  * and a self-referential chain is the one shape config validation forbids.
  *
+ * The 4.14.2 usage ledgers replace an older combined usage total; an archive
+ * carrying the old keys has them mapped to the chat ledger (see below).
+ *
  * Both restore and import call this, so the two paths cannot drift: a `.qtap`
  * bundle and a backup ZIP carrying the same profile land the same row.
  *
@@ -102,6 +105,29 @@ export function seedLegacyConnectionProfileFields<T extends Partial<ConnectionPr
   // always did.
   if (seeded.toolResultVerbatimTurns === undefined) {
     seeded.toolResultVerbatimTurns = DEFAULT_TOOL_RESULT_VERBATIM_TURNS;
+  }
+
+  // Usage ledgers (4.14.2). An older archive carries one combined total —
+  // `messageCount` / `totalPromptTokens` / `totalCompletionTokens` — that only
+  // ever counted chat turns. It becomes the chat ledger (what
+  // `split-profile-usage-counters-v1` did to the same rows in place); the old
+  // keys are then dropped so the strict row schema never sees them.
+  const legacy = seeded as Record<string, unknown>;
+  const legacyCount = (key: string): number => {
+    const value = legacy[key];
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+  };
+  if (seeded.chatCallCount === undefined && legacy.messageCount !== undefined) {
+    seeded.chatCallCount = legacyCount('messageCount');
+  }
+  if (seeded.chatPromptTokens === undefined && legacy.totalPromptTokens !== undefined) {
+    seeded.chatPromptTokens = legacyCount('totalPromptTokens');
+  }
+  if (seeded.chatCompletionTokens === undefined && legacy.totalCompletionTokens !== undefined) {
+    seeded.chatCompletionTokens = legacyCount('totalCompletionTokens');
+  }
+  for (const key of ['totalTokens', 'totalPromptTokens', 'totalCompletionTokens', 'messageCount']) {
+    delete legacy[key];
   }
 
   // A profile can't understudy itself: the chain would be one attempt wearing

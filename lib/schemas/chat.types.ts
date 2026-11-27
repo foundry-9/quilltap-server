@@ -1091,7 +1091,17 @@ export const ChatMetadataSchema = z.object({
   totalPromptTokens: z.number().default(0),
   /** Total completion/output tokens used in this chat */
   totalCompletionTokens: z.number().default(0),
-  /** Estimated total cost in USD for this chat */
+  /** Total input tokens served from a provider's prompt cache in this chat */
+  totalCacheReadTokens: z.number().default(0),
+  /** Total input tokens written into a provider's prompt cache in this chat */
+  totalCacheWriteTokens: z.number().default(0),
+  /**
+   * Estimated total cost in USD for this chat: every call made for it (turns,
+   * tool round-trips, memory, titles, summaries, the classifier…), cache reads
+   * and writes priced at their own rates. The token totals and this figure are
+   * written only by `accountLLMCall` (lib/services/usage-accounting.service.ts)
+   * and are patch-only on the chats table.
+   */
   estimatedCostUSD: z.number().nullable().optional(),
   /** Source of pricing data for cost estimate */
   priceSource: z.enum(['openrouter', 'registry', 'fallback', 'openrouter-estimate', 'unavailable']).nullable().optional(),
@@ -1514,7 +1524,17 @@ export const ChatMetadataBaseSchema = z.object({
   totalPromptTokens: z.number().default(0),
   /** Total completion/output tokens used in this chat */
   totalCompletionTokens: z.number().default(0),
-  /** Estimated total cost in USD for this chat */
+  /** Total input tokens served from a provider's prompt cache in this chat */
+  totalCacheReadTokens: z.number().default(0),
+  /** Total input tokens written into a provider's prompt cache in this chat */
+  totalCacheWriteTokens: z.number().default(0),
+  /**
+   * Estimated total cost in USD for this chat: every call made for it (turns,
+   * tool round-trips, memory, titles, summaries, the classifier…), cache reads
+   * and writes priced at their own rates. The token totals and this figure are
+   * written only by `accountLLMCall` (lib/services/usage-accounting.service.ts)
+   * and are patch-only on the chats table.
+   */
   estimatedCostUSD: z.number().nullable().optional(),
   /** Source of pricing data for cost estimate */
   priceSource: z.enum(['openrouter', 'registry', 'fallback', 'openrouter-estimate', 'unavailable']).nullable().optional(),

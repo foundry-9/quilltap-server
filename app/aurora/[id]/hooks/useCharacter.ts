@@ -87,7 +87,7 @@ function toUserControlledCharacters(
 const EMPTY_USER_CHARACTERS: UserControlledCharacter[] = []
 
 export function useCharacterPageSupport() {
-  const { profiles } = useConnectionProfiles()
+  const { profiles } = useConnectionProfiles({ order: 'chat-use' })
   // The same list `useUserCharacterDisplayName` reads, so the two share one fetch.
   const { data: userControlledCharacters = EMPTY_USER_CHARACTERS } = useCharactersList<
     { id: string; name: string; title?: string | null },

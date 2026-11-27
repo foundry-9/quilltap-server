@@ -101,9 +101,6 @@ jest.mock('@/lib/services/chat-message/memory-trigger.service', () => ({
   triggerContextSummaryCheck: jest.fn().mockResolvedValue(undefined),
 }))
 
-jest.mock('@/lib/services/token-tracking.service', () => ({
-  trackMessageTokenUsage: jest.fn().mockResolvedValue(undefined),
-}))
 
 jest.mock('@/lib/services/cost-estimation.service', () => ({
   estimateMessageCost: jest.fn().mockResolvedValue({ cost: 0, source: 'estimate' }),

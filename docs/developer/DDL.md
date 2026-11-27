@@ -806,7 +806,16 @@ CREATE TABLE "chats" (
   "coreWhisperEnabled" INTEGER DEFAULT NULL,
   "coreWhisperInterval" INTEGER DEFAULT NULL,
   "turnSkippingEnabled" INTEGER DEFAULT NULL, -- added in 4.8 (add-turn-skipping-field-v1): "nothing to add" turn-skipping toggle. NULL = enabled (default); 0 = disabled.
-  "showThinking" INTEGER DEFAULT NULL          -- added in 4.6 (add-thinking-display-fields-v1): per-chat thinking-visibility override (tri-state). NULL = inherit global chat_settings.thinkingDisplay.defaultVisible; 0 = hide; 1 = show. DISPLAY ONLY.
+  "showThinking" INTEGER DEFAULT NULL,         -- added in 4.6 (add-thinking-display-fields-v1): per-chat thinking-visibility override (tri-state). NULL = inherit global chat_settings.thinkingDisplay.defaultVisible; 0 = hide; 1 = show. DISPLAY ONLY.
+  -- Added in 4.14.2 (split-profile-usage-counters-v1). With totalPromptTokens /
+  -- totalCompletionTokens / estimatedCostUSD / priceSource, the chat's usage
+  -- totals: every provider call made for the chat (turns, tool round-trips,
+  -- failover attempts, memory, titles, summaries, the classifier), counted by
+  -- accountLLMCall (lib/services/usage-accounting.service.ts) with $inc and
+  -- patch-only on this table. totalPromptTokens is uncached input; the cost
+  -- prices cache reads and writes at their own rates.
+  "totalCacheReadTokens" INTEGER DEFAULT 0,
+  "totalCacheWriteTokens" INTEGER DEFAULT 0
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");
@@ -1283,10 +1292,6 @@ CREATE TABLE "connection_profiles" (
   "allowWebSearch" INTEGER DEFAULT 0,
   "useNativeWebSearch" INTEGER DEFAULT 0,
   "tags" TEXT DEFAULT '[]',
-  "totalTokens" INTEGER DEFAULT 0,
-  "totalPromptTokens" INTEGER DEFAULT 0,
-  "totalCompletionTokens" INTEGER DEFAULT 0,
-  "messageCount" INTEGER DEFAULT 0,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL,
   "isDangerousCompatible" INTEGER DEFAULT 0,
@@ -1329,7 +1334,27 @@ CREATE TABLE "connection_profiles" (
   -- history. 0 = never elide. Eliding rewrites the history part-way up, which
   -- re-writes a provider prompt cache from that point. Read it only through
   -- resolveToolResultVerbatimTurns() (lib/llm/connection-profile-utils.ts).
-  "toolResultVerbatimTurns" INTEGER DEFAULT 3
+  "toolResultVerbatimTurns" INTEGER DEFAULT 3,
+  -- Usage ledgers (4.14.2, split-profile-usage-counters-v1), replacing the
+  -- old totalTokens / totalPromptTokens / totalCompletionTokens /
+  -- messageCount. One call = one provider request, failed ones included.
+  -- "chat" is a conversation's own answers (llm_logs types CHAT_MESSAGE and
+  -- TOOL_CONTINUATION); "automatic" is everything else. Prompt tokens are the
+  -- uncached input; cache reads and writes are counted apart, so the four
+  -- token figures never overlap. Written only by accountLLMCall
+  -- (lib/services/usage-accounting.service.ts) via $inc, and patch-only, so a
+  -- whole-row update never rewinds them. Field list: PROFILE_USAGE_COUNTER_FIELDS
+  -- (lib/llm/profile-usage.ts).
+  "chatCallCount" INTEGER DEFAULT 0,
+  "chatPromptTokens" INTEGER DEFAULT 0,
+  "chatCompletionTokens" INTEGER DEFAULT 0,
+  "chatCacheReadTokens" INTEGER DEFAULT 0,
+  "chatCacheWriteTokens" INTEGER DEFAULT 0,
+  "automaticCallCount" INTEGER DEFAULT 0,
+  "automaticPromptTokens" INTEGER DEFAULT 0,
+  "automaticCompletionTokens" INTEGER DEFAULT 0,
+  "automaticCacheReadTokens" INTEGER DEFAULT 0,
+  "automaticCacheWriteTokens" INTEGER DEFAULT 0
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);

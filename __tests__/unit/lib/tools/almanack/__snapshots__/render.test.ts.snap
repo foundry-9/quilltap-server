@@ -605,12 +605,13 @@ Rows written before the timing gaps were closed carry none and are excluded from
 
 ### Connection Profiles — Lifetime Counters
 
-| Profile | Provider / Model | Messages | Prompt | Completion | Total | Last Touched |
-|---------|------------------|----------|--------|------------|-------|--------------|
-| Opus (household) | anthropic / claude-opus-5 | 20,000 | 7,000,000 | 1,000,000 | 8,000,000 | 8/5/2026 |
+| Profile | Provider / Model | Chat Calls | Chat Tokens | Automatic Calls | Automatic Tokens | Cache Read | Cache Written |
+|---------|------------------|------------|-------------|-----------------|------------------|------------|---------------|
+| Opus (household) | anthropic / claude-opus-5 | 20,000 | 40,000,000 | 4,100 | 1,020,000 | 30,000,000 | 2,000,000 |
 
-These counters live on the profile rows and cover the profile's whole life, not the log retention
-window. There is no last-used column, so "Last Touched" is the row's \`updatedAt\` — a proxy.
+These counters live on the profile rows and cover the profile's whole life (counted per provider
+call since 4.14.2), not the log retention window. Chat is a conversation's own replies and their
+tool round-trips; Automatic is every background task. Tokens include cache reads and writes.
 
 ### Connection Profiles — Within the Retention Window
 

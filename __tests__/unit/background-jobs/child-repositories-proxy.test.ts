@@ -79,7 +79,7 @@ function makeFakeRepos() {
     // TABLE_GROUP_RESOLVERS in the proxy.
     connections: {
       findById: jest.fn().mockResolvedValue({ id: 'p-1' }),
-      incrementTokenUsage: jest.fn().mockResolvedValue(undefined),
+      incrementUsage: jest.fn().mockResolvedValue(undefined),
       findApiKeyByIdAndUserId: jest.fn().mockResolvedValue({ id: 'k-1', key: 'sk-x' }),
       findApiKeyById: jest.fn().mockResolvedValue({ id: 'k-1', key: 'sk-x' }),
       updateApiKey: jest.fn().mockResolvedValue(null),
@@ -378,8 +378,8 @@ describe('child repository proxy — read-your-writes detector', () => {
     // token counters (connection_profiles), then a later call in the same job
     // re-resolves an API key (api_keys). Two tables — no staleness possible.
     await runWithJobScope('job-rww-crosstable', async () => {
-      await (proxied.connections as unknown as typeof repos.connections).incrementTokenUsage(
-        'p-1' as never, 100 as never, 50 as never,
+      await (proxied.connections as unknown as typeof repos.connections).incrementUsage(
+        'p-1' as never, 'chat' as never, { calls: 1, promptTokens: 100, completionTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0 } as never,
       );
       const key = await (proxied.connections as unknown as typeof repos.connections)
         .findApiKeyByIdAndUserId('k-1' as never, 'u-1' as never);
@@ -396,8 +396,8 @@ describe('child repository proxy — read-your-writes detector', () => {
     const proxied = getChildRepositoriesProxy();
 
     await runWithJobScope('job-rww-profiles', async () => {
-      await (proxied.connections as unknown as typeof repos.connections).incrementTokenUsage(
-        'p-1' as never, 100 as never, 50 as never,
+      await (proxied.connections as unknown as typeof repos.connections).incrementUsage(
+        'p-1' as never, 'chat' as never, { calls: 1, promptTokens: 100, completionTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0 } as never,
       );
       await (proxied.connections as unknown as typeof repos.connections).findById('p-1' as never);
       flushPendingWrites();

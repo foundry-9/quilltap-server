@@ -842,7 +842,7 @@ const FORBIDDEN_METHODS: Set<string> = new Set([
  * repository object is the wrong granularity for a repo spanning several
  * tables: `connections` owns both `connection_profiles` and `api_keys`, so
  * every `AUTONOMOUS_ROOM_TURN` produced a warning pairing the buffered
- * `connections.incrementTokenUsage` (a counter bump on `connection_profiles`)
+ * `connections.incrementUsage` (a counter bump on `connection_profiles`)
  * with a later `connections.findApiKeyByIdAndUserId` (a `SELECT` from
  * `api_keys`) — two tables that cannot stale each other. One line per turn,
  * forever, for a condition that does not exist.

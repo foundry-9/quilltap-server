@@ -19,8 +19,6 @@ import {
   loneCharacterHasAnswered,
   turnClosesCycle,
 } from '@/lib/chat/turn-manager'
-import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
-import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
@@ -650,27 +648,9 @@ async function closePersistedReply({
     reasoningSegments: done.reasoningSegments,
   }))
 
-  // Cost estimation + token tracking are intentionally fire-and-forget so a
-  // slow/unreachable pricing fetch never blocks the `done` event and leaves
-  // the client stuck on an interim status banner.
-  if (usage && (usage.promptTokens || usage.completionTokens)) {
-    void estimateMessageCost(
-      effectiveProfile.provider,
-      effectiveProfile.modelName,
-      usage.promptTokens || 0,
-      usage.completionTokens || 0,
-      userId
-    )
-      .then(costResult =>
-        trackMessageTokenUsage(chatId, effectiveProfile.id, usage, costResult.cost, costResult.source)
-      )
-      .catch(error => {
-        logger.warn('Background token tracking failed', {
-          chatId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      })
-  }
+  // Token and cost accounting happens per provider call, in logLLMCall
+  // (usage-accounting.service.ts) — every tool round-trip and failover attempt
+  // of this turn has already been counted against its profile and this chat.
 
   // A storyteller turn leaves the round's housekeeping to the round's end.
   if (chatSettings && storyteller) {

@@ -45,7 +45,8 @@ import type {
 } from './chats-ops-context';
 import { ChatParticipantsOps } from './chats-participants.ops';
 import { ChatImpersonationOps } from './chats-impersonation.ops';
-import { ChatTokenTrackingOps } from './chats-tokens.ops';
+import { ChatTokenTrackingOps, CHAT_USAGE_AGGREGATE_FIELDS } from './chats-tokens.ops';
+import type { UsageTally } from '@/lib/llm/profile-usage';
 import { ChatMessagesOps, ChatMessageRowSchema } from './chats-messages.ops';
 import { ChatSearchReplaceOps, type GlobalMessageSearchHit } from './chats-search.ops';
 
@@ -466,14 +467,12 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   // TOKEN USAGE TRACKING (delegated to ChatTokenTrackingOps)
   // ============================================================================
 
-  async incrementTokenAggregates(
-    chatId: string,
-    promptTokens: number,
-    completionTokens: number,
-    estimatedCost: number | null,
-    priceSource?: ChatMetadata['priceSource']
-  ): Promise<void> {
-    return this.tokensOps.incrementTokenAggregates(chatId, promptTokens, completionTokens, estimatedCost, priceSource);
+  async addCallUsage(chatId: string, tally: UsageTally): Promise<void> {
+    return this.tokensOps.addCallUsage(chatId, tally);
+  }
+
+  async addEstimatedCost(chatId: string, cost: number, priceSource?: ChatMetadata['priceSource']): Promise<void> {
+    return this.tokensOps.addEstimatedCost(chatId, cost, priceSource);
   }
 
   async resetTokenAggregates(chatId: string): Promise<ChatMetadata | null> {
@@ -630,7 +629,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   // `setConciergeMode` below.
 
   protected override patchOnlyFields(): readonly string[] {
-    return [...CONCIERGE_MODE_FIELDS, EQUIPPED_INVENTORY_FIELD, TURN_MODE_FIELD];
+    return [...CONCIERGE_MODE_FIELDS, EQUIPPED_INVENTORY_FIELD, TURN_MODE_FIELD, ...CHAT_USAGE_AGGREGATE_FIELDS];
   }
 
   /**

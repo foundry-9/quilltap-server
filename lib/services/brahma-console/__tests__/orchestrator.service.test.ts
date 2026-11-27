@@ -72,9 +72,6 @@ jest.mock('../turn-budget', () => ({
   resolveBrahmaMaxAgentTurns: jest.fn().mockResolvedValue(25),
 }))
 
-jest.mock('@/lib/services/token-tracking.service', () => ({
-  trackMessageTokenUsage: jest.fn(),
-}))
 
 jest.mock('@/lib/services/cost-estimation.service', () => ({
   estimateMessageCost: jest.fn(),

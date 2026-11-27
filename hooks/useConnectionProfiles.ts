@@ -1,6 +1,7 @@
 'use client'
 
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
+import { orderProfilesByChatUse } from '@/lib/llm/profile-usage'
 
 export interface ConnectionProfileInfo {
   id: string
@@ -27,6 +28,11 @@ function mapProfiles(rows: Array<Record<string, unknown>>): ConnectionProfileInf
   }))
 }
 
+/** The chat pickers' order: most used for chat first (lib/llm/profile-usage.ts). */
+function mapProfilesByChatUse(rows: Array<Record<string, unknown>>): ConnectionProfileInfo[] {
+  return mapProfiles(orderProfilesByChatUse(rows))
+}
+
 const EMPTY_PROFILES: ConnectionProfileInfo[] = []
 
 /**
@@ -36,11 +42,18 @@ const EMPTY_PROFILES: ConnectionProfileInfo[] = []
  * invalidates the list shows here; the long staleTime only spares re-reads
  * between writes.
  */
-export function useConnectionProfiles() {
+export function useConnectionProfiles(options: {
+  /**
+   * `'chat-use'` puts the profiles most used for chat first — for pickers that
+   * choose a chat's (or a character's chat) profile. Default: the operator's
+   * own order from Settings.
+   */
+  order?: 'settings' | 'chat-use'
+} = {}) {
   const { data: profiles = EMPTY_PROFILES, isLoading: loading } = useConnectionProfilesQuery<
     Record<string, unknown>,
     ConnectionProfileInfo[]
-  >({ select: mapProfiles, staleTime: Infinity })
+  >({ select: options.order === 'chat-use' ? mapProfilesByChatUse : mapProfiles, staleTime: Infinity })
 
   return {
     profiles,

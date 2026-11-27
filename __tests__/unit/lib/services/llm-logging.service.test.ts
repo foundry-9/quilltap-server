@@ -12,6 +12,7 @@ import {
   cleanupOldLogs,
 } from '../../../../lib/services/llm-logging.service'
 import { getRepositories } from '../../../../lib/repositories/factory'
+import { accountLLMCall } from '@/lib/services/usage-accounting.service'
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
@@ -24,6 +25,10 @@ jest.mock('@/lib/logging/create-logger', () => ({
 
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
+}))
+
+jest.mock('@/lib/services/usage-accounting.service', () => ({
+  accountLLMCall: jest.fn().mockResolvedValue(undefined),
 }))
 
 const mockGetRepositories = jest.mocked(getRepositories)
@@ -99,6 +104,36 @@ describe('llm-logging.service', () => {
   })
 
   describe('logLLMCall', () => {
+    const call = {
+      userId: 'user-1',
+      type: 'MEMORY_EXTRACTION' as const,
+      chatId: 'chat-1',
+      provider: 'openai',
+      modelName: 'gpt-4o',
+      connectionProfileId: 'profile-1',
+      request: { messages: [{ role: 'user', content: 'Hi' }] },
+      response: { content: 'Hello' },
+      usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 },
+    }
+
+    it('accounts the call even when logging is off', async () => {
+      mockRepos.chatSettings.findByUserId.mockResolvedValue({
+        llmLoggingSettings: { enabled: false, verboseMode: false, retentionDays: 30 },
+      })
+      const result = await logLLMCall(call)
+      expect(result).toBeNull()
+      expect(mockRepos.llmLogs.create).not.toHaveBeenCalled()
+      expect(jest.mocked(accountLLMCall)).toHaveBeenCalledWith(call)
+    })
+
+    it('accounts the call once when logging is on', async () => {
+      mockRepos.chatSettings.findByUserId.mockResolvedValue(null)
+      mockRepos.llmLogs.create.mockResolvedValue({ id: 'log-1' })
+      await logLLMCall(call)
+      expect(mockRepos.llmLogs.create).toHaveBeenCalledTimes(1)
+      expect(jest.mocked(accountLLMCall)).toHaveBeenCalledTimes(1)
+    })
+
     it('creates log entry when logging enabled', async () => {
       mockRepos.chatSettings.findByUserId.mockResolvedValue({
         llmLoggingSettings: {

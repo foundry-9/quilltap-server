@@ -622,7 +622,9 @@ export function translateUpdate(
     // $inc - increment numeric fields
     if (update.$inc) {
       for (const [field, amount] of Object.entries(update.$inc)) {
-        setClauses.push(`"${field}" = "${field}" + ?`);
+        // COALESCE: a counter that is NULL (a nullable cost, a column added
+        // without a default) starts from 0 instead of staying NULL forever.
+        setClauses.push(`"${field}" = COALESCE("${field}", 0) + ?`);
         params.push(amount);
       }
     }

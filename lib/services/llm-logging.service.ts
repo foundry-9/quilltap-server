@@ -22,6 +22,8 @@ import type {
 } from '@/lib/schemas/types';
 import type { LLMLoggingSettings } from '@/lib/schemas/settings.types';
 
+import { accountLLMCall } from './usage-accounting.service';
+
 const logger = createServiceLogger('llm-logging');
 
 const DEFAULT_LOGGING_SETTINGS: LLMLoggingSettings = {
@@ -155,12 +157,26 @@ function summarizeResponse(
 }
 
 /**
- * Log an LLM API call to the database
+ * Record an LLM API call: account its usage (always) and write its log row
+ * (when LLM logging is on). Every provider call goes through here.
  *
  * @param params - The parameters for the log entry
  * @returns The created log entry, or null if logging is disabled or failed
  */
 export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | null> {
+  // Count the call against its profile and chat whether or not logging is on
+  // (usage-accounting.service.ts is the one counter of provider calls). Its
+  // token writes are issued at once; the log row is written alongside, and a
+  // caller that awaits this waits for both.
+  const accounted = accountLLMCall(params);
+  try {
+    return await writeLogRow(params);
+  } finally {
+    await accounted;
+  }
+}
+
+async function writeLogRow(params: LogLLMCallParams): Promise<LLMLog | null> {
   try {
     // Check if logging is enabled for this user
     const loggingSettings = await isLoggingEnabled(params.userId);

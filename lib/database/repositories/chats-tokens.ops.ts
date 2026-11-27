@@ -1,8 +1,17 @@
 /**
  * Chat Token Tracking Operations
  *
- * Handles token usage aggregate tracking: incrementing and resetting
- * prompt/completion token counters and estimated cost.
+ * The chat's usage aggregates: prompt / completion / cache-read / cache-write
+ * token totals and the estimated cost. Written only by `accountLLMCall`
+ * (`lib/services/usage-accounting.service.ts`), one call at a time, with
+ * atomic `$inc`s — never read-then-set, which in the job child (reads see the
+ * real row, writes are buffered) let every call but the last in a job vanish
+ * from the cost. The columns are patch-only on the chats table
+ * (`CHAT_USAGE_AGGREGATE_FIELDS`), so a whole-row update cannot rewind them.
+ *
+ * Tokens and cost are two writes on purpose: the tokens land the moment the
+ * call is accounted, the cost after its pricing lookup, so a slow or failed
+ * price fetch can never cost the token count.
  */
 
 import { ChatMetadata } from '@/lib/schemas/types';
@@ -10,64 +19,69 @@ import { QueryFilter, UpdateOperators } from '../interfaces';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
 import { safeQuery } from './safe-query';
+import type { UsageTally } from '@/lib/llm/profile-usage';
+
+/** The chat columns the usage accounting owns. */
+export const CHAT_USAGE_AGGREGATE_FIELDS: readonly string[] = [
+  'totalPromptTokens',
+  'totalCompletionTokens',
+  'totalCacheReadTokens',
+  'totalCacheWriteTokens',
+  'estimatedCostUSD',
+  'priceSource',
+];
 
 export class ChatTokenTrackingOps {
   constructor(private readonly ctx: ChatOpsContext) {}
 
-  /**
-   * Increment token aggregate counters for a chat
-   * Uses atomic $inc operations for thread safety
-   */
-  async incrementTokenAggregates(
-    chatId: string,
-    promptTokens: number,
-    completionTokens: number,
-    estimatedCost: number | null,
-    priceSource?: ChatMetadata['priceSource']
-  ): Promise<void> {
+  /** Add one call's tokens to a chat's totals. */
+  async addCallUsage(chatId: string, tally: UsageTally): Promise<void> {
+    const inc: Record<string, number> = {};
+    if (tally.promptTokens > 0) inc.totalPromptTokens = tally.promptTokens;
+    if (tally.completionTokens > 0) inc.totalCompletionTokens = tally.completionTokens;
+    if (tally.cacheReadTokens > 0) inc.totalCacheReadTokens = tally.cacheReadTokens;
+    if (tally.cacheWriteTokens > 0) inc.totalCacheWriteTokens = tally.cacheWriteTokens;
+    if (Object.keys(inc).length === 0) return;
+
     await safeQuery(async () => {
       const collection = await this.ctx.getCollection();
-      const now = this.ctx.getCurrentTimestamp();
-
-      // Build update operations
-      const $set: Partial<ChatMetadata> = { updatedAt: now };
-      const updateOps: UpdateOperators<ChatMetadata> = {
-        $inc: {
-          totalPromptTokens: promptTokens,
-          totalCompletionTokens: completionTokens,
-        },
-        $set,
-      };
-
-      // If we have a cost to add, we need special handling
-      if (estimatedCost !== null && estimatedCost > 0) {
-        // Update estimatedCostUSD if it exists, or set it if it doesn't
-        const existing = await this.ctx.findById(chatId);
-        if (existing) {
-          const currentCost = existing.estimatedCostUSD || 0;
-          $set.estimatedCostUSD = currentCost + estimatedCost;
-
-          // Add priceSource if provided
-          if (priceSource) {
-            $set.priceSource = priceSource;
-          }
-        }
-      }
-
       const result = await collection.updateOne(
         { id: chatId } as QueryFilter,
-        updateOps
+        { $inc: inc } as UpdateOperators<ChatMetadata>
       );
-
       if (result.matchedCount === 0) {
-        logger.warn('Chat not found for token aggregates increment', { chatId });
+        logger.warn('Chat not found for usage increment', { chatId });
         return;
       }
-    }, 'Error incrementing token aggregates', {
-      chatId,
-      promptTokens,
-      completionTokens,
-    }, undefined);
+      logger.debug('Added call usage to chat totals', { chatId, ...inc });
+    }, 'Error adding call usage to chat', { chatId, ...tally }, undefined);
+  }
+
+  /**
+   * Add one call's estimated cost to a chat. The price source of the latest
+   * priced call is kept, as before.
+   */
+  async addEstimatedCost(
+    chatId: string,
+    cost: number,
+    priceSource?: ChatMetadata['priceSource']
+  ): Promise<void> {
+    if (!(cost > 0)) return;
+    await safeQuery(async () => {
+      const collection = await this.ctx.getCollection();
+      const result = await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        {
+          $inc: { estimatedCostUSD: cost },
+          ...(priceSource ? { $set: { priceSource } } : {}),
+        } as UpdateOperators<ChatMetadata>
+      );
+      if (result.matchedCount === 0) {
+        logger.warn('Chat not found for cost increment', { chatId });
+        return;
+      }
+      logger.debug('Added call cost to chat', { chatId, cost, priceSource });
+    }, 'Error adding call cost to chat', { chatId, cost }, undefined);
   }
 
   /**
@@ -77,6 +91,8 @@ export class ChatTokenTrackingOps {
     return safeQuery(() => this.ctx.update(chatId, {
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheWriteTokens: 0,
       estimatedCostUSD: null,
     }), 'Error resetting token aggregates', { chatId });
   }

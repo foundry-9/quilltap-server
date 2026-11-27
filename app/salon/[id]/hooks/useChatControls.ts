@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
 import { patchChat, type ChatPatch } from '@/lib/chat/patch-chat'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
+import { orderProfilesByChatUse } from '@/lib/llm/profile-usage'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
@@ -190,8 +191,9 @@ export function useChatControls({
     }
   }, [chat?.isPaused, isAllLLM, allLLMTurnCount])
 
-  // Fetch connection profiles for participant sidebar dropdowns
-  const { data: profilesData } = useConnectionProfilesQuery<{ id: string; name: string; provider?: string; modelName?: string }>()
+  // Fetch connection profiles for participant sidebar dropdowns, most used
+  // for chat first (lib/llm/profile-usage.ts).
+  const { data: profilesData } = useConnectionProfilesQuery<{ id: string; name: string; provider?: string; modelName?: string }>({ select: orderProfilesByChatUse })
 
   const connectionProfiles = useMemo(
     () => profilesData?.map((p) => ({

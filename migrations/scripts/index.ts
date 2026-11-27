@@ -412,6 +412,7 @@ import {
 // The [Name] prefill off on profiles reaching Claude through another provider
 import { retirePrefillOnGatewayClaudeProfilesMigration } from './retire-prefill-on-gateway-claude-profiles';
 import { addCharacterMemoryEditFlagMigration } from './add-character-memory-edit-flag-v1';
+import { splitProfileUsageCountersMigration } from './split-profile-usage-counters-v1';
 // Message route trail: routeTrail column on chat_messages (every model tried, in order)
 import { addRouteTrailMessageColumnMigration } from './add-route-trail-message-column-v1';
 // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
@@ -1009,6 +1010,8 @@ export const migrations: Migration[] = [
   retirePrefillOnGatewayClaudeProfilesMigration,
   // Commonplace Book: characters.canEditMemories (gates read_memory and edit_memory)
   addCharacterMemoryEditFlagMigration,
+  // Usage: connection profiles' chat / automatic ledgers; chats' cache-token totals
+  splitProfileUsageCountersMigration,
 ];
 
 export {
@@ -1488,5 +1491,6 @@ export {
   realignFileEntrySha256V2Migration,
   retirePrefillOnGatewayClaudeProfilesMigration,
   addCharacterMemoryEditFlagMigration,
+  splitProfileUsageCountersMigration,
 };
 

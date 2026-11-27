@@ -2726,28 +2726,21 @@ Export the chat as a single deterministic Markdown transcript (`text/markdown`, 
 
 #### `GET /api/v1/chats/[id]?action=cost`
 
-Get detailed cost breakdown for a chat.
+The chat's usage totals and estimated cost. The totals count every provider call made for the chat — turns and their tool round-trips, failover attempts, regenerations, memory, titles, summaries, the classifier — accounted per call by `accountLLMCall` (`lib/services/usage-accounting.service.ts`). `promptTokens` is uncached input; cache reads and writes are separate, and `totalTokens` is all four. The cost prices cache tokens at the model's cache rates (the input rate when none is published).
+
+**Query**: `detailed=true` adds `messageBreakdown` / `systemEventBreakdown` (per-message figures as stored on the messages; their own sum, not the chat totals).
 
 **Response**: `200 OK`
 
 ```json
 {
-  "chatId": "chat-uuid",
-  "costs": [
-    {
-      "participantId": "participant-uuid",
-      "characterId": "char-uuid",
-      "characterName": "Alice",
-      "provider": "ANTHROPIC",
-      "modelName": "claude-sonnet-4-20250514",
-      "totalPromptTokens": 15000,
-      "totalCompletionTokens": 5000,
-      "messageCount": 25
-    }
-  ],
-  "totalMessages": 50,
-  "totalPromptTokens": 30000,
-  "totalCompletionTokens": 10000
+  "totalTokens": 412000,
+  "promptTokens": 30000,
+  "completionTokens": 10000,
+  "cacheReadTokens": 360000,
+  "cacheWriteTokens": 12000,
+  "estimatedCostUSD": 0.41,
+  "priceSource": "registry"
 }
 ```
 
