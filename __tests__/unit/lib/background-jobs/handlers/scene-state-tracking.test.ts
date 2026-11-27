@@ -26,6 +26,7 @@ jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
   resolveUncensoredCheapLLMSelection: jest.fn(),
+  selectionFromProfile: jest.requireActual('@/lib/llm/cheap-llm').selectionFromProfile,
 }))
 
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({

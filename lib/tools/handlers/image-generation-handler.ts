@@ -25,7 +25,7 @@ import {
 } from '@/lib/tools/image-generation-tool';
 import { preparePromptExpansion, buildExpansionContext, parsePlaceholders, resolvePlaceholders } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
-import { buildCheapLLMConfig, resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { buildCheapLLMConfig, resolveUncensoredCheapLLMSelection, type CheapLLMSelection, selectionFromProfile } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser, selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
 import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import type { ChatSettings, ImageProfile } from '@/lib/schemas/types';
@@ -559,14 +559,7 @@ async function expandPromptWithDescriptions(
       const imagePromptProfile = allProfiles.find(p => p.id === imagePromptProfileId);
       if (imagePromptProfile) {
         // Create a direct selection from the uncensored override profile
-        const isLocal = imagePromptProfile.provider === 'OLLAMA';
-        cheapLLMSelection = {
-          provider: imagePromptProfile.provider,
-          modelName: imagePromptProfile.modelName,
-          connectionProfileId: imagePromptProfile.id,
-          baseUrl: isLocal ? (imagePromptProfile.baseUrl || 'http://localhost:11434') : undefined,
-          isLocal,
-        };
+        cheapLLMSelection = selectionFromProfile(imagePromptProfile, { localBaseUrlFallback: true });
         logger.info('[Image Generation] Using uncensored image prompt profile for dangerous content', {
           context: 'llm-api',
           profileId: imagePromptProfile.id,

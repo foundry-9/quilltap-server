@@ -3,6 +3,12 @@
 /**
  * Hook for uploading files to a project
  * Supports multiple file selection and folder path specification
+ *
+ * Uploads go through the files collection's upload action
+ * (`POST /api/v1/files?action=upload`, `projectId` in the form). The hook used
+ * to post to `/api/v1/projects/[id]/files/upload`, a route that never existed
+ * under v1, so every upload from the project page's Files card failed with
+ * Next's 409 "Server Action unavailable".
  */
 
 import { useRef, useState, useCallback } from 'react'
@@ -26,8 +32,7 @@ interface UseProjectFileUploadOptions {
 }
 
 interface UploadResponse {
-  file?: UploadedProjectFile
-  duplicate?: boolean
+  data?: UploadedProjectFile
   error?: string
 }
 
@@ -59,22 +64,23 @@ export function useProjectFileUpload({
       try {
         const formData = new FormData()
         formData.append('file', file)
+        formData.append('projectId', projectId)
         if (folderPath && folderPath !== '/') {
           formData.append('folderPath', folderPath)
         }
 
-        const res = await fetch(`/api/v1/projects/${projectId}/files/upload`, {
+        const res = await fetch('/api/v1/files?action=upload', {
           method: 'POST',
           body: formData,
         })
 
         const data = await safeJsonParse<UploadResponse>(res)
 
-        if (!res.ok || !data.file) {
+        if (!res.ok || !data.data) {
           throw new Error(data.error || 'Failed to upload file')
         }
 
-        uploadedFiles.push(data.file)
+        uploadedFiles.push(data.data)
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
         console.error('[useProjectFileUpload] Failed to upload file', {

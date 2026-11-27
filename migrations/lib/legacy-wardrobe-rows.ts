@@ -38,6 +38,20 @@ function parseIdList(raw: string | null | undefined): string[] {
   }
 }
 
+/**
+ * Whether the retired table holds any row at all (false once it is gone). A
+ * database born after the vault cutover has the table but never a row in it.
+ */
+export function hasAnyLegacyWardrobeRows(): boolean {
+  const db = getRawDatabase();
+  if (!db) return false;
+  const table = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'wardrobe_items'`)
+    .get();
+  if (!table) return false;
+  return Boolean(db.prepare(`SELECT 1 FROM "wardrobe_items" LIMIT 1`).get());
+}
+
 /** Every legacy row for the character (archived included), or `[]` once the table is gone. */
 export function readLegacyWardrobeRows(characterId: string): WardrobeItem[] {
   const db = getRawDatabase();

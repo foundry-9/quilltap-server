@@ -410,7 +410,7 @@ var init_sleep = __esm({
 var VERSION;
 var init_version = __esm({
   "node_modules/@anthropic-ai/sdk/version.mjs"() {
-    VERSION = "1.12.0";
+    VERSION = "1.14.0";
   }
 });
 
@@ -4722,7 +4722,7 @@ var init_files = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/shared.mjs
-var ClaudeCodeKeyCreatorNotMemberError, ClaudeCodeVersionTooOldError, CMEKKeyDisabledError, CMEKKeyNetworkBlockedError, OrganizationOnHoldError, OrganizationTypeNotSupportedError, ParentOrganizationRequiredError, RequestBodyEncodingInvalidError, RequestBodyEncodingUnsupportedError, LinkedOrganizationBillingUnavailableError, LinkedOrganizationSpendLimitReachedError, SandboxEgressRestrictedError, RequestBodyTooLargeAfterDecodingError, ContractSpendLimitReachedError, EnforcedSpendLimitReachedError, RampLimitExceededError, CMEKContextUnavailableError, CMEKKeyUnreachableError;
+var ClaudeCodeKeyCreatorNotMemberError, ClaudeCodeVersionTooOldError, CMEKKeyDisabledError, CMEKKeyNetworkBlockedError, OrganizationOnHoldError, OrganizationTypeNotSupportedError, ParentOrganizationRequiredError, RequestBodyEncodingInvalidError, RequestBodyEncodingUnsupportedError, WorkspaceHumanReviewDisabledError, LinkedOrganizationBillingUnavailableError, LinkedOrganizationSpendLimitReachedError, SandboxEgressRestrictedError, RequestBodyTooLargeAfterDecodingError, ContractSpendLimitReachedError, EnforcedSpendLimitReachedError, RampLimitExceededError, CMEKContextUnavailableError, CMEKKeyUnreachableError;
 var init_shared = __esm({
   "node_modules/@anthropic-ai/sdk/resources/shared.mjs"() {
     init_error();
@@ -4779,6 +4779,12 @@ var init_shared = __esm({
       }
       RequestBodyEncodingUnsupportedError2._errorName = "RequestBodyEncodingUnsupportedError";
       return RequestBodyEncodingUnsupportedError2;
+    })();
+    WorkspaceHumanReviewDisabledError = /* @__PURE__ */ (() => {
+      class WorkspaceHumanReviewDisabledError2 extends BadRequestError {
+      }
+      WorkspaceHumanReviewDisabledError2._errorName = "WorkspaceHumanReviewDisabledError";
+      return WorkspaceHumanReviewDisabledError2;
     })();
     LinkedOrganizationBillingUnavailableError = /* @__PURE__ */ (() => {
       class LinkedOrganizationBillingUnavailableError2 extends PaymentRequiredError {
@@ -4937,20 +4943,23 @@ var init_deployments = __esm({
        * ```ts
        * const betaManagedAgentsDeployment =
        *   await client.beta.deployments.create({
-       *     agent: 'string',
-       *     environment_id: 'x',
+       *     agent: {
+       *       id: 'agent_011CZkYpogX7uDKUyvBTophP',
+       *       type: 'agent',
+       *     },
+       *     environment_id: 'env_011CZkZ9X2dpNyB7HsEFoRfW',
        *     initial_events: [
        *       {
        *         content: [
        *           {
-       *             text: 'Where is my order #1234?',
+       *             text: "Compile yesterday's orders into report.md.",
        *             type: 'text',
        *           },
        *         ],
        *         type: 'user.message',
        *       },
        *     ],
-       *     name: 'x',
+       *     name: 'Daily order report',
        *   });
        * ```
        */
@@ -6721,6 +6730,310 @@ var init_agents = __esm({
       }
       Agents3.Versions = Versions;
       return Agents3;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/compliance/review/cases.mjs
+var Cases;
+var init_cases = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/compliance/review/cases.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    Cases = class extends APIResource {
+      /**
+       * Read one review case.
+       *
+       * A case that the API key can't reach, or that Anthropic hasn't sent, returns the
+       * same 404 as a case that doesn't exist.
+       *
+       * An Admin API key with the `read:compliance_review_cases` scope can call this
+       * endpoint.
+       *
+       * @example
+       * ```ts
+       * const betaComplianceReviewCase =
+       *   await client.beta.compliance.review.cases.retrieve(
+       *     'case_id',
+       *   );
+       * ```
+       */
+      retrieve(caseID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path`/v1/compliance/review/cases/${caseID}`, {
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.compliance.review.cases.retrieve", options, {
+            route: "/v1/compliance/review/cases/{case_id}",
+            attributes: { "anthropic.compliance.review.case.id": caseID }
+          })
+        });
+      }
+      /**
+       * List the review cases of every organization that the API key can reach, newest
+       * first by default. Both open and closed cases are returned unless `status` is
+       * set.
+       *
+       * To sync, store the largest `updated_at` you have read, and send it as the
+       * at-or-after filter on `updated_at`, sorted by `updated_at` ascending. That finds
+       * new cases, newly closed cases, and cases with a new notice. Read every page,
+       * match results by `id`, and store the new largest value after the last page.
+       *
+       * A request with the `anthropic-user-profile-id` header and no `user_profile_id`
+       * parameter returns a 400 error.
+       *
+       * An Admin API key with the `read:compliance_review_cases` scope can call this
+       * endpoint.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaComplianceReviewCase of client.beta.compliance.review.cases.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/compliance/review/cases", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.compliance.review.cases.list", options, {
+            route: "/v1/compliance/review/cases",
+            queryParams: [
+              "created_at[gt]",
+              "created_at[gte]",
+              "created_at[lt]",
+              "created_at[lte]",
+              "limit",
+              "order",
+              "order_by",
+              "page",
+              "status",
+              "updated_at[gt]",
+              "updated_at[gte]",
+              "updated_at[lt]",
+              "updated_at[lte]",
+              "user_profile_id"
+            ]
+          })
+        });
+      }
+      /**
+       * Send your conclusion on a review case. A response closes the case, and a closed
+       * case can't be reopened.
+       *
+       * Only the first response counts. A request is safe to send again: if the closed
+       * case has a response with the same field values, in any list order, the API
+       * returns 200 and changes nothing. If the closed case has a different response, or
+       * none, the API returns a 400 with `case_closed` in `error.details.error_code`.
+       *
+       * If your end customer reviews this case instead of you, the API returns a 403
+       * with `case_reviewed_by_end_customer` in `error.details.error_code`.
+       *
+       * An Admin API key with the `write:compliance_review_cases` scope can call this
+       * endpoint.
+       *
+       * @example
+       * ```ts
+       * const betaComplianceReviewCase =
+       *   await client.beta.compliance.review.cases.respond(
+       *     'case_id',
+       *     { determination: 'no_violation' },
+       *   );
+       * ```
+       */
+      respond(caseID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/compliance/review/cases/${caseID}/respond`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.compliance.review.cases.respond", options, {
+            route: "/v1/compliance/review/cases/{case_id}/respond",
+            attributes: { "anthropic.compliance.review.case.id": caseID }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/compliance/review/items.mjs
+var Items;
+var init_items = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/compliance/review/items.mjs"() {
+    init_resource();
+    init_headers();
+    init_tracing();
+    init_path();
+    Items = class extends APIResource {
+      /**
+       * Read one message that Anthropic flagged for your organization to review, with
+       * its request and response.
+       *
+       * A message that the API key can't read, or that isn't flagged, returns the same
+       * 404 as one that doesn't exist. For a message recorded with a user profile, send
+       * that profile's ID in the `anthropic-user-profile-id` header. A flagged message
+       * can also return 404 if it belongs to another organization than the key's own, or
+       * to your end customer's user profile or Workspace.
+       *
+       * If your encryption key or storage bucket refuses the read, the API returns a 400
+       * with `cmek_key_disabled`, `storage_bucket_unreadable` or
+       * `customer_storage_refusal_unattributed` in `error.details.error_code`.
+       *
+       * The API key must have the `read:compliance_review_items`,
+       * `read:compliance_user_data` or `read:org_audit` scope. A key of an organization
+       * with no parent organization must have `read:compliance_review_items`.
+       *
+       * @example
+       * ```ts
+       * const betaComplianceReviewItem =
+       *   await client.beta.compliance.review.items.retrieve(
+       *     'item_id',
+       *   );
+       * ```
+       */
+      retrieve(itemID, params = {}, options) {
+        const { betas, user_profile_id } = params ?? {};
+        return this._client.get(path`/v1/compliance/review/items/${itemID}`, {
+          ...options,
+          headers: buildHeaders([
+            {
+              ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0,
+              ...user_profile_id != null ? { "anthropic-user-profile-id": user_profile_id } : void 0
+            },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.compliance.review.items.retrieve", options, {
+            route: "/v1/compliance/review/items/{item_id}",
+            attributes: { "anthropic.compliance.review.item.id": itemID }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/compliance/review/notices.mjs
+var Notices;
+var init_notices = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/compliance/review/notices.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    Notices = class extends APIResource {
+      /**
+       * List Anthropic's notices to the organizations that the API key can reach, newest
+       * first by default. A notice is returned only if the API key can read every case
+       * in its `case_ids`.
+       *
+       * To poll, store the largest `created_at` you have read, and send it as the
+       * at-or-after filter on `created_at`. Read every page, match results by `id`, and
+       * store the new largest value after the last page.
+       *
+       * An Admin API key with the `read:compliance_review_cases` scope can call this
+       * endpoint.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaComplianceReviewNotice of client.beta.compliance.review.notices.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/compliance/review/notices", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.compliance.review.notices.list", options, {
+            route: "/v1/compliance/review/notices",
+            queryParams: [
+              "case_id",
+              "created_at[gt]",
+              "created_at[gte]",
+              "created_at[lt]",
+              "created_at[lte]",
+              "limit",
+              "order",
+              "page"
+            ]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/compliance/review/review.mjs
+var Review;
+var init_review = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/compliance/review/review.mjs"() {
+    init_resource();
+    init_cases();
+    init_cases();
+    init_items();
+    init_items();
+    init_notices();
+    init_notices();
+    Review = /* @__PURE__ */ (() => {
+      class Review2 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.cases = new Cases(this._client);
+          this.notices = new Notices(this._client);
+          this.items = new Items(this._client);
+        }
+      }
+      Review2.Cases = Cases;
+      Review2.Notices = Notices;
+      Review2.Items = Items;
+      return Review2;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/compliance/compliance.mjs
+var Compliance;
+var init_compliance = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/compliance/compliance.mjs"() {
+    init_resource();
+    init_review();
+    init_review();
+    Compliance = /* @__PURE__ */ (() => {
+      class Compliance2 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.review = new Review(this._client);
+        }
+      }
+      Compliance2.Review = Review;
+      return Compliance2;
     })();
   }
 });
@@ -11995,6 +12308,7 @@ var init_batches = __esm({
        * @throws {ClaudeCodeKeyCreatorNotMemberError}
        * @throws {CMEKKeyDisabledError}
        * @throws {OrganizationOnHoldError}
+       * @throws {WorkspaceHumanReviewDisabledError}
        * @throws {EnforcedSpendLimitReachedError}
        *
        * @example
@@ -12255,6 +12569,39 @@ var init_constants = __esm({
       "anthropic.claude-opus-4-1-20250805-v1:0": 8192,
       "claude-opus-4-1@20250805": 8192
     };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/internal/data/deprecated-models.mjs
+var DEPRECATED_MODELS;
+var init_deprecated_models = __esm({
+  "node_modules/@anthropic-ai/sdk/internal/data/deprecated-models.mjs"() {
+    DEPRECATED_MODELS = {
+      "claude-mythos-preview": "June 30th, 2026",
+      "claude-opus-4-5": "January 22nd, 2027",
+      "claude-opus-4-5-20251101": "January 22nd, 2027",
+      "claude-sonnet-4-5": "November 30th, 2026",
+      "claude-sonnet-4-5-20250929": "November 30th, 2026"
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/internal/data/models-to-warn-with-thinking-enabled.mjs
+var MODELS_TO_WARN_WITH_THINKING_ENABLED;
+var init_models_to_warn_with_thinking_enabled = __esm({
+  "node_modules/@anthropic-ai/sdk/internal/data/models-to-warn-with-thinking-enabled.mjs"() {
+    MODELS_TO_WARN_WITH_THINKING_ENABLED = [
+      "claude-opus-4-6",
+      "claude-mythos-preview"
+    ];
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/internal/data.mjs
+var init_data = __esm({
+  "node_modules/@anthropic-ai/sdk/internal/data.mjs"() {
+    init_deprecated_models();
+    init_models_to_warn_with_thinking_enabled();
   }
 });
 
@@ -13658,6 +14005,12 @@ var init_cost = __esm({
        * With no `group_by[]` and no `time_bucket_width`, a single row aggregates the
        * whole range. Includes all cost, whether or not it is attributable to a seat
        * user. Requires an API key with the `read:analytics` scope, or an Admin API key.
+       * This endpoint is in beta and is not available to organizations with HIPAA
+       * readiness enabled: their API requests return a 400 error. A parent
+       * organization's report across its child organizations leaves out the child
+       * organizations that have HIPAA readiness enabled. If the parent has child
+       * organizations and all of them have HIPAA readiness enabled, the request returns
+       * a 400 error.
        *
        * @example
        * ```ts
@@ -13955,7 +14308,12 @@ var init_usage = __esm({
        * returned across pages. With no `group_by[]` and no `time_bucket_width`, a single
        * row aggregates the whole range. Includes all usage, whether or not it is
        * attributable to a seat user. Requires an API key with the `read:analytics`
-       * scope, or an Admin API key.
+       * scope, or an Admin API key. This endpoint is in beta and is not available to
+       * organizations with HIPAA readiness enabled: their API requests return a 400
+       * error. A parent organization's report across its child organizations leaves out
+       * the child organizations that have HIPAA readiness enabled. If the parent has
+       * child organizations and all of them have HIPAA readiness enabled, the request
+       * returns a 400 error.
        *
        * @example
        * ```ts
@@ -14437,2875 +14795,12 @@ var init_analytics = __esm({
   }
 });
 
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-channels.mjs
-var SlackChannels;
-var init_slack_channels = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-channels.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    SlackChannels = class extends APIResource {
-      /**
-       * Set a Slack channel up for Claude Tag and return it with its identifier. If the
-       * channel is already set up, whether in claude.ai, by Claude's first use in it or
-       * by an earlier request, the existing channel is returned, so the request can be
-       * repeated. `settings`, when sent, is applied as an update applies it. Before a
-       * channel is set up, Claude's Slack app confirms with Slack that the channel is in
-       * the workspace, is not archived and is visible to the app; a channel that fails
-       * the confirmation returns 404. Setting the channel up and applying `settings` are
-       * two steps: when the second is refused, the response is the refusal, the channel
-       * stays set up with every setting unset, and the error's
-       * `details.slack_channel_id` holds the channel's identifier.
-       *
-       * @throws {BetaSlackChannelSetUpSettingsRefusedError}
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       * @throws {BetaEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpSettingsConflictError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagSlackChannel =
-       *   await client.beta.organization.claudeTag.slackChannels.create(
-       *     { slack: { channel_id: 'xx', workspace_id: 'xx' } },
-       *   );
-       * ```
-       */
-      create(params, options) {
-        const { betas, ...body } = params;
-        return this._client.post("/v1/organizations/claude_tag/slack_channels", {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.create", options, {
-            route: "/v1/organizations/claude_tag/slack_channels",
-            createdIDAttribute: "anthropic.organization.claude_tag.slack_channel.id"
-          })
-        });
-      }
-      /**
-       * Get one Slack channel and its settings. By default `settings` holds what the
-       * channel itself stores: a setting that is null there is not set on the channel
-       * and is inherited. With `include_inherited=true`, `settings` holds what applies
-       * in the channel once the settings levels above it are taken into account, and the
-       * request fails with 503 rather than resolve against a settings level that could
-       * not be read. Either way `sources` names the settings level each value comes
-       * from, so a caller tells the channel's own value from an inherited one by its
-       * source, not by whether it is null.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagSlackChannel =
-       *   await client.beta.organization.claudeTag.slackChannels.retrieve(
-       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
-       *   );
-       * ```
-       */
-      retrieve(id, params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.get(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.retrieve", options, {
-            route: "/v1/organizations/claude_tag/slack_channels/{id}",
-            queryParams: ["include_inherited"],
-            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
-          })
-        });
-      }
-      /**
-       * Change the settings a Slack channel stores. The update is partial: a setting
-       * left out is unchanged, and a setting sent as null is cleared, so the channel
-       * inherits it. If any value is refused, no setting in the request is stored. A
-       * group direct message takes no settings and returns 400.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       * @throws {BetaEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpSettingsConflictError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagSlackChannel =
-       *   await client.beta.organization.claudeTag.slackChannels.update(
-       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
-       *     { settings: {} },
-       *   );
-       * ```
-       */
-      update(id, params, options) {
-        const { betas, ...body } = params;
-        return this._client.post(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.update", options, {
-            route: "/v1/organizations/claude_tag/slack_channels/{id}",
-            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
-          })
-        });
-      }
-      /**
-       * List the set-up Slack channels of one Slack workspace, newest first by
-       * `created_at`. A channel that is not set up is not listed: Slack holds the full
-       * list of a workspace's channels. Pass `slack_channel_id` as well to look one
-       * channel up by its Slack identifiers: `data` then holds that channel, or is empty
-       * when it is not set up, and `limit` and `page` are ignored. A workspace that the
-       * organization owns only through a Slack Enterprise Grid returns 404 until it is
-       * set up. With `include_inherited=true` each channel's `settings` holds what
-       * applies in it, and the request fails with 503 rather than resolve against a
-       * settings level that could not be read. A `page` cursor resumes only a request
-       * with the same `include_inherited`.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaClaudeTagSlackChannel of client.beta.organization.claudeTag.slackChannels.list(
-       *   { slack_workspace_id: 'slack_workspace_id' },
-       * )) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(params, options) {
-        const { betas, ...query } = params;
-        return this._client.getAPIList("/v1/organizations/claude_tag/slack_channels", PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.list", options, {
-            route: "/v1/organizations/claude_tag/slack_channels",
-            queryParams: ["include_inherited", "limit", "page", "slack_channel_id", "slack_workspace_id"]
-          })
-        });
-      }
-      /**
-       * Remove a Slack channel from Claude Tag. This deletes the channel's stored
-       * settings and its Bundle Targets at once, and then, in the background, the
-       * channel's sessions and their transcripts, its memory, its routines and the
-       * artifacts published from it. None of it can be restored. The channel in Slack
-       * and its messages are unchanged. The request is refused with 400 and
-       * `error.details.error_code` `slack_channel_enabled` while `enabled` resolves to
-       * `true` for the channel, as a read with `include_inherited=true` returns it: set
-       * `enabled` to `false` on the channel first. This guards against removing a
-       * channel in use by mistake; it is not a way to keep Claude out, because the
-       * removal deletes the channel's own `enabled: false` with its other settings,
-       * after which the channel inherits again and Claude's next use of it can set it up
-       * anew with a new identifier. The identifier returns 404 as soon as the request
-       * returns, so a repeated removal returns 404. A group direct message returns 400,
-       * and so does a channel that holds configuration this API does not manage.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       * @throws {BetaSlackChannelSetUpSettingsConflictError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagDeletedSlackChannel =
-       *   await client.beta.organization.claudeTag.slackChannels.delete(
-       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
-       *   );
-       * ```
-       */
-      delete(id, params = {}, options) {
-        const { betas } = params ?? {};
-        return this._client.delete(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.delete", options, {
-            route: "/v1/organizations/claude_tag/slack_channels/{id}",
-            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-workspaces.mjs
-var SlackWorkspaces;
-var init_slack_workspaces = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-workspaces.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    SlackWorkspaces = class extends APIResource {
-      /**
-       * Get one Slack workspace and its settings. By default `settings` holds what the
-       * workspace itself stores: a setting that is null there is not set on the
-       * workspace and is inherited. With `include_inherited=true`, `settings` holds what
-       * applies in the workspace once the organization's Slack defaults are taken into
-       * account, and the request fails with 503 rather than resolve against a settings
-       * level that could not be read. Either way `sources` names the settings level each
-       * value comes from.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagSlackWorkspace =
-       *   await client.beta.organization.claudeTag.slackWorkspaces.retrieve(
-       *     'slws_01Hq8TzW5mKc2YbX7vNd4RfJ',
-       *   );
-       * ```
-       */
-      retrieve(id, params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.get(path`/v1/organizations/claude_tag/slack_workspaces/${id}`, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.retrieve", options, {
-            route: "/v1/organizations/claude_tag/slack_workspaces/{id}",
-            queryParams: ["include_inherited"],
-            attributes: { "anthropic.organization.claude_tag.slack_workspace.id": id }
-          })
-        });
-      }
-      /**
-       * Change the settings a Slack workspace stores. The update is partial: a setting
-       * left out is unchanged, and a setting sent as null is cleared, so the workspace
-       * inherits it. If any value is refused, no setting in the request is stored.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       * @throws {BetaEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
-       * @throws {BetaSlackChannelSetUpSettingsConflictError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagSlackWorkspace =
-       *   await client.beta.organization.claudeTag.slackWorkspaces.update(
-       *     'slws_01Hq8TzW5mKc2YbX7vNd4RfJ',
-       *     { settings: {} },
-       *   );
-       * ```
-       */
-      update(id, params, options) {
-        const { betas, ...body } = params;
-        return this._client.post(path`/v1/organizations/claude_tag/slack_workspaces/${id}`, {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.update", options, {
-            route: "/v1/organizations/claude_tag/slack_workspaces/{id}",
-            attributes: { "anthropic.organization.claude_tag.slack_workspace.id": id }
-          })
-        });
-      }
-      /**
-       * List the set-up Slack workspaces the organization owns, newest first by
-       * `created_at`. Pass `slack_workspace_id` to look one workspace up by its Slack
-       * identifier: `data` then holds that workspace, or is empty when it is not set up.
-       * A workspace of a Slack Enterprise Grid the organization has connected returns
-       * 404 until it is set up. With `include_inherited=true` each workspace's
-       * `settings` holds what applies in it, and the request fails with 503 rather than
-       * resolve against a settings level that could not be read. A `page` cursor resumes
-       * only a request with the same `include_inherited`.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaClaudeTagSlackWorkspace of client.beta.organization.claudeTag.slackWorkspaces.list()) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.getAPIList("/v1/organizations/claude_tag/slack_workspaces", PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.list", options, {
-            route: "/v1/organizations/claude_tag/slack_workspaces",
-            queryParams: ["include_inherited", "limit", "page", "slack_workspace_id"]
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/targets.mjs
-var Targets;
-var init_targets = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/targets.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    Targets = class extends APIResource {
-      /**
-       * Attach a Bundle to a Slack channel or a Slack workspace. A Bundle attached to a
-       * workspace can be used in the workspace and in every channel in it. Attaching a
-       * Bundle to a channel or workspace it is already attached to returns the existing
-       * Bundle Target. The channel or workspace must be set up: attaching never sets a
-       * channel up. A group direct message takes no Bundle and returns 400.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagBundleTarget =
-       *   await client.beta.organization.claudeTag.bundles.targets.create(
-       *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
-       *     {
-       *       target: {
-       *         slack_channel_id: 'xxxxxxxx',
-       *         type: 'slack_channel',
-       *       },
-       *     },
-       *   );
-       * ```
-       */
-      create(bundleID, params, options) {
-        const { target, betas } = params;
-        return this._client.post(path`/v1/organizations/claude_tag/bundles/${bundleID}/targets`, {
-          body: target,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.create", options, {
-            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets",
-            attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
-          })
-        });
-      }
-      /**
-       * Get one Bundle Target. Returns 404 when `target_id` is the identifier of another
-       * Bundle's Bundle Target, or the Bundle Target was detached.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagBundleTarget =
-       *   await client.beta.organization.claudeTag.bundles.targets.retrieve(
-       *     'btgt_01SvpyRQK3nN6eH9uhRA7n1qHq8TzW5mKc2YbX7vNd4RfJ',
-       *     { bundle_id: 'capp_011CZkZjLP1cWxj5EtMmdgbq' },
-       *   );
-       * ```
-       */
-      retrieve(targetID, params, options) {
-        const { bundle_id, betas } = params;
-        return this._client.get(path`/v1/organizations/claude_tag/bundles/${bundle_id}/targets/${targetID}`, {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.retrieve", options, {
-            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets/{target_id}",
-            attributes: {
-              "anthropic.organization.claude_tag.bundle.id": bundle_id,
-              "anthropic.organization.claude_tag.bundle.target.id": targetID
-            }
-          })
-        });
-      }
-      /**
-       * List the Slack channels and Slack workspaces a Bundle is attached to, newest
-       * first by `created_at`. Only channels and workspaces the organization owns are
-       * listed; a Bundle that is attached to anything else has no Bundle Target for it.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaClaudeTagBundleTarget of client.beta.organization.claudeTag.bundles.targets.list(
-       *   'capp_011CZkZjLP1cWxj5EtMmdgbq',
-       * )) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(bundleID, params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path`/v1/organizations/claude_tag/bundles/${bundleID}/targets`, PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.list", options, {
-            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets",
-            queryParams: ["limit", "page"],
-            attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
-          })
-        });
-      }
-      /**
-       * Detach a Bundle from a Slack channel or a Slack workspace. A repeated detach
-       * returns 404.
-       *
-       * @throws {BetaAPIKeyScopeMissingError}
-       * @throws {BetaClaudeTagWritesNotEnabledError}
-       * @throws {BetaComplianceConfigurationRestrictedError}
-       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeTagDeletedBundleTarget =
-       *   await client.beta.organization.claudeTag.bundles.targets.delete(
-       *     'btgt_01SvpyRQK3nN6eH9uhRA7n1qHq8TzW5mKc2YbX7vNd4RfJ',
-       *     { bundle_id: 'capp_011CZkZjLP1cWxj5EtMmdgbq' },
-       *   );
-       * ```
-       */
-      delete(targetID, params, options) {
-        const { bundle_id, betas } = params;
-        return this._client.delete(path`/v1/organizations/claude_tag/bundles/${bundle_id}/targets/${targetID}`, {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.delete", options, {
-            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets/{target_id}",
-            attributes: {
-              "anthropic.organization.claude_tag.bundle.id": bundle_id,
-              "anthropic.organization.claude_tag.bundle.target.id": targetID
-            }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/bundles.mjs
-var Bundles;
-var init_bundles = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/bundles.mjs"() {
-    init_resource();
-    init_targets();
-    init_targets();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    Bundles = /* @__PURE__ */ (() => {
-      class Bundles2 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.targets = new Targets(this._client);
-        }
-        /**
-         * Get one Bundle. What the Bundle grants (connectors, repositories and
-         * credentials) is never returned.
-         *
-         * @throws {BetaAPIKeyScopeMissingError}
-         * @throws {BetaClaudeTagWritesNotEnabledError}
-         * @throws {BetaComplianceConfigurationRestrictedError}
-         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-         *
-         * @example
-         * ```ts
-         * const betaClaudeTagBundle =
-         *   await client.beta.organization.claudeTag.bundles.retrieve(
-         *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
-         *   );
-         * ```
-         */
-        retrieve(bundleID, params = {}, options) {
-          const { betas } = params ?? {};
-          return this._client.get(path`/v1/organizations/claude_tag/bundles/${bundleID}`, {
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.retrieve", options, {
-              route: "/v1/organizations/claude_tag/bundles/{bundle_id}",
-              attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
-            })
-          });
-        }
-        /**
-         * Change a Bundle's instructions. The update is partial: a field left out is
-         * unchanged, and `instructions` sent as null or as an empty string clears them.
-         * The later of two updates wins. Sessions that start after the change use the new
-         * instructions; sessions already running keep the ones they started with. Some
-         * Bundles are managed in claude.ai, and an update of one returns 400.
-         *
-         * @throws {BetaBundleAttachmentNotSupportedError}
-         * @throws {BetaBundleOnCallError}
-         * @throws {BetaAPIKeyScopeMissingError}
-         * @throws {BetaClaudeTagWritesNotEnabledError}
-         * @throws {BetaComplianceConfigurationRestrictedError}
-         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-         * @throws {BetaSlackChannelSetUpSettingsConflictError}
-         *
-         * @example
-         * ```ts
-         * const betaClaudeTagBundle =
-         *   await client.beta.organization.claudeTag.bundles.update(
-         *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
-         *     {},
-         *   );
-         * ```
-         */
-        update(bundleID, params, options) {
-          const { betas, ...body } = params;
-          return this._client.post(path`/v1/organizations/claude_tag/bundles/${bundleID}`, {
-            body,
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.update", options, {
-              route: "/v1/organizations/claude_tag/bundles/{bundle_id}",
-              attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
-            })
-          });
-        }
-        /**
-         * List the organization's Bundles, newest first by `created_at`. A Bundle that
-         * Claude Tag manages for itself is not listed.
-         *
-         * @throws {BetaAPIKeyScopeMissingError}
-         * @throws {BetaClaudeTagWritesNotEnabledError}
-         * @throws {BetaComplianceConfigurationRestrictedError}
-         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
-         *
-         * @example
-         * ```ts
-         * // Automatically fetches more pages as needed.
-         * for await (const betaClaudeTagBundle of client.beta.organization.claudeTag.bundles.list()) {
-         *   // ...
-         * }
-         * ```
-         */
-        list(params = {}, options) {
-          const { betas, ...query } = params ?? {};
-          return this._client.getAPIList("/v1/organizations/claude_tag/bundles", PageCursor, {
-            query,
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.list", options, {
-              route: "/v1/organizations/claude_tag/bundles",
-              queryParams: ["limit", "page"]
-            })
-          });
-        }
-      }
-      Bundles2.Targets = Targets;
-      return Bundles2;
-    })();
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/claude-tag.mjs
-var BetaBundleAttachmentNotSupportedError, BetaBundleOnCallError, BetaSlackChannelSetUpSettingsRefusedError, BetaAPIKeyScopeMissingError, BetaClaudeTagWritesNotEnabledError, BetaComplianceConfigurationRestrictedError, BetaOrganizationLevelScopedAPIKeyRequiredError, BetaSlackChannelSetUpEnvironmentNotFoundError, BetaSlackChannelSetUpSettingsConflictError, ClaudeTag;
-var init_claude_tag = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/claude-tag.mjs"() {
-    init_resource();
-    init_slack_channels();
-    init_slack_channels();
-    init_slack_workspaces();
-    init_slack_workspaces();
-    init_bundles();
-    init_bundles();
-    init_error();
-    BetaBundleAttachmentNotSupportedError = /* @__PURE__ */ (() => {
-      class BetaBundleAttachmentNotSupportedError2 extends BadRequestError {
-      }
-      BetaBundleAttachmentNotSupportedError2._errorName = "BetaBundleAttachmentNotSupportedError";
-      return BetaBundleAttachmentNotSupportedError2;
-    })();
-    BetaBundleOnCallError = /* @__PURE__ */ (() => {
-      class BetaBundleOnCallError2 extends BadRequestError {
-      }
-      BetaBundleOnCallError2._errorName = "BetaBundleOnCallError";
-      return BetaBundleOnCallError2;
-    })();
-    BetaSlackChannelSetUpSettingsRefusedError = /* @__PURE__ */ (() => {
-      class BetaSlackChannelSetUpSettingsRefusedError2 extends BadRequestError {
-      }
-      BetaSlackChannelSetUpSettingsRefusedError2._errorName = "BetaSlackChannelSetUpSettingsRefusedError";
-      return BetaSlackChannelSetUpSettingsRefusedError2;
-    })();
-    BetaAPIKeyScopeMissingError = /* @__PURE__ */ (() => {
-      class BetaAPIKeyScopeMissingError2 extends PermissionDeniedError {
-      }
-      BetaAPIKeyScopeMissingError2._errorName = "BetaAPIKeyScopeMissingError";
-      return BetaAPIKeyScopeMissingError2;
-    })();
-    BetaClaudeTagWritesNotEnabledError = /* @__PURE__ */ (() => {
-      class BetaClaudeTagWritesNotEnabledError2 extends PermissionDeniedError {
-      }
-      BetaClaudeTagWritesNotEnabledError2._errorName = "BetaClaudeTagWritesNotEnabledError";
-      return BetaClaudeTagWritesNotEnabledError2;
-    })();
-    BetaComplianceConfigurationRestrictedError = /* @__PURE__ */ (() => {
-      class BetaComplianceConfigurationRestrictedError2 extends PermissionDeniedError {
-      }
-      BetaComplianceConfigurationRestrictedError2._errorName = "BetaComplianceConfigurationRestrictedError";
-      return BetaComplianceConfigurationRestrictedError2;
-    })();
-    BetaOrganizationLevelScopedAPIKeyRequiredError = /* @__PURE__ */ (() => {
-      class BetaOrganizationLevelScopedAPIKeyRequiredError2 extends PermissionDeniedError {
-      }
-      BetaOrganizationLevelScopedAPIKeyRequiredError2._errorName = "BetaOrganizationLevelScopedAPIKeyRequiredError";
-      return BetaOrganizationLevelScopedAPIKeyRequiredError2;
-    })();
-    BetaSlackChannelSetUpEnvironmentNotFoundError = /* @__PURE__ */ (() => {
-      class BetaSlackChannelSetUpEnvironmentNotFoundError2 extends NotFoundError {
-      }
-      BetaSlackChannelSetUpEnvironmentNotFoundError2._errorName = "BetaSlackChannelSetUpEnvironmentNotFoundError";
-      return BetaSlackChannelSetUpEnvironmentNotFoundError2;
-    })();
-    BetaSlackChannelSetUpSettingsConflictError = /* @__PURE__ */ (() => {
-      class BetaSlackChannelSetUpSettingsConflictError2 extends ConflictError {
-      }
-      BetaSlackChannelSetUpSettingsConflictError2._errorName = "BetaSlackChannelSetUpSettingsConflictError";
-      return BetaSlackChannelSetUpSettingsConflictError2;
-    })();
-    ClaudeTag = /* @__PURE__ */ (() => {
-      class ClaudeTag2 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.slackChannels = new SlackChannels(this._client);
-          this.slackWorkspaces = new SlackWorkspaces(this._client);
-          this.bundles = new Bundles(this._client);
-        }
-      }
-      ClaudeTag2.BetaBundleAttachmentNotSupportedError = BetaBundleAttachmentNotSupportedError;
-      ClaudeTag2.BetaBundleOnCallError = BetaBundleOnCallError;
-      ClaudeTag2.BetaSlackChannelSetUpSettingsRefusedError = BetaSlackChannelSetUpSettingsRefusedError;
-      ClaudeTag2.BetaAPIKeyScopeMissingError = BetaAPIKeyScopeMissingError;
-      ClaudeTag2.BetaClaudeTagWritesNotEnabledError = BetaClaudeTagWritesNotEnabledError;
-      ClaudeTag2.BetaComplianceConfigurationRestrictedError = BetaComplianceConfigurationRestrictedError;
-      ClaudeTag2.BetaOrganizationLevelScopedAPIKeyRequiredError = BetaOrganizationLevelScopedAPIKeyRequiredError;
-      ClaudeTag2.BetaSlackChannelSetUpEnvironmentNotFoundError = BetaSlackChannelSetUpEnvironmentNotFoundError;
-      ClaudeTag2.BetaSlackChannelSetUpSettingsConflictError = BetaSlackChannelSetUpSettingsConflictError;
-      ClaudeTag2.SlackChannels = SlackChannels;
-      ClaudeTag2.SlackWorkspaces = SlackWorkspaces;
-      ClaudeTag2.Bundles = Bundles;
-      return ClaudeTag2;
-    })();
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/users.mjs
-var BetaCannotSignOutPrimaryOwnerError, BetaCannotSignOutSelfError, BetaCannotSignOutManagedMemberError, BetaCannotSignOutMembershipAdminError, BetaCannotSignOutOwnerError, BetaCannotSignOutPrivilegedMemberError, Users2;
-var init_users2 = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/users.mjs"() {
-    init_resource();
-    init_error();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    BetaCannotSignOutPrimaryOwnerError = /* @__PURE__ */ (() => {
-      class BetaCannotSignOutPrimaryOwnerError2 extends BadRequestError {
-      }
-      BetaCannotSignOutPrimaryOwnerError2._errorName = "BetaCannotSignOutPrimaryOwnerError";
-      return BetaCannotSignOutPrimaryOwnerError2;
-    })();
-    BetaCannotSignOutSelfError = /* @__PURE__ */ (() => {
-      class BetaCannotSignOutSelfError2 extends BadRequestError {
-      }
-      BetaCannotSignOutSelfError2._errorName = "BetaCannotSignOutSelfError";
-      return BetaCannotSignOutSelfError2;
-    })();
-    BetaCannotSignOutManagedMemberError = /* @__PURE__ */ (() => {
-      class BetaCannotSignOutManagedMemberError2 extends PermissionDeniedError {
-      }
-      BetaCannotSignOutManagedMemberError2._errorName = "BetaCannotSignOutManagedMemberError";
-      return BetaCannotSignOutManagedMemberError2;
-    })();
-    BetaCannotSignOutMembershipAdminError = /* @__PURE__ */ (() => {
-      class BetaCannotSignOutMembershipAdminError2 extends PermissionDeniedError {
-      }
-      BetaCannotSignOutMembershipAdminError2._errorName = "BetaCannotSignOutMembershipAdminError";
-      return BetaCannotSignOutMembershipAdminError2;
-    })();
-    BetaCannotSignOutOwnerError = /* @__PURE__ */ (() => {
-      class BetaCannotSignOutOwnerError2 extends PermissionDeniedError {
-      }
-      BetaCannotSignOutOwnerError2._errorName = "BetaCannotSignOutOwnerError";
-      return BetaCannotSignOutOwnerError2;
-    })();
-    BetaCannotSignOutPrivilegedMemberError = /* @__PURE__ */ (() => {
-      class BetaCannotSignOutPrivilegedMemberError2 extends PermissionDeniedError {
-      }
-      BetaCannotSignOutPrivilegedMemberError2._errorName = "BetaCannotSignOutPrivilegedMemberError";
-      return BetaCannotSignOutPrivilegedMemberError2;
-    })();
-    Users2 = /* @__PURE__ */ (() => {
-      class Users8 extends APIResource {
-        /**
-         * Retrieve a member of the organization by user ID.
-         *
-         * @example
-         * ```ts
-         * const betaOrganizationUser =
-         *   await client.beta.organization.users.retrieve('user_id');
-         * ```
-         */
-        retrieve(userID, options) {
-          return this._client.get(path`/v1/organizations/users/${userID}`, {
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.users.retrieve", options, {
-              route: "/v1/organizations/users/{user_id}",
-              attributes: { "anthropic.organization.user.id": userID }
-            })
-          });
-        }
-        /**
-         * Update a member's organization role.
-         *
-         * @throws {SandboxEgressRestrictedError}
-         *
-         * @example
-         * ```ts
-         * const betaOrganizationUser =
-         *   await client.beta.organization.users.update('user_id', {
-         *     role: 'user',
-         *   });
-         * ```
-         */
-        update(userID, body, options) {
-          return this._client.post(path`/v1/organizations/users/${userID}`, {
-            body,
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.users.update", options, {
-              route: "/v1/organizations/users/{user_id}",
-              attributes: { "anthropic.organization.user.id": userID }
-            })
-          });
-        }
-        /**
-         * List the organization's members.
-         *
-         * @example
-         * ```ts
-         * // Automatically fetches more pages as needed.
-         * for await (const betaOrganizationUser of client.beta.organization.users.list()) {
-         *   // ...
-         * }
-         * ```
-         */
-        list(query = {}, options) {
-          return this._client.getAPIList("/v1/organizations/users", Page, {
-            query,
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.users.list", options, {
-              route: "/v1/organizations/users",
-              queryParams: ["after_id", "before_id", "email", "limit", "roles"]
-            })
-          });
-        }
-        /**
-         * Remove a member from the organization.
-         *
-         * @throws {CannotRemoveLastMemberError}
-         * @throws {SandboxEgressRestrictedError}
-         * @throws {ConcurrentMembershipChangeError}
-         *
-         * @example
-         * ```ts
-         * const user = await client.beta.organization.users.remove(
-         *   'user_id',
-         * );
-         * ```
-         */
-        remove(userID, options) {
-          return this._client.delete(path`/v1/organizations/users/${userID}`, {
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.users.remove", options, {
-              route: "/v1/organizations/users/{user_id}",
-              attributes: { "anthropic.organization.user.id": userID }
-            })
-          });
-        }
-        /**
-         * Sign a member out of Claude everywhere, without removing them from the
-         * organization. This ends their sign-in sessions and removes their trusted devices
-         * wherever they use Claude, including other organizations and individual plans. It
-         * also ends the OAuth tokens issued to them for this organization, so apps such as
-         * Claude Code must sign in again.
-         *
-         * A token can take up to an hour to stop working, though it almost always stops at
-         * once. The member keeps their role and can sign in again right away. To keep them
-         * out, remove them from the organization or, if your organization uses single
-         * sign-on, block them in your identity provider. Signing out does not end API
-         * keys, OAuth tokens that were not issued for this organization, or the member's
-         * Claude Code cloud sessions and routines.
-         *
-         * You cannot sign out the organization's primary owner or the person your API key
-         * or token acts for, and a request to sign out another owner, a member with owner
-         * permissions, or a membership admin may be refused. A refused request returns a
-         * `400` or `403` error that says why. If the request returns `503`, send it again
-         * to finish; anything already ended stays ended.
-         *
-         * Every request must include the beta header
-         * `anthropic-beta: admin-user-sign-out-2026-10-08`. A request without it returns
-         * `400`. Sign-out is in beta for Claude Enterprise organizations. In an
-         * organization where it is not enabled, a request returns `400` with `error_code`
-         * `organization_not_enrolled_in_beta`. In a Claude Enterprise organization, an API
-         * key needs the `write:members` scope; a key without it gets `403`.
-         *
-         * @throws {BetaCannotSignOutPrimaryOwnerError}
-         * @throws {BetaCannotSignOutSelfError}
-         * @throws {BetaOrganizationNotEnrolledInBetaError}
-         * @throws {BetaCannotSignOutManagedMemberError}
-         * @throws {BetaCannotSignOutMembershipAdminError}
-         * @throws {BetaCannotSignOutOwnerError}
-         * @throws {BetaCannotSignOutPrivilegedMemberError}
-         * @throws {SandboxEgressRestrictedError}
-         *
-         * @example
-         * ```ts
-         * const betaOrganizationUser =
-         *   await client.beta.organization.users.signOut('user_id');
-         * ```
-         */
-        signOut(userID, params = {}, options) {
-          const { betas } = params ?? {};
-          return this._client.post(path`/v1/organizations/users/${userID}/sign_out`, {
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "admin-user-sign-out-2026-10-08"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.users.sign_out", options, {
-              route: "/v1/organizations/users/{user_id}/sign_out",
-              attributes: { "anthropic.organization.user.id": userID }
-            })
-          });
-        }
-      }
-      Users8.BetaCannotSignOutPrimaryOwnerError = BetaCannotSignOutPrimaryOwnerError;
-      Users8.BetaCannotSignOutSelfError = BetaCannotSignOutSelfError;
-      Users8.BetaCannotSignOutManagedMemberError = BetaCannotSignOutManagedMemberError;
-      Users8.BetaCannotSignOutMembershipAdminError = BetaCannotSignOutMembershipAdminError;
-      Users8.BetaCannotSignOutOwnerError = BetaCannotSignOutOwnerError;
-      Users8.BetaCannotSignOutPrivilegedMemberError = BetaCannotSignOutPrivilegedMemberError;
-      return Users8;
-    })();
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/members.mjs
-var Members;
-var init_members = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/members.mjs"() {
-    init_resource();
-    init_pagination();
-    init_tracing();
-    init_path();
-    Members = class extends APIResource {
-      /**
-       * List members of an RBAC Group.
-       *
-       * The RBAC Groups API is available to Claude Enterprise organizations only.
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaRBACGroupMember of client.beta.organization.rbacGroups.members.list(
-       *   'rbac_group_id',
-       * )) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(rbacGroupID, query = {}, options) {
-        return this._client.getAPIList(path`/v1/organizations/rbac_groups/${rbacGroupID}/members`, PageCursor, {
-          query,
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.list", options, {
-            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members",
-            queryParams: ["limit", "page"],
-            attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
-          })
-        });
-      }
-      /**
-       * Add a User to an RBAC Group. Membership of groups provisioned by an identity
-       * provider (source type `"scim"`) cannot be modified via the API while an
-       * organization in the tenant uses SCIM provisioning.
-       *
-       * The RBAC Groups API is available to Claude Enterprise organizations only.
-       *
-       * @throws {RBACGroupGrantsOwnerAccessError}
-       * @throws {RBACGroupOwnerAccessUnconfirmedError}
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaRBACGroupMember =
-       *   await client.beta.organization.rbacGroups.members.add(
-       *     'rbac_group_id',
-       *     { user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu' },
-       *   );
-       * ```
-       */
-      add(rbacGroupID, body, options) {
-        return this._client.post(path`/v1/organizations/rbac_groups/${rbacGroupID}/members`, {
-          body,
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.add", options, {
-            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members",
-            attributes: { "anthropic.organization.rbac_group.id": rbacGroupID },
-            createdIDAttribute: "anthropic.organization.rbac_group.member.id",
-            createdIDField: "user_id"
-          })
-        });
-      }
-      /**
-       * Remove a User from an RBAC Group. Membership of groups provisioned by an
-       * identity provider (source type `"scim"`) cannot be modified via the API while an
-       * organization in the tenant uses SCIM provisioning.
-       *
-       * The RBAC Groups API is available to Claude Enterprise organizations only.
-       *
-       * @throws {RBACGroupGrantsOwnerAccessError}
-       * @throws {RBACGroupOwnerAccessUnconfirmedError}
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaDeletedRBACGroupMember =
-       *   await client.beta.organization.rbacGroups.members.remove(
-       *     'user_id',
-       *     { rbac_group_id: 'rbac_group_id' },
-       *   );
-       * ```
-       */
-      remove(userID, params, options) {
-        const { rbac_group_id } = params;
-        return this._client.delete(path`/v1/organizations/rbac_groups/${rbac_group_id}/members/${userID}`, {
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.remove", options, {
-            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members/{user_id}",
-            attributes: {
-              "anthropic.organization.rbac_group.id": rbac_group_id,
-              "anthropic.organization.rbac_group.member.id": userID
-            }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/rbac-groups.mjs
-var BetaRBACGroupNotFoundError, RBACGroups;
-var init_rbac_groups = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/rbac-groups.mjs"() {
-    init_resource();
-    init_members();
-    init_members();
-    init_error();
-    init_pagination();
-    init_tracing();
-    init_path();
-    BetaRBACGroupNotFoundError = /* @__PURE__ */ (() => {
-      class BetaRBACGroupNotFoundError2 extends NotFoundError {
-      }
-      BetaRBACGroupNotFoundError2._errorName = "BetaRBACGroupNotFoundError";
-      return BetaRBACGroupNotFoundError2;
-    })();
-    RBACGroups = /* @__PURE__ */ (() => {
-      class RBACGroups4 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.members = new Members(this._client);
-        }
-        /**
-         * Create an RBAC Group in the Claude Enterprise tenant. Groups created via the API
-         * have source type `"direct"`.
-         *
-         * The RBAC Groups API is available to Claude Enterprise organizations only.
-         *
-         * @throws {SandboxEgressRestrictedError}
-         *
-         * @example
-         * ```ts
-         * const betaRBACGroup =
-         *   await client.beta.organization.rbacGroups.create({
-         *     name: 'Engineering',
-         *   });
-         * ```
-         */
-        create(body, options) {
-          return this._client.post("/v1/organizations/rbac_groups", {
-            body,
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.create", options, {
-              route: "/v1/organizations/rbac_groups",
-              createdIDAttribute: "anthropic.organization.rbac_group.id"
-            })
-          });
-        }
-        /**
-         * Retrieve an RBAC Group by ID.
-         *
-         * The RBAC Groups API is available to Claude Enterprise organizations only.
-         *
-         * @example
-         * ```ts
-         * const betaRBACGroup =
-         *   await client.beta.organization.rbacGroups.retrieve(
-         *     'rbac_group_id',
-         *   );
-         * ```
-         */
-        retrieve(rbacGroupID, options) {
-          return this._client.get(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.retrieve", options, {
-              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
-              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
-            })
-          });
-        }
-        /**
-         * Update an RBAC Group's name. Groups provisioned by an identity provider (source
-         * type `"scim"`) cannot be modified via the API while an organization in the
-         * tenant uses SCIM provisioning.
-         *
-         * The RBAC Groups API is available to Claude Enterprise organizations only.
-         *
-         * @throws {SandboxEgressRestrictedError}
-         *
-         * @example
-         * ```ts
-         * const betaRBACGroup =
-         *   await client.beta.organization.rbacGroups.update(
-         *     'rbac_group_id',
-         *     {},
-         *   );
-         * ```
-         */
-        update(rbacGroupID, body, options) {
-          return this._client.post(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
-            body,
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.update", options, {
-              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
-              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
-            })
-          });
-        }
-        /**
-         * List RBAC Groups in the Claude Enterprise tenant.
-         *
-         * The RBAC Groups API is available to Claude Enterprise organizations only.
-         *
-         * @example
-         * ```ts
-         * // Automatically fetches more pages as needed.
-         * for await (const betaRBACGroup of client.beta.organization.rbacGroups.list()) {
-         *   // ...
-         * }
-         * ```
-         */
-        list(query = {}, options) {
-          return this._client.getAPIList("/v1/organizations/rbac_groups", PageCursor, {
-            query,
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.list", options, {
-              route: "/v1/organizations/rbac_groups",
-              queryParams: ["limit", "page"]
-            })
-          });
-        }
-        /**
-         * Delete an RBAC Group. Groups provisioned by an identity provider (source type
-         * `"scim"`) cannot be deleted via the API while an organization in the tenant uses
-         * SCIM provisioning.
-         *
-         * The RBAC Groups API is available to Claude Enterprise organizations only.
-         *
-         * @throws {RBACGroupGrantsOwnerAccessError}
-         * @throws {RBACGroupOwnerAccessUnconfirmedError}
-         * @throws {SandboxEgressRestrictedError}
-         *
-         * @example
-         * ```ts
-         * const betaDeletedRBACGroup =
-         *   await client.beta.organization.rbacGroups.delete(
-         *     'rbac_group_id',
-         *   );
-         * ```
-         */
-        delete(rbacGroupID, options) {
-          return this._client.delete(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.delete", options, {
-              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
-              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
-            })
-          });
-        }
-      }
-      RBACGroups4.BetaRBACGroupNotFoundError = BetaRBACGroupNotFoundError;
-      RBACGroups4.Members = Members;
-      return RBACGroups4;
-    })();
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/installation-settings.mjs
-var InstallationSettings;
-var init_installation_settings = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/installation-settings.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    InstallationSettings = class extends APIResource {
-      /**
-       * List an organization-owned Plugin's installation settings, which say which
-       * members it is for, most recently created first.
-       *
-       * The list holds the Plugin's own organization-wide setting (absent while the
-       * Plugin inherits its marketplace's default) and each RBAC Group's own setting. A
-       * member-owned Plugin has shares instead, so this path returns 404 for one.
-       *
-       * **Accepted credentials:** an Admin API key with the `read:plugins` or
-       * `read:org_audit` scope, or a Compliance Access Key with the
-       * `read:compliance_org_data` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-       * available to Claude Enterprise organizations only. It is not available to Claude
-       * Platform (Claude Console) organizations, or to organizations with HIPAA
-       * readiness enabled.
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaPluginInstallationSetting of client.beta.organization.plugins.installationSettings.list(
-       *   'plugin_id',
-       * )) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(pluginID, params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path`/v1/organizations/plugins/${pluginID}/installation_settings`, PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.installation_settings.list", options, {
-            route: "/v1/organizations/plugins/{plugin_id}/installation_settings",
-            queryParams: ["limit", "organization_id", "page", "target_type"],
-            attributes: { "anthropic.organization.plugin.id": pluginID }
-          })
-        });
-      }
-      /**
-       * Remove an organization-owned Plugin's own installation setting for the whole
-       * organization or for one RBAC Group.
-       *
-       * Removing the `organization` target returns the Plugin to its marketplace's
-       * default installation setting and leaves the groups' settings in place. Removing
-       * a group's setting makes the group's members fall back to the Plugin's
-       * organization-wide setting or to the settings of their other groups.
-       *
-       * A target that holds no setting of its own returns 404 (a Plugin that already
-       * inherits its marketplace's default holds no `organization` setting), and so does
-       * a member-owned Plugin.
-       *
-       * A removal counts as one of the Plugin's installation-setting writes: send all of
-       * those writes one at a time. If several arrive for the same Plugin at the same
-       * time, the server handles them one after another and can answer some of them with
-       * `503` and `x-should-retry: true` instead of applying them; wait a second or two
-       * and send the removal again. A `404` on the repeat means the setting is already
-       * gone.
-       *
-       * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-       * available to Claude Enterprise organizations only. It is not available to Claude
-       * Platform (Claude Console) organizations, or to organizations with HIPAA
-       * readiness enabled.
-       *
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaDeletedPluginInstallationSetting =
-       *   await client.beta.organization.plugins.installationSettings.remove(
-       *     'target',
-       *     { plugin_id: 'plugin_id' },
-       *   );
-       * ```
-       */
-      remove(target, params, options) {
-        const { plugin_id, betas } = params;
-        return this._client.delete(path`/v1/organizations/plugins/${plugin_id}/installation_settings/${target}`, {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.installation_settings.remove", options, {
-            route: "/v1/organizations/plugins/{plugin_id}/installation_settings/{target}",
-            attributes: {
-              "anthropic.organization.plugin.id": plugin_id,
-              "anthropic.organization.plugin.installation_setting.id": target
-            }
-          })
-        });
-      }
-      /**
-       * Set or change an organization-owned Plugin's installation setting for the whole
-       * organization or for one RBAC Group.
-       *
-       * Writing the value a target already holds of its own changes nothing.
-       *
-       * A member-owned Plugin has shares instead of installation settings, so this path
-       * returns 404 for one.
-       *
-       * Send a Plugin's installation-setting writes one at a time. If several writes for
-       * the same Plugin arrive at the same time, the server handles them one after
-       * another and can answer some of them with `503` instead of applying them. That
-       * `503` carries `x-should-retry: true`, and the write is safe to repeat: wait a
-       * second or two, then send it again.
-       *
-       * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-       * available to Claude Enterprise organizations only. It is not available to Claude
-       * Platform (Claude Console) organizations, or to organizations with HIPAA
-       * readiness enabled.
-       *
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaPluginInstallationSetting =
-       *   await client.beta.organization.plugins.installationSettings.set(
-       *     'target',
-       *     {
-       *       plugin_id: 'plugin_id',
-       *       installation_preference: 'required',
-       *     },
-       *   );
-       * ```
-       */
-      set(target, params, options) {
-        const { plugin_id, betas, ...body } = params;
-        return this._client.post(path`/v1/organizations/plugins/${plugin_id}/installation_settings/${target}`, {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.installation_settings.set", options, {
-            route: "/v1/organizations/plugins/{plugin_id}/installation_settings/{target}",
-            attributes: {
-              "anthropic.organization.plugin.id": plugin_id,
-              "anthropic.organization.plugin.installation_setting.id": target
-            }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/shares.mjs
-var Shares;
-var init_shares = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/shares.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    Shares = class extends APIResource {
-      /**
-       * List the shares the owner of a member-owned Plugin has given — to every member
-       * of the organization, to an RBAC Group, or to one member — most recently granted
-       * first.
-       *
-       * Shares are read-only in this API: members give and withdraw them in claude.ai,
-       * and who gave a share is recorded on the Compliance API activity feed rather than
-       * on the share. An organization-owned Plugin has installation settings instead, so
-       * this path returns 404 for one.
-       *
-       * **Accepted credentials:** an Admin API key with the `read:plugins` or
-       * `read:org_audit` scope, or a Compliance Access Key with the
-       * `read:compliance_org_data` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-       * available to Claude Enterprise organizations only. It is not available to Claude
-       * Platform (Claude Console) organizations, or to organizations with HIPAA
-       * readiness enabled.
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaPluginShare of client.beta.organization.plugins.shares.list(
-       *   'plugin_id',
-       * )) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(pluginID, params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path`/v1/organizations/plugins/${pluginID}/shares`, PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.shares.list", options, {
-            route: "/v1/organizations/plugins/{plugin_id}/shares",
-            queryParams: ["limit", "organization_id", "page", "target_type"],
-            attributes: { "anthropic.organization.plugin.id": pluginID }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/versions.mjs
-var Versions2;
-var init_versions2 = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/versions.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_uploads();
-    init_path();
-    Versions2 = class extends APIResource {
-      /**
-       * Add a version to an organization-owned Plugin by uploading the new version's
-       * files; it becomes the version served to members unless the Plugin's served
-       * version has been pinned.
-       *
-       * The upload is the same `multipart/form-data` as creating a Plugin: the version's
-       * files (`files`, each part sent as `files[]`) and optional `release_notes`. The
-       * uploaded manifest's `name` must equal the Plugin's `name`. Returns the stored
-       * version; read the Plugin back to see which version it serves.
-       *
-       * Only a Plugin in a `manual` marketplace takes uploads; a Plugin synchronized
-       * from a repository gets its versions from the repository. When the Plugin is in
-       * the organization's library marketplace, a version that adds a skill with the
-       * name of an organization skill that this API does not list is refused with a 409:
-       * `error_code` `skill_name_taken`, with that name in `details.skill_name`. A 503
-       * with `error_code` `registration_pending` means the version was stored but is not
-       * yet usable; a later version create on the Plugin completes it.
-       *
-       * For a worked example, see
-       * [Create a version](/docs/en/manage-claude/plugins-api#create-a-version) in the
-       * Plugins API guide.
-       *
-       * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-       * available to Claude Enterprise organizations only. It is not available to Claude
-       * Platform (Claude Console) organizations, or to organizations with HIPAA
-       * readiness enabled.
-       *
-       * @throws {CMEKKeyDisabledError}
-       * @throws {CMEKKeyNetworkBlockedError}
-       * @throws {BetaUnsupportedCharsetError}
-       * @throws {SandboxEgressRestrictedError}
-       * @throws {BetaSkillNameTakenError}
-       * @throws {BetaRegistrationPendingError}
-       *
-       * @example
-       * ```ts
-       * const betaPluginVersion =
-       *   await client.beta.organization.plugins.versions.create(
-       *     'plugin_id',
-       *     { files: [fs.createReadStream('path/to/file')] },
-       *   );
-       * ```
-       */
-      create(pluginID, params, options) {
-        const { betas, ...body } = params;
-        return this._client.post(path`/v1/organizations/plugins/${pluginID}/versions`, multipartFormRequestOptions({
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.versions.create", options, {
-            route: "/v1/organizations/plugins/{plugin_id}/versions",
-            attributes: { "anthropic.organization.plugin.id": pluginID },
-            createdIDAttribute: "anthropic.organization.plugin.version.id"
-          })
-        }, this._client));
-      }
-      /**
-       * Retrieve one version of a Plugin by its ID, or the Plugin's newest version.
-       *
-       * **Accepted credentials:** an Admin API key with the `read:plugins` or
-       * `read:org_audit` scope, or a Compliance Access Key with the
-       * `read:compliance_org_data` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-       * available to Claude Enterprise organizations only. It is not available to Claude
-       * Platform (Claude Console) organizations, or to organizations with HIPAA
-       * readiness enabled.
-       *
-       * @example
-       * ```ts
-       * const betaPluginVersion =
-       *   await client.beta.organization.plugins.versions.retrieve(
-       *     'version',
-       *     { plugin_id: 'plugin_id' },
-       *   );
-       * ```
-       */
-      retrieve(version, params, options) {
-        const { plugin_id, betas, ...query } = params;
-        return this._client.get(path`/v1/organizations/plugins/${plugin_id}/versions/${version}`, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.versions.retrieve", options, {
-            route: "/v1/organizations/plugins/{plugin_id}/versions/{version}",
-            queryParams: ["organization_id"],
-            attributes: {
-              "anthropic.organization.plugin.id": plugin_id,
-              "anthropic.organization.plugin.version.id": version
-            }
-          })
-        });
-      }
-      /**
-       * List a Plugin's versions, newest first.
-       *
-       * The first item of the first page is the version the Plugin's `latest_version_id`
-       * refers to.
-       *
-       * **Accepted credentials:** an Admin API key with the `read:plugins` or
-       * `read:org_audit` scope, or a Compliance Access Key with the
-       * `read:compliance_org_data` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-       * available to Claude Enterprise organizations only. It is not available to Claude
-       * Platform (Claude Console) organizations, or to organizations with HIPAA
-       * readiness enabled.
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaPluginVersion of client.beta.organization.plugins.versions.list(
-       *   'plugin_id',
-       * )) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(pluginID, params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path`/v1/organizations/plugins/${pluginID}/versions`, PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.versions.list", options, {
-            route: "/v1/organizations/plugins/{plugin_id}/versions",
-            queryParams: ["limit", "organization_id", "page"],
-            attributes: { "anthropic.organization.plugin.id": pluginID }
-          })
-        });
-      }
-      /**
-       * Download one version's `.zip` archive, exactly as stored. Each download of a
-       * Plugin from a member's personal plugin marketplace is recorded on the Compliance
-       * API activity feed.
-       *
-       * The response body is the archive (`Content-Type: application/zip`), sent as an
-       * attachment whose filename is derived from the Plugin's name; name saved files
-       * from the IDs in the request path, since that filename is not unique.
-       *
-       * **Accepted credentials:** an Admin API key with the `read:plugins` or
-       * `read:org_audit` scope, or a Compliance Access Key with the
-       * `read:compliance_org_data` scope.
-       *
-       * Every read scope above (`read:plugins`, `read:org_audit`, and
-       * `read:compliance_org_data`) can download the files of plugins in members'
-       * personal marketplaces, including files that claude.ai's admin settings do not
-       * show, and a `read:org_audit` or `read:compliance_org_data` key created for all
-       * of your parent organization's linked organizations can do this in any
-       * organization under it that has access to this API, by passing `organization_id`.
-       * Each such download records a `claude_plugin_archive_accessed` event on the
-       * Compliance API activity feed, identifying the key, the plugin, the version, and
-       * the member. Downloads of organization-owned plugins are not recorded.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-       * available to Claude Enterprise organizations only. It is not available to Claude
-       * Platform (Claude Console) organizations, or to organizations with HIPAA
-       * readiness enabled.
-       *
-       * @throws {CMEKKeyDisabledError}
-       * @throws {CMEKKeyNetworkBlockedError}
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const response =
-       *   await client.beta.organization.plugins.versions.download(
-       *     'version',
-       *     { plugin_id: 'plugin_id' },
-       *   );
-       *
-       * const content = await response.blob();
-       * console.log(content);
-       * ```
-       */
-      download(version, params, options) {
-        const { plugin_id, betas, ...query } = params;
-        return this._client.get(path`/v1/organizations/plugins/${plugin_id}/versions/${version}/content`, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            {
-              "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString(),
-              Accept: "application/binary"
-            },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __binaryResponse: true,
-          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.versions.download", options, {
-            route: "/v1/organizations/plugins/{plugin_id}/versions/{version}/content",
-            queryParams: ["organization_id"],
-            attributes: {
-              "anthropic.organization.plugin.id": plugin_id,
-              "anthropic.organization.plugin.version.id": version
-            }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/plugins.mjs
-var BetaScanFailedError, BetaPluginNameTakenError, BetaScanPendingError, BetaSkillNameTakenError, BetaRegistrationPendingError, Plugins2;
-var init_plugins2 = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/plugins.mjs"() {
-    init_resource();
-    init_installation_settings();
-    init_installation_settings();
-    init_shares();
-    init_shares();
-    init_versions2();
-    init_versions2();
-    init_error();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_uploads();
-    init_path();
-    BetaScanFailedError = /* @__PURE__ */ (() => {
-      class BetaScanFailedError2 extends BadRequestError {
-      }
-      BetaScanFailedError2._errorName = "BetaScanFailedError";
-      return BetaScanFailedError2;
-    })();
-    BetaPluginNameTakenError = /* @__PURE__ */ (() => {
-      class BetaPluginNameTakenError2 extends ConflictError {
-      }
-      BetaPluginNameTakenError2._errorName = "BetaPluginNameTakenError";
-      return BetaPluginNameTakenError2;
-    })();
-    BetaScanPendingError = /* @__PURE__ */ (() => {
-      class BetaScanPendingError2 extends ConflictError {
-      }
-      BetaScanPendingError2._errorName = "BetaScanPendingError";
-      return BetaScanPendingError2;
-    })();
-    BetaSkillNameTakenError = /* @__PURE__ */ (() => {
-      class BetaSkillNameTakenError2 extends ConflictError {
-      }
-      BetaSkillNameTakenError2._errorName = "BetaSkillNameTakenError";
-      return BetaSkillNameTakenError2;
-    })();
-    BetaRegistrationPendingError = /* @__PURE__ */ (() => {
-      class BetaRegistrationPendingError2 extends ServiceUnavailableError {
-      }
-      BetaRegistrationPendingError2._errorName = "BetaRegistrationPendingError";
-      return BetaRegistrationPendingError2;
-    })();
-    Plugins2 = /* @__PURE__ */ (() => {
-      class Plugins4 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.versions = new Versions2(this._client);
-          this.installationSettings = new InstallationSettings(this._client);
-          this.shares = new Shares(this._client);
-        }
-        /**
-         * Create an organization-owned Plugin and its first version by uploading the
-         * version's files.
-         *
-         * The upload is `multipart/form-data`: the version's files (`files`, each part
-         * sent as `files[]`), with an optional `marketplace_id` and `release_notes`. The
-         * manifest's `name` becomes the Plugin's `name`, and `display_name`, `description`
-         * and `manifest_version` come from the manifest too.
-         *
-         * `name` may contain lowercase letters (from any alphabet), digits, and hyphens,
-         * up to 64 characters. Uppercase letters, spaces, underscores, and other
-         * punctuation are rejected.
-         *
-         * The `name` must be unique within the marketplace: a name already taken returns a
-         * 409 with `error_code` `plugin_name_taken` and, when a Plugin holds it, that
-         * Plugin's ID in `details.plugin_id`. A Plugin going into the organization's
-         * library marketplace is also refused with a 409 when one of its skills has the
-         * name of an organization skill that this API does not list: `error_code`
-         * `skill_name_taken`, with that name in `details.skill_name`; rename the skill, or
-         * remove the organization skill in claude.ai. A 503 with `error_code`
-         * `registration_pending` means the Plugin and its version were stored (their IDs
-         * are in `details`) but are not yet usable in claude.ai: do not retry the create
-         * (the retry would return `plugin_name_taken`); create a version on the stored
-         * Plugin instead, which completes it.
-         *
-         * For a worked example, see
-         * [Create a plugin](/docs/en/manage-claude/plugins-api#create-a-plugin) in the
-         * Plugins API guide.
-         *
-         * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
-         *
-         * Every request must include the beta header
-         * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-         * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-         * available to Claude Enterprise organizations only. It is not available to Claude
-         * Platform (Claude Console) organizations, or to organizations with HIPAA
-         * readiness enabled.
-         *
-         * @throws {CMEKKeyDisabledError}
-         * @throws {CMEKKeyNetworkBlockedError}
-         * @throws {BetaUnsupportedCharsetError}
-         * @throws {SandboxEgressRestrictedError}
-         * @throws {BetaPluginNameTakenError}
-         * @throws {BetaSkillNameTakenError}
-         * @throws {BetaRegistrationPendingError}
-         *
-         * @example
-         * ```ts
-         * const betaPlugin =
-         *   await client.beta.organization.plugins.create({
-         *     files: [fs.createReadStream('path/to/file')],
-         *   });
-         * ```
-         */
-        create(params, options) {
-          const { betas, ...body } = params;
-          return this._client.post("/v1/organizations/plugins", multipartFormRequestOptions({
-            body,
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.plugins.create", options, {
-              route: "/v1/organizations/plugins",
-              createdIDAttribute: "anthropic.organization.plugin.id"
-            })
-          }, this._client));
-        }
-        /**
-         * Retrieve a Plugin by ID.
-         *
-         * **Accepted credentials:** an Admin API key with the `read:plugins` or
-         * `read:org_audit` scope, or a Compliance Access Key with the
-         * `read:compliance_org_data` scope.
-         *
-         * Every request must include the beta header
-         * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-         * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-         * available to Claude Enterprise organizations only. It is not available to Claude
-         * Platform (Claude Console) organizations, or to organizations with HIPAA
-         * readiness enabled.
-         *
-         * @example
-         * ```ts
-         * const betaPlugin =
-         *   await client.beta.organization.plugins.retrieve(
-         *     'plugin_id',
-         *   );
-         * ```
-         */
-        retrieve(pluginID, params = {}, options) {
-          const { betas, ...query } = params ?? {};
-          return this._client.get(path`/v1/organizations/plugins/${pluginID}`, {
-            query,
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.plugins.retrieve", options, {
-              route: "/v1/organizations/plugins/{plugin_id}",
-              queryParams: ["organization_id"],
-              attributes: { "anthropic.organization.plugin.id": pluginID }
-            })
-          });
-        }
-        /**
-         * Change which stored version of an organization-owned Plugin is served to
-         * members, for example to roll back to an earlier one. This pins the served
-         * version: later uploads through this API are stored but no longer change what is
-         * served, and pinning cannot currently be undone, here or in claude.ai.
-         *
-         * A version from claude.ai might still change what is served: see
-         * [Versions and the served version](/docs/en/manage-claude/plugins-api#versions-and-the-served-version)
-         * in the Plugins API guide.
-         *
-         * Pass the version as `served_version_id`: an earlier one to roll back, a later
-         * one to start serving a version that was stored without being served, or the one
-         * already served to pin it without changing what is served. No new version is
-         * created.
-         *
-         * When the organization has content scanning enabled, a version whose
-         * `content_scan.status` is `processing` is refused with a 409 (`error_code`
-         * `scan_pending`; retry once the scan finishes). A version whose
-         * `content_scan.status` is `errored`, or whose `content_scan.assessment` is `fail`
-         * or `unknown`, is refused with a 400 (`error_code` `scan_failed`); a `warn` is
-         * accepted. If the scan outcome cannot be read at that moment, the request fails
-         * with a retryable 503 instead. When the Plugin is in the organization's library
-         * marketplace, a version other than the one served is also refused with a 409 when
-         * an organization skill that this API does not list has since taken the name of
-         * one of its skills: `error_code` `skill_name_taken`, with that name in
-         * `details.skill_name`. A member-owned Plugin cannot be updated here (403).
-         *
-         * This endpoint does not write installation settings; they are written at
-         * `/v1/organizations/plugins/{plugin_id}/installation_settings/{target}`.
-         *
-         * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
-         *
-         * Every request must include the beta header
-         * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-         * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-         * available to Claude Enterprise organizations only. It is not available to Claude
-         * Platform (Claude Console) organizations, or to organizations with HIPAA
-         * readiness enabled.
-         *
-         * @throws {CMEKKeyDisabledError}
-         * @throws {CMEKKeyNetworkBlockedError}
-         * @throws {BetaScanFailedError}
-         * @throws {SandboxEgressRestrictedError}
-         * @throws {BetaScanPendingError}
-         * @throws {BetaSkillNameTakenError}
-         *
-         * @example
-         * ```ts
-         * const betaPlugin =
-         *   await client.beta.organization.plugins.update(
-         *     'plugin_id',
-         *     {
-         *       served_version_id:
-         *         'pluginver_01KaZmQpRsTuVwXyZ2b4c6d8',
-         *     },
-         *   );
-         * ```
-         */
-        update(pluginID, params, options) {
-          const { betas, ...body } = params;
-          return this._client.post(path`/v1/organizations/plugins/${pluginID}`, {
-            body,
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.plugins.update", options, {
-              route: "/v1/organizations/plugins/{plugin_id}",
-              attributes: { "anthropic.organization.plugin.id": pluginID }
-            })
-          });
-        }
-        /**
-         * List the Plugins created under the organization, newest first: those in the
-         * organization's own plugin marketplaces and those in members' personal plugin
-         * marketplaces.
-         *
-         * Plugins in members' personal marketplaces are listed with the same detail as the
-         * organization's own, and their files can be downloaded through the version
-         * archive endpoint, which records each such download on the Compliance API
-         * activity feed.
-         *
-         * **Accepted credentials:** an Admin API key with the `read:plugins` or
-         * `read:org_audit` scope, or a Compliance Access Key with the
-         * `read:compliance_org_data` scope.
-         *
-         * Every request must include the beta header
-         * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-         * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-         * available to Claude Enterprise organizations only. It is not available to Claude
-         * Platform (Claude Console) organizations, or to organizations with HIPAA
-         * readiness enabled.
-         *
-         * @example
-         * ```ts
-         * // Automatically fetches more pages as needed.
-         * for await (const betaPlugin of client.beta.organization.plugins.list()) {
-         *   // ...
-         * }
-         * ```
-         */
-        list(params = {}, options) {
-          const { betas, ...query } = params ?? {};
-          return this._client.getAPIList("/v1/organizations/plugins", PageCursor, {
-            query,
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.plugins.list", options, {
-              route: "/v1/organizations/plugins",
-              queryParams: [
-                "created_at[gt]",
-                "created_at[gte]",
-                "created_at[lt]",
-                "created_at[lte]",
-                "limit",
-                "marketplace_id",
-                "organization_id",
-                "owner_type",
-                "owner_user_id",
-                "page"
-              ]
-            })
-          });
-        }
-        /**
-         * Permanently delete a Plugin and every version it holds, exactly as when an
-         * administrator deletes it in claude.ai. The Plugin may belong to the organization
-         * or to a member, including a member who has since left the organization. Do not
-         * delete a Plugin only because your pipeline did not create it: a member or an
-         * administrator might have added it in claude.ai.
-         *
-         * An organization-owned Plugin's installation settings go with it; a member-owned
-         * Plugin's shares are withdrawn and its owner no longer has it.
-         *
-         * To take an organization-owned Plugin out of use reversibly, set its
-         * organization-wide installation setting to `not_available` instead (and remove or
-         * change any group settings, which override it for their members). Only a Plugin
-         * in a `manual` marketplace can be deleted here; one synchronized from a
-         * repository is removed by removing it from the repository (400).
-         *
-         * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
-         *
-         * Every request must include the beta header
-         * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
-         * exactly as if the endpoint did not exist. The Plugins API is in beta and is
-         * available to Claude Enterprise organizations only. It is not available to Claude
-         * Platform (Claude Console) organizations, or to organizations with HIPAA
-         * readiness enabled.
-         *
-         * @throws {CMEKKeyDisabledError}
-         * @throws {SandboxEgressRestrictedError}
-         *
-         * @example
-         * ```ts
-         * const betaDeletedPlugin =
-         *   await client.beta.organization.plugins.delete(
-         *     'plugin_id',
-         *   );
-         * ```
-         */
-        delete(pluginID, params = {}, options) {
-          const { betas } = params ?? {};
-          return this._client.delete(path`/v1/organizations/plugins/${pluginID}`, {
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.plugins.delete", options, {
-              route: "/v1/organizations/plugins/{plugin_id}",
-              attributes: { "anthropic.organization.plugin.id": pluginID }
-            })
-          });
-        }
-      }
-      Plugins4.BetaScanFailedError = BetaScanFailedError;
-      Plugins4.BetaPluginNameTakenError = BetaPluginNameTakenError;
-      Plugins4.BetaScanPendingError = BetaScanPendingError;
-      Plugins4.BetaSkillNameTakenError = BetaSkillNameTakenError;
-      Plugins4.BetaRegistrationPendingError = BetaRegistrationPendingError;
-      Plugins4.Versions = Versions2;
-      Plugins4.InstallationSettings = InstallationSettings;
-      Plugins4.Shares = Shares;
-      return Plugins4;
-    })();
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/effective.mjs
-var Effective;
-var init_effective = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/effective.mjs"() {
-    init_resource();
-    init_pagination();
-    init_tracing();
-    Effective = class extends APIResource {
-      /**
-       * List each member's effective spend limit and period-to-date spend.
-       *
-       * Returns one row per (member, period) the member resolves a spend limit for, with
-       * the `source` scope the spend limit was inherited from. Paginates by member, so a
-       * member's periods never split across pages. Supported for Claude Enterprise
-       * organizations only, not for Claude Console organizations.
-       *
-       * @throws {OrganizationTypeNotSupportedError}
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaSpendSummary of client.beta.organization.spendLimits.effective.list()) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(query = {}, options) {
-        return this._client.getAPIList("/v1/organizations/spend_limits/effective", PageCursor, {
-          query,
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.effective.list", options, {
-            route: "/v1/organizations/spend_limits/effective",
-            queryParams: ["limit", "page", "period", "user_ids"]
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/increase-requests.mjs
-var IncreaseRequests;
-var init_increase_requests = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/increase-requests.mjs"() {
-    init_resource();
-    init_pagination();
-    init_tracing();
-    init_path();
-    IncreaseRequests = class extends APIResource {
-      /**
-       * Retrieve a spend limit increase request.
-       *
-       * While `pending`, the response includes a live `spend_summary` for the requester
-       * at the request's period.
-       *
-       * @example
-       * ```ts
-       * const betaSpendLimitIncreaseRequest =
-       *   await client.beta.organization.spendLimits.increaseRequests.retrieve(
-       *     'spend_limit_increase_request_id',
-       *   );
-       * ```
-       */
-      retrieve(spendLimitIncreaseRequestID, options) {
-        return this._client.get(path`/v1/organizations/spend_limit_increase_requests/${spendLimitIncreaseRequestID}`, {
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.retrieve", options, {
-            route: "/v1/organizations/spend_limit_increase_requests/{spend_limit_increase_request_id}",
-            attributes: {
-              "anthropic.organization.spend_limit_increase_request.id": spendLimitIncreaseRequestID
-            }
-          })
-        });
-      }
-      /**
-       * List spend limit increase requests, most recent first.
-       *
-       * Pending requests include a live `spend_summary` for the requester. Requests
-       * whose requester is no longer a member are excluded.
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaSpendLimitIncreaseRequest of client.beta.organization.spendLimits.increaseRequests.list()) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(query = {}, options) {
-        return this._client.getAPIList("/v1/organizations/spend_limit_increase_requests", PageCursor, {
-          query,
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.list", options, {
-            route: "/v1/organizations/spend_limit_increase_requests",
-            queryParams: ["actor_ids", "limit", "page", "status"]
-          })
-        });
-      }
-      /**
-       * Approve a pending spend limit increase request.
-       *
-       * Writes a per-user spend limit at `amount` for the requester and transitions the
-       * request to `approved`. `period` defaults to the period the member was blocked
-       * on. Anthropic emails the requester unless `suppress_notification` is set.
-       *
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const response =
-       *   await client.beta.organization.spendLimits.increaseRequests.approve(
-       *     'spend_limit_increase_request_id',
-       *     { amount: '50000' },
-       *   );
-       * ```
-       */
-      approve(spendLimitIncreaseRequestID, body, options) {
-        return this._client.post(path`/v1/organizations/spend_limit_increase_requests/${spendLimitIncreaseRequestID}/approve`, {
-          body,
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.approve", options, {
-            route: "/v1/organizations/spend_limit_increase_requests/{spend_limit_increase_request_id}/approve",
-            attributes: {
-              "anthropic.organization.spend_limit_increase_request.id": spendLimitIncreaseRequestID
-            }
-          })
-        });
-      }
-      /**
-       * Deny a pending spend limit increase request.
-       *
-       * Idempotent on `denied`; denying an already-`approved` request returns 400.
-       * Anthropic emails the requester unless `suppress_notification` is set.
-       *
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaSpendLimitIncreaseRequest =
-       *   await client.beta.organization.spendLimits.increaseRequests.deny(
-       *     'spend_limit_increase_request_id',
-       *     {},
-       *   );
-       * ```
-       */
-      deny(spendLimitIncreaseRequestID, body, options) {
-        return this._client.post(path`/v1/organizations/spend_limit_increase_requests/${spendLimitIncreaseRequestID}/deny`, {
-          body,
-          ...options,
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.deny", options, {
-            route: "/v1/organizations/spend_limit_increase_requests/{spend_limit_increase_request_id}/deny",
-            attributes: {
-              "anthropic.organization.spend_limit_increase_request.id": spendLimitIncreaseRequestID
-            }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/spend-limits.mjs
-var BetaSpendLimitsAdminAPIWritesNotEnabledError, SpendLimits;
-var init_spend_limits = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/spend-limits.mjs"() {
-    init_resource();
-    init_effective();
-    init_effective();
-    init_increase_requests();
-    init_increase_requests();
-    init_error();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    BetaSpendLimitsAdminAPIWritesNotEnabledError = /* @__PURE__ */ (() => {
-      class BetaSpendLimitsAdminAPIWritesNotEnabledError2 extends PermissionDeniedError {
-      }
-      BetaSpendLimitsAdminAPIWritesNotEnabledError2._errorName = "BetaSpendLimitsAdminAPIWritesNotEnabledError";
-      return BetaSpendLimitsAdminAPIWritesNotEnabledError2;
-    })();
-    SpendLimits = /* @__PURE__ */ (() => {
-      class SpendLimits3 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.effective = new Effective(this._client);
-          this.increaseRequests = new IncreaseRequests(this._client);
-        }
-        /**
-         * Retrieve a spend limit by ID.
-         *
-         * @throws {BetaSpendLimitsAdminAPIWritesNotEnabledError}
-         *
-         * @example
-         * ```ts
-         * const betaSpendLimit =
-         *   await client.beta.organization.spendLimits.retrieve(
-         *     'spend_limit_id',
-         *   );
-         * ```
-         */
-        retrieve(spendLimitID, options) {
-          return this._client.get(path`/v1/organizations/spend_limits/${spendLimitID}`, {
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.retrieve", options, {
-              route: "/v1/organizations/spend_limits/{spend_limit_id}",
-              attributes: { "anthropic.organization.spend_limit.id": spendLimitID }
-            })
-          });
-        }
-        /**
-         * List the organization's spend limits.
-         *
-         * A Claude Console organization's limits, including any read-only `usage_tier`
-         * limit, come newest first. Listing them is in an early access preview. To request
-         * access, contact your Anthropic account team. A Claude Enterprise organization's
-         * limits are grouped by scope type, in the order `organization`, `seat_tier`,
-         * `rbac_group`, `organization_service`, `user`; within a type they come in a fixed
-         * order that is not creation order.
-         *
-         * @throws {OrganizationTypeNotSupportedError}
-         *
-         * @example
-         * ```ts
-         * // Automatically fetches more pages as needed.
-         * for await (const betaSpendLimit of client.beta.organization.spendLimits.list()) {
-         *   // ...
-         * }
-         * ```
-         */
-        list(params = {}, options) {
-          const { betas, ...query } = params ?? {};
-          return this._client.getAPIList("/v1/organizations/spend_limits", PageCursor, {
-            query,
-            ...options,
-            headers: buildHeaders([
-              { "anthropic-beta": [...betas ?? [], "spend-limit-reads-2026-09-26"].toString() },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.list", options, {
-              route: "/v1/organizations/spend_limits",
-              queryParams: ["limit", "page", "scope_type", "workspace_id"]
-            })
-          });
-        }
-        /**
-         * Delete a spend limit.
-         *
-         * For a Claude Enterprise organization, this deletes a per-user override, and the
-         * member falls back to any inherited spend limit at that period. Its seat-tier,
-         * group, and organization-level rows cannot be deleted via this endpoint. A Claude
-         * Console organization deletes its organization and workspace limits, but not its
-         * `usage_tier` limit. Deleting organization and workspace limits through the API
-         * is in an early access preview.
-         *
-         * @throws {SandboxEgressRestrictedError}
-         * @throws {BetaSpendLimitsAdminAPIWritesNotEnabledError}
-         *
-         * @example
-         * ```ts
-         * const spendLimit =
-         *   await client.beta.organization.spendLimits.delete(
-         *     'spend_limit_id',
-         *   );
-         * ```
-         */
-        delete(spendLimitID, options) {
-          return this._client.delete(path`/v1/organizations/spend_limits/${spendLimitID}`, {
-            ...options,
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.delete", options, {
-              route: "/v1/organizations/spend_limits/{spend_limit_id}",
-              attributes: { "anthropic.organization.spend_limit.id": spendLimitID }
-            })
-          });
-        }
-        /**
-         * Set a spend limit.
-         *
-         * Upsert keyed on (scope, period): setting a limit that already exists overwrites
-         * it in place. A Claude Enterprise organization sets `user` limits. Its seat-tier,
-         * group, and organization-level defaults are configured in claude.ai. A Claude
-         * Console organization sets `organization` and `workspace` limits, which are
-         * monthly and always carry an amount. Setting those limits is in an early access
-         * preview. To request access, contact your Anthropic account team.
-         *
-         * @throws {SandboxEgressRestrictedError}
-         * @throws {BetaSpendLimitsAdminAPIWritesNotEnabledError}
-         *
-         * @example
-         * ```ts
-         * const betaSpendLimit =
-         *   await client.beta.organization.spendLimits.set({
-         *     amount: '50000',
-         *     scope: {
-         *       type: 'user',
-         *       user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu',
-         *     },
-         *   });
-         * ```
-         */
-        set(params, options) {
-          const { betas, ...body } = params;
-          return this._client.post("/v1/organizations/spend_limits", {
-            body,
-            ...options,
-            headers: buildHeaders([
-              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-              options?.headers
-            ]),
-            __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.set", options, {
-              route: "/v1/organizations/spend_limits",
-              createdIDAttribute: "anthropic.organization.spend_limit.id"
-            })
-          });
-        }
-      }
-      SpendLimits3.BetaSpendLimitsAdminAPIWritesNotEnabledError = BetaSpendLimitsAdminAPIWritesNotEnabledError;
-      SpendLimits3.Effective = Effective;
-      SpendLimits3.IncreaseRequests = IncreaseRequests;
-      return SpendLimits3;
-    })();
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/configuration.mjs
-var Configuration;
-var init_configuration = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/configuration.mjs"() {
-    init_resource();
-    init_headers();
-    init_tracing();
-    Configuration = class extends APIResource {
-      /**
-       * Retrieve the organization's Claude Code managed settings mode and RBAC Group
-       * order.
-       *
-       * **Accepted credentials:** an organization-level Admin API key with the
-       * `read:claude_code_managed_settings` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
-       * it, or from an organization not enabled for this beta, returns `404`. The Claude
-       * Code Managed Settings API is in beta and is available to Claude Enterprise
-       * organizations only.
-       *
-       * @example
-       * ```ts
-       * const betaClaudeCodeManagedSettingsConfiguration =
-       *   await client.beta.organization.claudeCode.managedSettings.configuration.retrieve();
-       * ```
-       */
-      retrieve(params = {}, options) {
-        const { betas } = params ?? {};
-        return this._client.get("/v1/organizations/claude_code/managed_settings/configuration", {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.configuration.retrieve", options, { route: "/v1/organizations/claude_code/managed_settings/configuration" })
-        });
-      }
-      /**
-       * Change the organization's Claude Code managed settings mode, the RBAC Group
-       * order, or both, in one atomic write.
-       *
-       * To change the order, send `rbac_group_order` with the `rbac_group_order_version`
-       * from the read the change is based on. If the order has changed since that read,
-       * the request returns `409`: read it again and retry. To switch modes only if the
-       * order has not changed, send the current `rbac_group_order` and
-       * `rbac_group_order_version` with the new `mode`.
-       *
-       * A switch to `rbac_groups` mode with no RBAC Group settings and no default
-       * settings copies the organization settings into a new default, in the same write,
-       * so members keep the settings they had. The copy does not follow later changes to
-       * the organization settings. If the organization settings cannot be copied, the
-       * request returns `400` and changes nothing. If they cannot be read, are over 1
-       * MiB or are not valid, setting the default settings first avoids the copy.
-       *
-       * After a switch to `rbac_groups` mode, a member in no listed RBAC Group receives
-       * the default settings, or no settings if no default is set, not the organization
-       * settings.
-       *
-       * **Accepted credentials:** an organization-level Admin API key with the
-       * `write:claude_code_managed_settings` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
-       * it, or from an organization not enabled for this beta, returns `404`. The Claude
-       * Code Managed Settings API is in beta and is available to Claude Enterprise
-       * organizations only.
-       *
-       * A write that returns `503` may have applied. Retrying it is safe.
-       *
-       * @throws {CMEKKeyDisabledError}
-       * @throws {BetaRequestBodyTimeoutError}
-       * @throws {BetaSettingsDocumentLimitExceededError}
-       * @throws {BetaSettingsHistoryLimitExceededError}
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeCodeManagedSettingsConfiguration =
-       *   await client.beta.organization.claudeCode.managedSettings.configuration.update(
-       *     {},
-       *   );
-       * ```
-       */
-      update(params, options) {
-        const { betas, ...body } = params;
-        return this._client.post("/v1/organizations/claude_code/managed_settings/configuration", {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.configuration.update", options, { route: "/v1/organizations/claude_code/managed_settings/configuration" })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-group-default.mjs
-var RBACGroupDefault;
-var init_rbac_group_default = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-group-default.mjs"() {
-    init_resource();
-    init_headers();
-    init_tracing();
-    RBACGroupDefault = class extends APIResource {
-      /**
-       * Retrieve the default Claude Code managed settings, which members who belong to
-       * no RBAC Group in `rbac_group_order` receive in `rbac_groups` mode.
-       *
-       * **Accepted credentials:** an organization-level Admin API key with the
-       * `read:claude_code_managed_settings` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
-       * it, or from an organization not enabled for this beta, returns `404`. The Claude
-       * Code Managed Settings API is in beta and is available to Claude Enterprise
-       * organizations only.
-       *
-       * @throws {BetaCMEKFeatureUnsupportedError}
-       * @throws {CMEKKeyDisabledError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeCodeRBACGroupDefaultManagedSettings =
-       *   await client.beta.organization.claudeCode.managedSettings.rbacGroupDefault.retrieve();
-       * ```
-       */
-      retrieve(params = {}, options) {
-        const { betas } = params ?? {};
-        return this._client.get("/v1/organizations/claude_code/managed_settings/rbac_group_default", {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_group_default.retrieve", options, { route: "/v1/organizations/claude_code/managed_settings/rbac_group_default" })
-        });
-      }
-      /**
-       * Set or replace the default Claude Code managed settings, or clear them with
-       * `null`.
-       *
-       * **Accepted credentials:** an organization-level Admin API key with the
-       * `write:claude_code_managed_settings` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
-       * it, or from an organization not enabled for this beta, returns `404`. The Claude
-       * Code Managed Settings API is in beta and is available to Claude Enterprise
-       * organizations only.
-       *
-       * A write that returns `503` may have applied. Retrying it is safe.
-       *
-       * @throws {BetaCMEKFeatureUnsupportedError}
-       * @throws {CMEKKeyDisabledError}
-       * @throws {BetaRequestBodyTimeoutError}
-       * @throws {BetaSettingsDocumentLimitExceededError}
-       * @throws {BetaSettingsHistoryLimitExceededError}
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeCodeRBACGroupDefaultManagedSettings =
-       *   await client.beta.organization.claudeCode.managedSettings.rbacGroupDefault.update(
-       *     { settings: { foo: 'bar' } },
-       *   );
-       * ```
-       */
-      update(params, options) {
-        const { betas, ...body } = params;
-        return this._client.post("/v1/organizations/claude_code/managed_settings/rbac_group_default", {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_group_default.update", options, { route: "/v1/organizations/claude_code/managed_settings/rbac_group_default" })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-groups.mjs
-var RBACGroups2;
-var init_rbac_groups2 = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-groups.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    RBACGroups2 = class extends APIResource {
-      /**
-       * Retrieve an RBAC Group's Claude Code managed settings.
-       *
-       * **Accepted credentials:** an organization-level Admin API key with the
-       * `read:claude_code_managed_settings` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
-       * it, or from an organization not enabled for this beta, returns `404`. The Claude
-       * Code Managed Settings API is in beta and is available to Claude Enterprise
-       * organizations only.
-       *
-       * @throws {BetaCMEKFeatureUnsupportedError}
-       * @throws {CMEKKeyDisabledError}
-       * @throws {BetaRBACGroupManagedSettingsNotFoundError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeCodeRBACGroupManagedSettings =
-       *   await client.beta.organization.claudeCode.managedSettings.rbacGroups.retrieve(
-       *     'rbac_group_id',
-       *   );
-       * ```
-       */
-      retrieve(rbacGroupID, params = {}, options) {
-        const { betas } = params ?? {};
-        return this._client.get(path`/v1/organizations/claude_code/managed_settings/rbac_groups/${rbacGroupID}`, {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.retrieve", options, {
-            route: "/v1/organizations/claude_code/managed_settings/rbac_groups/{rbac_group_id}",
-            attributes: { "anthropic.organization.claude_code.managed_setting.rbac_group.id": rbacGroupID }
-          })
-        });
-      }
-      /**
-       * List the RBAC Groups that have Claude Code managed settings, highest precedence
-       * first.
-       *
-       * Each entry gives the group's status and timestamps, not its settings. The list
-       * includes deleted groups that still have settings, and leaves out the default
-       * settings. If the order changes between pages, the request returns `409`: list
-       * again from the first page.
-       *
-       * **Accepted credentials:** an organization-level Admin API key with the
-       * `read:claude_code_managed_settings` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
-       * it, or from an organization not enabled for this beta, returns `404`. The Claude
-       * Code Managed Settings API is in beta and is available to Claude Enterprise
-       * organizations only.
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaClaudeCodeRBACGroupManagedSettingsSummary of client.beta.organization.claudeCode.managedSettings.rbacGroups.list()) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.getAPIList("/v1/organizations/claude_code/managed_settings/rbac_groups", PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.list", options, {
-            route: "/v1/organizations/claude_code/managed_settings/rbac_groups",
-            queryParams: ["limit", "page"]
-          })
-        });
-      }
-      /**
-       * Delete an RBAC Group's Claude Code managed settings and remove the group from
-       * `rbac_group_order`.
-       *
-       * A group with no settings returns `404` with the error code
-       * `rbac_group_managed_settings_not_found`. That code on a retry of a delete that
-       * returned `503` means the settings are gone.
-       *
-       * **Accepted credentials:** an organization-level Admin API key with the
-       * `write:claude_code_managed_settings` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
-       * it, or from an organization not enabled for this beta, returns `404`. The Claude
-       * Code Managed Settings API is in beta and is available to Claude Enterprise
-       * organizations only.
-       *
-       * A write that returns `503` may have applied. Retrying it is safe.
-       *
-       * @throws {CMEKKeyDisabledError}
-       * @throws {BetaSettingsHistoryLimitExceededError}
-       * @throws {SandboxEgressRestrictedError}
-       * @throws {BetaRBACGroupManagedSettingsNotFoundError}
-       *
-       * @example
-       * ```ts
-       * const betaDeletedClaudeCodeRBACGroupManagedSettings =
-       *   await client.beta.organization.claudeCode.managedSettings.rbacGroups.delete(
-       *     'rbac_group_id',
-       *   );
-       * ```
-       */
-      delete(rbacGroupID, params = {}, options) {
-        const { betas } = params ?? {};
-        return this._client.delete(path`/v1/organizations/claude_code/managed_settings/rbac_groups/${rbacGroupID}`, {
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.delete", options, {
-            route: "/v1/organizations/claude_code/managed_settings/rbac_groups/{rbac_group_id}",
-            attributes: { "anthropic.organization.claude_code.managed_setting.rbac_group.id": rbacGroupID }
-          })
-        });
-      }
-      /**
-       * Create or replace an RBAC Group's Claude Code managed settings.
-       *
-       * New settings join the end of `rbac_group_order`, and existing settings keep
-       * their place. Until the group is moved up, its members who also belong to an
-       * earlier group keep that group's settings. In `organization` mode a write changes
-       * no member's settings until the organization switches to `rbac_groups` mode. Once
-       * a group has settings, that switch no longer copies the organization settings
-       * into default settings, so members in no RBAC Group in `rbac_group_order` receive
-       * no settings unless you set the default settings before the switch.
-       *
-       * Get the group's ID from the RBAC Groups API. One key can hold `read:rbac_groups`
-       * and `write:claude_code_managed_settings`.
-       *
-       * **Accepted credentials:** an organization-level Admin API key with the
-       * `write:claude_code_managed_settings` scope.
-       *
-       * Every request must include the beta header
-       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
-       * it, or from an organization not enabled for this beta, returns `404`. The Claude
-       * Code Managed Settings API is in beta and is available to Claude Enterprise
-       * organizations only.
-       *
-       * A write that returns `503` may have applied. Retrying it is safe.
-       *
-       * @throws {BetaCMEKFeatureUnsupportedError}
-       * @throws {CMEKKeyDisabledError}
-       * @throws {BetaRBACGroupOrderLimitExceededError}
-       * @throws {BetaRequestBodyTimeoutError}
-       * @throws {BetaSettingsDocumentLimitExceededError}
-       * @throws {BetaSettingsHistoryLimitExceededError}
-       * @throws {SandboxEgressRestrictedError}
-       * @throws {BetaRBACGroupNotFoundError}
-       *
-       * @example
-       * ```ts
-       * const betaClaudeCodeRBACGroupManagedSettings =
-       *   await client.beta.organization.claudeCode.managedSettings.rbacGroups.set(
-       *     'rbac_group_id',
-       *     { settings: { foo: 'bar' } },
-       *   );
-       * ```
-       */
-      set(rbacGroupID, params, options) {
-        const { betas, ...body } = params;
-        return this._client.post(path`/v1/organizations/claude_code/managed_settings/rbac_groups/${rbacGroupID}`, {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.set", options, {
-            route: "/v1/organizations/claude_code/managed_settings/rbac_groups/{rbac_group_id}",
-            attributes: { "anthropic.organization.claude_code.managed_setting.rbac_group.id": rbacGroupID }
-          })
-        });
-      }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/managed-settings.mjs
-var BetaCMEKFeatureUnsupportedError, BetaRBACGroupOrderLimitExceededError, BetaSettingsDocumentLimitExceededError, BetaSettingsHistoryLimitExceededError, BetaRBACGroupManagedSettingsNotFoundError, ManagedSettings;
-var init_managed_settings = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/managed-settings.mjs"() {
-    init_resource();
-    init_configuration();
-    init_configuration();
-    init_rbac_group_default();
-    init_rbac_group_default();
-    init_rbac_groups2();
-    init_rbac_groups2();
-    init_error();
-    BetaCMEKFeatureUnsupportedError = /* @__PURE__ */ (() => {
-      class BetaCMEKFeatureUnsupportedError2 extends BadRequestError {
-      }
-      BetaCMEKFeatureUnsupportedError2._errorName = "BetaCMEKFeatureUnsupportedError";
-      return BetaCMEKFeatureUnsupportedError2;
-    })();
-    BetaRBACGroupOrderLimitExceededError = /* @__PURE__ */ (() => {
-      class BetaRBACGroupOrderLimitExceededError2 extends BadRequestError {
-      }
-      BetaRBACGroupOrderLimitExceededError2._errorName = "BetaRBACGroupOrderLimitExceededError";
-      return BetaRBACGroupOrderLimitExceededError2;
-    })();
-    BetaSettingsDocumentLimitExceededError = /* @__PURE__ */ (() => {
-      class BetaSettingsDocumentLimitExceededError2 extends BadRequestError {
-      }
-      BetaSettingsDocumentLimitExceededError2._errorName = "BetaSettingsDocumentLimitExceededError";
-      return BetaSettingsDocumentLimitExceededError2;
-    })();
-    BetaSettingsHistoryLimitExceededError = /* @__PURE__ */ (() => {
-      class BetaSettingsHistoryLimitExceededError2 extends BadRequestError {
-      }
-      BetaSettingsHistoryLimitExceededError2._errorName = "BetaSettingsHistoryLimitExceededError";
-      return BetaSettingsHistoryLimitExceededError2;
-    })();
-    BetaRBACGroupManagedSettingsNotFoundError = /* @__PURE__ */ (() => {
-      class BetaRBACGroupManagedSettingsNotFoundError2 extends NotFoundError {
-      }
-      BetaRBACGroupManagedSettingsNotFoundError2._errorName = "BetaRBACGroupManagedSettingsNotFoundError";
-      return BetaRBACGroupManagedSettingsNotFoundError2;
-    })();
-    ManagedSettings = /* @__PURE__ */ (() => {
-      class ManagedSettings2 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.configuration = new Configuration(this._client);
-          this.rbacGroups = new RBACGroups2(this._client);
-          this.rbacGroupDefault = new RBACGroupDefault(this._client);
-        }
-      }
-      ManagedSettings2.BetaCMEKFeatureUnsupportedError = BetaCMEKFeatureUnsupportedError;
-      ManagedSettings2.BetaRBACGroupOrderLimitExceededError = BetaRBACGroupOrderLimitExceededError;
-      ManagedSettings2.BetaSettingsDocumentLimitExceededError = BetaSettingsDocumentLimitExceededError;
-      ManagedSettings2.BetaSettingsHistoryLimitExceededError = BetaSettingsHistoryLimitExceededError;
-      ManagedSettings2.BetaRBACGroupManagedSettingsNotFoundError = BetaRBACGroupManagedSettingsNotFoundError;
-      ManagedSettings2.Configuration = Configuration;
-      ManagedSettings2.RBACGroups = RBACGroups2;
-      ManagedSettings2.RBACGroupDefault = RBACGroupDefault;
-      return ManagedSettings2;
-    })();
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/claude-code.mjs
-var ClaudeCode;
-var init_claude_code = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/claude-code.mjs"() {
-    init_resource();
-    init_managed_settings();
-    init_managed_settings();
-    ClaudeCode = /* @__PURE__ */ (() => {
-      class ClaudeCode2 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.managedSettings = new ManagedSettings(this._client);
-        }
-      }
-      ClaudeCode2.ManagedSettings = ManagedSettings;
-      ClaudeCode2.BetaCMEKFeatureUnsupportedError = BetaCMEKFeatureUnsupportedError;
-      ClaudeCode2.BetaRBACGroupOrderLimitExceededError = BetaRBACGroupOrderLimitExceededError;
-      ClaudeCode2.BetaSettingsDocumentLimitExceededError = BetaSettingsDocumentLimitExceededError;
-      ClaudeCode2.BetaSettingsHistoryLimitExceededError = BetaSettingsHistoryLimitExceededError;
-      ClaudeCode2.BetaRBACGroupManagedSettingsNotFoundError = BetaRBACGroupManagedSettingsNotFoundError;
-      return ClaudeCode2;
-    })();
-  }
-});
-
 // node_modules/@anthropic-ai/sdk/resources/beta/organization/compliance-settings.mjs
 var ComplianceSettings;
 var init_compliance_settings = __esm({
   "node_modules/@anthropic-ai/sdk/resources/beta/organization/compliance-settings.mjs"() {
     init_resource();
+    init_headers();
     init_tracing();
     ComplianceSettings = class extends APIResource {
       /**
@@ -17322,9 +14817,14 @@ var init_compliance_settings = __esm({
        *   await client.beta.organization.complianceSettings.retrieve();
        * ```
        */
-      retrieve(options) {
+      retrieve(params = {}, options) {
+        const { betas } = params ?? {};
         return this._client.get("/v1/organizations/compliance_settings", {
           ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
           __qualifiers: { beta: "true" },
           __span: startApiCallSpan(this._client, "anthropic.organization.compliance_settings.retrieve", options, {
             route: "/v1/organizations/compliance_settings"
@@ -17359,10 +14859,15 @@ var init_compliance_settings = __esm({
        *   });
        * ```
        */
-      update(body, options) {
+      update(params, options) {
+        const { betas, ...body } = params;
         return this._client.post("/v1/organizations/compliance_settings", {
           body,
           ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
           __qualifiers: { beta: "true" },
           __span: startApiCallSpan(this._client, "anthropic.organization.compliance_settings.update", options, {
             route: "/v1/organizations/compliance_settings"
@@ -17545,604 +15050,311 @@ var init_external_keys = __esm({
   }
 });
 
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/issuers.mjs
-var Issuers;
-var init_issuers = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/issuers.mjs"() {
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/external-storage.mjs
+var BetaExternalStorageInUseError, BetaExternalStorageInWorkspacePolicyError, BetaExternalStorageNotAvailableError, BetaGrantRequiredError, BetaInvalidStorageARNError, BetaProviderNotAllowedError, BetaStorageAttachLimitReachedError, BetaStorageNotAttachableError, BetaStorageProfileStillRequiredError, BetaStorageVerificationFailedError, BetaUnsupportedRegionError, BetaStorageAlreadyRegisteredError, BetaStorageChangedConcurrentlyError, ExternalStorage;
+var init_external_storage = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/external-storage.mjs"() {
     init_resource();
+    init_error();
     init_pagination();
     init_headers();
     init_tracing();
     init_path();
-    Issuers = class extends APIResource {
-      /**
-       * **Requires an OAuth access token with the `org:admin` scope**, from
-       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-       * API keys are not accepted. See
-       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
-       *
-       * Register an OIDC issuer that Anthropic will trust for workload identity
-       * federation in your organization.
-       *
-       * The `jwks` field controls how the issuer's signing keys are obtained and takes
-       * one of three shapes selected by `type`: `discovery` (resolve keys through OIDC
-       * discovery), `explicit_url` (fetch keys from a fixed JWKS URL), or `inline`
-       * (provide a static key set). When `jwks.type` is `discovery` and no
-       * `discovery_base` is set, the issuer URL must be publicly reachable over HTTPS so
-       * Anthropic can fetch the discovery document; for `explicit_url` and `inline`
-       * modes the issuer URL is only matched as the JWT's `iss` claim and is not
-       * fetched.
-       *
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaFederationIssuer =
-       *   await client.beta.organization.federation.issuers.create({
-       *     issuer_url: 'x',
-       *     name: 'x',
-       *   });
-       * ```
-       */
-      create(params, options) {
-        const { betas, ...body } = params;
-        return this._client.post("/v1/organizations/federation_issuers", {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.federation.issuers.create", options, {
-            route: "/v1/organizations/federation_issuers",
-            createdIDAttribute: "anthropic.organization.federation_issuer.id"
-          })
-        });
+    BetaExternalStorageInUseError = /* @__PURE__ */ (() => {
+      class BetaExternalStorageInUseError2 extends BadRequestError {
       }
-      /**
-       * **Requires an OAuth access token with the `org:admin` scope**, from
-       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-       * API keys are not accepted. See
-       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
-       *
-       * Retrieve a federation issuer by its ID (`fdis_...`).
-       *
-       * @example
-       * ```ts
-       * const betaFederationIssuer =
-       *   await client.beta.organization.federation.issuers.retrieve(
-       *     'federation_issuer_id',
-       *   );
-       * ```
-       */
-      retrieve(federationIssuerID, params = {}, options) {
-        const { betas } = params ?? {};
-        return this._client.get(path`/v1/organizations/federation_issuers/${federationIssuerID}`, {
-          ...options,
-          headers: buildHeaders([
-            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.federation.issuers.retrieve", options, {
-            route: "/v1/organizations/federation_issuers/{federation_issuer_id}",
-            attributes: { "anthropic.organization.federation_issuer.id": federationIssuerID }
-          })
-        });
+      BetaExternalStorageInUseError2._errorName = "BetaExternalStorageInUseError";
+      return BetaExternalStorageInUseError2;
+    })();
+    BetaExternalStorageInWorkspacePolicyError = /* @__PURE__ */ (() => {
+      class BetaExternalStorageInWorkspacePolicyError2 extends BadRequestError {
       }
-      /**
-       * **Requires an OAuth access token with the `org:admin` scope**, from
-       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-       * API keys are not accepted. See
-       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
-       *
-       * Partially update a federation issuer.
-       *
-       * Setting `jwks` replaces the full JWKS shape at once. Archived issuers cannot be
-       * updated; this returns 400. Create a new issuer instead.
-       *
-       * Updating an issuer that backs a rule with a scope outside `workspace:developer`
-       * or `workspace:inference` requires a Console session.
-       *
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaFederationIssuer =
-       *   await client.beta.organization.federation.issuers.update(
-       *     'federation_issuer_id',
-       *     {},
-       *   );
-       * ```
-       */
-      update(federationIssuerID, params, options) {
-        const { betas, ...body } = params;
-        return this._client.post(path`/v1/organizations/federation_issuers/${federationIssuerID}`, {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.federation.issuers.update", options, {
-            route: "/v1/organizations/federation_issuers/{federation_issuer_id}",
-            attributes: { "anthropic.organization.federation_issuer.id": federationIssuerID }
-          })
-        });
+      BetaExternalStorageInWorkspacePolicyError2._errorName = "BetaExternalStorageInWorkspacePolicyError";
+      return BetaExternalStorageInWorkspacePolicyError2;
+    })();
+    BetaExternalStorageNotAvailableError = /* @__PURE__ */ (() => {
+      class BetaExternalStorageNotAvailableError2 extends BadRequestError {
       }
-      /**
-       * **Requires an OAuth access token with the `org:admin` scope**, from
-       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-       * API keys are not accepted. See
-       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
-       *
-       * List federation issuers in your organization.
-       *
-       * Archived issuers are excluded unless `include_archived=true`.
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaFederationIssuer of client.beta.organization.federation.issuers.list()) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.getAPIList("/v1/organizations/federation_issuers", PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.federation.issuers.list", options, {
-            route: "/v1/organizations/federation_issuers",
-            queryParams: ["include_archived", "limit", "page"]
-          })
-        });
+      BetaExternalStorageNotAvailableError2._errorName = "BetaExternalStorageNotAvailableError";
+      return BetaExternalStorageNotAvailableError2;
+    })();
+    BetaGrantRequiredError = /* @__PURE__ */ (() => {
+      class BetaGrantRequiredError2 extends BadRequestError {
       }
-      /**
-       * **Requires an OAuth access token with the `org:admin` scope**, from
-       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-       * API keys are not accepted. See
-       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
-       *
-       * Archive a federation issuer.
-       *
-       * Idempotent; re-archiving returns the issuer with its original `archived_at`.
-       * Rejected with 400 if any live (non-archived) federation rule still references
-       * the issuer; archive those rules first (a rule's issuer cannot be changed), or
-       * recreate them against another issuer.
-       *
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaFederationIssuer =
-       *   await client.beta.organization.federation.issuers.archive(
-       *     'federation_issuer_id',
-       *   );
-       * ```
-       */
-      archive(federationIssuerID, params = {}, options) {
-        const { betas } = params ?? {};
-        return this._client.post(path`/v1/organizations/federation_issuers/${federationIssuerID}/archive`, {
-          ...options,
-          headers: buildHeaders([
-            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.federation.issuers.archive", options, {
-            route: "/v1/organizations/federation_issuers/{federation_issuer_id}/archive",
-            attributes: { "anthropic.organization.federation_issuer.id": federationIssuerID }
-          })
-        });
+      BetaGrantRequiredError2._errorName = "BetaGrantRequiredError";
+      return BetaGrantRequiredError2;
+    })();
+    BetaInvalidStorageARNError = /* @__PURE__ */ (() => {
+      class BetaInvalidStorageARNError2 extends BadRequestError {
       }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/rules/workspaces.mjs
-var Workspaces;
-var init_workspaces = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/rules/workspaces.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    Workspaces = class extends APIResource {
-      /**
-       * **Requires an OAuth access token with the `org:admin` scope**, from
-       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-       * API keys are not accepted. See
-       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
-       *
-       * List workspaces where this federation rule is enabled.
-       *
-       * Returns all workspace enablements in a single response; the `limit` and `page`
-       * parameters are accepted but have no effect, and `next_page` is always `null`.
-       * Returns explicit per-workspace enablements only; for rules with
-       * `applies_to_all_workspaces` or a legacy single `workspace_id`, check those
-       * fields on the rule itself.
-       *
-       * @example
-       * ```ts
-       * // Automatically fetches more pages as needed.
-       * for await (const betaFederationRuleWorkspace of client.beta.organization.federation.rules.workspaces.list(
-       *   'federation_rule_id',
-       * )) {
-       *   // ...
-       * }
-       * ```
-       */
-      list(federationRuleID, params = {}, options) {
-        const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path`/v1/organizations/federation_rules/${federationRuleID}/workspaces`, PageCursor, {
-          query,
-          ...options,
-          headers: buildHeaders([
-            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.workspaces.list", options, {
-            route: "/v1/organizations/federation_rules/{federation_rule_id}/workspaces",
-            queryParams: ["limit", "page"],
-            attributes: { "anthropic.organization.federation_rule.id": federationRuleID }
-          })
-        });
+      BetaInvalidStorageARNError2._errorName = "BetaInvalidStorageARNError";
+      return BetaInvalidStorageARNError2;
+    })();
+    BetaProviderNotAllowedError = /* @__PURE__ */ (() => {
+      class BetaProviderNotAllowedError2 extends BadRequestError {
       }
-      /**
-       * **Requires an OAuth access token with the `org:admin` scope**, from
-       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-       * API keys are not accepted. See
-       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
-       *
-       * Enable a federation rule for a workspace.
-       *
-       * Idempotent; re-enabling returns the existing enablement. The rule and workspace
-       * must both belong to your organization. Membership of the rule's target service
-       * account in this workspace is not checked at enablement: token exchange into this
-       * workspace is rejected unless the target is a member (it is implicitly a member
-       * of the default workspace). Archived rules are rejected with 400. OAuth callers
-       * may only manage rules whose `oauth_scope` is `workspace:developer` or
-       * `workspace:inference`; other scopes require a Console session.
-       *
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const betaFederationRuleWorkspace =
-       *   await client.beta.organization.federation.rules.workspaces.add(
-       *     'federation_rule_id',
-       *     { workspace_id: 'workspace_id' },
-       *   );
-       * ```
-       */
-      add(federationRuleID, params, options) {
-        const { betas, ...body } = params;
-        return this._client.post(path`/v1/organizations/federation_rules/${federationRuleID}/workspaces`, {
-          body,
-          ...options,
-          headers: buildHeaders([
-            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.workspaces.add", options, {
-            route: "/v1/organizations/federation_rules/{federation_rule_id}/workspaces",
-            attributes: { "anthropic.organization.federation_rule.id": federationRuleID },
-            createdIDAttribute: "anthropic.organization.federation_rule.workspace.id",
-            createdIDField: "workspace_id"
-          })
-        });
+      BetaProviderNotAllowedError2._errorName = "BetaProviderNotAllowedError";
+      return BetaProviderNotAllowedError2;
+    })();
+    BetaStorageAttachLimitReachedError = /* @__PURE__ */ (() => {
+      class BetaStorageAttachLimitReachedError2 extends BadRequestError {
       }
-      /**
-       * **Requires an OAuth access token with the `org:admin` scope**, from
-       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-       * API keys are not accepted. See
-       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
-       *
-       * Disable a federation rule for a workspace.
-       *
-       * Idempotent; succeeds even if the enablement was already removed. OAuth callers
-       * may only manage rules whose `oauth_scope` is `workspace:developer` or
-       * `workspace:inference`; other scopes require a Console session.
-       *
-       * @throws {SandboxEgressRestrictedError}
-       *
-       * @example
-       * ```ts
-       * const workspace =
-       *   await client.beta.organization.federation.rules.workspaces.remove(
-       *     'workspace_id',
-       *     { federation_rule_id: 'federation_rule_id' },
-       *   );
-       * ```
-       */
-      remove(workspaceID, params, options) {
-        const { federation_rule_id, betas } = params;
-        return this._client.delete(path`/v1/organizations/federation_rules/${federation_rule_id}/workspaces/${workspaceID}`, {
-          ...options,
-          headers: buildHeaders([
-            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-            options?.headers
-          ]),
-          __qualifiers: { beta: "true" },
-          __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.workspaces.remove", options, {
-            route: "/v1/organizations/federation_rules/{federation_rule_id}/workspaces/{workspace_id}",
-            attributes: {
-              "anthropic.organization.federation_rule.id": federation_rule_id,
-              "anthropic.organization.federation_rule.workspace.id": workspaceID
-            }
-          })
-        });
+      BetaStorageAttachLimitReachedError2._errorName = "BetaStorageAttachLimitReachedError";
+      return BetaStorageAttachLimitReachedError2;
+    })();
+    BetaStorageNotAttachableError = /* @__PURE__ */ (() => {
+      class BetaStorageNotAttachableError2 extends BadRequestError {
       }
-    };
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/rules/rules.mjs
-var Rules;
-var init_rules = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/rules/rules.mjs"() {
-    init_resource();
-    init_workspaces();
-    init_workspaces();
-    init_pagination();
-    init_headers();
-    init_tracing();
-    init_path();
-    Rules = /* @__PURE__ */ (() => {
-      class Rules3 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.workspaces = new Workspaces(this._client);
-        }
+      BetaStorageNotAttachableError2._errorName = "BetaStorageNotAttachableError";
+      return BetaStorageNotAttachableError2;
+    })();
+    BetaStorageProfileStillRequiredError = /* @__PURE__ */ (() => {
+      class BetaStorageProfileStillRequiredError2 extends BadRequestError {
+      }
+      BetaStorageProfileStillRequiredError2._errorName = "BetaStorageProfileStillRequiredError";
+      return BetaStorageProfileStillRequiredError2;
+    })();
+    BetaStorageVerificationFailedError = /* @__PURE__ */ (() => {
+      class BetaStorageVerificationFailedError2 extends BadRequestError {
+      }
+      BetaStorageVerificationFailedError2._errorName = "BetaStorageVerificationFailedError";
+      return BetaStorageVerificationFailedError2;
+    })();
+    BetaUnsupportedRegionError = /* @__PURE__ */ (() => {
+      class BetaUnsupportedRegionError2 extends BadRequestError {
+      }
+      BetaUnsupportedRegionError2._errorName = "BetaUnsupportedRegionError";
+      return BetaUnsupportedRegionError2;
+    })();
+    BetaStorageAlreadyRegisteredError = /* @__PURE__ */ (() => {
+      class BetaStorageAlreadyRegisteredError2 extends ConflictError {
+      }
+      BetaStorageAlreadyRegisteredError2._errorName = "BetaStorageAlreadyRegisteredError";
+      return BetaStorageAlreadyRegisteredError2;
+    })();
+    BetaStorageChangedConcurrentlyError = /* @__PURE__ */ (() => {
+      class BetaStorageChangedConcurrentlyError2 extends ConflictError {
+      }
+      BetaStorageChangedConcurrentlyError2._errorName = "BetaStorageChangedConcurrentlyError";
+      return BetaStorageChangedConcurrentlyError2;
+    })();
+    ExternalStorage = /* @__PURE__ */ (() => {
+      class ExternalStorage3 extends APIResource {
         /**
-         * **Requires an OAuth access token with the `org:admin` scope**, from
-         * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-         * API keys are not accepted. See
-         * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+         * Register a bucket in the organization's own cloud account. It is saved as
+         * `pending_configuration` and verified when activated.
          *
-         * Create a federation rule owned by your organization.
-         *
-         * The referenced issuer and the target service account must already exist in the
-         * same organization; invalid references are rejected with a 400 error. The
-         * workspace reference is validated. Membership is not checked at rule creation:
-         * token exchange resolves a single enabled workspace per call and is rejected
-         * unless the target service account is a member of that workspace (it is
-         * implicitly a member of the default workspace). Rules on well-known shared
-         * issuers (GitHub Actions, GitLab, Buildkite, Terraform Cloud, Google) must
-         * constrain tenant identity via an identity-bearing claim, a tenant-pinning
-         * subject prefix (such as `repo:YOUR_ORG/...`), or a CEL condition referencing one
-         * of those identity claims (e.g. `claims.repository_owner`). OAuth callers may
-         * only manage rules whose `oauth_scope` is `workspace:developer` or
-         * `workspace:inference`; other scopes require a Console session.
-         *
+         * @throws {BetaGrantRequiredError}
+         * @throws {BetaOrganizationNotEligibleError}
+         * @throws {BetaProviderNotAllowedError}
+         * @throws {BetaUnsupportedRegionError}
+         * @throws {UserProfileNotFoundError}
          * @throws {SandboxEgressRestrictedError}
+         * @throws {BetaStorageAlreadyRegisteredError}
+         * @throws {BetaAuthorizationCheckUnavailableError}
          *
          * @example
          * ```ts
-         * const betaFederationRule =
-         *   await client.beta.organization.federation.rules.create({
-         *     issuer_id: 'issuer_id',
-         *     match: {},
-         *     name: 'x',
-         *     oauth_scope: 'x',
-         *     target: {
-         *       service_account_id: 'svac_01SDCCSbTxrXDpWc1phhtcfK',
-         *       type: 'service_account',
+         * const betaExternalStorage =
+         *   await client.beta.organization.externalStorage.create({
+         *     provider_config: {
+         *       account_id: '111122223333',
+         *       bucket_name: 'acme-safety-retention',
+         *       region: 'us-east-2',
+         *       type: 'aws',
          *     },
          *   });
          * ```
          */
         create(params, options) {
           const { betas, ...body } = params;
-          return this._client.post("/v1/organizations/federation_rules", {
+          return this._client.post("/v1/organizations/external_storage", {
             body,
             ...options,
             headers: buildHeaders([
-              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              { "anthropic-beta": [...betas ?? [], "efs-2026-10-01"].toString() },
               options?.headers
             ]),
             __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.create", options, {
-              route: "/v1/organizations/federation_rules",
-              createdIDAttribute: "anthropic.organization.federation_rule.id"
+            __span: startApiCallSpan(this._client, "anthropic.organization.external_storage.create", options, {
+              route: "/v1/organizations/external_storage",
+              createdIDAttribute: "anthropic.organization.external_storage.id"
             })
           });
         }
         /**
-         * **Requires an OAuth access token with the `org:admin` scope**, from
-         * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-         * API keys are not accepted. See
-         * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+         * Get one External Storage in the organization.
          *
-         * Retrieve a federation rule by its ID (`fdrl_...`).
+         * @throws {BetaInvalidStorageARNError}
          *
          * @example
          * ```ts
-         * const betaFederationRule =
-         *   await client.beta.organization.federation.rules.retrieve(
-         *     'federation_rule_id',
+         * const betaExternalStorage =
+         *   await client.beta.organization.externalStorage.retrieve(
+         *     'external_storage_id',
          *   );
          * ```
          */
-        retrieve(federationRuleID, params = {}, options) {
+        retrieve(externalStorageID, params = {}, options) {
           const { betas } = params ?? {};
-          return this._client.get(path`/v1/organizations/federation_rules/${federationRuleID}`, {
+          return this._client.get(path`/v1/organizations/external_storage/${externalStorageID}`, {
             ...options,
             headers: buildHeaders([
-              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              { "anthropic-beta": [...betas ?? [], "efs-2026-10-01"].toString() },
               options?.headers
             ]),
             __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.retrieve", options, {
-              route: "/v1/organizations/federation_rules/{federation_rule_id}",
-              attributes: { "anthropic.organization.federation_rule.id": federationRuleID }
+            __span: startApiCallSpan(this._client, "anthropic.organization.external_storage.retrieve", options, {
+              route: "/v1/organizations/external_storage/{external_storage_id}",
+              attributes: { "anthropic.organization.external_storage.id": externalStorageID }
             })
           });
         }
         /**
-         * **Requires an OAuth access token with the `org:admin` scope**, from
-         * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-         * API keys are not accepted. See
-         * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+         * Rename External Storage or clear its name, in any status.
          *
-         * Partially update a federation rule.
-         *
-         * `issuer_id` is immutable. `match` and `target` are replaced as whole objects
-         * when set. Referenced service accounts and workspaces must exist in your
-         * organization; invalid references are rejected with a 400 error. Archived rules
-         * cannot be updated; this returns 400. Create a new rule instead. Rules on
-         * well-known shared issuers (GitHub Actions, GitLab, Buildkite, Terraform Cloud,
-         * Google) must constrain tenant identity via an identity-bearing claim, a
-         * tenant-pinning subject prefix (such as `repo:YOUR_ORG/...`), or a CEL condition
-         * referencing one of those identity claims (e.g. `claims.repository_owner`). On
-         * these issuers the requirement is re-checked on every update; if an existing
-         * rule's stored match does not yet constrain tenant identity, any update (even a
-         * rename or description change) must also supply a conforming `match` in the same
-         * request. OAuth callers may only manage rules whose `oauth_scope` is
-         * `workspace:developer` or `workspace:inference`; other scopes require a Console
-         * session.
-         *
+         * @throws {BetaInvalidStorageARNError}
          * @throws {SandboxEgressRestrictedError}
          *
          * @example
          * ```ts
-         * const betaFederationRule =
-         *   await client.beta.organization.federation.rules.update(
-         *     'federation_rule_id',
-         *     {},
+         * const betaExternalStorage =
+         *   await client.beta.organization.externalStorage.update(
+         *     'external_storage_id',
+         *     { display_name: 'x' },
          *   );
          * ```
          */
-        update(federationRuleID, params, options) {
+        update(externalStorageID, params, options) {
           const { betas, ...body } = params;
-          return this._client.post(path`/v1/organizations/federation_rules/${federationRuleID}`, {
+          return this._client.post(path`/v1/organizations/external_storage/${externalStorageID}`, {
             body,
             ...options,
             headers: buildHeaders([
-              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              { "anthropic-beta": [...betas ?? [], "efs-2026-10-01"].toString() },
               options?.headers
             ]),
             __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.update", options, {
-              route: "/v1/organizations/federation_rules/{federation_rule_id}",
-              attributes: { "anthropic.organization.federation_rule.id": federationRuleID }
+            __span: startApiCallSpan(this._client, "anthropic.organization.external_storage.update", options, {
+              route: "/v1/organizations/external_storage/{external_storage_id}",
+              attributes: { "anthropic.organization.external_storage.id": externalStorageID }
             })
           });
         }
         /**
-         * **Requires an OAuth access token with the `org:admin` scope**, from
-         * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-         * API keys are not accepted. See
-         * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
-         *
-         * List federation rules in your organization.
-         *
-         * Optionally filter by issuer with `issuer_id`. Archived rules are excluded unless
-         * `include_archived=true`.
+         * List the organization's External Storage, newest first.
          *
          * @example
          * ```ts
          * // Automatically fetches more pages as needed.
-         * for await (const betaFederationRule of client.beta.organization.federation.rules.list()) {
+         * for await (const betaExternalStorage of client.beta.organization.externalStorage.list()) {
          *   // ...
          * }
          * ```
          */
         list(params = {}, options) {
           const { betas, ...query } = params ?? {};
-          return this._client.getAPIList("/v1/organizations/federation_rules", PageCursor, {
+          return this._client.getAPIList("/v1/organizations/external_storage", PageCursor, {
             query,
             ...options,
             headers: buildHeaders([
-              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              { "anthropic-beta": [...betas ?? [], "efs-2026-10-01"].toString() },
               options?.headers
             ]),
             __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.list", options, {
-              route: "/v1/organizations/federation_rules",
-              queryParams: ["include_archived", "issuer_id", "limit", "page"]
+            __span: startApiCallSpan(this._client, "anthropic.organization.external_storage.list", options, {
+              route: "/v1/organizations/external_storage",
+              queryParams: ["limit", "page", "user_profile_ids"]
             })
           });
         }
         /**
-         * **Requires an OAuth access token with the `org:admin` scope**, from
-         * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
-         * API keys are not accepted. See
-         * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+         * Delete External Storage. Storage that is pending configuration, available, or
+         * active but never attached is deleted at once, unless an Enterprise Frontier
+         * Safeguards workspace policy lists it. Other storage gets a 400 that says what to
+         * do next. On `draining` storage that 400 can mean this delete started a removal
+         * that can't be undone. To check, get the storage: if `status.removal_started` is
+         * true, delete it again later to finish.
          *
-         * Archive a federation rule.
-         *
-         * Token exchange through this rule stops immediately. Idempotent; re-archiving
-         * returns the rule with its original `archived_at`. Archiving clears the rule's
-         * workspace targeting (`workspace_id` and `workspace_ids` are emptied). Tokens
-         * already minted before archive remain valid until they expire. OAuth callers may
-         * only manage rules whose `oauth_scope` is `workspace:developer` or
-         * `workspace:inference`; other scopes require a Console session.
-         *
+         * @throws {BetaExternalStorageInUseError}
+         * @throws {BetaExternalStorageInWorkspacePolicyError}
+         * @throws {BetaInvalidStorageARNError}
          * @throws {SandboxEgressRestrictedError}
          *
          * @example
          * ```ts
-         * const betaFederationRule =
-         *   await client.beta.organization.federation.rules.archive(
-         *     'federation_rule_id',
+         * const betaDeletedExternalStorage =
+         *   await client.beta.organization.externalStorage.delete(
+         *     'external_storage_id',
          *   );
          * ```
          */
-        archive(federationRuleID, params = {}, options) {
+        delete(externalStorageID, params = {}, options) {
           const { betas } = params ?? {};
-          return this._client.post(path`/v1/organizations/federation_rules/${federationRuleID}/archive`, {
+          return this._client.delete(path`/v1/organizations/external_storage/${externalStorageID}`, {
             ...options,
             headers: buildHeaders([
-              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              { "anthropic-beta": [...betas ?? [], "efs-2026-10-01"].toString() },
               options?.headers
             ]),
             __qualifiers: { beta: "true" },
-            __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.archive", options, {
-              route: "/v1/organizations/federation_rules/{federation_rule_id}/archive",
-              attributes: { "anthropic.organization.federation_rule.id": federationRuleID }
+            __span: startApiCallSpan(this._client, "anthropic.organization.external_storage.delete", options, {
+              route: "/v1/organizations/external_storage/{external_storage_id}",
+              attributes: { "anthropic.organization.external_storage.id": externalStorageID }
+            })
+          });
+        }
+        /**
+         * Verify pending External Storage and make it available. Storage that is already
+         * available, active or draining comes back unchanged, without any check.
+         *
+         * @throws {BetaGrantRequiredError}
+         * @throws {BetaInvalidStorageARNError}
+         * @throws {BetaOrganizationNotEligibleError}
+         * @throws {BetaProviderNotAllowedError}
+         * @throws {BetaStorageVerificationFailedError}
+         * @throws {UserProfileNotFoundError}
+         * @throws {SandboxEgressRestrictedError}
+         * @throws {BetaAuthorizationCheckUnavailableError}
+         *
+         * @example
+         * ```ts
+         * const betaExternalStorage =
+         *   await client.beta.organization.externalStorage.activate(
+         *     'external_storage_id',
+         *   );
+         * ```
+         */
+        activate(externalStorageID, params = {}, options) {
+          const { betas } = params ?? {};
+          return this._client.post(path`/v1/organizations/external_storage/${externalStorageID}/activate`, {
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "efs-2026-10-01"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.external_storage.activate", options, {
+              route: "/v1/organizations/external_storage/{external_storage_id}/activate",
+              attributes: { "anthropic.organization.external_storage.id": externalStorageID }
             })
           });
         }
       }
-      Rules3.Workspaces = Workspaces;
-      return Rules3;
-    })();
-  }
-});
-
-// node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/federation.mjs
-var Federation;
-var init_federation = __esm({
-  "node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/federation.mjs"() {
-    init_resource();
-    init_issuers();
-    init_issuers();
-    init_rules();
-    init_rules();
-    Federation = /* @__PURE__ */ (() => {
-      class Federation3 extends APIResource {
-        constructor() {
-          super(...arguments);
-          this.issuers = new Issuers(this._client);
-          this.rules = new Rules(this._client);
-        }
-      }
-      Federation3.Issuers = Issuers;
-      Federation3.Rules = Rules;
-      return Federation3;
+      ExternalStorage3.BetaExternalStorageInUseError = BetaExternalStorageInUseError;
+      ExternalStorage3.BetaExternalStorageInWorkspacePolicyError = BetaExternalStorageInWorkspacePolicyError;
+      ExternalStorage3.BetaExternalStorageNotAvailableError = BetaExternalStorageNotAvailableError;
+      ExternalStorage3.BetaGrantRequiredError = BetaGrantRequiredError;
+      ExternalStorage3.BetaInvalidStorageARNError = BetaInvalidStorageARNError;
+      ExternalStorage3.BetaProviderNotAllowedError = BetaProviderNotAllowedError;
+      ExternalStorage3.BetaStorageAttachLimitReachedError = BetaStorageAttachLimitReachedError;
+      ExternalStorage3.BetaStorageNotAttachableError = BetaStorageNotAttachableError;
+      ExternalStorage3.BetaStorageProfileStillRequiredError = BetaStorageProfileStillRequiredError;
+      ExternalStorage3.BetaStorageVerificationFailedError = BetaStorageVerificationFailedError;
+      ExternalStorage3.BetaUnsupportedRegionError = BetaUnsupportedRegionError;
+      ExternalStorage3.BetaStorageAlreadyRegisteredError = BetaStorageAlreadyRegisteredError;
+      ExternalStorage3.BetaStorageChangedConcurrentlyError = BetaStorageChangedConcurrentlyError;
+      return ExternalStorage3;
     })();
   }
 });
@@ -18563,6 +15775,212 @@ var init_rate_limits = __esm({
   }
 });
 
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/users.mjs
+var BetaCannotSignOutPrimaryOwnerError, BetaCannotSignOutSelfError, BetaCannotSignOutManagedMemberError, BetaCannotSignOutMembershipAdminError, BetaCannotSignOutOwnerError, BetaCannotSignOutPrivilegedMemberError, Users2;
+var init_users2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/users.mjs"() {
+    init_resource();
+    init_error();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    BetaCannotSignOutPrimaryOwnerError = /* @__PURE__ */ (() => {
+      class BetaCannotSignOutPrimaryOwnerError2 extends BadRequestError {
+      }
+      BetaCannotSignOutPrimaryOwnerError2._errorName = "BetaCannotSignOutPrimaryOwnerError";
+      return BetaCannotSignOutPrimaryOwnerError2;
+    })();
+    BetaCannotSignOutSelfError = /* @__PURE__ */ (() => {
+      class BetaCannotSignOutSelfError2 extends BadRequestError {
+      }
+      BetaCannotSignOutSelfError2._errorName = "BetaCannotSignOutSelfError";
+      return BetaCannotSignOutSelfError2;
+    })();
+    BetaCannotSignOutManagedMemberError = /* @__PURE__ */ (() => {
+      class BetaCannotSignOutManagedMemberError2 extends PermissionDeniedError {
+      }
+      BetaCannotSignOutManagedMemberError2._errorName = "BetaCannotSignOutManagedMemberError";
+      return BetaCannotSignOutManagedMemberError2;
+    })();
+    BetaCannotSignOutMembershipAdminError = /* @__PURE__ */ (() => {
+      class BetaCannotSignOutMembershipAdminError2 extends PermissionDeniedError {
+      }
+      BetaCannotSignOutMembershipAdminError2._errorName = "BetaCannotSignOutMembershipAdminError";
+      return BetaCannotSignOutMembershipAdminError2;
+    })();
+    BetaCannotSignOutOwnerError = /* @__PURE__ */ (() => {
+      class BetaCannotSignOutOwnerError2 extends PermissionDeniedError {
+      }
+      BetaCannotSignOutOwnerError2._errorName = "BetaCannotSignOutOwnerError";
+      return BetaCannotSignOutOwnerError2;
+    })();
+    BetaCannotSignOutPrivilegedMemberError = /* @__PURE__ */ (() => {
+      class BetaCannotSignOutPrivilegedMemberError2 extends PermissionDeniedError {
+      }
+      BetaCannotSignOutPrivilegedMemberError2._errorName = "BetaCannotSignOutPrivilegedMemberError";
+      return BetaCannotSignOutPrivilegedMemberError2;
+    })();
+    Users2 = /* @__PURE__ */ (() => {
+      class Users8 extends APIResource {
+        /**
+         * Retrieve a member of the organization by user ID.
+         *
+         * @example
+         * ```ts
+         * const betaOrganizationUser =
+         *   await client.beta.organization.users.retrieve('user_id');
+         * ```
+         */
+        retrieve(userID, options) {
+          return this._client.get(path`/v1/organizations/users/${userID}`, {
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.users.retrieve", options, {
+              route: "/v1/organizations/users/{user_id}",
+              attributes: { "anthropic.organization.user.id": userID }
+            })
+          });
+        }
+        /**
+         * Update a member's organization role.
+         *
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaOrganizationUser =
+         *   await client.beta.organization.users.update('user_id', {
+         *     role: 'user',
+         *   });
+         * ```
+         */
+        update(userID, body, options) {
+          return this._client.post(path`/v1/organizations/users/${userID}`, {
+            body,
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.users.update", options, {
+              route: "/v1/organizations/users/{user_id}",
+              attributes: { "anthropic.organization.user.id": userID }
+            })
+          });
+        }
+        /**
+         * List the organization's members.
+         *
+         * @example
+         * ```ts
+         * // Automatically fetches more pages as needed.
+         * for await (const betaOrganizationUser of client.beta.organization.users.list()) {
+         *   // ...
+         * }
+         * ```
+         */
+        list(query = {}, options) {
+          return this._client.getAPIList("/v1/organizations/users", Page, {
+            query,
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.users.list", options, {
+              route: "/v1/organizations/users",
+              queryParams: ["after_id", "before_id", "email", "limit", "roles"]
+            })
+          });
+        }
+        /**
+         * Remove a member from the organization.
+         *
+         * @throws {CannotRemoveLastMemberError}
+         * @throws {SandboxEgressRestrictedError}
+         * @throws {ConcurrentMembershipChangeError}
+         *
+         * @example
+         * ```ts
+         * const user = await client.beta.organization.users.remove(
+         *   'user_id',
+         * );
+         * ```
+         */
+        remove(userID, options) {
+          return this._client.delete(path`/v1/organizations/users/${userID}`, {
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.users.remove", options, {
+              route: "/v1/organizations/users/{user_id}",
+              attributes: { "anthropic.organization.user.id": userID }
+            })
+          });
+        }
+        /**
+         * Sign a member out of Claude everywhere, without removing them from the
+         * organization. This ends their sign-in sessions and removes their trusted devices
+         * wherever they use Claude, including other organizations and individual plans. It
+         * also ends the OAuth tokens issued to them for this organization, so apps such as
+         * Claude Code must sign in again.
+         *
+         * A token can take up to an hour to stop working, though it almost always stops at
+         * once. The member keeps their role and can sign in again right away. To keep them
+         * out, remove them from the organization or, if your organization uses single
+         * sign-on, block them in your identity provider. Signing out does not end API
+         * keys, OAuth tokens that were not issued for this organization, or the member's
+         * Claude Code cloud sessions and routines.
+         *
+         * You cannot sign out the organization's primary owner or the person your API key
+         * or token acts for, and a request to sign out another owner, a member with owner
+         * permissions, or a membership admin may be refused. A refused request returns a
+         * `400` or `403` error that says why. If the request returns `503`, send it again
+         * to finish; anything already ended stays ended.
+         *
+         * Every request must include the beta header
+         * `anthropic-beta: admin-user-sign-out-2026-10-08`. A request without it returns
+         * `400`. Sign-out is in beta for Claude Enterprise organizations. In an
+         * organization where it is not enabled, a request returns `400` with `error_code`
+         * `organization_not_enrolled_in_beta`. In a Claude Enterprise organization, an API
+         * key needs the `write:members` scope; a key without it gets `403`.
+         *
+         * @throws {BetaCannotSignOutPrimaryOwnerError}
+         * @throws {BetaCannotSignOutSelfError}
+         * @throws {BetaOrganizationNotEnrolledInBetaError}
+         * @throws {BetaCannotSignOutManagedMemberError}
+         * @throws {BetaCannotSignOutMembershipAdminError}
+         * @throws {BetaCannotSignOutOwnerError}
+         * @throws {BetaCannotSignOutPrivilegedMemberError}
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaOrganizationUser =
+         *   await client.beta.organization.users.signOut('user_id');
+         * ```
+         */
+        signOut(userID, params = {}, options) {
+          const { betas } = params ?? {};
+          return this._client.post(path`/v1/organizations/users/${userID}/sign_out`, {
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "admin-user-sign-out-2026-10-08"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.users.sign_out", options, {
+              route: "/v1/organizations/users/{user_id}/sign_out",
+              attributes: { "anthropic.organization.user.id": userID }
+            })
+          });
+        }
+      }
+      Users8.BetaCannotSignOutPrimaryOwnerError = BetaCannotSignOutPrimaryOwnerError;
+      Users8.BetaCannotSignOutSelfError = BetaCannotSignOutSelfError;
+      Users8.BetaCannotSignOutManagedMemberError = BetaCannotSignOutManagedMemberError;
+      Users8.BetaCannotSignOutMembershipAdminError = BetaCannotSignOutMembershipAdminError;
+      Users8.BetaCannotSignOutOwnerError = BetaCannotSignOutOwnerError;
+      Users8.BetaCannotSignOutPrivilegedMemberError = BetaCannotSignOutPrivilegedMemberError;
+      return Users8;
+    })();
+  }
+});
+
 // node_modules/@anthropic-ai/sdk/resources/beta/organization/webhooks.mjs
 var Webhooks2;
 var init_webhooks2 = __esm({
@@ -18796,6 +16214,3094 @@ var init_webhooks2 = __esm({
         });
       }
     };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/configuration.mjs
+var Configuration;
+var init_configuration = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/configuration.mjs"() {
+    init_resource();
+    init_headers();
+    init_tracing();
+    Configuration = class extends APIResource {
+      /**
+       * Retrieve the organization's Claude Code managed settings mode and RBAC Group
+       * order.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `read:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeManagedSettingsConfiguration =
+       *   await client.beta.organization.claudeCode.managedSettings.configuration.retrieve();
+       * ```
+       */
+      retrieve(params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get("/v1/organizations/claude_code/managed_settings/configuration", {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.configuration.retrieve", options, { route: "/v1/organizations/claude_code/managed_settings/configuration" })
+        });
+      }
+      /**
+       * Change the organization's Claude Code managed settings mode, the RBAC Group
+       * order, or both, in one atomic write.
+       *
+       * To change the order, send `rbac_group_order` with the `rbac_group_order_version`
+       * from the read the change is based on. If the order has changed since that read,
+       * the request returns `409`: read it again and retry. To switch modes only if the
+       * order has not changed, send the current `rbac_group_order` and
+       * `rbac_group_order_version` with the new `mode`.
+       *
+       * A switch to `rbac_groups` mode with no RBAC Group settings and no default
+       * settings copies the organization settings into a new default, in the same write,
+       * so members keep the settings they had. The copy does not follow later changes to
+       * the organization settings. If the organization settings cannot be copied, the
+       * request returns `400` and changes nothing. If they cannot be read, are over 1
+       * MiB or are not valid, setting the default settings first avoids the copy.
+       *
+       * After a switch to `rbac_groups` mode, a member in no listed RBAC Group receives
+       * the default settings, or no settings if no default is set, not the organization
+       * settings.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `write:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * A write that returns `503` may have applied. Retrying it is safe.
+       *
+       * @throws {CMEKKeyDisabledError}
+       * @throws {BetaRequestBodyTimeoutError}
+       * @throws {BetaSettingsDocumentLimitExceededError}
+       * @throws {BetaSettingsHistoryLimitExceededError}
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeManagedSettingsConfiguration =
+       *   await client.beta.organization.claudeCode.managedSettings.configuration.update(
+       *     {},
+       *   );
+       * ```
+       */
+      update(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/organizations/claude_code/managed_settings/configuration", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.configuration.update", options, { route: "/v1/organizations/claude_code/managed_settings/configuration" })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-group-default.mjs
+var RBACGroupDefault;
+var init_rbac_group_default = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-group-default.mjs"() {
+    init_resource();
+    init_headers();
+    init_tracing();
+    RBACGroupDefault = class extends APIResource {
+      /**
+       * Retrieve the default Claude Code managed settings, which members who belong to
+       * no RBAC Group in `rbac_group_order` receive in `rbac_groups` mode.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `read:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * @throws {BetaCMEKFeatureUnsupportedError}
+       * @throws {CMEKKeyDisabledError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeRBACGroupDefaultManagedSettings =
+       *   await client.beta.organization.claudeCode.managedSettings.rbacGroupDefault.retrieve();
+       * ```
+       */
+      retrieve(params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get("/v1/organizations/claude_code/managed_settings/rbac_group_default", {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_group_default.retrieve", options, { route: "/v1/organizations/claude_code/managed_settings/rbac_group_default" })
+        });
+      }
+      /**
+       * Set or replace the default Claude Code managed settings, or clear them with
+       * `null`.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `write:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * A write that returns `503` may have applied. Retrying it is safe.
+       *
+       * @throws {BetaCMEKFeatureUnsupportedError}
+       * @throws {CMEKKeyDisabledError}
+       * @throws {BetaRequestBodyTimeoutError}
+       * @throws {BetaSettingsDocumentLimitExceededError}
+       * @throws {BetaSettingsHistoryLimitExceededError}
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeRBACGroupDefaultManagedSettings =
+       *   await client.beta.organization.claudeCode.managedSettings.rbacGroupDefault.update(
+       *     { settings: { foo: 'bar' } },
+       *   );
+       * ```
+       */
+      update(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/organizations/claude_code/managed_settings/rbac_group_default", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_group_default.update", options, { route: "/v1/organizations/claude_code/managed_settings/rbac_group_default" })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-groups.mjs
+var RBACGroups;
+var init_rbac_groups = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/rbac-groups.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    RBACGroups = class extends APIResource {
+      /**
+       * Retrieve an RBAC Group's Claude Code managed settings.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `read:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * @throws {BetaCMEKFeatureUnsupportedError}
+       * @throws {CMEKKeyDisabledError}
+       * @throws {BetaRBACGroupManagedSettingsNotFoundError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeRBACGroupManagedSettings =
+       *   await client.beta.organization.claudeCode.managedSettings.rbacGroups.retrieve(
+       *     'rbac_group_id',
+       *   );
+       * ```
+       */
+      retrieve(rbacGroupID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path`/v1/organizations/claude_code/managed_settings/rbac_groups/${rbacGroupID}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.retrieve", options, {
+            route: "/v1/organizations/claude_code/managed_settings/rbac_groups/{rbac_group_id}",
+            attributes: { "anthropic.organization.claude_code.managed_setting.rbac_group.id": rbacGroupID }
+          })
+        });
+      }
+      /**
+       * List the RBAC Groups that have Claude Code managed settings, highest precedence
+       * first.
+       *
+       * Each entry gives the group's status and timestamps, not its settings. The list
+       * includes deleted groups that still have settings, and leaves out the default
+       * settings. If the order changes between pages, the request returns `409`: list
+       * again from the first page.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `read:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaClaudeCodeRBACGroupManagedSettingsSummary of client.beta.organization.claudeCode.managedSettings.rbacGroups.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/organizations/claude_code/managed_settings/rbac_groups", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.list", options, {
+            route: "/v1/organizations/claude_code/managed_settings/rbac_groups",
+            queryParams: ["limit", "page"]
+          })
+        });
+      }
+      /**
+       * Delete an RBAC Group's Claude Code managed settings and remove the group from
+       * `rbac_group_order`.
+       *
+       * A group with no settings returns `404` with the error code
+       * `rbac_group_managed_settings_not_found`. That code on a retry of a delete that
+       * returned `503` means the settings are gone.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `write:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * A write that returns `503` may have applied. Retrying it is safe.
+       *
+       * @throws {CMEKKeyDisabledError}
+       * @throws {BetaSettingsHistoryLimitExceededError}
+       * @throws {SandboxEgressRestrictedError}
+       * @throws {BetaRBACGroupManagedSettingsNotFoundError}
+       *
+       * @example
+       * ```ts
+       * const betaDeletedClaudeCodeRBACGroupManagedSettings =
+       *   await client.beta.organization.claudeCode.managedSettings.rbacGroups.delete(
+       *     'rbac_group_id',
+       *   );
+       * ```
+       */
+      delete(rbacGroupID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.delete(path`/v1/organizations/claude_code/managed_settings/rbac_groups/${rbacGroupID}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.delete", options, {
+            route: "/v1/organizations/claude_code/managed_settings/rbac_groups/{rbac_group_id}",
+            attributes: { "anthropic.organization.claude_code.managed_setting.rbac_group.id": rbacGroupID }
+          })
+        });
+      }
+      /**
+       * Create or replace an RBAC Group's Claude Code managed settings.
+       *
+       * New settings join the end of `rbac_group_order`, and existing settings keep
+       * their place. Until the group is moved up, its members who also belong to an
+       * earlier group keep that group's settings. In `organization` mode a write changes
+       * no member's settings until the organization switches to `rbac_groups` mode. Once
+       * a group has settings, that switch no longer copies the organization settings
+       * into default settings, so members in no RBAC Group in `rbac_group_order` receive
+       * no settings unless you set the default settings before the switch.
+       *
+       * Get the group's ID from the RBAC Groups API. One key can hold `read:rbac_groups`
+       * and `write:claude_code_managed_settings`.
+       *
+       * **Accepted credentials:** an organization-level Admin API key with the
+       * `write:claude_code_managed_settings` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-claude-code-managed-settings-2026-10-06`. A request without
+       * it, or from an organization not enabled for this beta, returns `404`. The Claude
+       * Code Managed Settings API is in beta and is available to Claude Enterprise
+       * organizations only.
+       *
+       * A write that returns `503` may have applied. Retrying it is safe.
+       *
+       * @throws {BetaCMEKFeatureUnsupportedError}
+       * @throws {CMEKKeyDisabledError}
+       * @throws {BetaRBACGroupOrderLimitExceededError}
+       * @throws {BetaRequestBodyTimeoutError}
+       * @throws {BetaSettingsDocumentLimitExceededError}
+       * @throws {BetaSettingsHistoryLimitExceededError}
+       * @throws {SandboxEgressRestrictedError}
+       * @throws {BetaRBACGroupNotFoundError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeCodeRBACGroupManagedSettings =
+       *   await client.beta.organization.claudeCode.managedSettings.rbacGroups.set(
+       *     'rbac_group_id',
+       *     { settings: { foo: 'bar' } },
+       *   );
+       * ```
+       */
+      set(rbacGroupID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/claude_code/managed_settings/rbac_groups/${rbacGroupID}`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-claude-code-managed-settings-2026-10-06"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_code.managed_settings.rbac_groups.set", options, {
+            route: "/v1/organizations/claude_code/managed_settings/rbac_groups/{rbac_group_id}",
+            attributes: { "anthropic.organization.claude_code.managed_setting.rbac_group.id": rbacGroupID }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/managed-settings.mjs
+var BetaCMEKFeatureUnsupportedError, BetaRBACGroupOrderLimitExceededError, BetaSettingsDocumentLimitExceededError, BetaSettingsHistoryLimitExceededError, BetaRBACGroupManagedSettingsNotFoundError, ManagedSettings;
+var init_managed_settings = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/managed-settings/managed-settings.mjs"() {
+    init_resource();
+    init_configuration();
+    init_configuration();
+    init_rbac_group_default();
+    init_rbac_group_default();
+    init_rbac_groups();
+    init_rbac_groups();
+    init_error();
+    BetaCMEKFeatureUnsupportedError = /* @__PURE__ */ (() => {
+      class BetaCMEKFeatureUnsupportedError2 extends BadRequestError {
+      }
+      BetaCMEKFeatureUnsupportedError2._errorName = "BetaCMEKFeatureUnsupportedError";
+      return BetaCMEKFeatureUnsupportedError2;
+    })();
+    BetaRBACGroupOrderLimitExceededError = /* @__PURE__ */ (() => {
+      class BetaRBACGroupOrderLimitExceededError2 extends BadRequestError {
+      }
+      BetaRBACGroupOrderLimitExceededError2._errorName = "BetaRBACGroupOrderLimitExceededError";
+      return BetaRBACGroupOrderLimitExceededError2;
+    })();
+    BetaSettingsDocumentLimitExceededError = /* @__PURE__ */ (() => {
+      class BetaSettingsDocumentLimitExceededError2 extends BadRequestError {
+      }
+      BetaSettingsDocumentLimitExceededError2._errorName = "BetaSettingsDocumentLimitExceededError";
+      return BetaSettingsDocumentLimitExceededError2;
+    })();
+    BetaSettingsHistoryLimitExceededError = /* @__PURE__ */ (() => {
+      class BetaSettingsHistoryLimitExceededError2 extends BadRequestError {
+      }
+      BetaSettingsHistoryLimitExceededError2._errorName = "BetaSettingsHistoryLimitExceededError";
+      return BetaSettingsHistoryLimitExceededError2;
+    })();
+    BetaRBACGroupManagedSettingsNotFoundError = /* @__PURE__ */ (() => {
+      class BetaRBACGroupManagedSettingsNotFoundError2 extends NotFoundError {
+      }
+      BetaRBACGroupManagedSettingsNotFoundError2._errorName = "BetaRBACGroupManagedSettingsNotFoundError";
+      return BetaRBACGroupManagedSettingsNotFoundError2;
+    })();
+    ManagedSettings = /* @__PURE__ */ (() => {
+      class ManagedSettings2 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.configuration = new Configuration(this._client);
+          this.rbacGroups = new RBACGroups(this._client);
+          this.rbacGroupDefault = new RBACGroupDefault(this._client);
+        }
+      }
+      ManagedSettings2.BetaCMEKFeatureUnsupportedError = BetaCMEKFeatureUnsupportedError;
+      ManagedSettings2.BetaRBACGroupOrderLimitExceededError = BetaRBACGroupOrderLimitExceededError;
+      ManagedSettings2.BetaSettingsDocumentLimitExceededError = BetaSettingsDocumentLimitExceededError;
+      ManagedSettings2.BetaSettingsHistoryLimitExceededError = BetaSettingsHistoryLimitExceededError;
+      ManagedSettings2.BetaRBACGroupManagedSettingsNotFoundError = BetaRBACGroupManagedSettingsNotFoundError;
+      ManagedSettings2.Configuration = Configuration;
+      ManagedSettings2.RBACGroups = RBACGroups;
+      ManagedSettings2.RBACGroupDefault = RBACGroupDefault;
+      return ManagedSettings2;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/claude-code.mjs
+var ClaudeCode;
+var init_claude_code = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-code/claude-code.mjs"() {
+    init_resource();
+    init_managed_settings();
+    init_managed_settings();
+    ClaudeCode = /* @__PURE__ */ (() => {
+      class ClaudeCode2 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.managedSettings = new ManagedSettings(this._client);
+        }
+      }
+      ClaudeCode2.ManagedSettings = ManagedSettings;
+      ClaudeCode2.BetaCMEKFeatureUnsupportedError = BetaCMEKFeatureUnsupportedError;
+      ClaudeCode2.BetaRBACGroupOrderLimitExceededError = BetaRBACGroupOrderLimitExceededError;
+      ClaudeCode2.BetaSettingsDocumentLimitExceededError = BetaSettingsDocumentLimitExceededError;
+      ClaudeCode2.BetaSettingsHistoryLimitExceededError = BetaSettingsHistoryLimitExceededError;
+      ClaudeCode2.BetaRBACGroupManagedSettingsNotFoundError = BetaRBACGroupManagedSettingsNotFoundError;
+      return ClaudeCode2;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-channels.mjs
+var SlackChannels;
+var init_slack_channels = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-channels.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    SlackChannels = class extends APIResource {
+      /**
+       * Set a Slack channel up for Claude Tag and return it with its identifier. If the
+       * channel is already set up, whether in claude.ai, by Claude's first use in it or
+       * by an earlier request, the existing channel is returned, so the request can be
+       * repeated. `settings`, when sent, is applied as an update applies it. Before a
+       * channel is set up, Claude's Slack app confirms with Slack that the channel is in
+       * the workspace, is not archived and is visible to the app; a channel that fails
+       * the confirmation returns 404. Setting the channel up and applying `settings` are
+       * two steps: when the second is refused, the response is the refusal, the channel
+       * stays set up with every setting unset, and the error's
+       * `details.slack_channel_id` holds the channel's identifier.
+       *
+       * @throws {BetaSlackChannelSetUpSettingsRefusedError}
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       * @throws {BetaEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpSettingsConflictError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagSlackChannel =
+       *   await client.beta.organization.claudeTag.slackChannels.create(
+       *     {
+       *       slack: {
+       *         channel_id: 'C0456EFGH',
+       *         workspace_id: 'T0123ABCD',
+       *       },
+       *     },
+       *   );
+       * ```
+       */
+      create(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/organizations/claude_tag/slack_channels", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.create", options, {
+            route: "/v1/organizations/claude_tag/slack_channels",
+            createdIDAttribute: "anthropic.organization.claude_tag.slack_channel.id"
+          })
+        });
+      }
+      /**
+       * Get one Slack channel and its settings. By default `settings` holds what the
+       * channel itself stores: a setting that is null there is not set on the channel
+       * and is inherited. With `include_inherited=true`, `settings` holds what applies
+       * in the channel once the settings levels above it are taken into account, and the
+       * request fails with 503 rather than resolve against a settings level that could
+       * not be read. Either way `sources` names the settings level each value comes
+       * from, so a caller tells the channel's own value from an inherited one by its
+       * source, not by whether it is null.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagSlackChannel =
+       *   await client.beta.organization.claudeTag.slackChannels.retrieve(
+       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
+       *   );
+       * ```
+       */
+      retrieve(id, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.get(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.retrieve", options, {
+            route: "/v1/organizations/claude_tag/slack_channels/{id}",
+            queryParams: ["include_inherited"],
+            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
+          })
+        });
+      }
+      /**
+       * Change the settings a Slack channel stores. The update is partial: a setting
+       * left out is unchanged, and a setting sent as null is cleared, so the channel
+       * inherits it. If any value is refused, no setting in the request is stored. A
+       * group direct message takes no settings and returns 400.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       * @throws {BetaEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpSettingsConflictError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagSlackChannel =
+       *   await client.beta.organization.claudeTag.slackChannels.update(
+       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
+       *     { settings: {} },
+       *   );
+       * ```
+       */
+      update(id, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.update", options, {
+            route: "/v1/organizations/claude_tag/slack_channels/{id}",
+            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
+          })
+        });
+      }
+      /**
+       * List the set-up Slack channels of one Slack workspace, newest first by
+       * `created_at`. A channel that is not set up is not listed: Slack holds the full
+       * list of a workspace's channels. Pass `slack_channel_id` as well to look one
+       * channel up by its Slack identifiers: `data` then holds that channel, or is empty
+       * when it is not set up, and `limit` and `page` are ignored. A workspace that the
+       * organization owns only through a Slack Enterprise Grid returns 404 until it is
+       * set up. With `include_inherited=true` each channel's `settings` holds what
+       * applies in it, and the request fails with 503 rather than resolve against a
+       * settings level that could not be read. A `page` cursor resumes only a request
+       * with the same `include_inherited`.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaClaudeTagSlackChannel of client.beta.organization.claudeTag.slackChannels.list(
+       *   { slack_workspace_id: 'slack_workspace_id' },
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params, options) {
+        const { betas, ...query } = params;
+        return this._client.getAPIList("/v1/organizations/claude_tag/slack_channels", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.list", options, {
+            route: "/v1/organizations/claude_tag/slack_channels",
+            queryParams: ["include_inherited", "limit", "page", "slack_channel_id", "slack_workspace_id"]
+          })
+        });
+      }
+      /**
+       * Remove a Slack channel from Claude Tag. This deletes the channel's stored
+       * settings and its Bundle Targets at once, and then, in the background, the
+       * channel's sessions and their transcripts, its memory, its routines and the
+       * artifacts published from it. None of it can be restored. The channel in Slack
+       * and its messages are unchanged. The request is refused with 400 and
+       * `error.details.error_code` `slack_channel_enabled` while `enabled` resolves to
+       * `true` for the channel, as a read with `include_inherited=true` returns it: set
+       * `enabled` to `false` on the channel first. This guards against removing a
+       * channel in use by mistake; it is not a way to keep Claude out, because the
+       * removal deletes the channel's own `enabled: false` with its other settings,
+       * after which the channel inherits again and Claude's next use of it can set it up
+       * anew with a new identifier. The identifier returns 404 as soon as the request
+       * returns, so a repeated removal returns 404. A group direct message returns 400,
+       * and so does a channel that holds configuration this API does not manage.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       * @throws {BetaSlackChannelSetUpSettingsConflictError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagDeletedSlackChannel =
+       *   await client.beta.organization.claudeTag.slackChannels.delete(
+       *     'slch_01SvpyRQK3nN6eH9uhRA7n1q',
+       *   );
+       * ```
+       */
+      delete(id, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.delete(path`/v1/organizations/claude_tag/slack_channels/${id}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_channels.delete", options, {
+            route: "/v1/organizations/claude_tag/slack_channels/{id}",
+            attributes: { "anthropic.organization.claude_tag.slack_channel.id": id }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-workspaces.mjs
+var SlackWorkspaces;
+var init_slack_workspaces = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/slack-workspaces.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    SlackWorkspaces = class extends APIResource {
+      /**
+       * Get one Slack workspace and its settings. By default `settings` holds what the
+       * workspace itself stores: a setting that is null there is not set on the
+       * workspace and is inherited. With `include_inherited=true`, `settings` holds what
+       * applies in the workspace once the organization's Slack defaults are taken into
+       * account, and the request fails with 503 rather than resolve against a settings
+       * level that could not be read. Either way `sources` names the settings level each
+       * value comes from.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagSlackWorkspace =
+       *   await client.beta.organization.claudeTag.slackWorkspaces.retrieve(
+       *     'slws_01Hq8TzW5mKc2YbX7vNd4RfJ',
+       *   );
+       * ```
+       */
+      retrieve(id, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.get(path`/v1/organizations/claude_tag/slack_workspaces/${id}`, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.retrieve", options, {
+            route: "/v1/organizations/claude_tag/slack_workspaces/{id}",
+            queryParams: ["include_inherited"],
+            attributes: { "anthropic.organization.claude_tag.slack_workspace.id": id }
+          })
+        });
+      }
+      /**
+       * Change the settings a Slack workspace stores. The update is partial: a setting
+       * left out is unchanged, and a setting sent as null is cleared, so the workspace
+       * inherits it. If any value is refused, no setting in the request is stored.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       * @throws {BetaEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpEnvironmentNotFoundError}
+       * @throws {BetaSlackChannelSetUpSettingsConflictError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagSlackWorkspace =
+       *   await client.beta.organization.claudeTag.slackWorkspaces.update(
+       *     'slws_01Hq8TzW5mKc2YbX7vNd4RfJ',
+       *     { settings: {} },
+       *   );
+       * ```
+       */
+      update(id, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/claude_tag/slack_workspaces/${id}`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.update", options, {
+            route: "/v1/organizations/claude_tag/slack_workspaces/{id}",
+            attributes: { "anthropic.organization.claude_tag.slack_workspace.id": id }
+          })
+        });
+      }
+      /**
+       * List the set-up Slack workspaces the organization owns, newest first by
+       * `created_at`. Pass `slack_workspace_id` to look one workspace up by its Slack
+       * identifier: `data` then holds that workspace, or is empty when it is not set up.
+       * A workspace of a Slack Enterprise Grid the organization has connected returns
+       * 404 until it is set up. With `include_inherited=true` each workspace's
+       * `settings` holds what applies in it, and the request fails with 503 rather than
+       * resolve against a settings level that could not be read. A `page` cursor resumes
+       * only a request with the same `include_inherited`.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaClaudeTagSlackWorkspace of client.beta.organization.claudeTag.slackWorkspaces.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/organizations/claude_tag/slack_workspaces", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.slack_workspaces.list", options, {
+            route: "/v1/organizations/claude_tag/slack_workspaces",
+            queryParams: ["include_inherited", "limit", "page", "slack_workspace_id"]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/targets.mjs
+var Targets;
+var init_targets = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/targets.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    Targets = class extends APIResource {
+      /**
+       * Attach a Bundle to a Slack channel or a Slack workspace. A Bundle attached to a
+       * workspace can be used in the workspace and in every channel in it. Attaching a
+       * Bundle to a channel or workspace it is already attached to returns the existing
+       * Bundle Target. The channel or workspace must be set up: attaching never sets a
+       * channel up. A group direct message takes no Bundle and returns 400.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagBundleTarget =
+       *   await client.beta.organization.claudeTag.bundles.targets.create(
+       *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
+       *     {
+       *       target: {
+       *         slack_channel_id: 'slch_01SvpyRQK3nN6eH9uhRA7n1q',
+       *         type: 'slack_channel',
+       *       },
+       *     },
+       *   );
+       * ```
+       */
+      create(bundleID, params, options) {
+        const { target, betas } = params;
+        return this._client.post(path`/v1/organizations/claude_tag/bundles/${bundleID}/targets`, {
+          body: target,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.create", options, {
+            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets",
+            attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
+          })
+        });
+      }
+      /**
+       * Get one Bundle Target. Returns 404 when `target_id` is the identifier of another
+       * Bundle's Bundle Target, or the Bundle Target was detached.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagBundleTarget =
+       *   await client.beta.organization.claudeTag.bundles.targets.retrieve(
+       *     'btgt_01SvpyRQK3nN6eH9uhRA7n1qHq8TzW5mKc2YbX7vNd4RfJ',
+       *     { bundle_id: 'capp_011CZkZjLP1cWxj5EtMmdgbq' },
+       *   );
+       * ```
+       */
+      retrieve(targetID, params, options) {
+        const { bundle_id, betas } = params;
+        return this._client.get(path`/v1/organizations/claude_tag/bundles/${bundle_id}/targets/${targetID}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.retrieve", options, {
+            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets/{target_id}",
+            attributes: {
+              "anthropic.organization.claude_tag.bundle.id": bundle_id,
+              "anthropic.organization.claude_tag.bundle.target.id": targetID
+            }
+          })
+        });
+      }
+      /**
+       * List the Slack channels and Slack workspaces a Bundle is attached to, newest
+       * first by `created_at`. Only channels and workspaces the organization owns are
+       * listed; a Bundle that is attached to anything else has no Bundle Target for it.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaClaudeTagBundleTarget of client.beta.organization.claudeTag.bundles.targets.list(
+       *   'capp_011CZkZjLP1cWxj5EtMmdgbq',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(bundleID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path`/v1/organizations/claude_tag/bundles/${bundleID}/targets`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.list", options, {
+            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets",
+            queryParams: ["limit", "page"],
+            attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
+          })
+        });
+      }
+      /**
+       * Detach a Bundle from a Slack channel or a Slack workspace. A repeated detach
+       * returns 404.
+       *
+       * @throws {BetaAPIKeyScopeMissingError}
+       * @throws {BetaClaudeTagWritesNotEnabledError}
+       * @throws {BetaComplianceConfigurationRestrictedError}
+       * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+       *
+       * @example
+       * ```ts
+       * const betaClaudeTagDeletedBundleTarget =
+       *   await client.beta.organization.claudeTag.bundles.targets.delete(
+       *     'btgt_01SvpyRQK3nN6eH9uhRA7n1qHq8TzW5mKc2YbX7vNd4RfJ',
+       *     { bundle_id: 'capp_011CZkZjLP1cWxj5EtMmdgbq' },
+       *   );
+       * ```
+       */
+      delete(targetID, params, options) {
+        const { bundle_id, betas } = params;
+        return this._client.delete(path`/v1/organizations/claude_tag/bundles/${bundle_id}/targets/${targetID}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.targets.delete", options, {
+            route: "/v1/organizations/claude_tag/bundles/{bundle_id}/targets/{target_id}",
+            attributes: {
+              "anthropic.organization.claude_tag.bundle.id": bundle_id,
+              "anthropic.organization.claude_tag.bundle.target.id": targetID
+            }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/bundles.mjs
+var Bundles;
+var init_bundles = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/bundles/bundles.mjs"() {
+    init_resource();
+    init_targets();
+    init_targets();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    Bundles = /* @__PURE__ */ (() => {
+      class Bundles2 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.targets = new Targets(this._client);
+        }
+        /**
+         * Get one Bundle. What the Bundle grants (connectors, repositories and
+         * credentials) is never returned.
+         *
+         * @throws {BetaAPIKeyScopeMissingError}
+         * @throws {BetaClaudeTagWritesNotEnabledError}
+         * @throws {BetaComplianceConfigurationRestrictedError}
+         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+         *
+         * @example
+         * ```ts
+         * const betaClaudeTagBundle =
+         *   await client.beta.organization.claudeTag.bundles.retrieve(
+         *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
+         *   );
+         * ```
+         */
+        retrieve(bundleID, params = {}, options) {
+          const { betas } = params ?? {};
+          return this._client.get(path`/v1/organizations/claude_tag/bundles/${bundleID}`, {
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.retrieve", options, {
+              route: "/v1/organizations/claude_tag/bundles/{bundle_id}",
+              attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
+            })
+          });
+        }
+        /**
+         * Change a Bundle's instructions. The update is partial: a field left out is
+         * unchanged, and `instructions` sent as null or as an empty string clears them.
+         * The later of two updates wins. Sessions that start after the change use the new
+         * instructions; sessions already running keep the ones they started with. Some
+         * Bundles are managed in claude.ai, and an update of one returns 400.
+         *
+         * @throws {BetaBundleAttachmentNotSupportedError}
+         * @throws {BetaBundleOnCallError}
+         * @throws {BetaAPIKeyScopeMissingError}
+         * @throws {BetaClaudeTagWritesNotEnabledError}
+         * @throws {BetaComplianceConfigurationRestrictedError}
+         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+         * @throws {BetaSlackChannelSetUpSettingsConflictError}
+         *
+         * @example
+         * ```ts
+         * const betaClaudeTagBundle =
+         *   await client.beta.organization.claudeTag.bundles.update(
+         *     'capp_011CZkZjLP1cWxj5EtMmdgbq',
+         *     {},
+         *   );
+         * ```
+         */
+        update(bundleID, params, options) {
+          const { betas, ...body } = params;
+          return this._client.post(path`/v1/organizations/claude_tag/bundles/${bundleID}`, {
+            body,
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.update", options, {
+              route: "/v1/organizations/claude_tag/bundles/{bundle_id}",
+              attributes: { "anthropic.organization.claude_tag.bundle.id": bundleID }
+            })
+          });
+        }
+        /**
+         * List the organization's Bundles, newest first by `created_at`. A Bundle that
+         * Claude Tag manages for itself is not listed.
+         *
+         * @throws {BetaAPIKeyScopeMissingError}
+         * @throws {BetaClaudeTagWritesNotEnabledError}
+         * @throws {BetaComplianceConfigurationRestrictedError}
+         * @throws {BetaOrganizationLevelScopedAPIKeyRequiredError}
+         *
+         * @example
+         * ```ts
+         * // Automatically fetches more pages as needed.
+         * for await (const betaClaudeTagBundle of client.beta.organization.claudeTag.bundles.list()) {
+         *   // ...
+         * }
+         * ```
+         */
+        list(params = {}, options) {
+          const { betas, ...query } = params ?? {};
+          return this._client.getAPIList("/v1/organizations/claude_tag/bundles", PageCursor, {
+            query,
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "experimental-claude-tag-2026-10-21"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.claude_tag.bundles.list", options, {
+              route: "/v1/organizations/claude_tag/bundles",
+              queryParams: ["limit", "page"]
+            })
+          });
+        }
+      }
+      Bundles2.Targets = Targets;
+      return Bundles2;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/claude-tag.mjs
+var BetaBundleAttachmentNotSupportedError, BetaBundleOnCallError, BetaSlackChannelSetUpSettingsRefusedError, BetaAPIKeyScopeMissingError, BetaClaudeTagWritesNotEnabledError, BetaComplianceConfigurationRestrictedError, BetaOrganizationLevelScopedAPIKeyRequiredError, BetaSlackChannelSetUpEnvironmentNotFoundError, BetaSlackChannelSetUpSettingsConflictError, ClaudeTag;
+var init_claude_tag = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/claude-tag/claude-tag.mjs"() {
+    init_resource();
+    init_slack_channels();
+    init_slack_channels();
+    init_slack_workspaces();
+    init_slack_workspaces();
+    init_bundles();
+    init_bundles();
+    init_error();
+    BetaBundleAttachmentNotSupportedError = /* @__PURE__ */ (() => {
+      class BetaBundleAttachmentNotSupportedError2 extends BadRequestError {
+      }
+      BetaBundleAttachmentNotSupportedError2._errorName = "BetaBundleAttachmentNotSupportedError";
+      return BetaBundleAttachmentNotSupportedError2;
+    })();
+    BetaBundleOnCallError = /* @__PURE__ */ (() => {
+      class BetaBundleOnCallError2 extends BadRequestError {
+      }
+      BetaBundleOnCallError2._errorName = "BetaBundleOnCallError";
+      return BetaBundleOnCallError2;
+    })();
+    BetaSlackChannelSetUpSettingsRefusedError = /* @__PURE__ */ (() => {
+      class BetaSlackChannelSetUpSettingsRefusedError2 extends BadRequestError {
+      }
+      BetaSlackChannelSetUpSettingsRefusedError2._errorName = "BetaSlackChannelSetUpSettingsRefusedError";
+      return BetaSlackChannelSetUpSettingsRefusedError2;
+    })();
+    BetaAPIKeyScopeMissingError = /* @__PURE__ */ (() => {
+      class BetaAPIKeyScopeMissingError2 extends PermissionDeniedError {
+      }
+      BetaAPIKeyScopeMissingError2._errorName = "BetaAPIKeyScopeMissingError";
+      return BetaAPIKeyScopeMissingError2;
+    })();
+    BetaClaudeTagWritesNotEnabledError = /* @__PURE__ */ (() => {
+      class BetaClaudeTagWritesNotEnabledError2 extends PermissionDeniedError {
+      }
+      BetaClaudeTagWritesNotEnabledError2._errorName = "BetaClaudeTagWritesNotEnabledError";
+      return BetaClaudeTagWritesNotEnabledError2;
+    })();
+    BetaComplianceConfigurationRestrictedError = /* @__PURE__ */ (() => {
+      class BetaComplianceConfigurationRestrictedError2 extends PermissionDeniedError {
+      }
+      BetaComplianceConfigurationRestrictedError2._errorName = "BetaComplianceConfigurationRestrictedError";
+      return BetaComplianceConfigurationRestrictedError2;
+    })();
+    BetaOrganizationLevelScopedAPIKeyRequiredError = /* @__PURE__ */ (() => {
+      class BetaOrganizationLevelScopedAPIKeyRequiredError2 extends PermissionDeniedError {
+      }
+      BetaOrganizationLevelScopedAPIKeyRequiredError2._errorName = "BetaOrganizationLevelScopedAPIKeyRequiredError";
+      return BetaOrganizationLevelScopedAPIKeyRequiredError2;
+    })();
+    BetaSlackChannelSetUpEnvironmentNotFoundError = /* @__PURE__ */ (() => {
+      class BetaSlackChannelSetUpEnvironmentNotFoundError2 extends NotFoundError {
+      }
+      BetaSlackChannelSetUpEnvironmentNotFoundError2._errorName = "BetaSlackChannelSetUpEnvironmentNotFoundError";
+      return BetaSlackChannelSetUpEnvironmentNotFoundError2;
+    })();
+    BetaSlackChannelSetUpSettingsConflictError = /* @__PURE__ */ (() => {
+      class BetaSlackChannelSetUpSettingsConflictError2 extends ConflictError {
+      }
+      BetaSlackChannelSetUpSettingsConflictError2._errorName = "BetaSlackChannelSetUpSettingsConflictError";
+      return BetaSlackChannelSetUpSettingsConflictError2;
+    })();
+    ClaudeTag = /* @__PURE__ */ (() => {
+      class ClaudeTag2 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.slackChannels = new SlackChannels(this._client);
+          this.slackWorkspaces = new SlackWorkspaces(this._client);
+          this.bundles = new Bundles(this._client);
+        }
+      }
+      ClaudeTag2.BetaBundleAttachmentNotSupportedError = BetaBundleAttachmentNotSupportedError;
+      ClaudeTag2.BetaBundleOnCallError = BetaBundleOnCallError;
+      ClaudeTag2.BetaSlackChannelSetUpSettingsRefusedError = BetaSlackChannelSetUpSettingsRefusedError;
+      ClaudeTag2.BetaAPIKeyScopeMissingError = BetaAPIKeyScopeMissingError;
+      ClaudeTag2.BetaClaudeTagWritesNotEnabledError = BetaClaudeTagWritesNotEnabledError;
+      ClaudeTag2.BetaComplianceConfigurationRestrictedError = BetaComplianceConfigurationRestrictedError;
+      ClaudeTag2.BetaOrganizationLevelScopedAPIKeyRequiredError = BetaOrganizationLevelScopedAPIKeyRequiredError;
+      ClaudeTag2.BetaSlackChannelSetUpEnvironmentNotFoundError = BetaSlackChannelSetUpEnvironmentNotFoundError;
+      ClaudeTag2.BetaSlackChannelSetUpSettingsConflictError = BetaSlackChannelSetUpSettingsConflictError;
+      ClaudeTag2.SlackChannels = SlackChannels;
+      ClaudeTag2.SlackWorkspaces = SlackWorkspaces;
+      ClaudeTag2.Bundles = Bundles;
+      return ClaudeTag2;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/issuers.mjs
+var Issuers;
+var init_issuers = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/issuers.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    Issuers = class extends APIResource {
+      /**
+       * **Requires an OAuth access token with the `org:admin` scope**, from
+       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+       * API keys are not accepted. See
+       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+       *
+       * Register an OIDC issuer that Anthropic will trust for workload identity
+       * federation in your organization.
+       *
+       * The `jwks` field controls how the issuer's signing keys are obtained and takes
+       * one of three shapes selected by `type`: `discovery` (resolve keys through OIDC
+       * discovery), `explicit_url` (fetch keys from a fixed JWKS URL), or `inline`
+       * (provide a static key set). When `jwks.type` is `discovery` and no
+       * `discovery_base` is set, the issuer URL must be publicly reachable over HTTPS so
+       * Anthropic can fetch the discovery document; for `explicit_url` and `inline`
+       * modes the issuer URL is only matched as the JWT's `iss` claim and is not
+       * fetched.
+       *
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaFederationIssuer =
+       *   await client.beta.organization.federation.issuers.create({
+       *     issuer_url:
+       *       'https://token.actions.githubusercontent.com',
+       *     name: 'github-actions',
+       *   });
+       * ```
+       */
+      create(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/organizations/federation_issuers", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.federation.issuers.create", options, {
+            route: "/v1/organizations/federation_issuers",
+            createdIDAttribute: "anthropic.organization.federation_issuer.id"
+          })
+        });
+      }
+      /**
+       * **Requires an OAuth access token with the `org:admin` scope**, from
+       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+       * API keys are not accepted. See
+       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+       *
+       * Retrieve a federation issuer by its ID (`fdis_...`).
+       *
+       * @example
+       * ```ts
+       * const betaFederationIssuer =
+       *   await client.beta.organization.federation.issuers.retrieve(
+       *     'federation_issuer_id',
+       *   );
+       * ```
+       */
+      retrieve(federationIssuerID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path`/v1/organizations/federation_issuers/${federationIssuerID}`, {
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.federation.issuers.retrieve", options, {
+            route: "/v1/organizations/federation_issuers/{federation_issuer_id}",
+            attributes: { "anthropic.organization.federation_issuer.id": federationIssuerID }
+          })
+        });
+      }
+      /**
+       * **Requires an OAuth access token with the `org:admin` scope**, from
+       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+       * API keys are not accepted. See
+       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+       *
+       * Partially update a federation issuer.
+       *
+       * Setting `jwks` replaces the full JWKS shape at once. Archived issuers cannot be
+       * updated; this returns 400. Create a new issuer instead.
+       *
+       * Updating an issuer that backs a rule with a scope outside `workspace:developer`
+       * or `workspace:inference` requires a Console session.
+       *
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaFederationIssuer =
+       *   await client.beta.organization.federation.issuers.update(
+       *     'federation_issuer_id',
+       *     {},
+       *   );
+       * ```
+       */
+      update(federationIssuerID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/federation_issuers/${federationIssuerID}`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.federation.issuers.update", options, {
+            route: "/v1/organizations/federation_issuers/{federation_issuer_id}",
+            attributes: { "anthropic.organization.federation_issuer.id": federationIssuerID }
+          })
+        });
+      }
+      /**
+       * **Requires an OAuth access token with the `org:admin` scope**, from
+       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+       * API keys are not accepted. See
+       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+       *
+       * List federation issuers in your organization.
+       *
+       * Archived issuers are excluded unless `include_archived=true`.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaFederationIssuer of client.beta.organization.federation.issuers.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/organizations/federation_issuers", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.federation.issuers.list", options, {
+            route: "/v1/organizations/federation_issuers",
+            queryParams: ["include_archived", "limit", "page"]
+          })
+        });
+      }
+      /**
+       * **Requires an OAuth access token with the `org:admin` scope**, from
+       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+       * API keys are not accepted. See
+       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+       *
+       * Archive a federation issuer.
+       *
+       * Idempotent; re-archiving returns the issuer with its original `archived_at`.
+       * Rejected with 400 if any live (non-archived) federation rule still references
+       * the issuer; archive those rules first (a rule's issuer cannot be changed), or
+       * recreate them against another issuer.
+       *
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaFederationIssuer =
+       *   await client.beta.organization.federation.issuers.archive(
+       *     'federation_issuer_id',
+       *   );
+       * ```
+       */
+      archive(federationIssuerID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.post(path`/v1/organizations/federation_issuers/${federationIssuerID}/archive`, {
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.federation.issuers.archive", options, {
+            route: "/v1/organizations/federation_issuers/{federation_issuer_id}/archive",
+            attributes: { "anthropic.organization.federation_issuer.id": federationIssuerID }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/rules/workspaces.mjs
+var Workspaces;
+var init_workspaces = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/rules/workspaces.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    Workspaces = class extends APIResource {
+      /**
+       * **Requires an OAuth access token with the `org:admin` scope**, from
+       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+       * API keys are not accepted. See
+       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+       *
+       * List workspaces where this federation rule is enabled.
+       *
+       * Returns all workspace enablements in a single response; the `limit` and `page`
+       * parameters are accepted but have no effect, and `next_page` is always `null`.
+       * Returns explicit per-workspace enablements only; for rules with
+       * `applies_to_all_workspaces` or a legacy single `workspace_id`, check those
+       * fields on the rule itself.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaFederationRuleWorkspace of client.beta.organization.federation.rules.workspaces.list(
+       *   'federation_rule_id',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(federationRuleID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path`/v1/organizations/federation_rules/${federationRuleID}/workspaces`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.workspaces.list", options, {
+            route: "/v1/organizations/federation_rules/{federation_rule_id}/workspaces",
+            queryParams: ["limit", "page"],
+            attributes: { "anthropic.organization.federation_rule.id": federationRuleID }
+          })
+        });
+      }
+      /**
+       * **Requires an OAuth access token with the `org:admin` scope**, from
+       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+       * API keys are not accepted. See
+       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+       *
+       * Enable a federation rule for a workspace.
+       *
+       * Idempotent; re-enabling returns the existing enablement. The rule and workspace
+       * must both belong to your organization. Membership of the rule's target service
+       * account in this workspace is not checked at enablement: token exchange into this
+       * workspace is rejected unless the target is a member (it is implicitly a member
+       * of the default workspace). Archived rules are rejected with 400. OAuth callers
+       * may only manage rules whose `oauth_scope` is `workspace:developer` or
+       * `workspace:inference`; other scopes require a Console session.
+       *
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaFederationRuleWorkspace =
+       *   await client.beta.organization.federation.rules.workspaces.add(
+       *     'federation_rule_id',
+       *     { workspace_id: 'wrkspc_01AbCdEfGhJkLmNpQrStUvWx' },
+       *   );
+       * ```
+       */
+      add(federationRuleID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/federation_rules/${federationRuleID}/workspaces`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.workspaces.add", options, {
+            route: "/v1/organizations/federation_rules/{federation_rule_id}/workspaces",
+            attributes: { "anthropic.organization.federation_rule.id": federationRuleID },
+            createdIDAttribute: "anthropic.organization.federation_rule.workspace.id",
+            createdIDField: "workspace_id"
+          })
+        });
+      }
+      /**
+       * **Requires an OAuth access token with the `org:admin` scope**, from
+       * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+       * API keys are not accepted. See
+       * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+       *
+       * Disable a federation rule for a workspace.
+       *
+       * Idempotent; succeeds even if the enablement was already removed. OAuth callers
+       * may only manage rules whose `oauth_scope` is `workspace:developer` or
+       * `workspace:inference`; other scopes require a Console session.
+       *
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const workspace =
+       *   await client.beta.organization.federation.rules.workspaces.remove(
+       *     'workspace_id',
+       *     { federation_rule_id: 'federation_rule_id' },
+       *   );
+       * ```
+       */
+      remove(workspaceID, params, options) {
+        const { federation_rule_id, betas } = params;
+        return this._client.delete(path`/v1/organizations/federation_rules/${federation_rule_id}/workspaces/${workspaceID}`, {
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.workspaces.remove", options, {
+            route: "/v1/organizations/federation_rules/{federation_rule_id}/workspaces/{workspace_id}",
+            attributes: {
+              "anthropic.organization.federation_rule.id": federation_rule_id,
+              "anthropic.organization.federation_rule.workspace.id": workspaceID
+            }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/rules/rules.mjs
+var Rules;
+var init_rules = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/rules/rules.mjs"() {
+    init_resource();
+    init_workspaces();
+    init_workspaces();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    Rules = /* @__PURE__ */ (() => {
+      class Rules3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.workspaces = new Workspaces(this._client);
+        }
+        /**
+         * **Requires an OAuth access token with the `org:admin` scope**, from
+         * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+         * API keys are not accepted. See
+         * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+         *
+         * Create a federation rule owned by your organization.
+         *
+         * The referenced issuer and the target service account must already exist in the
+         * same organization; invalid references are rejected with a 400 error. The
+         * workspace reference is validated. Membership is not checked at rule creation:
+         * token exchange resolves a single enabled workspace per call and is rejected
+         * unless the target service account is a member of that workspace (it is
+         * implicitly a member of the default workspace). Rules on well-known shared
+         * issuers (GitHub Actions, GitLab, Buildkite, Terraform Cloud, Google) must
+         * constrain tenant identity via an identity-bearing claim, a tenant-pinning
+         * subject prefix (such as `repo:YOUR_ORG/...`), or a CEL condition referencing one
+         * of those identity claims (e.g. `claims.repository_owner`). OAuth callers may
+         * only manage rules whose `oauth_scope` is `workspace:developer` or
+         * `workspace:inference`; other scopes require a Console session.
+         *
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaFederationRule =
+         *   await client.beta.organization.federation.rules.create({
+         *     issuer_id: 'fdis_01SDCCSbTxrXDpWc1phhtcfK',
+         *     match: {},
+         *     name: 'prod-deploy-pipeline',
+         *     oauth_scope: 'workspace:developer',
+         *     target: {
+         *       service_account_id: 'svac_01SDCCSbTxrXDpWc1phhtcfK',
+         *       type: 'service_account',
+         *     },
+         *   });
+         * ```
+         */
+        create(params, options) {
+          const { betas, ...body } = params;
+          return this._client.post("/v1/organizations/federation_rules", {
+            body,
+            ...options,
+            headers: buildHeaders([
+              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.create", options, {
+              route: "/v1/organizations/federation_rules",
+              createdIDAttribute: "anthropic.organization.federation_rule.id"
+            })
+          });
+        }
+        /**
+         * **Requires an OAuth access token with the `org:admin` scope**, from
+         * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+         * API keys are not accepted. See
+         * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+         *
+         * Retrieve a federation rule by its ID (`fdrl_...`).
+         *
+         * @example
+         * ```ts
+         * const betaFederationRule =
+         *   await client.beta.organization.federation.rules.retrieve(
+         *     'federation_rule_id',
+         *   );
+         * ```
+         */
+        retrieve(federationRuleID, params = {}, options) {
+          const { betas } = params ?? {};
+          return this._client.get(path`/v1/organizations/federation_rules/${federationRuleID}`, {
+            ...options,
+            headers: buildHeaders([
+              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.retrieve", options, {
+              route: "/v1/organizations/federation_rules/{federation_rule_id}",
+              attributes: { "anthropic.organization.federation_rule.id": federationRuleID }
+            })
+          });
+        }
+        /**
+         * **Requires an OAuth access token with the `org:admin` scope**, from
+         * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+         * API keys are not accepted. See
+         * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+         *
+         * Partially update a federation rule.
+         *
+         * `issuer_id` is immutable. `match` and `target` are replaced as whole objects
+         * when set. Referenced service accounts and workspaces must exist in your
+         * organization; invalid references are rejected with a 400 error. Archived rules
+         * cannot be updated; this returns 400. Create a new rule instead. Rules on
+         * well-known shared issuers (GitHub Actions, GitLab, Buildkite, Terraform Cloud,
+         * Google) must constrain tenant identity via an identity-bearing claim, a
+         * tenant-pinning subject prefix (such as `repo:YOUR_ORG/...`), or a CEL condition
+         * referencing one of those identity claims (e.g. `claims.repository_owner`). On
+         * these issuers the requirement is re-checked on every update; if an existing
+         * rule's stored match does not yet constrain tenant identity, any update (even a
+         * rename or description change) must also supply a conforming `match` in the same
+         * request. OAuth callers may only manage rules whose `oauth_scope` is
+         * `workspace:developer` or `workspace:inference`; other scopes require a Console
+         * session.
+         *
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaFederationRule =
+         *   await client.beta.organization.federation.rules.update(
+         *     'federation_rule_id',
+         *     {},
+         *   );
+         * ```
+         */
+        update(federationRuleID, params, options) {
+          const { betas, ...body } = params;
+          return this._client.post(path`/v1/organizations/federation_rules/${federationRuleID}`, {
+            body,
+            ...options,
+            headers: buildHeaders([
+              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.update", options, {
+              route: "/v1/organizations/federation_rules/{federation_rule_id}",
+              attributes: { "anthropic.organization.federation_rule.id": federationRuleID }
+            })
+          });
+        }
+        /**
+         * **Requires an OAuth access token with the `org:admin` scope**, from
+         * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+         * API keys are not accepted. See
+         * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+         *
+         * List federation rules in your organization.
+         *
+         * Optionally filter by issuer with `issuer_id`. Archived rules are excluded unless
+         * `include_archived=true`.
+         *
+         * @example
+         * ```ts
+         * // Automatically fetches more pages as needed.
+         * for await (const betaFederationRule of client.beta.organization.federation.rules.list()) {
+         *   // ...
+         * }
+         * ```
+         */
+        list(params = {}, options) {
+          const { betas, ...query } = params ?? {};
+          return this._client.getAPIList("/v1/organizations/federation_rules", PageCursor, {
+            query,
+            ...options,
+            headers: buildHeaders([
+              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.list", options, {
+              route: "/v1/organizations/federation_rules",
+              queryParams: ["include_archived", "issuer_id", "limit", "page"]
+            })
+          });
+        }
+        /**
+         * **Requires an OAuth access token with the `org:admin` scope**, from
+         * `ant auth login --scope org:admin` or a workload identity federation rule; Admin
+         * API keys are not accepted. See
+         * [Manage WIF with the Admin API](/docs/en/manage-claude/wif-admin-api).
+         *
+         * Archive a federation rule.
+         *
+         * Token exchange through this rule stops immediately. Idempotent; re-archiving
+         * returns the rule with its original `archived_at`. Archiving clears the rule's
+         * workspace targeting (`workspace_id` and `workspace_ids` are emptied). Tokens
+         * already minted before archive remain valid until they expire. OAuth callers may
+         * only manage rules whose `oauth_scope` is `workspace:developer` or
+         * `workspace:inference`; other scopes require a Console session.
+         *
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaFederationRule =
+         *   await client.beta.organization.federation.rules.archive(
+         *     'federation_rule_id',
+         *   );
+         * ```
+         */
+        archive(federationRuleID, params = {}, options) {
+          const { betas } = params ?? {};
+          return this._client.post(path`/v1/organizations/federation_rules/${federationRuleID}/archive`, {
+            ...options,
+            headers: buildHeaders([
+              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.federation.rules.archive", options, {
+              route: "/v1/organizations/federation_rules/{federation_rule_id}/archive",
+              attributes: { "anthropic.organization.federation_rule.id": federationRuleID }
+            })
+          });
+        }
+      }
+      Rules3.Workspaces = Workspaces;
+      return Rules3;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/federation.mjs
+var Federation;
+var init_federation = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/federation/federation.mjs"() {
+    init_resource();
+    init_issuers();
+    init_issuers();
+    init_rules();
+    init_rules();
+    Federation = /* @__PURE__ */ (() => {
+      class Federation3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.issuers = new Issuers(this._client);
+          this.rules = new Rules(this._client);
+        }
+      }
+      Federation3.Issuers = Issuers;
+      Federation3.Rules = Rules;
+      return Federation3;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/installation-settings.mjs
+var InstallationSettings;
+var init_installation_settings = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/installation-settings.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    InstallationSettings = class extends APIResource {
+      /**
+       * List an organization-owned Plugin's installation settings, which say which
+       * members it is for, most recently created first.
+       *
+       * The list holds the Plugin's own organization-wide setting (absent while the
+       * Plugin inherits its marketplace's default) and each RBAC Group's own setting. A
+       * member-owned Plugin has shares instead, so this path returns 404 for one.
+       *
+       * **Accepted credentials:** an Admin API key with the `read:plugins` or
+       * `read:org_audit` scope, or a Compliance Access Key with the
+       * `read:compliance_org_data` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+       * available to Claude Enterprise organizations only. It is not available to Claude
+       * Platform (Claude Console) organizations, or to organizations with HIPAA
+       * readiness enabled.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaPluginInstallationSetting of client.beta.organization.plugins.installationSettings.list(
+       *   'plugin_id',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(pluginID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path`/v1/organizations/plugins/${pluginID}/installation_settings`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.installation_settings.list", options, {
+            route: "/v1/organizations/plugins/{plugin_id}/installation_settings",
+            queryParams: ["limit", "organization_id", "page", "target_type"],
+            attributes: { "anthropic.organization.plugin.id": pluginID }
+          })
+        });
+      }
+      /**
+       * Remove an organization-owned Plugin's own installation setting for the whole
+       * organization or for one RBAC Group.
+       *
+       * Removing the `organization` target returns the Plugin to its marketplace's
+       * default installation setting and leaves the groups' settings in place. Removing
+       * a group's setting makes the group's members fall back to the Plugin's
+       * organization-wide setting or to the settings of their other groups.
+       *
+       * A target that holds no setting of its own returns 404 (a Plugin that already
+       * inherits its marketplace's default holds no `organization` setting), and so does
+       * a member-owned Plugin.
+       *
+       * A removal counts as one of the Plugin's installation-setting writes: send all of
+       * those writes one at a time. If several arrive for the same Plugin at the same
+       * time, the server handles them one after another and can answer some of them with
+       * `503` and `x-should-retry: true` instead of applying them; wait a second or two
+       * and send the removal again. A `404` on the repeat means the setting is already
+       * gone.
+       *
+       * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+       * available to Claude Enterprise organizations only. It is not available to Claude
+       * Platform (Claude Console) organizations, or to organizations with HIPAA
+       * readiness enabled.
+       *
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaDeletedPluginInstallationSetting =
+       *   await client.beta.organization.plugins.installationSettings.remove(
+       *     'target',
+       *     { plugin_id: 'plugin_id' },
+       *   );
+       * ```
+       */
+      remove(target, params, options) {
+        const { plugin_id, betas } = params;
+        return this._client.delete(path`/v1/organizations/plugins/${plugin_id}/installation_settings/${target}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.installation_settings.remove", options, {
+            route: "/v1/organizations/plugins/{plugin_id}/installation_settings/{target}",
+            attributes: {
+              "anthropic.organization.plugin.id": plugin_id,
+              "anthropic.organization.plugin.installation_setting.id": target
+            }
+          })
+        });
+      }
+      /**
+       * Set or change an organization-owned Plugin's installation setting for the whole
+       * organization or for one RBAC Group.
+       *
+       * Writing the value a target already holds of its own changes nothing.
+       *
+       * A member-owned Plugin has shares instead of installation settings, so this path
+       * returns 404 for one.
+       *
+       * Send a Plugin's installation-setting writes one at a time. If several writes for
+       * the same Plugin arrive at the same time, the server handles them one after
+       * another and can answer some of them with `503` instead of applying them. That
+       * `503` carries `x-should-retry: true`, and the write is safe to repeat: wait a
+       * second or two, then send it again.
+       *
+       * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+       * available to Claude Enterprise organizations only. It is not available to Claude
+       * Platform (Claude Console) organizations, or to organizations with HIPAA
+       * readiness enabled.
+       *
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaPluginInstallationSetting =
+       *   await client.beta.organization.plugins.installationSettings.set(
+       *     'target',
+       *     {
+       *       plugin_id: 'plugin_id',
+       *       installation_preference: 'required',
+       *     },
+       *   );
+       * ```
+       */
+      set(target, params, options) {
+        const { plugin_id, betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/plugins/${plugin_id}/installation_settings/${target}`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.installation_settings.set", options, {
+            route: "/v1/organizations/plugins/{plugin_id}/installation_settings/{target}",
+            attributes: {
+              "anthropic.organization.plugin.id": plugin_id,
+              "anthropic.organization.plugin.installation_setting.id": target
+            }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/shares.mjs
+var Shares;
+var init_shares = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/shares.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    Shares = class extends APIResource {
+      /**
+       * List the shares the owner of a member-owned Plugin has given — to every member
+       * of the organization, to an RBAC Group, or to one member — most recently granted
+       * first.
+       *
+       * Shares are read-only in this API: members give and withdraw them in claude.ai.
+       * The Plugin's `owner` gave each share listed. An organization-owned Plugin has
+       * installation settings instead of shares, so this path returns 404 for one.
+       *
+       * **Accepted credentials:** an Admin API key with the `read:plugins` or
+       * `read:org_audit` scope, or a Compliance Access Key with the
+       * `read:compliance_org_data` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+       * available to Claude Enterprise organizations only. It is not available to Claude
+       * Platform (Claude Console) organizations, or to organizations with HIPAA
+       * readiness enabled.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaPluginShare of client.beta.organization.plugins.shares.list(
+       *   'plugin_id',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(pluginID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path`/v1/organizations/plugins/${pluginID}/shares`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.shares.list", options, {
+            route: "/v1/organizations/plugins/{plugin_id}/shares",
+            queryParams: ["limit", "organization_id", "page", "target_type"],
+            attributes: { "anthropic.organization.plugin.id": pluginID }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/versions.mjs
+var Versions2;
+var init_versions2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/versions.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_uploads();
+    init_path();
+    Versions2 = class extends APIResource {
+      /**
+       * Add a version to an organization-owned Plugin by uploading the new version's
+       * files; it becomes the version served to members unless the Plugin's served
+       * version has been pinned.
+       *
+       * The upload is the same `multipart/form-data` as creating a Plugin: the version's
+       * files (`files`, each part sent as `files[]`) and optional `release_notes`. The
+       * uploaded manifest's `name` must equal the Plugin's `name`. Returns the stored
+       * version; read the Plugin back to see which version it serves.
+       *
+       * Only a Plugin in a `manual` marketplace takes uploads; a Plugin synchronized
+       * from a repository gets its versions from the repository. When the Plugin is in
+       * the organization's library marketplace, a version that adds a skill with the
+       * name of an organization skill that this API does not list is refused with a 409:
+       * `error_code` `skill_name_taken`, with that name in `details.skill_name`. A 503
+       * with `error_code` `registration_pending` means the version was stored but is not
+       * yet usable; a later version create on the Plugin completes it.
+       *
+       * For a worked example, see
+       * [Create a version](/docs/en/manage-claude/plugins-api#create-a-version) in the
+       * Plugins API guide.
+       *
+       * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+       * available to Claude Enterprise organizations only. It is not available to Claude
+       * Platform (Claude Console) organizations, or to organizations with HIPAA
+       * readiness enabled.
+       *
+       * @throws {CMEKKeyDisabledError}
+       * @throws {CMEKKeyNetworkBlockedError}
+       * @throws {BetaUnsupportedCharsetError}
+       * @throws {SandboxEgressRestrictedError}
+       * @throws {BetaSkillNameTakenError}
+       * @throws {BetaRegistrationPendingError}
+       *
+       * @example
+       * ```ts
+       * const betaPluginVersion =
+       *   await client.beta.organization.plugins.versions.create(
+       *     'plugin_id',
+       *     { files: [fs.createReadStream('path/to/file')] },
+       *   );
+       * ```
+       */
+      create(pluginID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/plugins/${pluginID}/versions`, multipartFormRequestOptions({
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.versions.create", options, {
+            route: "/v1/organizations/plugins/{plugin_id}/versions",
+            attributes: { "anthropic.organization.plugin.id": pluginID },
+            createdIDAttribute: "anthropic.organization.plugin.version.id"
+          })
+        }, this._client));
+      }
+      /**
+       * Retrieve one version of a Plugin by its ID, or the Plugin's newest version.
+       *
+       * **Accepted credentials:** an Admin API key with the `read:plugins` or
+       * `read:org_audit` scope, or a Compliance Access Key with the
+       * `read:compliance_org_data` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+       * available to Claude Enterprise organizations only. It is not available to Claude
+       * Platform (Claude Console) organizations, or to organizations with HIPAA
+       * readiness enabled.
+       *
+       * @example
+       * ```ts
+       * const betaPluginVersion =
+       *   await client.beta.organization.plugins.versions.retrieve(
+       *     'version',
+       *     { plugin_id: 'plugin_id' },
+       *   );
+       * ```
+       */
+      retrieve(version, params, options) {
+        const { plugin_id, betas, ...query } = params;
+        return this._client.get(path`/v1/organizations/plugins/${plugin_id}/versions/${version}`, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.versions.retrieve", options, {
+            route: "/v1/organizations/plugins/{plugin_id}/versions/{version}",
+            queryParams: ["organization_id"],
+            attributes: {
+              "anthropic.organization.plugin.id": plugin_id,
+              "anthropic.organization.plugin.version.id": version
+            }
+          })
+        });
+      }
+      /**
+       * List a Plugin's versions, newest first.
+       *
+       * The first item of the first page is the version the Plugin's `latest_version_id`
+       * refers to.
+       *
+       * **Accepted credentials:** an Admin API key with the `read:plugins` or
+       * `read:org_audit` scope, or a Compliance Access Key with the
+       * `read:compliance_org_data` scope.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+       * available to Claude Enterprise organizations only. It is not available to Claude
+       * Platform (Claude Console) organizations, or to organizations with HIPAA
+       * readiness enabled.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaPluginVersion of client.beta.organization.plugins.versions.list(
+       *   'plugin_id',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(pluginID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path`/v1/organizations/plugins/${pluginID}/versions`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.versions.list", options, {
+            route: "/v1/organizations/plugins/{plugin_id}/versions",
+            queryParams: ["limit", "organization_id", "page"],
+            attributes: { "anthropic.organization.plugin.id": pluginID }
+          })
+        });
+      }
+      /**
+       * Download one version's `.zip` archive, exactly as stored. Downloads of Plugins
+       * from members' personal plugin marketplaces can be recorded on the Compliance API
+       * activity feed.
+       *
+       * The response body is the archive (`Content-Type: application/zip`), sent as an
+       * attachment whose filename is derived from the Plugin's name; name saved files
+       * from the IDs in the request path, since that filename is not unique.
+       *
+       * **Accepted credentials:** an Admin API key with the `read:plugins` or
+       * `read:org_audit` scope, or a Compliance Access Key with the
+       * `read:compliance_org_data` scope.
+       *
+       * Every read scope above (`read:plugins`, `read:org_audit`, and
+       * `read:compliance_org_data`) can download the files of plugins in members'
+       * personal marketplaces, including files that claude.ai's admin settings do not
+       * show, and a `read:org_audit` or `read:compliance_org_data` key created for all
+       * of your parent organization's linked organizations can do this in any
+       * organization under it that has access to this API, by passing `organization_id`.
+       * The Compliance API activity feed can record such a download as a
+       * `claude_plugin_archive_accessed` event, which identifies the key, the plugin,
+       * the version, and the member. It does so only while activity events are captured
+       * for the plugin's organization, and a record is not guaranteed even then. The
+       * files are served whether or not the download is recorded. Downloads of
+       * organization-owned plugins are not recorded.
+       *
+       * Every request must include the beta header
+       * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+       * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+       * available to Claude Enterprise organizations only. It is not available to Claude
+       * Platform (Claude Console) organizations, or to organizations with HIPAA
+       * readiness enabled.
+       *
+       * @throws {CMEKKeyDisabledError}
+       * @throws {CMEKKeyNetworkBlockedError}
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const response =
+       *   await client.beta.organization.plugins.versions.download(
+       *     'version',
+       *     { plugin_id: 'plugin_id' },
+       *   );
+       *
+       * const content = await response.blob();
+       * console.log(content);
+       * ```
+       */
+      download(version, params, options) {
+        const { plugin_id, betas, ...query } = params;
+        return this._client.get(path`/v1/organizations/plugins/${plugin_id}/versions/${version}/content`, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            {
+              "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString(),
+              Accept: "application/binary"
+            },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __binaryResponse: true,
+          __span: startApiCallSpan(this._client, "anthropic.organization.plugins.versions.download", options, {
+            route: "/v1/organizations/plugins/{plugin_id}/versions/{version}/content",
+            queryParams: ["organization_id"],
+            attributes: {
+              "anthropic.organization.plugin.id": plugin_id,
+              "anthropic.organization.plugin.version.id": version
+            }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/plugins.mjs
+var BetaScanFailedError, BetaPluginNameTakenError, BetaScanPendingError, BetaSkillNameTakenError, BetaRegistrationPendingError, Plugins2;
+var init_plugins2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/plugins/plugins.mjs"() {
+    init_resource();
+    init_installation_settings();
+    init_installation_settings();
+    init_shares();
+    init_shares();
+    init_versions2();
+    init_versions2();
+    init_error();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_uploads();
+    init_path();
+    BetaScanFailedError = /* @__PURE__ */ (() => {
+      class BetaScanFailedError2 extends BadRequestError {
+      }
+      BetaScanFailedError2._errorName = "BetaScanFailedError";
+      return BetaScanFailedError2;
+    })();
+    BetaPluginNameTakenError = /* @__PURE__ */ (() => {
+      class BetaPluginNameTakenError2 extends ConflictError {
+      }
+      BetaPluginNameTakenError2._errorName = "BetaPluginNameTakenError";
+      return BetaPluginNameTakenError2;
+    })();
+    BetaScanPendingError = /* @__PURE__ */ (() => {
+      class BetaScanPendingError2 extends ConflictError {
+      }
+      BetaScanPendingError2._errorName = "BetaScanPendingError";
+      return BetaScanPendingError2;
+    })();
+    BetaSkillNameTakenError = /* @__PURE__ */ (() => {
+      class BetaSkillNameTakenError2 extends ConflictError {
+      }
+      BetaSkillNameTakenError2._errorName = "BetaSkillNameTakenError";
+      return BetaSkillNameTakenError2;
+    })();
+    BetaRegistrationPendingError = /* @__PURE__ */ (() => {
+      class BetaRegistrationPendingError2 extends ServiceUnavailableError {
+      }
+      BetaRegistrationPendingError2._errorName = "BetaRegistrationPendingError";
+      return BetaRegistrationPendingError2;
+    })();
+    Plugins2 = /* @__PURE__ */ (() => {
+      class Plugins4 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.versions = new Versions2(this._client);
+          this.installationSettings = new InstallationSettings(this._client);
+          this.shares = new Shares(this._client);
+        }
+        /**
+         * Create an organization-owned Plugin and its first version by uploading the
+         * version's files.
+         *
+         * The upload is `multipart/form-data`: the version's files (`files`, each part
+         * sent as `files[]`), with an optional `marketplace_id` and `release_notes`. The
+         * manifest's `name` becomes the Plugin's `name`, and `display_name`, `description`
+         * and `manifest_version` come from the manifest too.
+         *
+         * `name` may contain lowercase letters (from any alphabet), digits, and hyphens,
+         * up to 64 characters. Uppercase letters, spaces, underscores, and other
+         * punctuation are rejected.
+         *
+         * The `name` must be unique within the marketplace: a name already taken returns a
+         * 409 with `error_code` `plugin_name_taken` and, when a Plugin holds it, that
+         * Plugin's ID in `details.plugin_id`. A Plugin going into the organization's
+         * library marketplace is also refused with a 409 when one of its skills has the
+         * name of an organization skill that this API does not list: `error_code`
+         * `skill_name_taken`, with that name in `details.skill_name`; rename the skill, or
+         * remove the organization skill in claude.ai. A 503 with `error_code`
+         * `registration_pending` means the Plugin and its version were stored (their IDs
+         * are in `details`) but are not yet usable in claude.ai: do not retry the create
+         * (the retry would return `plugin_name_taken`); create a version on the stored
+         * Plugin instead, which completes it.
+         *
+         * For a worked example, see
+         * [Create a plugin](/docs/en/manage-claude/plugins-api#create-a-plugin) in the
+         * Plugins API guide.
+         *
+         * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
+         *
+         * Every request must include the beta header
+         * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+         * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+         * available to Claude Enterprise organizations only. It is not available to Claude
+         * Platform (Claude Console) organizations, or to organizations with HIPAA
+         * readiness enabled.
+         *
+         * @throws {CMEKKeyDisabledError}
+         * @throws {CMEKKeyNetworkBlockedError}
+         * @throws {BetaUnsupportedCharsetError}
+         * @throws {SandboxEgressRestrictedError}
+         * @throws {BetaPluginNameTakenError}
+         * @throws {BetaSkillNameTakenError}
+         * @throws {BetaRegistrationPendingError}
+         *
+         * @example
+         * ```ts
+         * const betaPlugin =
+         *   await client.beta.organization.plugins.create({
+         *     files: [fs.createReadStream('path/to/file')],
+         *   });
+         * ```
+         */
+        create(params, options) {
+          const { betas, ...body } = params;
+          return this._client.post("/v1/organizations/plugins", multipartFormRequestOptions({
+            body,
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.plugins.create", options, {
+              route: "/v1/organizations/plugins",
+              createdIDAttribute: "anthropic.organization.plugin.id"
+            })
+          }, this._client));
+        }
+        /**
+         * Retrieve a Plugin by ID.
+         *
+         * **Accepted credentials:** an Admin API key with the `read:plugins` or
+         * `read:org_audit` scope, or a Compliance Access Key with the
+         * `read:compliance_org_data` scope.
+         *
+         * Every request must include the beta header
+         * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+         * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+         * available to Claude Enterprise organizations only. It is not available to Claude
+         * Platform (Claude Console) organizations, or to organizations with HIPAA
+         * readiness enabled.
+         *
+         * @example
+         * ```ts
+         * const betaPlugin =
+         *   await client.beta.organization.plugins.retrieve(
+         *     'plugin_id',
+         *   );
+         * ```
+         */
+        retrieve(pluginID, params = {}, options) {
+          const { betas, ...query } = params ?? {};
+          return this._client.get(path`/v1/organizations/plugins/${pluginID}`, {
+            query,
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.plugins.retrieve", options, {
+              route: "/v1/organizations/plugins/{plugin_id}",
+              queryParams: ["organization_id"],
+              attributes: { "anthropic.organization.plugin.id": pluginID }
+            })
+          });
+        }
+        /**
+         * Change which stored version of an organization-owned Plugin is served to
+         * members, for example to roll back to an earlier one. This pins the served
+         * version: later uploads through this API are stored but no longer change what is
+         * served, and pinning cannot currently be undone, here or in claude.ai.
+         *
+         * A version from claude.ai might still change what is served: see
+         * [Versions and the served version](/docs/en/manage-claude/plugins-api#versions-and-the-served-version)
+         * in the Plugins API guide.
+         *
+         * Pass the version as `served_version_id`: an earlier one to roll back, a later
+         * one to start serving a version that was stored without being served, or the one
+         * already served to pin it without changing what is served. No new version is
+         * created.
+         *
+         * When the organization has content scanning enabled, a version whose
+         * `content_scan.status` is `processing` is refused with a 409 (`error_code`
+         * `scan_pending`; retry once the scan finishes). A version whose
+         * `content_scan.status` is `errored`, or whose `content_scan.assessment` is `fail`
+         * or `unknown`, is refused with a 400 (`error_code` `scan_failed`); a `warn` is
+         * accepted. If the scan outcome cannot be read at that moment, the request fails
+         * with a retryable 503 instead. When the Plugin is in the organization's library
+         * marketplace, a version other than the one served is also refused with a 409 when
+         * an organization skill that this API does not list has since taken the name of
+         * one of its skills: `error_code` `skill_name_taken`, with that name in
+         * `details.skill_name`. A member-owned Plugin cannot be updated here (403).
+         *
+         * This endpoint does not write installation settings; they are written at
+         * `/v1/organizations/plugins/{plugin_id}/installation_settings/{target}`.
+         *
+         * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
+         *
+         * Every request must include the beta header
+         * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+         * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+         * available to Claude Enterprise organizations only. It is not available to Claude
+         * Platform (Claude Console) organizations, or to organizations with HIPAA
+         * readiness enabled.
+         *
+         * @throws {CMEKKeyDisabledError}
+         * @throws {CMEKKeyNetworkBlockedError}
+         * @throws {BetaScanFailedError}
+         * @throws {SandboxEgressRestrictedError}
+         * @throws {BetaScanPendingError}
+         * @throws {BetaSkillNameTakenError}
+         *
+         * @example
+         * ```ts
+         * const betaPlugin =
+         *   await client.beta.organization.plugins.update(
+         *     'plugin_id',
+         *     {
+         *       served_version_id:
+         *         'pluginver_01KaZmQpRsTuVwXyZ2b4c6d8',
+         *     },
+         *   );
+         * ```
+         */
+        update(pluginID, params, options) {
+          const { betas, ...body } = params;
+          return this._client.post(path`/v1/organizations/plugins/${pluginID}`, {
+            body,
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.plugins.update", options, {
+              route: "/v1/organizations/plugins/{plugin_id}",
+              attributes: { "anthropic.organization.plugin.id": pluginID }
+            })
+          });
+        }
+        /**
+         * List the Plugins created under the organization, newest first: those in the
+         * organization's own plugin marketplaces and those in members' personal plugin
+         * marketplaces.
+         *
+         * Plugins in members' personal marketplaces are listed with the same detail as the
+         * organization's own, and their files can be downloaded through the version
+         * archive endpoint. Those downloads can be recorded on the Compliance API activity
+         * feed; the version archive endpoint says when.
+         *
+         * **Accepted credentials:** an Admin API key with the `read:plugins` or
+         * `read:org_audit` scope, or a Compliance Access Key with the
+         * `read:compliance_org_data` scope.
+         *
+         * Every request must include the beta header
+         * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+         * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+         * available to Claude Enterprise organizations only. It is not available to Claude
+         * Platform (Claude Console) organizations, or to organizations with HIPAA
+         * readiness enabled.
+         *
+         * @example
+         * ```ts
+         * // Automatically fetches more pages as needed.
+         * for await (const betaPlugin of client.beta.organization.plugins.list()) {
+         *   // ...
+         * }
+         * ```
+         */
+        list(params = {}, options) {
+          const { betas, ...query } = params ?? {};
+          return this._client.getAPIList("/v1/organizations/plugins", PageCursor, {
+            query,
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.plugins.list", options, {
+              route: "/v1/organizations/plugins",
+              queryParams: [
+                "created_at[gt]",
+                "created_at[gte]",
+                "created_at[lt]",
+                "created_at[lte]",
+                "limit",
+                "marketplace_id",
+                "organization_id",
+                "owner_type",
+                "owner_user_id",
+                "page"
+              ]
+            })
+          });
+        }
+        /**
+         * Permanently delete a Plugin and every version it holds, exactly as when an
+         * administrator deletes it in claude.ai. The Plugin may belong to the organization
+         * or to a member, including a member who has since left the organization. Do not
+         * delete a Plugin only because your pipeline did not create it: a member or an
+         * administrator might have added it in claude.ai.
+         *
+         * An organization-owned Plugin's installation settings go with it; a member-owned
+         * Plugin's shares are withdrawn and its owner no longer has it.
+         *
+         * To take an organization-owned Plugin out of use reversibly, set its
+         * organization-wide installation setting to `not_available` instead (and remove or
+         * change any group settings, which override it for their members). Only a Plugin
+         * in a `manual` marketplace can be deleted here; one synchronized from a
+         * repository is removed by removing it from the repository (400).
+         *
+         * **Accepted credentials:** an Admin API key with the `write:plugins` scope.
+         *
+         * Every request must include the beta header
+         * `anthropic-beta: ce-plugins-2026-09-01`. A request without it returns `404`,
+         * exactly as if the endpoint did not exist. The Plugins API is in beta and is
+         * available to Claude Enterprise organizations only. It is not available to Claude
+         * Platform (Claude Console) organizations, or to organizations with HIPAA
+         * readiness enabled.
+         *
+         * @throws {CMEKKeyDisabledError}
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaDeletedPlugin =
+         *   await client.beta.organization.plugins.delete(
+         *     'plugin_id',
+         *   );
+         * ```
+         */
+        delete(pluginID, params = {}, options) {
+          const { betas } = params ?? {};
+          return this._client.delete(path`/v1/organizations/plugins/${pluginID}`, {
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "ce-plugins-2026-09-01"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.plugins.delete", options, {
+              route: "/v1/organizations/plugins/{plugin_id}",
+              attributes: { "anthropic.organization.plugin.id": pluginID }
+            })
+          });
+        }
+      }
+      Plugins4.BetaScanFailedError = BetaScanFailedError;
+      Plugins4.BetaPluginNameTakenError = BetaPluginNameTakenError;
+      Plugins4.BetaScanPendingError = BetaScanPendingError;
+      Plugins4.BetaSkillNameTakenError = BetaSkillNameTakenError;
+      Plugins4.BetaRegistrationPendingError = BetaRegistrationPendingError;
+      Plugins4.Versions = Versions2;
+      Plugins4.InstallationSettings = InstallationSettings;
+      Plugins4.Shares = Shares;
+      return Plugins4;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/providers/google/projects/data-controls.mjs
+var DataControls;
+var init_data_controls = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/providers/google/projects/data-controls.mjs"() {
+    init_resource();
+    init_headers();
+    init_tracing();
+    init_path();
+    DataControls = class extends APIResource {
+      /**
+       * Get a Google Cloud project's encryption keys and storage buckets for Claude on
+       * Google Cloud's Agent Platform, with each region's status.
+       *
+       * Your organization must have proved that it owns the project.
+       *
+       * @example
+       * ```ts
+       * const betaGoogleManagedProjectDataControls =
+       *   await client.beta.organization.providers.google.projects.dataControls.retrieve(
+       *     '123456789012',
+       *   );
+       * ```
+       */
+      retrieve(projectNumber, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path`/v1/organizations/providers/google/projects/${projectNumber}/data_controls`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "google-managed-data-controls-2026-09-01"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.providers.google.projects.data_controls.retrieve", options, {
+            route: "/v1/organizations/providers/google/projects/{project_number}/data_controls",
+            attributes: { "anthropic.organization.provider.google.project.id": projectNumber }
+          })
+        });
+      }
+      /**
+       * Turn a control on or off, or change the key or bucket set for a region. Controls
+       * and regions that you leave out stay as they are.
+       *
+       * Your organization must have proved that it owns the project. Only one
+       * organization at a time can have controls turned on for a project.
+       *
+       * **Requires a credential that identifies a user or a service account**: an OAuth
+       * access token with the `org:admin` scope, or an organization-scoped API key that
+       * belongs to a user or service account whose organization role can update these
+       * controls. The `admin`, `owner` and `primary_owner` roles can. An Admin API key
+       * gets a `403` error.
+       *
+       * @throws {BetaCMEKNotApprovedError}
+       * @throws {BetaExternalKeyNotFoundError}
+       * @throws {BetaExternalKeyProviderMismatchError}
+       * @throws {BetaGCPProjectNotVerifiedError}
+       * @throws {KeyProfileMismatchError}
+       * @throws {BetaOrganizationNotEligibleError}
+       * @throws {BetaRegionNotSupportedError}
+       * @throws {BetaStorageNotApprovedError}
+       * @throws {SandboxEgressRestrictedError}
+       * @throws {BetaGCPProjectControlledByAnotherOrganizationError}
+       * @throws {BetaStorageInUseError}
+       * @throws {BetaAuthorizationCheckUnavailableError}
+       *
+       * @example
+       * ```ts
+       * const betaGoogleManagedProjectDataControls =
+       *   await client.beta.organization.providers.google.projects.dataControls.update(
+       *     '123456789012',
+       *     {},
+       *   );
+       * ```
+       */
+      update(projectNumber, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path`/v1/organizations/providers/google/projects/${projectNumber}/data_controls`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "google-managed-data-controls-2026-09-01"].toString() },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.providers.google.projects.data_controls.update", options, {
+            route: "/v1/organizations/providers/google/projects/{project_number}/data_controls",
+            attributes: { "anthropic.organization.provider.google.project.id": projectNumber }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/providers/google/projects/projects.mjs
+var Projects2;
+var init_projects2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/providers/google/projects/projects.mjs"() {
+    init_resource();
+    init_data_controls();
+    init_data_controls();
+    Projects2 = /* @__PURE__ */ (() => {
+      class Projects5 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.dataControls = new DataControls(this._client);
+        }
+      }
+      Projects5.DataControls = DataControls;
+      return Projects5;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/providers/google/google.mjs
+var Google;
+var init_google = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/providers/google/google.mjs"() {
+    init_resource();
+    init_projects2();
+    init_projects2();
+    Google = /* @__PURE__ */ (() => {
+      class Google3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.projects = new Projects2(this._client);
+        }
+      }
+      Google3.Projects = Projects2;
+      return Google3;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/providers/providers.mjs
+var Providers;
+var init_providers = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/providers/providers.mjs"() {
+    init_resource();
+    init_google();
+    init_google();
+    Providers = /* @__PURE__ */ (() => {
+      class Providers3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.google = new Google(this._client);
+        }
+      }
+      Providers3.Google = Google;
+      return Providers3;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/members.mjs
+var Members;
+var init_members = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/members.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    init_path();
+    Members = class extends APIResource {
+      /**
+       * List members of an RBAC Group.
+       *
+       * The RBAC Groups API is available to Claude Enterprise organizations only.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaRBACGroupMember of client.beta.organization.rbacGroups.members.list(
+       *   'rbac_group_id',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(rbacGroupID, query = {}, options) {
+        return this._client.getAPIList(path`/v1/organizations/rbac_groups/${rbacGroupID}/members`, PageCursor, {
+          query,
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.list", options, {
+            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members",
+            queryParams: ["limit", "page"],
+            attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+          })
+        });
+      }
+      /**
+       * Add a User to an RBAC Group. Membership of groups provisioned by an identity
+       * provider (source type `"scim"`) cannot be modified via the API while an
+       * organization in the tenant uses SCIM provisioning.
+       *
+       * The RBAC Groups API is available to Claude Enterprise organizations only.
+       *
+       * @throws {RBACGroupGrantsOwnerAccessError}
+       * @throws {RBACGroupOwnerAccessUnconfirmedError}
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaRBACGroupMember =
+       *   await client.beta.organization.rbacGroups.members.add(
+       *     'rbac_group_id',
+       *     { user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu' },
+       *   );
+       * ```
+       */
+      add(rbacGroupID, body, options) {
+        return this._client.post(path`/v1/organizations/rbac_groups/${rbacGroupID}/members`, {
+          body,
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.add", options, {
+            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members",
+            attributes: { "anthropic.organization.rbac_group.id": rbacGroupID },
+            createdIDAttribute: "anthropic.organization.rbac_group.member.id",
+            createdIDField: "user_id"
+          })
+        });
+      }
+      /**
+       * Remove a User from an RBAC Group. Membership of groups provisioned by an
+       * identity provider (source type `"scim"`) cannot be modified via the API while an
+       * organization in the tenant uses SCIM provisioning.
+       *
+       * The RBAC Groups API is available to Claude Enterprise organizations only.
+       *
+       * @throws {RBACGroupGrantsOwnerAccessError}
+       * @throws {RBACGroupOwnerAccessUnconfirmedError}
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaDeletedRBACGroupMember =
+       *   await client.beta.organization.rbacGroups.members.remove(
+       *     'user_id',
+       *     { rbac_group_id: 'rbac_group_id' },
+       *   );
+       * ```
+       */
+      remove(userID, params, options) {
+        const { rbac_group_id } = params;
+        return this._client.delete(path`/v1/organizations/rbac_groups/${rbac_group_id}/members/${userID}`, {
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.remove", options, {
+            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members/{user_id}",
+            attributes: {
+              "anthropic.organization.rbac_group.id": rbac_group_id,
+              "anthropic.organization.rbac_group.member.id": userID
+            }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/rbac-groups.mjs
+var BetaRBACGroupNotFoundError, RBACGroups2;
+var init_rbac_groups2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/rbac-groups/rbac-groups.mjs"() {
+    init_resource();
+    init_members();
+    init_members();
+    init_error();
+    init_pagination();
+    init_tracing();
+    init_path();
+    BetaRBACGroupNotFoundError = /* @__PURE__ */ (() => {
+      class BetaRBACGroupNotFoundError2 extends NotFoundError {
+      }
+      BetaRBACGroupNotFoundError2._errorName = "BetaRBACGroupNotFoundError";
+      return BetaRBACGroupNotFoundError2;
+    })();
+    RBACGroups2 = /* @__PURE__ */ (() => {
+      class RBACGroups4 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.members = new Members(this._client);
+        }
+        /**
+         * Create an RBAC Group in the Claude Enterprise tenant. Groups created via the API
+         * have source type `"direct"`.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaRBACGroup =
+         *   await client.beta.organization.rbacGroups.create({
+         *     name: 'Engineering',
+         *   });
+         * ```
+         */
+        create(body, options) {
+          return this._client.post("/v1/organizations/rbac_groups", {
+            body,
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.create", options, {
+              route: "/v1/organizations/rbac_groups",
+              createdIDAttribute: "anthropic.organization.rbac_group.id"
+            })
+          });
+        }
+        /**
+         * Retrieve an RBAC Group by ID.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * const betaRBACGroup =
+         *   await client.beta.organization.rbacGroups.retrieve(
+         *     'rbac_group_id',
+         *   );
+         * ```
+         */
+        retrieve(rbacGroupID, options) {
+          return this._client.get(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.retrieve", options, {
+              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
+              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+            })
+          });
+        }
+        /**
+         * Update an RBAC Group's name. Groups provisioned by an identity provider (source
+         * type `"scim"`) cannot be modified via the API while an organization in the
+         * tenant uses SCIM provisioning.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaRBACGroup =
+         *   await client.beta.organization.rbacGroups.update(
+         *     'rbac_group_id',
+         *     {},
+         *   );
+         * ```
+         */
+        update(rbacGroupID, body, options) {
+          return this._client.post(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
+            body,
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.update", options, {
+              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
+              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+            })
+          });
+        }
+        /**
+         * List RBAC Groups in the Claude Enterprise tenant.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * // Automatically fetches more pages as needed.
+         * for await (const betaRBACGroup of client.beta.organization.rbacGroups.list()) {
+         *   // ...
+         * }
+         * ```
+         */
+        list(query = {}, options) {
+          return this._client.getAPIList("/v1/organizations/rbac_groups", PageCursor, {
+            query,
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.list", options, {
+              route: "/v1/organizations/rbac_groups",
+              queryParams: ["limit", "page"]
+            })
+          });
+        }
+        /**
+         * Delete an RBAC Group. Groups provisioned by an identity provider (source type
+         * `"scim"`) cannot be deleted via the API while an organization in the tenant uses
+         * SCIM provisioning.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @throws {RBACGroupGrantsOwnerAccessError}
+         * @throws {RBACGroupOwnerAccessUnconfirmedError}
+         * @throws {SandboxEgressRestrictedError}
+         *
+         * @example
+         * ```ts
+         * const betaDeletedRBACGroup =
+         *   await client.beta.organization.rbacGroups.delete(
+         *     'rbac_group_id',
+         *   );
+         * ```
+         */
+        delete(rbacGroupID, options) {
+          return this._client.delete(path`/v1/organizations/rbac_groups/${rbacGroupID}`, {
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.delete", options, {
+              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
+              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+            })
+          });
+        }
+      }
+      RBACGroups4.BetaRBACGroupNotFoundError = BetaRBACGroupNotFoundError;
+      RBACGroups4.Members = Members;
+      return RBACGroups4;
+    })();
   }
 });
 
@@ -19282,6 +19788,339 @@ var init_service_accounts = __esm({
   }
 });
 
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/effective.mjs
+var Effective;
+var init_effective = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/effective.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    Effective = class extends APIResource {
+      /**
+       * List each member's effective spend limit and period-to-date spend.
+       *
+       * Returns one row per (member, period) the member resolves a spend limit for, with
+       * the `source` scope the spend limit was inherited from. Paginates by member, so a
+       * member's periods never split across pages. Supported for Claude Enterprise
+       * organizations only, not for Claude Console organizations.
+       *
+       * @throws {OrganizationTypeNotSupportedError}
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaSpendSummary of client.beta.organization.spendLimits.effective.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query = {}, options) {
+        return this._client.getAPIList("/v1/organizations/spend_limits/effective", PageCursor, {
+          query,
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.effective.list", options, {
+            route: "/v1/organizations/spend_limits/effective",
+            queryParams: ["limit", "page", "period", "user_ids"]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/increase-requests.mjs
+var IncreaseRequests;
+var init_increase_requests = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/increase-requests.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    init_path();
+    IncreaseRequests = class extends APIResource {
+      /**
+       * Retrieve a spend limit increase request.
+       *
+       * While `pending`, the response includes a live `spend_summary` for the requester
+       * at the request's period.
+       *
+       * @example
+       * ```ts
+       * const betaSpendLimitIncreaseRequest =
+       *   await client.beta.organization.spendLimits.increaseRequests.retrieve(
+       *     'spend_limit_increase_request_id',
+       *   );
+       * ```
+       */
+      retrieve(spendLimitIncreaseRequestID, options) {
+        return this._client.get(path`/v1/organizations/spend_limit_increase_requests/${spendLimitIncreaseRequestID}`, {
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.retrieve", options, {
+            route: "/v1/organizations/spend_limit_increase_requests/{spend_limit_increase_request_id}",
+            attributes: {
+              "anthropic.organization.spend_limit_increase_request.id": spendLimitIncreaseRequestID
+            }
+          })
+        });
+      }
+      /**
+       * List spend limit increase requests, most recent first.
+       *
+       * Pending requests include a live `spend_summary` for the requester. Requests
+       * whose requester is no longer a member are excluded.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaSpendLimitIncreaseRequest of client.beta.organization.spendLimits.increaseRequests.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query = {}, options) {
+        return this._client.getAPIList("/v1/organizations/spend_limit_increase_requests", PageCursor, {
+          query,
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.list", options, {
+            route: "/v1/organizations/spend_limit_increase_requests",
+            queryParams: ["actor_ids", "limit", "page", "status"]
+          })
+        });
+      }
+      /**
+       * Approve a pending spend limit increase request.
+       *
+       * Writes a per-user spend limit at `amount` for the requester and transitions the
+       * request to `approved`. `period` defaults to the period the member was blocked
+       * on. Anthropic emails the requester unless `suppress_notification` is set.
+       *
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const response =
+       *   await client.beta.organization.spendLimits.increaseRequests.approve(
+       *     'spend_limit_increase_request_id',
+       *     { amount: '50000' },
+       *   );
+       * ```
+       */
+      approve(spendLimitIncreaseRequestID, body, options) {
+        return this._client.post(path`/v1/organizations/spend_limit_increase_requests/${spendLimitIncreaseRequestID}/approve`, {
+          body,
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.approve", options, {
+            route: "/v1/organizations/spend_limit_increase_requests/{spend_limit_increase_request_id}/approve",
+            attributes: {
+              "anthropic.organization.spend_limit_increase_request.id": spendLimitIncreaseRequestID
+            }
+          })
+        });
+      }
+      /**
+       * Deny a pending spend limit increase request.
+       *
+       * Idempotent on `denied`; denying an already-`approved` request returns 400.
+       * Anthropic emails the requester unless `suppress_notification` is set.
+       *
+       * @throws {SandboxEgressRestrictedError}
+       *
+       * @example
+       * ```ts
+       * const betaSpendLimitIncreaseRequest =
+       *   await client.beta.organization.spendLimits.increaseRequests.deny(
+       *     'spend_limit_increase_request_id',
+       *     {},
+       *   );
+       * ```
+       */
+      deny(spendLimitIncreaseRequestID, body, options) {
+        return this._client.post(path`/v1/organizations/spend_limit_increase_requests/${spendLimitIncreaseRequestID}/deny`, {
+          body,
+          ...options,
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.deny", options, {
+            route: "/v1/organizations/spend_limit_increase_requests/{spend_limit_increase_request_id}/deny",
+            attributes: {
+              "anthropic.organization.spend_limit_increase_request.id": spendLimitIncreaseRequestID
+            }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/spend-limits.mjs
+var BetaSpendLimitsAdminAPIWritesNotEnabledError, SpendLimits;
+var init_spend_limits = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/organization/spend-limits/spend-limits.mjs"() {
+    init_resource();
+    init_effective();
+    init_effective();
+    init_increase_requests();
+    init_increase_requests();
+    init_error();
+    init_pagination();
+    init_headers();
+    init_tracing();
+    init_path();
+    BetaSpendLimitsAdminAPIWritesNotEnabledError = /* @__PURE__ */ (() => {
+      class BetaSpendLimitsAdminAPIWritesNotEnabledError2 extends PermissionDeniedError {
+      }
+      BetaSpendLimitsAdminAPIWritesNotEnabledError2._errorName = "BetaSpendLimitsAdminAPIWritesNotEnabledError";
+      return BetaSpendLimitsAdminAPIWritesNotEnabledError2;
+    })();
+    SpendLimits = /* @__PURE__ */ (() => {
+      class SpendLimits3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.effective = new Effective(this._client);
+          this.increaseRequests = new IncreaseRequests(this._client);
+        }
+        /**
+         * Retrieve a spend limit by ID.
+         *
+         * @throws {BetaSpendLimitsAdminAPIWritesNotEnabledError}
+         *
+         * @example
+         * ```ts
+         * const betaSpendLimit =
+         *   await client.beta.organization.spendLimits.retrieve(
+         *     'spend_limit_id',
+         *   );
+         * ```
+         */
+        retrieve(spendLimitID, options) {
+          return this._client.get(path`/v1/organizations/spend_limits/${spendLimitID}`, {
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.retrieve", options, {
+              route: "/v1/organizations/spend_limits/{spend_limit_id}",
+              attributes: { "anthropic.organization.spend_limit.id": spendLimitID }
+            })
+          });
+        }
+        /**
+         * List the organization's spend limits.
+         *
+         * A Claude Console organization's limits, including any read-only `usage_tier`
+         * limit, come newest first. Listing them is in an early access preview. To request
+         * access, contact your Anthropic account team. A Claude Enterprise organization's
+         * limits are grouped by scope type, in the order `organization`, `seat_tier`,
+         * `rbac_group`, `organization_service`, `user`; within a type they come in a fixed
+         * order that is not creation order.
+         *
+         * @throws {OrganizationTypeNotSupportedError}
+         *
+         * @example
+         * ```ts
+         * // Automatically fetches more pages as needed.
+         * for await (const betaSpendLimit of client.beta.organization.spendLimits.list()) {
+         *   // ...
+         * }
+         * ```
+         */
+        list(params = {}, options) {
+          const { betas, ...query } = params ?? {};
+          return this._client.getAPIList("/v1/organizations/spend_limits", PageCursor, {
+            query,
+            ...options,
+            headers: buildHeaders([
+              { "anthropic-beta": [...betas ?? [], "spend-limit-reads-2026-09-26"].toString() },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.list", options, {
+              route: "/v1/organizations/spend_limits",
+              queryParams: ["limit", "page", "scope_type", "workspace_id"]
+            })
+          });
+        }
+        /**
+         * Delete a spend limit.
+         *
+         * For a Claude Enterprise organization, this deletes a per-user override, and the
+         * member falls back to any inherited spend limit at that period. Its seat-tier,
+         * group, and organization-level rows cannot be deleted via this endpoint. A Claude
+         * Console organization deletes its organization and workspace limits, but not its
+         * `usage_tier` limit. Deleting organization and workspace limits through the API
+         * is in an early access preview.
+         *
+         * @throws {SandboxEgressRestrictedError}
+         * @throws {BetaSpendLimitsAdminAPIWritesNotEnabledError}
+         *
+         * @example
+         * ```ts
+         * const spendLimit =
+         *   await client.beta.organization.spendLimits.delete(
+         *     'spend_limit_id',
+         *   );
+         * ```
+         */
+        delete(spendLimitID, options) {
+          return this._client.delete(path`/v1/organizations/spend_limits/${spendLimitID}`, {
+            ...options,
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.delete", options, {
+              route: "/v1/organizations/spend_limits/{spend_limit_id}",
+              attributes: { "anthropic.organization.spend_limit.id": spendLimitID }
+            })
+          });
+        }
+        /**
+         * Set a spend limit.
+         *
+         * Upsert keyed on (scope, period): setting a limit that already exists overwrites
+         * it in place. A Claude Enterprise organization sets `user` limits. Its seat-tier,
+         * group, and organization-level defaults are configured in claude.ai. A Claude
+         * Console organization sets `organization` and `workspace` limits, which are
+         * monthly and always carry an amount. Setting those limits is in an early access
+         * preview. To request access, contact your Anthropic account team.
+         *
+         * @throws {SandboxEgressRestrictedError}
+         * @throws {BetaSpendLimitsAdminAPIWritesNotEnabledError}
+         *
+         * @example
+         * ```ts
+         * const betaSpendLimit =
+         *   await client.beta.organization.spendLimits.set({
+         *     amount: '50000',
+         *     scope: {
+         *       type: 'user',
+         *       user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu',
+         *     },
+         *   });
+         * ```
+         */
+        set(params, options) {
+          const { betas, ...body } = params;
+          return this._client.post("/v1/organizations/spend_limits", {
+            body,
+            ...options,
+            headers: buildHeaders([
+              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              options?.headers
+            ]),
+            __qualifiers: { beta: "true" },
+            __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.set", options, {
+              route: "/v1/organizations/spend_limits",
+              createdIDAttribute: "anthropic.organization.spend_limit.id"
+            })
+          });
+        }
+      }
+      SpendLimits3.BetaSpendLimitsAdminAPIWritesNotEnabledError = BetaSpendLimitsAdminAPIWritesNotEnabledError;
+      SpendLimits3.Effective = Effective;
+      SpendLimits3.IncreaseRequests = IncreaseRequests;
+      return SpendLimits3;
+    })();
+  }
+});
+
 // node_modules/@anthropic-ai/sdk/resources/beta/organization/telemetry-destinations/workspaces.mjs
 var Workspaces3;
 var init_workspaces3 = __esm({
@@ -19448,7 +20287,7 @@ var init_telemetry_destinations = __esm({
          * const betaTelemetryDestination =
          *   await client.beta.organization.telemetryDestinations.create(
          *     {
-         *       endpoint_url: 'x',
+         *       endpoint_url: 'https://gateway.example.com',
          *       workspaces: { type: 'all' },
          *     },
          *   );
@@ -20055,7 +20894,7 @@ var init_service_accounts2 = __esm({
        *   await client.beta.organization.workspaces.serviceAccounts.add(
        *     'workspace_id',
        *     {
-       *       service_account_id: 'service_account_id',
+       *       service_account_id: 'svac_01SDCCSbTxrXDpWc1phhtcfK',
        *       workspace_role: 'workspace_admin',
        *     },
        *   );
@@ -20127,7 +20966,7 @@ var init_service_accounts2 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/beta/organization/workspaces/workspaces.mjs
-var Workspaces4;
+var BetaHumanReviewOnWithExternalStorageError, BetaTranscriptsStorageRequiredError, BetaWorkspaceChangedConcurrentlyError, Workspaces4;
 var init_workspaces4 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/beta/organization/workspaces/workspaces.mjs"() {
     init_resource();
@@ -20137,10 +20976,29 @@ var init_workspaces4 = __esm({
     init_rate_limits2();
     init_service_accounts2();
     init_service_accounts2();
+    init_error();
     init_pagination();
     init_headers();
     init_tracing();
     init_path();
+    BetaHumanReviewOnWithExternalStorageError = /* @__PURE__ */ (() => {
+      class BetaHumanReviewOnWithExternalStorageError2 extends BadRequestError {
+      }
+      BetaHumanReviewOnWithExternalStorageError2._errorName = "BetaHumanReviewOnWithExternalStorageError";
+      return BetaHumanReviewOnWithExternalStorageError2;
+    })();
+    BetaTranscriptsStorageRequiredError = /* @__PURE__ */ (() => {
+      class BetaTranscriptsStorageRequiredError2 extends BadRequestError {
+      }
+      BetaTranscriptsStorageRequiredError2._errorName = "BetaTranscriptsStorageRequiredError";
+      return BetaTranscriptsStorageRequiredError2;
+    })();
+    BetaWorkspaceChangedConcurrentlyError = /* @__PURE__ */ (() => {
+      class BetaWorkspaceChangedConcurrentlyError2 extends ConflictError {
+      }
+      BetaWorkspaceChangedConcurrentlyError2._errorName = "BetaWorkspaceChangedConcurrentlyError";
+      return BetaWorkspaceChangedConcurrentlyError2;
+    })();
     Workspaces4 = /* @__PURE__ */ (() => {
       class Workspaces8 extends APIResource {
         constructor() {
@@ -20152,13 +21010,26 @@ var init_workspaces4 = __esm({
         /**
          * Create Workspace
          *
+         * @throws {BetaApprovalRequiredError}
          * @throws {ExternalKeyValidationFailedError}
          * @throws {ExternalKeyValidationTimedOutError}
+         * @throws {BetaExternalStorageNotAvailableError}
+         * @throws {BetaGrantRequiredError}
+         * @throws {BetaHumanReviewNotAvailableError}
+         * @throws {BetaHumanReviewOnWithExternalStorageError}
+         * @throws {BetaInvalidStorageARNError}
          * @throws {KeyProfileMismatchError}
+         * @throws {BetaOrganizationNotEligibleError}
+         * @throws {BetaStorageNotAttachableError}
+         * @throws {StorageProfileMismatchError}
+         * @throws {BetaStorageVerificationFailedError}
+         * @throws {BetaTranscriptsStorageRequiredError}
          * @throws {UserProfileNotFoundError}
          * @throws {WorkspacePolicyViolationError}
          * @throws {SandboxEgressRestrictedError}
          * @throws {ExternalKeyChangedError}
+         * @throws {BetaAuthorizationCheckUnavailableError}
+         * @throws {WorkspaceCreatedIncompleteError}
          *
          * @example
          * ```ts
@@ -20195,9 +21066,14 @@ var init_workspaces4 = __esm({
          *   );
          * ```
          */
-        retrieve(workspaceID, options) {
+        retrieve(workspaceID, params = {}, options) {
+          const { betas } = params ?? {};
           return this._client.get(path`/v1/organizations/workspaces/${workspaceID}`, {
             ...options,
+            headers: buildHeaders([
+              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              options?.headers
+            ]),
             __qualifiers: { beta: "true" },
             __span: startApiCallSpan(this._client, "anthropic.organization.workspaces.retrieve", options, {
               route: "/v1/organizations/workspaces/{workspace_id}",
@@ -20208,13 +21084,30 @@ var init_workspaces4 = __esm({
         /**
          * Update Workspace
          *
+         * @throws {BetaApprovalRequiredError}
          * @throws {ExternalKeyValidationFailedError}
          * @throws {ExternalKeyValidationTimedOutError}
+         * @throws {BetaExternalStorageNotAvailableError}
+         * @throws {BetaGrantRequiredError}
+         * @throws {BetaHumanReviewNotAvailableError}
+         * @throws {BetaHumanReviewOnWithExternalStorageError}
+         * @throws {BetaInvalidStorageARNError}
          * @throws {KeyProfileMismatchError}
+         * @throws {BetaOrganizationNotEligibleError}
+         * @throws {BetaStorageAttachLimitReachedError}
+         * @throws {BetaStorageNotAttachableError}
+         * @throws {StorageProfileMismatchError}
+         * @throws {BetaStorageProfileStillRequiredError}
+         * @throws {BetaStorageVerificationFailedError}
+         * @throws {BetaTranscriptsStorageRequiredError}
          * @throws {UserProfileNotFoundError}
          * @throws {WorkspacePolicyViolationError}
          * @throws {SandboxEgressRestrictedError}
          * @throws {ExternalKeyChangedError}
+         * @throws {BetaStorageChangedConcurrentlyError}
+         * @throws {BetaWorkspaceChangedConcurrentlyError}
+         * @throws {BetaAuthorizationCheckUnavailableError}
+         * @throws {ChangeOutcomeUnknownError}
          *
          * @example
          * ```ts
@@ -20225,10 +21118,15 @@ var init_workspaces4 = __esm({
          *   );
          * ```
          */
-        update(workspaceID, body, options) {
+        update(workspaceID, params, options) {
+          const { betas, ...body } = params;
           return this._client.post(path`/v1/organizations/workspaces/${workspaceID}`, {
             body,
             ...options,
+            headers: buildHeaders([
+              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              options?.headers
+            ]),
             __qualifiers: { beta: "true" },
             __span: startApiCallSpan(this._client, "anthropic.organization.workspaces.update", options, {
               route: "/v1/organizations/workspaces/{workspace_id}",
@@ -20247,10 +21145,15 @@ var init_workspaces4 = __esm({
          * }
          * ```
          */
-        list(query = {}, options) {
+        list(params = {}, options) {
+          const { betas, ...query } = params ?? {};
           return this._client.getAPIList("/v1/organizations/workspaces", Page, {
             query,
             ...options,
+            headers: buildHeaders([
+              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              options?.headers
+            ]),
             __qualifiers: { beta: "true" },
             __span: startApiCallSpan(this._client, "anthropic.organization.workspaces.list", options, {
               route: "/v1/organizations/workspaces",
@@ -20262,6 +21165,7 @@ var init_workspaces4 = __esm({
          * Archive Workspace
          *
          * @throws {SandboxEgressRestrictedError}
+         * @throws {StorageAttachedDuringArchiveError}
          *
          * @example
          * ```ts
@@ -20271,9 +21175,14 @@ var init_workspaces4 = __esm({
          *   );
          * ```
          */
-        archive(workspaceID, options) {
+        archive(workspaceID, params = {}, options) {
+          const { betas } = params ?? {};
           return this._client.post(path`/v1/organizations/workspaces/${workspaceID}/archive`, {
             ...options,
+            headers: buildHeaders([
+              { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+              options?.headers
+            ]),
             __qualifiers: { beta: "true" },
             __span: startApiCallSpan(this._client, "anthropic.organization.workspaces.archive", options, {
               route: "/v1/organizations/workspaces/{workspace_id}/archive",
@@ -20282,6 +21191,9 @@ var init_workspaces4 = __esm({
           });
         }
       }
+      Workspaces8.BetaHumanReviewOnWithExternalStorageError = BetaHumanReviewOnWithExternalStorageError;
+      Workspaces8.BetaTranscriptsStorageRequiredError = BetaTranscriptsStorageRequiredError;
+      Workspaces8.BetaWorkspaceChangedConcurrentlyError = BetaWorkspaceChangedConcurrentlyError;
       Workspaces8.RateLimits = RateLimits2;
       Workspaces8.Members = Members2;
       Workspaces8.ServiceAccounts = ServiceAccounts2;
@@ -20291,7 +21203,7 @@ var init_workspaces4 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/beta/organization/organization.mjs
-var Organization;
+var BetaApprovalRequiredError, BetaHumanReviewNotAvailableError, BetaOrganizationNotEligibleError, BetaAuthorizationCheckUnavailableError, Organization;
 var init_organization = __esm({
   "node_modules/@anthropic-ai/sdk/resources/beta/organization/organization.mjs"() {
     init_resource();
@@ -20301,6 +21213,8 @@ var init_organization = __esm({
     init_compliance_settings();
     init_external_keys();
     init_external_keys();
+    init_external_storage();
+    init_external_storage();
     init_invites();
     init_invites();
     init_plugin_marketplaces();
@@ -20321,8 +21235,10 @@ var init_organization = __esm({
     init_federation();
     init_plugins2();
     init_plugins2();
-    init_rbac_groups();
-    init_rbac_groups();
+    init_providers();
+    init_providers();
+    init_rbac_groups2();
+    init_rbac_groups2();
     init_rbac_roles();
     init_rbac_roles();
     init_service_accounts();
@@ -20333,7 +21249,32 @@ var init_organization = __esm({
     init_telemetry_destinations();
     init_workspaces4();
     init_workspaces4();
+    init_error();
     init_tracing();
+    BetaApprovalRequiredError = /* @__PURE__ */ (() => {
+      class BetaApprovalRequiredError2 extends BadRequestError {
+      }
+      BetaApprovalRequiredError2._errorName = "BetaApprovalRequiredError";
+      return BetaApprovalRequiredError2;
+    })();
+    BetaHumanReviewNotAvailableError = /* @__PURE__ */ (() => {
+      class BetaHumanReviewNotAvailableError2 extends BadRequestError {
+      }
+      BetaHumanReviewNotAvailableError2._errorName = "BetaHumanReviewNotAvailableError";
+      return BetaHumanReviewNotAvailableError2;
+    })();
+    BetaOrganizationNotEligibleError = /* @__PURE__ */ (() => {
+      class BetaOrganizationNotEligibleError2 extends BadRequestError {
+      }
+      BetaOrganizationNotEligibleError2._errorName = "BetaOrganizationNotEligibleError";
+      return BetaOrganizationNotEligibleError2;
+    })();
+    BetaAuthorizationCheckUnavailableError = /* @__PURE__ */ (() => {
+      class BetaAuthorizationCheckUnavailableError2 extends ServiceUnavailableError {
+      }
+      BetaAuthorizationCheckUnavailableError2._errorName = "BetaAuthorizationCheckUnavailableError";
+      return BetaAuthorizationCheckUnavailableError2;
+    })();
     Organization = /* @__PURE__ */ (() => {
       class Organization4 extends APIResource {
         constructor() {
@@ -20343,13 +21284,15 @@ var init_organization = __esm({
           this.federation = new Federation(this._client);
           this.invites = new Invites(this._client);
           this.serviceAccounts = new ServiceAccounts(this._client);
+          this.externalStorage = new ExternalStorage(this._client);
+          this.providers = new Providers(this._client);
           this.users = new Users2(this._client);
           this.workspaces = new Workspaces4(this._client);
           this.rateLimits = new RateLimits(this._client);
           this.complianceSettings = new ComplianceSettings(this._client);
           this.analytics = new Analytics(this._client);
           this.spendLimits = new SpendLimits(this._client);
-          this.rbacGroups = new RBACGroups(this._client);
+          this.rbacGroups = new RBACGroups2(this._client);
           this.rbacRoles = new RBACRoles(this._client);
           this.plugins = new Plugins2(this._client);
           this.pluginMarketplaces = new PluginMarketplaces(this._client);
@@ -20378,11 +21321,30 @@ var init_organization = __esm({
           });
         }
       }
+      Organization4.BetaApprovalRequiredError = BetaApprovalRequiredError;
+      Organization4.BetaHumanReviewNotAvailableError = BetaHumanReviewNotAvailableError;
+      Organization4.BetaOrganizationNotEligibleError = BetaOrganizationNotEligibleError;
+      Organization4.BetaAuthorizationCheckUnavailableError = BetaAuthorizationCheckUnavailableError;
       Organization4.APIKeys = APIKeys;
       Organization4.ExternalKeys = ExternalKeys;
       Organization4.Federation = Federation;
       Organization4.Invites = Invites;
       Organization4.ServiceAccounts = ServiceAccounts;
+      Organization4.ExternalStorage = ExternalStorage;
+      Organization4.BetaExternalStorageInUseError = BetaExternalStorageInUseError;
+      Organization4.BetaExternalStorageInWorkspacePolicyError = BetaExternalStorageInWorkspacePolicyError;
+      Organization4.BetaExternalStorageNotAvailableError = BetaExternalStorageNotAvailableError;
+      Organization4.BetaGrantRequiredError = BetaGrantRequiredError;
+      Organization4.BetaInvalidStorageARNError = BetaInvalidStorageARNError;
+      Organization4.BetaProviderNotAllowedError = BetaProviderNotAllowedError;
+      Organization4.BetaStorageAttachLimitReachedError = BetaStorageAttachLimitReachedError;
+      Organization4.BetaStorageNotAttachableError = BetaStorageNotAttachableError;
+      Organization4.BetaStorageProfileStillRequiredError = BetaStorageProfileStillRequiredError;
+      Organization4.BetaStorageVerificationFailedError = BetaStorageVerificationFailedError;
+      Organization4.BetaUnsupportedRegionError = BetaUnsupportedRegionError;
+      Organization4.BetaStorageAlreadyRegisteredError = BetaStorageAlreadyRegisteredError;
+      Organization4.BetaStorageChangedConcurrentlyError = BetaStorageChangedConcurrentlyError;
+      Organization4.Providers = Providers;
       Organization4.Users = Users2;
       Organization4.BetaCannotSignOutPrimaryOwnerError = BetaCannotSignOutPrimaryOwnerError;
       Organization4.BetaCannotSignOutSelfError = BetaCannotSignOutSelfError;
@@ -20391,12 +21353,15 @@ var init_organization = __esm({
       Organization4.BetaCannotSignOutOwnerError = BetaCannotSignOutOwnerError;
       Organization4.BetaCannotSignOutPrivilegedMemberError = BetaCannotSignOutPrivilegedMemberError;
       Organization4.Workspaces = Workspaces4;
+      Organization4.BetaHumanReviewOnWithExternalStorageError = BetaHumanReviewOnWithExternalStorageError;
+      Organization4.BetaTranscriptsStorageRequiredError = BetaTranscriptsStorageRequiredError;
+      Organization4.BetaWorkspaceChangedConcurrentlyError = BetaWorkspaceChangedConcurrentlyError;
       Organization4.RateLimits = RateLimits;
       Organization4.ComplianceSettings = ComplianceSettings;
       Organization4.Analytics = Analytics;
       Organization4.SpendLimits = SpendLimits;
       Organization4.BetaSpendLimitsAdminAPIWritesNotEnabledError = BetaSpendLimitsAdminAPIWritesNotEnabledError;
-      Organization4.RBACGroups = RBACGroups;
+      Organization4.RBACGroups = RBACGroups2;
       Organization4.BetaRBACGroupNotFoundError = BetaRBACGroupNotFoundError;
       Organization4.RBACRoles = RBACRoles;
       Organization4.Plugins = Plugins2;
@@ -21952,7 +22917,11 @@ var init_action_urls = __esm({
     init_path();
     ActionURLs = class extends APIResource {
       /**
-       * Create Action URL
+       * Create a link that sends the profile's end customer to the Verification Portal.
+       *
+       * See
+       * [Send an end customer a link to the Verification Portal](https://platform.claude.com/docs/en/manage-claude/user-profiles-verification-portal)
+       * for when to create the link and what the end customer sees.
        *
        * @example
        * ```ts
@@ -21986,6 +22955,127 @@ var init_action_urls = __esm({
   }
 });
 
+// node_modules/@anthropic-ai/sdk/resources/beta/user-profiles/providers/google/data-controls.mjs
+var DataControls2;
+var init_data_controls2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/user-profiles/providers/google/data-controls.mjs"() {
+    init_resource();
+    init_headers();
+    init_tracing();
+    init_path();
+    DataControls2 = class extends APIResource {
+      /**
+       * Get the profile's encryption keys and storage buckets for Claude on Google
+       * Cloud's Agent Platform, with each region's status.
+       *
+       * @example
+       * ```ts
+       * const betaGoogleManagedDataControls =
+       *   await client.beta.userProfiles.providers.google.dataControls.retrieve(
+       *     'uprof_011CZkZCu8hGbp5mYRQgUmz9',
+       *   );
+       * ```
+       */
+      retrieve(userProfileID, params = {}, options) {
+        const { betas, workspace_id } = params ?? {};
+        return this._client.get(path`/v1/user_profiles/${userProfileID}/providers/google/data_controls`, {
+          ...options,
+          headers: buildHeaders([
+            {
+              "anthropic-beta": [
+                ...betas ?? [],
+                "user-profiles-2026-09-04,google-managed-data-controls-2026-09-01"
+              ].toString(),
+              ...workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0
+            },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.user_profiles.providers.google.data_controls.retrieve", options, {
+            route: "/v1/user_profiles/{user_profile_id}/providers/google/data_controls",
+            attributes: { "anthropic.user_profile.id": userProfileID }
+          })
+        });
+      }
+      /**
+       * Turn a control on or off, or change the key or bucket set for a region. Controls
+       * and regions that you leave out stay as they are.
+       *
+       * @example
+       * ```ts
+       * const betaGoogleManagedDataControls =
+       *   await client.beta.userProfiles.providers.google.dataControls.update(
+       *     'uprof_011CZkZCu8hGbp5mYRQgUmz9',
+       *     {},
+       *   );
+       * ```
+       */
+      update(userProfileID, params, options) {
+        const { betas, workspace_id, ...body } = params;
+        return this._client.post(path`/v1/user_profiles/${userProfileID}/providers/google/data_controls`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            {
+              "anthropic-beta": [
+                ...betas ?? [],
+                "user-profiles-2026-09-04,google-managed-data-controls-2026-09-01"
+              ].toString(),
+              ...workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0
+            },
+            options?.headers
+          ]),
+          __qualifiers: { beta: "true" },
+          __span: startApiCallSpan(this._client, "anthropic.user_profiles.providers.google.data_controls.update", options, {
+            route: "/v1/user_profiles/{user_profile_id}/providers/google/data_controls",
+            attributes: { "anthropic.user_profile.id": userProfileID }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/user-profiles/providers/google/google.mjs
+var Google2;
+var init_google2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/user-profiles/providers/google/google.mjs"() {
+    init_resource();
+    init_data_controls2();
+    init_data_controls2();
+    Google2 = /* @__PURE__ */ (() => {
+      class Google3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.dataControls = new DataControls2(this._client);
+        }
+      }
+      Google3.DataControls = DataControls2;
+      return Google3;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/beta/user-profiles/providers/providers.mjs
+var Providers2;
+var init_providers2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/beta/user-profiles/providers/providers.mjs"() {
+    init_resource();
+    init_google2();
+    init_google2();
+    Providers2 = /* @__PURE__ */ (() => {
+      class Providers3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.google = new Google2(this._client);
+        }
+      }
+      Providers3.Google = Google2;
+      return Providers3;
+    })();
+  }
+});
+
 // node_modules/@anthropic-ai/sdk/resources/beta/user-profiles/user-profiles.mjs
 var UserProfiles;
 var init_user_profiles = __esm({
@@ -21993,6 +23083,8 @@ var init_user_profiles = __esm({
     init_resource();
     init_action_urls();
     init_action_urls();
+    init_providers2();
+    init_providers2();
     init_pagination();
     init_headers();
     init_tracing();
@@ -22002,9 +23094,15 @@ var init_user_profiles = __esm({
         constructor() {
           super(...arguments);
           this.actionURLs = new ActionURLs(this._client);
+          this.providers = new Providers2(this._client);
         }
         /**
-         * Create User Profile
+         * Register one of your end customers and get the ID to send on the requests you
+         * make for them.
+         *
+         * See the
+         * [User profiles guide](https://platform.claude.com/docs/en/manage-claude/user-profiles#create-a-profile-for-each-end-customer)
+         * for what to send.
          *
          * @example
          * ```ts
@@ -22032,7 +23130,11 @@ var init_user_profiles = __esm({
           });
         }
         /**
-         * Get User Profile
+         * Get a user profile by ID to check the details stored for it.
+         *
+         * See the
+         * [User profiles guide](https://platform.claude.com/docs/en/manage-claude/user-profiles)
+         * for how to set up and manage profiles.
          *
          * @example
          * ```ts
@@ -22061,7 +23163,12 @@ var init_user_profiles = __esm({
           });
         }
         /**
-         * Update User Profile
+         * Change the details of a user profile, leaving the fields that you don't send as
+         * they are.
+         *
+         * See the
+         * [User profiles guide](https://platform.claude.com/docs/en/manage-claude/user-profiles#update-a-profile)
+         * for how each field is updated.
          *
          * @example
          * ```ts
@@ -22092,7 +23199,11 @@ var init_user_profiles = __esm({
           });
         }
         /**
-         * List User Profiles
+         * List the user profiles in your organization, newest first by default.
+         *
+         * See the
+         * [User profiles guide](https://platform.claude.com/docs/en/manage-claude/user-profiles)
+         * for how to set up and manage profiles.
          *
          * @example
          * ```ts
@@ -22122,7 +23233,11 @@ var init_user_profiles = __esm({
           });
         }
         /**
-         * Delete User Profile
+         * Delete a user profile, for example when the end customer closes their account.
+         *
+         * Stop sending the profile's ID first. See the
+         * [User profiles guide](https://platform.claude.com/docs/en/manage-claude/user-profiles#delete-a-profile)
+         * for what happens after a delete.
          *
          * @example
          * ```ts
@@ -22151,7 +23266,12 @@ var init_user_profiles = __esm({
           });
         }
         /**
-         * Create Enrollment URL
+         * Create a link that sends the profile's end customer to the Verification Portal
+         * from Claude Platform on AWS.
+         *
+         * On the Claude API, create an action URL instead. See
+         * [Send an end customer a link to the Verification Portal](https://platform.claude.com/docs/en/manage-claude/user-profiles-verification-portal)
+         * for when to create the link and what the end customer sees.
          *
          * @example
          * ```ts
@@ -22181,6 +23301,7 @@ var init_user_profiles = __esm({
         }
       }
       UserProfiles3.ActionURLs = ActionURLs;
+      UserProfiles3.Providers = Providers2;
       return UserProfiles3;
     })();
   }
@@ -24236,12 +25357,13 @@ var init_BetaMessageThread = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs
-var DEPRECATED_MODELS, MODELS_TO_WARN_WITH_THINKING_ENABLED, Messages, BETA_CLIENT_TOOL_UNION_KEYS;
+var Messages, BETA_CLIENT_TOOL_UNION_KEYS;
 var init_messages2 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs"() {
     init_batches();
     init_resource();
     init_constants();
+    init_data();
     init_headers();
     init_tracing();
     init_tracing2();
@@ -24255,11 +25377,6 @@ var init_messages2 = __esm({
     init_BetaToolRunner();
     init_ToolError();
     init_batches();
-    DEPRECATED_MODELS = {
-      "claude-sonnet-4-5": "November 30th, 2026",
-      "claude-sonnet-4-5-20250929": "November 30th, 2026"
-    };
-    MODELS_TO_WARN_WITH_THINKING_ENABLED = ["claude-mythos-preview", "claude-opus-4-6"];
     Messages = /* @__PURE__ */ (() => {
       class Messages5 extends APIResource {
         constructor() {
@@ -24455,7 +25572,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
 });
 
 // node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs
-var BetaOrganizationNotEnrolledInBetaError, BetaRequestBodyTimeoutError, BetaUnsupportedCharsetError, Beta;
+var BetaCMEKNotApprovedError, BetaExternalKeyNotFoundError, BetaExternalKeyProviderMismatchError, BetaGCPProjectNotVerifiedError, BetaOrganizationNotEnrolledInBetaError, BetaRegionNotSupportedError, BetaRequestBodyTimeoutError, BetaStorageNotApprovedError, BetaUnsupportedCharsetError, BetaGCPProjectControlledByAnotherOrganizationError, BetaStorageInUseError, Beta;
 var init_beta3 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs"() {
     init_resource();
@@ -24473,6 +25590,8 @@ var init_beta3 = __esm({
     init_webhooks();
     init_agents();
     init_agents();
+    init_compliance();
+    init_compliance();
     init_environments2();
     init_environments2();
     init_memory_stores();
@@ -24492,11 +25611,41 @@ var init_beta3 = __esm({
     init_vaults();
     init_vaults();
     init_error();
+    BetaCMEKNotApprovedError = /* @__PURE__ */ (() => {
+      class BetaCMEKNotApprovedError2 extends BadRequestError {
+      }
+      BetaCMEKNotApprovedError2._errorName = "BetaCMEKNotApprovedError";
+      return BetaCMEKNotApprovedError2;
+    })();
+    BetaExternalKeyNotFoundError = /* @__PURE__ */ (() => {
+      class BetaExternalKeyNotFoundError2 extends BadRequestError {
+      }
+      BetaExternalKeyNotFoundError2._errorName = "BetaExternalKeyNotFoundError";
+      return BetaExternalKeyNotFoundError2;
+    })();
+    BetaExternalKeyProviderMismatchError = /* @__PURE__ */ (() => {
+      class BetaExternalKeyProviderMismatchError2 extends BadRequestError {
+      }
+      BetaExternalKeyProviderMismatchError2._errorName = "BetaExternalKeyProviderMismatchError";
+      return BetaExternalKeyProviderMismatchError2;
+    })();
+    BetaGCPProjectNotVerifiedError = /* @__PURE__ */ (() => {
+      class BetaGCPProjectNotVerifiedError2 extends BadRequestError {
+      }
+      BetaGCPProjectNotVerifiedError2._errorName = "BetaGCPProjectNotVerifiedError";
+      return BetaGCPProjectNotVerifiedError2;
+    })();
     BetaOrganizationNotEnrolledInBetaError = /* @__PURE__ */ (() => {
       class BetaOrganizationNotEnrolledInBetaError2 extends BadRequestError {
       }
       BetaOrganizationNotEnrolledInBetaError2._errorName = "BetaOrganizationNotEnrolledInBetaError";
       return BetaOrganizationNotEnrolledInBetaError2;
+    })();
+    BetaRegionNotSupportedError = /* @__PURE__ */ (() => {
+      class BetaRegionNotSupportedError2 extends BadRequestError {
+      }
+      BetaRegionNotSupportedError2._errorName = "BetaRegionNotSupportedError";
+      return BetaRegionNotSupportedError2;
     })();
     BetaRequestBodyTimeoutError = /* @__PURE__ */ (() => {
       class BetaRequestBodyTimeoutError2 extends BadRequestError {
@@ -24504,11 +25653,29 @@ var init_beta3 = __esm({
       BetaRequestBodyTimeoutError2._errorName = "BetaRequestBodyTimeoutError";
       return BetaRequestBodyTimeoutError2;
     })();
+    BetaStorageNotApprovedError = /* @__PURE__ */ (() => {
+      class BetaStorageNotApprovedError2 extends BadRequestError {
+      }
+      BetaStorageNotApprovedError2._errorName = "BetaStorageNotApprovedError";
+      return BetaStorageNotApprovedError2;
+    })();
     BetaUnsupportedCharsetError = /* @__PURE__ */ (() => {
       class BetaUnsupportedCharsetError2 extends BadRequestError {
       }
       BetaUnsupportedCharsetError2._errorName = "BetaUnsupportedCharsetError";
       return BetaUnsupportedCharsetError2;
+    })();
+    BetaGCPProjectControlledByAnotherOrganizationError = /* @__PURE__ */ (() => {
+      class BetaGCPProjectControlledByAnotherOrganizationError2 extends ConflictError {
+      }
+      BetaGCPProjectControlledByAnotherOrganizationError2._errorName = "BetaGCPProjectControlledByAnotherOrganizationError";
+      return BetaGCPProjectControlledByAnotherOrganizationError2;
+    })();
+    BetaStorageInUseError = /* @__PURE__ */ (() => {
+      class BetaStorageInUseError2 extends ConflictError {
+      }
+      BetaStorageInUseError2._errorName = "BetaStorageInUseError";
+      return BetaStorageInUseError2;
     })();
     Beta = /* @__PURE__ */ (() => {
       class Beta3 extends APIResource {
@@ -24529,12 +25696,21 @@ var init_beta3 = __esm({
           this.userProfiles = new UserProfiles(this._client);
           this.dreams = new Dreams(this._client);
           this.tunnels = new Tunnels(this._client);
+          this.compliance = new Compliance(this._client);
           this.organization = new Organization(this._client);
         }
       }
+      Beta3.BetaCMEKNotApprovedError = BetaCMEKNotApprovedError;
+      Beta3.BetaExternalKeyNotFoundError = BetaExternalKeyNotFoundError;
+      Beta3.BetaExternalKeyProviderMismatchError = BetaExternalKeyProviderMismatchError;
+      Beta3.BetaGCPProjectNotVerifiedError = BetaGCPProjectNotVerifiedError;
       Beta3.BetaOrganizationNotEnrolledInBetaError = BetaOrganizationNotEnrolledInBetaError;
+      Beta3.BetaRegionNotSupportedError = BetaRegionNotSupportedError;
       Beta3.BetaRequestBodyTimeoutError = BetaRequestBodyTimeoutError;
+      Beta3.BetaStorageNotApprovedError = BetaStorageNotApprovedError;
       Beta3.BetaUnsupportedCharsetError = BetaUnsupportedCharsetError;
+      Beta3.BetaGCPProjectControlledByAnotherOrganizationError = BetaGCPProjectControlledByAnotherOrganizationError;
+      Beta3.BetaStorageInUseError = BetaStorageInUseError;
       Beta3.Models = Models;
       Beta3.Messages = Messages;
       Beta3.Agents = Agents;
@@ -24556,7 +25732,12 @@ var init_beta3 = __esm({
       Beta3.UserProfiles = UserProfiles;
       Beta3.Dreams = Dreams;
       Beta3.Tunnels = Tunnels;
+      Beta3.Compliance = Compliance;
       Beta3.Organization = Organization;
+      Beta3.BetaApprovalRequiredError = BetaApprovalRequiredError;
+      Beta3.BetaHumanReviewNotAvailableError = BetaHumanReviewNotAvailableError;
+      Beta3.BetaOrganizationNotEligibleError = BetaOrganizationNotEligibleError;
+      Beta3.BetaAuthorizationCheckUnavailableError = BetaAuthorizationCheckUnavailableError;
       return Beta3;
     })();
   }
@@ -25306,6 +26487,7 @@ var init_batches2 = __esm({
        * @throws {ClaudeCodeKeyCreatorNotMemberError}
        * @throws {CMEKKeyDisabledError}
        * @throws {OrganizationOnHoldError}
+       * @throws {WorkspaceHumanReviewDisabledError}
        * @throws {EnforcedSpendLimitReachedError}
        *
        * @example
@@ -25533,10 +26715,11 @@ var init_batches2 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs
-var AvailableToolsLimitExceededError, CompactionBlockAmbiguousError, CompactionBlockMisplacedError, CompactionContentMismatchError, CompactionIncompleteTurnError, CompactionNothingToSummarizeError, CompactionSignatureInvalidError, CompactionTooManyToolReferencesError, CompactionToolChangesMismatchError, ImageDimensionsTooLargeError, ThreadAlreadyContinuedError, ThreadContinueInFlightError, ThreadFingerprintMismatchError, ThreadUnsupportedRequestError, ToolNameConflictError, ToolReferenceUnresolvedError, ThreadNotFoundError, CompactionUnavailableError, Messages2, DEPRECATED_MODELS2, MODELS_TO_WARN_WITH_THINKING_ENABLED2;
+var AvailableToolsLimitExceededError, CompactionBlockAmbiguousError, CompactionBlockMisplacedError, CompactionContentMismatchError, CompactionIncompleteTurnError, CompactionNothingToSummarizeError, CompactionSignatureInvalidError, CompactionTooManyToolReferencesError, CompactionToolChangesMismatchError, ImageDimensionsTooLargeError, ThreadAlreadyContinuedError, ThreadContinueInFlightError, ThreadFingerprintMismatchError, ThreadUnsupportedRequestError, ToolNameConflictError, ToolReferenceUnresolvedError, ThreadNotFoundError, CompactionUnavailableError, Messages2;
 var init_messages3 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs"() {
     init_resource();
+    init_data();
     init_headers();
     init_tracing();
     init_tracing2();
@@ -25663,11 +26846,11 @@ var init_messages3 = __esm({
         }
         create(params, options) {
           const { user_profile_id, workspace_id, ...body } = params;
-          if (body.model in DEPRECATED_MODELS2) {
-            console.warn(`The model '${body.model}' is deprecated and will reach end-of-life on ${DEPRECATED_MODELS2[body.model]}
+          if (body.model in DEPRECATED_MODELS) {
+            console.warn(`The model '${body.model}' is deprecated and will reach end-of-life on ${DEPRECATED_MODELS[body.model]}
 Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resources/model-deprecations for more information.`);
           }
-          if (MODELS_TO_WARN_WITH_THINKING_ENABLED2.includes(body.model) && body.thinking && body.thinking.type === "enabled") {
+          if (MODELS_TO_WARN_WITH_THINKING_ENABLED.includes(body.model) && body.thinking && body.thinking.type === "enabled") {
             console.warn(`Using Claude with ${body.model} and 'thinking.type=enabled' is deprecated. Use 'thinking.type=adaptive' instead which results in better model performance in our testing: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`);
           }
           let timeout = options?.timeout ?? this._client._options.timeout;
@@ -25820,11 +27003,6 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       Messages5.Batches = Batches2;
       return Messages5;
     })();
-    DEPRECATED_MODELS2 = {
-      "claude-sonnet-4-5": "November 30th, 2026",
-      "claude-sonnet-4-5-20250929": "November 30th, 2026"
-    };
-    MODELS_TO_WARN_WITH_THINKING_ENABLED2 = ["claude-mythos-preview", "claude-opus-4-6"];
   }
 });
 
@@ -26775,13 +27953,13 @@ var init_users4 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/organization/analytics/apps/chat/projects.mjs
-var Projects2;
-var init_projects2 = __esm({
+var Projects3;
+var init_projects3 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/organization/analytics/apps/chat/projects.mjs"() {
     init_resource();
     init_pagination();
     init_tracing();
-    Projects2 = class extends APIResource {
+    Projects3 = class extends APIResource {
       /**
        * Get per-project activity for a given day, with cursor-based pagination.
        *
@@ -26828,16 +28006,16 @@ var Chat2;
 var init_chat2 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/organization/analytics/apps/chat/chat.mjs"() {
     init_resource();
-    init_projects2();
-    init_projects2();
+    init_projects3();
+    init_projects3();
     Chat2 = /* @__PURE__ */ (() => {
       class Chat4 extends APIResource {
         constructor() {
           super(...arguments);
-          this.projects = new Projects2(this._client);
+          this.projects = new Projects3(this._client);
         }
       }
-      Chat4.Projects = Projects2;
+      Chat4.Projects = Projects3;
       return Chat4;
     })();
   }
@@ -26940,8 +28118,9 @@ var init_issuers2 = __esm({
        * ```ts
        * const federationIssuer =
        *   await client.organization.federation.issuers.create({
-       *     issuer_url: 'x',
-       *     name: 'x',
+       *     issuer_url:
+       *       'https://token.actions.githubusercontent.com',
+       *     name: 'github-actions',
        *   });
        * ```
        */
@@ -27146,7 +28325,7 @@ var init_workspaces5 = __esm({
        * const federationRuleWorkspace =
        *   await client.organization.federation.rules.workspaces.add(
        *     'federation_rule_id',
-       *     { workspace_id: 'workspace_id' },
+       *     { workspace_id: 'wrkspc_01AbCdEfGhJkLmNpQrStUvWx' },
        *   );
        * ```
        */
@@ -27245,10 +28424,10 @@ var init_rules2 = __esm({
          * ```ts
          * const federationRule =
          *   await client.organization.federation.rules.create({
-         *     issuer_id: 'issuer_id',
+         *     issuer_id: 'fdis_01SDCCSbTxrXDpWc1phhtcfK',
          *     match: {},
-         *     name: 'x',
-         *     oauth_scope: 'x',
+         *     name: 'prod-deploy-pipeline',
+         *     oauth_scope: 'workspace:developer',
          *     target: {
          *       service_account_id: 'svac_01SDCCSbTxrXDpWc1phhtcfK',
          *       type: 'service_account',
@@ -28697,7 +29876,7 @@ var init_service_accounts4 = __esm({
        *   await client.organization.workspaces.serviceAccounts.add(
        *     'workspace_id',
        *     {
-       *       service_account_id: 'service_account_id',
+       *       service_account_id: 'svac_01SDCCSbTxrXDpWc1phhtcfK',
        *       workspace_role: 'workspace_admin',
        *     },
        *   );
@@ -28758,7 +29937,7 @@ var init_service_accounts4 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/organization/workspaces/workspaces.mjs
-var KeyProfileMismatchError, WorkspaceMemberLimitExceededError, WorkspacePolicyViolationError, Workspaces7;
+var KeyProfileMismatchError, StorageProfileMismatchError, WorkspaceMemberLimitExceededError, WorkspacePolicyViolationError, StorageAttachedDuringArchiveError, WorkspaceCreatedIncompleteError, Workspaces7;
 var init_workspaces7 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/organization/workspaces/workspaces.mjs"() {
     init_resource();
@@ -28778,6 +29957,12 @@ var init_workspaces7 = __esm({
       KeyProfileMismatchError2._errorName = "KeyProfileMismatchError";
       return KeyProfileMismatchError2;
     })();
+    StorageProfileMismatchError = /* @__PURE__ */ (() => {
+      class StorageProfileMismatchError2 extends BadRequestError {
+      }
+      StorageProfileMismatchError2._errorName = "StorageProfileMismatchError";
+      return StorageProfileMismatchError2;
+    })();
     WorkspaceMemberLimitExceededError = /* @__PURE__ */ (() => {
       class WorkspaceMemberLimitExceededError2 extends BadRequestError {
       }
@@ -28789,6 +29974,18 @@ var init_workspaces7 = __esm({
       }
       WorkspacePolicyViolationError2._errorName = "WorkspacePolicyViolationError";
       return WorkspacePolicyViolationError2;
+    })();
+    StorageAttachedDuringArchiveError = /* @__PURE__ */ (() => {
+      class StorageAttachedDuringArchiveError2 extends ConflictError {
+      }
+      StorageAttachedDuringArchiveError2._errorName = "StorageAttachedDuringArchiveError";
+      return StorageAttachedDuringArchiveError2;
+    })();
+    WorkspaceCreatedIncompleteError = /* @__PURE__ */ (() => {
+      class WorkspaceCreatedIncompleteError2 extends ServiceUnavailableError {
+      }
+      WorkspaceCreatedIncompleteError2._errorName = "WorkspaceCreatedIncompleteError";
+      return WorkspaceCreatedIncompleteError2;
     })();
     Workspaces7 = /* @__PURE__ */ (() => {
       class Workspaces8 extends APIResource {
@@ -28808,6 +30005,7 @@ var init_workspaces7 = __esm({
          * @throws {WorkspacePolicyViolationError}
          * @throws {SandboxEgressRestrictedError}
          * @throws {ExternalKeyChangedError}
+         * @throws {WorkspaceCreatedIncompleteError}
          *
          * @example
          * ```ts
@@ -28853,10 +30051,12 @@ var init_workspaces7 = __esm({
          * @throws {ExternalKeyValidationFailedError}
          * @throws {ExternalKeyValidationTimedOutError}
          * @throws {KeyProfileMismatchError}
+         * @throws {StorageProfileMismatchError}
          * @throws {UserProfileNotFoundError}
          * @throws {WorkspacePolicyViolationError}
          * @throws {SandboxEgressRestrictedError}
          * @throws {ExternalKeyChangedError}
+         * @throws {ChangeOutcomeUnknownError}
          *
          * @example
          * ```ts
@@ -28902,6 +30102,7 @@ var init_workspaces7 = __esm({
          * Archive Workspace
          *
          * @throws {SandboxEgressRestrictedError}
+         * @throws {StorageAttachedDuringArchiveError}
          *
          * @example
          * ```ts
@@ -28922,8 +30123,11 @@ var init_workspaces7 = __esm({
         }
       }
       Workspaces8.KeyProfileMismatchError = KeyProfileMismatchError;
+      Workspaces8.StorageProfileMismatchError = StorageProfileMismatchError;
       Workspaces8.WorkspaceMemberLimitExceededError = WorkspaceMemberLimitExceededError;
       Workspaces8.WorkspacePolicyViolationError = WorkspacePolicyViolationError;
+      Workspaces8.StorageAttachedDuringArchiveError = StorageAttachedDuringArchiveError;
+      Workspaces8.WorkspaceCreatedIncompleteError = WorkspaceCreatedIncompleteError;
       Workspaces8.RateLimits = RateLimits4;
       Workspaces8.Members = Members4;
       Workspaces8.ServiceAccounts = ServiceAccounts4;
@@ -28933,7 +30137,7 @@ var init_workspaces7 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/organization/organization.mjs
-var OrgMemberLimitExceededError, RBACRoleNotFoundError, ConcurrentMembershipChangeError, Organization2;
+var OrgMemberLimitExceededError, RBACRoleNotFoundError, ConcurrentMembershipChangeError, ChangeOutcomeUnknownError, Organization2;
 var init_organization2 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/organization/organization.mjs"() {
     init_resource();
@@ -28983,6 +30187,12 @@ var init_organization2 = __esm({
       ConcurrentMembershipChangeError2._errorName = "ConcurrentMembershipChangeError";
       return ConcurrentMembershipChangeError2;
     })();
+    ChangeOutcomeUnknownError = /* @__PURE__ */ (() => {
+      class ChangeOutcomeUnknownError2 extends ServiceUnavailableError {
+      }
+      ChangeOutcomeUnknownError2._errorName = "ChangeOutcomeUnknownError";
+      return ChangeOutcomeUnknownError2;
+    })();
     Organization2 = /* @__PURE__ */ (() => {
       class Organization4 extends APIResource {
         constructor() {
@@ -29023,6 +30233,7 @@ var init_organization2 = __esm({
       Organization4.OrgMemberLimitExceededError = OrgMemberLimitExceededError;
       Organization4.RBACRoleNotFoundError = RBACRoleNotFoundError;
       Organization4.ConcurrentMembershipChangeError = ConcurrentMembershipChangeError;
+      Organization4.ChangeOutcomeUnknownError = ChangeOutcomeUnknownError;
       Organization4.APIKeys = APIKeys2;
       Organization4.OrgAPIKeyLimitExceededError = OrgAPIKeyLimitExceededError;
       Organization4.WorkspaceAPIKeyLimitExceededError = WorkspaceAPIKeyLimitExceededError;
@@ -29042,8 +30253,11 @@ var init_organization2 = __esm({
       Organization4.CannotRemoveLastMemberError = CannotRemoveLastMemberError;
       Organization4.Workspaces = Workspaces7;
       Organization4.KeyProfileMismatchError = KeyProfileMismatchError;
+      Organization4.StorageProfileMismatchError = StorageProfileMismatchError;
       Organization4.WorkspaceMemberLimitExceededError = WorkspaceMemberLimitExceededError;
       Organization4.WorkspacePolicyViolationError = WorkspacePolicyViolationError;
+      Organization4.StorageAttachedDuringArchiveError = StorageAttachedDuringArchiveError;
+      Organization4.WorkspaceCreatedIncompleteError = WorkspaceCreatedIncompleteError;
       Organization4.RateLimits = RateLimits3;
       Organization4.ComplianceSettings = ComplianceSettings2;
       Organization4.Analytics = Analytics2;
@@ -29346,7 +30560,11 @@ var init_action_urls2 = __esm({
     init_path();
     ActionURLs2 = class extends APIResource {
       /**
-       * Create Action URL
+       * Create a link that sends the profile's end customer to the Verification Portal.
+       *
+       * See
+       * [Send an end customer a link to the Verification Portal](https://platform.claude.com/docs/en/manage-claude/user-profiles-verification-portal)
+       * for when to create the link and what the end customer sees.
        *
        * @example
        * ```ts
@@ -29419,7 +30637,12 @@ var init_user_profiles2 = __esm({
           this.actionURLs = new ActionURLs2(this._client);
         }
         /**
-         * Create User Profile
+         * Register one of your end customers and get the ID to send on the requests you
+         * make for them.
+         *
+         * See the
+         * [User profiles guide](https://platform.claude.com/docs/en/manage-claude/user-profiles#create-a-profile-for-each-end-customer)
+         * for what to send.
          *
          * @example
          * ```ts
@@ -29442,7 +30665,11 @@ var init_user_profiles2 = __esm({
           });
         }
         /**
-         * Get User Profile
+         * Get a user profile by ID to check the details stored for it.
+         *
+         * See the
+         * [User profiles guide](https://platform.claude.com/docs/en/manage-claude/user-profiles)
+         * for how to set up and manage profiles.
          *
          * @example
          * ```ts
@@ -29466,7 +30693,12 @@ var init_user_profiles2 = __esm({
           });
         }
         /**
-         * Update User Profile
+         * Change the details of a user profile, leaving the fields that you don't send as
+         * they are.
+         *
+         * See the
+         * [User profiles guide](https://platform.claude.com/docs/en/manage-claude/user-profiles#update-a-profile)
+         * for how each field is updated.
          *
          * @example
          * ```ts
@@ -29492,7 +30724,11 @@ var init_user_profiles2 = __esm({
           });
         }
         /**
-         * List User Profiles
+         * List the user profiles in your organization, newest first by default.
+         *
+         * See the
+         * [User profiles guide](https://platform.claude.com/docs/en/manage-claude/user-profiles)
+         * for how to set up and manage profiles.
          *
          * @example
          * ```ts
@@ -29518,7 +30754,11 @@ var init_user_profiles2 = __esm({
           });
         }
         /**
-         * Delete User Profile
+         * Delete a user profile, for example when the end customer closes their account.
+         *
+         * Stop sending the profile's ID first. See the
+         * [User profiles guide](https://platform.claude.com/docs/en/manage-claude/user-profiles#delete-a-profile)
+         * for what happens after a delete.
          *
          * @example
          * ```ts
@@ -29569,16 +30809,20 @@ var init_error_classes = __esm({
     init_user_profiles2();
     init_environments2();
     init_work();
+    init_external_storage();
+    init_organization();
     init_users2();
     init_rbac_groups3();
     init_workspaces7();
     init_claude_tag();
     init_plugins2();
-    init_rbac_groups();
+    init_rbac_groups2();
     init_spend_limits();
+    init_workspaces4();
     init_managed_settings();
     ERROR_CODE_CLASSES = /* @__PURE__ */ new Map([
       ["400 already_member", AlreadyMemberError],
+      ["400 approval_required", BetaApprovalRequiredError],
       ["400 available_tools_limit_exceeded", AvailableToolsLimitExceededError],
       ["400 bundle_attachment_not_supported", BetaBundleAttachmentNotSupportedError],
       ["400 bundle_on_call", BetaBundleOnCallError],
@@ -29591,6 +30835,7 @@ var init_error_classes = __esm({
       ["400 cmek_feature_unsupported", BetaCMEKFeatureUnsupportedError],
       ["400 cmek_key_disabled", CMEKKeyDisabledError],
       ["400 cmek_key_network_blocked", CMEKKeyNetworkBlockedError],
+      ["400 cmek_not_approved", BetaCMEKNotApprovedError],
       ["400 compaction_block_ambiguous", CompactionBlockAmbiguousError],
       ["400 compaction_block_misplaced", CompactionBlockMisplacedError],
       ["400 compaction_content_mismatch", CompactionContentMismatchError],
@@ -29602,23 +30847,36 @@ var init_error_classes = __esm({
       ["400 email_domain_not_allowed", EmailDomainNotAllowedError],
       ["400 environment_archived", BetaEnvironmentArchivedError],
       ["400 external_key_in_workspace_policy", ExternalKeyInWorkspacePolicyError],
+      ["400 external_key_not_found", BetaExternalKeyNotFoundError],
+      ["400 external_key_provider_mismatch", BetaExternalKeyProviderMismatchError],
       ["400 external_key_validation_failed", ExternalKeyValidationFailedError],
       ["400 external_key_validation_timed_out", ExternalKeyValidationTimedOutError],
+      ["400 external_storage_in_use", BetaExternalStorageInUseError],
+      ["400 external_storage_in_workspace_policy", BetaExternalStorageInWorkspacePolicyError],
+      ["400 external_storage_not_available", BetaExternalStorageNotAvailableError],
       ["400 file_not_downloadable", FileNotDownloadableError],
+      ["400 gcp_project_not_verified", BetaGCPProjectNotVerifiedError],
+      ["400 grant_required", BetaGrantRequiredError],
+      ["400 human_review_not_available", BetaHumanReviewNotAvailableError],
+      ["400 human_review_on_with_external_storage", BetaHumanReviewOnWithExternalStorageError],
       ["400 image_dimensions_too_large", ImageDimensionsTooLargeError],
       ["400 invalid_config_type_change", BetaInvalidConfigTypeChangeError],
       ["400 invalid_metadata", BetaInvalidMetadataError],
+      ["400 invalid_storage_arn", BetaInvalidStorageARNError],
       ["400 invite_already_exists", InviteAlreadyExistsError],
       ["400 key_profile_mismatch", KeyProfileMismatchError],
       ["400 org_api_key_limit_exceeded", OrgAPIKeyLimitExceededError],
       ["400 org_member_limit_exceeded", OrgMemberLimitExceededError],
+      ["400 organization_not_eligible", BetaOrganizationNotEligibleError],
       ["400 organization_not_enrolled_in_beta", BetaOrganizationNotEnrolledInBetaError],
       ["400 organization_on_hold", OrganizationOnHoldError],
       ["400 organization_type_not_supported", OrganizationTypeNotSupportedError],
       ["400 parent_organization_required", ParentOrganizationRequiredError],
+      ["400 provider_not_allowed", BetaProviderNotAllowedError],
       ["400 rbac_group_grants_owner_access", RBACGroupGrantsOwnerAccessError],
       ["400 rbac_group_order_limit_exceeded", BetaRBACGroupOrderLimitExceededError],
       ["400 rbac_group_owner_access_unconfirmed", RBACGroupOwnerAccessUnconfirmedError],
+      ["400 region_not_supported", BetaRegionNotSupportedError],
       ["400 request_body_encoding_invalid", RequestBodyEncodingInvalidError],
       ["400 request_body_encoding_unsupported", RequestBodyEncodingUnsupportedError],
       ["400 request_body_timeout", BetaRequestBodyTimeoutError],
@@ -29626,17 +30884,26 @@ var init_error_classes = __esm({
       ["400 settings_document_limit_exceeded", BetaSettingsDocumentLimitExceededError],
       ["400 settings_history_limit_exceeded", BetaSettingsHistoryLimitExceededError],
       ["400 slack_channel_set_up_settings_refused", BetaSlackChannelSetUpSettingsRefusedError],
+      ["400 storage_attach_limit_reached", BetaStorageAttachLimitReachedError],
+      ["400 storage_not_approved", BetaStorageNotApprovedError],
+      ["400 storage_not_attachable", BetaStorageNotAttachableError],
+      ["400 storage_profile_mismatch", StorageProfileMismatchError],
+      ["400 storage_profile_still_required", BetaStorageProfileStillRequiredError],
       ["400 storage_quota_exceeded", StorageQuotaExceededError],
+      ["400 storage_verification_failed", BetaStorageVerificationFailedError],
       ["400 thread_already_continued", ThreadAlreadyContinuedError],
       ["400 thread_continue_in_flight", ThreadContinueInFlightError],
       ["400 thread_fingerprint_mismatch", ThreadFingerprintMismatchError],
       ["400 thread_unsupported_request", ThreadUnsupportedRequestError],
       ["400 tool_name_conflict", ToolNameConflictError],
       ["400 tool_reference_unresolved", ToolReferenceUnresolvedError],
+      ["400 transcripts_storage_required", BetaTranscriptsStorageRequiredError],
       ["400 unsupported_charset", BetaUnsupportedCharsetError],
+      ["400 unsupported_region", BetaUnsupportedRegionError],
       ["400 user_profile_not_found", UserProfileNotFoundError],
       ["400 user_profile_required", UserProfileRequiredError],
       ["400 workspace_api_key_limit_exceeded", WorkspaceAPIKeyLimitExceededError],
+      ["400 workspace_human_review_disabled", WorkspaceHumanReviewDisabledError],
       ["400 workspace_member_limit_exceeded", WorkspaceMemberLimitExceededError],
       ["400 workspace_policy_violation", WorkspacePolicyViolationError],
       ["402 linked_organization_billing_unavailable", LinkedOrganizationBillingUnavailableError],
@@ -29664,19 +30931,28 @@ var init_error_classes = __esm({
       ["404 thread_not_found", ThreadNotFoundError],
       ["409 concurrent_membership_change", ConcurrentMembershipChangeError],
       ["409 external_key_changed", ExternalKeyChangedError],
+      ["409 gcp_project_controlled_by_another_organization", BetaGCPProjectControlledByAnotherOrganizationError],
       ["409 plugin_name_taken", BetaPluginNameTakenError],
       ["409 scan_pending", BetaScanPendingError],
       ["409 skill_name_taken", BetaSkillNameTakenError],
       ["409 skill_read_blocked_undecryptable", SkillReadBlockedUndecryptableError],
       ["409 slack_channel_set_up_settings_conflict", BetaSlackChannelSetUpSettingsConflictError],
+      ["409 storage_already_registered", BetaStorageAlreadyRegisteredError],
+      ["409 storage_attached_during_archive", StorageAttachedDuringArchiveError],
+      ["409 storage_changed_concurrently", BetaStorageChangedConcurrentlyError],
+      ["409 storage_in_use", BetaStorageInUseError],
+      ["409 workspace_changed_concurrently", BetaWorkspaceChangedConcurrentlyError],
       ["412 heartbeat_precondition_failed", BetaHeartbeatPreconditionFailedError],
       ["413 request_body_too_large_after_decoding", RequestBodyTooLargeAfterDecodingError],
       ["429 contract_spend_limit_reached", ContractSpendLimitReachedError],
       ["429 enforced_spend_limit_reached", EnforcedSpendLimitReachedError],
       ["429 ramp_limit_exceeded", RampLimitExceededError],
+      ["503 authorization_check_unavailable", BetaAuthorizationCheckUnavailableError],
+      ["503 change_outcome_unknown", ChangeOutcomeUnknownError],
       ["503 cmek_context_unavailable", CMEKContextUnavailableError],
       ["503 cmek_key_unreachable", CMEKKeyUnreachableError],
       ["503 registration_pending", BetaRegistrationPendingError],
+      ["503 workspace_created_incomplete", WorkspaceCreatedIncompleteError],
       ["529 compaction_unavailable", CompactionUnavailableError]
     ]);
   }
@@ -31711,10 +32987,19 @@ var init_client = __esm({
       Anthropic2.OrgMemberLimitExceededError = OrgMemberLimitExceededError;
       Anthropic2.RBACRoleNotFoundError = RBACRoleNotFoundError;
       Anthropic2.ConcurrentMembershipChangeError = ConcurrentMembershipChangeError;
+      Anthropic2.ChangeOutcomeUnknownError = ChangeOutcomeUnknownError;
       Anthropic2.Beta = Beta;
+      Anthropic2.BetaCMEKNotApprovedError = BetaCMEKNotApprovedError;
+      Anthropic2.BetaExternalKeyNotFoundError = BetaExternalKeyNotFoundError;
+      Anthropic2.BetaExternalKeyProviderMismatchError = BetaExternalKeyProviderMismatchError;
+      Anthropic2.BetaGCPProjectNotVerifiedError = BetaGCPProjectNotVerifiedError;
       Anthropic2.BetaOrganizationNotEnrolledInBetaError = BetaOrganizationNotEnrolledInBetaError;
+      Anthropic2.BetaRegionNotSupportedError = BetaRegionNotSupportedError;
       Anthropic2.BetaRequestBodyTimeoutError = BetaRequestBodyTimeoutError;
+      Anthropic2.BetaStorageNotApprovedError = BetaStorageNotApprovedError;
       Anthropic2.BetaUnsupportedCharsetError = BetaUnsupportedCharsetError;
+      Anthropic2.BetaGCPProjectControlledByAnotherOrganizationError = BetaGCPProjectControlledByAnotherOrganizationError;
+      Anthropic2.BetaStorageInUseError = BetaStorageInUseError;
       Anthropic2.ClaudeCodeKeyCreatorNotMemberError = ClaudeCodeKeyCreatorNotMemberError;
       Anthropic2.ClaudeCodeVersionTooOldError = ClaudeCodeVersionTooOldError;
       Anthropic2.CMEKKeyDisabledError = CMEKKeyDisabledError;
@@ -31724,6 +33009,7 @@ var init_client = __esm({
       Anthropic2.ParentOrganizationRequiredError = ParentOrganizationRequiredError;
       Anthropic2.RequestBodyEncodingInvalidError = RequestBodyEncodingInvalidError;
       Anthropic2.RequestBodyEncodingUnsupportedError = RequestBodyEncodingUnsupportedError;
+      Anthropic2.WorkspaceHumanReviewDisabledError = WorkspaceHumanReviewDisabledError;
       Anthropic2.LinkedOrganizationBillingUnavailableError = LinkedOrganizationBillingUnavailableError;
       Anthropic2.LinkedOrganizationSpendLimitReachedError = LinkedOrganizationSpendLimitReachedError;
       Anthropic2.SandboxEgressRestrictedError = SandboxEgressRestrictedError;
@@ -33188,7 +34474,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION3 = "7.62.0";
+var VERSION3 = "7.65.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -40464,7 +41750,7 @@ function normalizeRequestOptionsForQuery7(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var ExternalStorage = class extends APIResource2 {
+var ExternalStorage2 = class extends APIResource2 {
   /**
    * Register one customer-managed external storage configuration.
    *
@@ -43157,7 +44443,7 @@ function normalizeRequestOptionsForQuery22(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Projects3 = class extends APIResource2 {
+var Projects4 = class extends APIResource2 {
   constructor() {
     super(...arguments);
     this.users = new Users6(this._client);
@@ -43260,19 +44546,19 @@ var Projects3 = class extends APIResource2 {
     })));
   }
 };
-Projects3.Users = Users6;
-Projects3.ServiceAccounts = ServiceAccounts5;
-Projects3.APIKeys = APIKeys3;
-Projects3.RateLimits = RateLimits5;
-Projects3.ModelPermissions = ModelPermissions;
-Projects3.ServiceTierSettings = ServiceTierSettings;
-Projects3.HostedToolPermissions = HostedToolPermissions;
-Projects3.Groups = Groups2;
-Projects3.Roles = Roles3;
-Projects3.DataRetention = DataRetention2;
-Projects3.SpendLimit = SpendLimit2;
-Projects3.SpendAlerts = SpendAlerts2;
-Projects3.Certificates = Certificates3;
+Projects4.Users = Users6;
+Projects4.ServiceAccounts = ServiceAccounts5;
+Projects4.APIKeys = APIKeys3;
+Projects4.RateLimits = RateLimits5;
+Projects4.ModelPermissions = ModelPermissions;
+Projects4.ServiceTierSettings = ServiceTierSettings;
+Projects4.HostedToolPermissions = HostedToolPermissions;
+Projects4.Groups = Groups2;
+Projects4.Roles = Roles3;
+Projects4.DataRetention = DataRetention2;
+Projects4.SpendLimit = SpendLimit2;
+Projects4.SpendAlerts = SpendAlerts2;
+Projects4.Certificates = Certificates3;
 
 // ../../../node_modules/openai/resources/admin/organization/users/roles.mjs
 function resolveResourceRequestOptions34(options, buildOptions) {
@@ -43806,11 +45092,11 @@ var Organization3 = class extends APIResource2 {
     this.dataRetention = new DataRetention(this._client);
     this.externalKeys = new ExternalKeys3(this._client);
     this.workloadIdentityProviders = new WorkloadIdentityProviders(this._client);
-    this.externalStorage = new ExternalStorage(this._client);
+    this.externalStorage = new ExternalStorage2(this._client);
     this.spendLimit = new SpendLimit(this._client);
     this.spendAlerts = new SpendAlerts(this._client);
     this.certificates = new Certificates2(this._client);
-    this.projects = new Projects3(this._client);
+    this.projects = new Projects4(this._client);
   }
 };
 Organization3.AuditLogs = AuditLogs;
@@ -43823,11 +45109,11 @@ Organization3.Roles = Roles;
 Organization3.DataRetention = DataRetention;
 Organization3.ExternalKeys = ExternalKeys3;
 Organization3.WorkloadIdentityProviders = WorkloadIdentityProviders;
-Organization3.ExternalStorage = ExternalStorage;
+Organization3.ExternalStorage = ExternalStorage2;
 Organization3.SpendLimit = SpendLimit;
 Organization3.SpendAlerts = SpendAlerts;
 Organization3.Certificates = Certificates2;
-Organization3.Projects = Projects3;
+Organization3.Projects = Projects4;
 
 // ../../../node_modules/openai/resources/admin/admin.mjs
 var Admin = class extends APIResource2 {
@@ -45331,7 +46617,7 @@ function normalizeRequestOptionsForQuery35(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Items = class extends APIResource2 {
+var Items2 = class extends APIResource2 {
   list(sessionID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery35(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
@@ -45415,7 +46701,7 @@ var Traces = class extends APIResource2 {
 function resolveResourceRequestOptions54(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var Items2 = class extends APIResource2 {
+var Items3 = class extends APIResource2 {
   /**
    * Lists this subagent's own items across all of its turns. See
    * [subagent workflows](https://developers.openai.com/api/docs/guides/agents-api/multi-agent).
@@ -45446,7 +46732,7 @@ var Items2 = class extends APIResource2 {
 function resolveResourceRequestOptions55(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var Items3 = class extends APIResource2 {
+var Items4 = class extends APIResource2 {
   /**
    * Lists items belonging to one turn of this subagent. See
    * [subagent workflows](https://developers.openai.com/api/docs/guides/agents-api/multi-agent).
@@ -45480,7 +46766,7 @@ function resolveResourceRequestOptions56(options, buildOptions) {
 var Turns = class extends APIResource2 {
   constructor() {
     super(...arguments);
-    this.items = new Items3(this._client);
+    this.items = new Items4(this._client);
   }
   /**
    * Retrieves a turn belonging to this subagent. See
@@ -45531,7 +46817,7 @@ var Turns = class extends APIResource2 {
     })));
   }
 };
-Turns.Items = Items3;
+Turns.Items = Items4;
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/subagents/subagents.mjs
 function resolveResourceRequestOptions57(options, buildOptions) {
@@ -45582,7 +46868,7 @@ function normalizeRequestOptionsForQuery37(value, queryKeys, options) {
 var Subagents = class extends APIResource2 {
   constructor() {
     super(...arguments);
-    this.items = new Items2(this._client);
+    this.items = new Items3(this._client);
     this.turns = new Turns(this._client);
   }
   /**
@@ -45621,14 +46907,14 @@ var Subagents = class extends APIResource2 {
     })));
   }
 };
-Subagents.Items = Items2;
+Subagents.Items = Items3;
 Subagents.Turns = Turns;
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/turns/items.mjs
 function resolveResourceRequestOptions58(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var Items4 = class extends APIResource2 {
+var Items5 = class extends APIResource2 {
   /**
    * Lists items belonging to one root-agent turn, including its interactions with
    * subagents. See
@@ -45705,7 +46991,7 @@ function normalizeRequestOptionsForQuery38(value, queryKeys, options) {
 var Turns2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
-    this.items = new Items4(this._client);
+    this.items = new Items5(this._client);
   }
   /**
    * Retrieves a turn's current status, timestamps, usage, and error. Returns 404 if
@@ -45744,7 +47030,7 @@ var Turns2 = class extends APIResource2 {
     })));
   }
 };
-Turns2.Items = Items4;
+Turns2.Items = Items5;
 
 // ../../../node_modules/openai/lib/agents/turn-state.mjs
 var _TurnState_turnID;
@@ -46629,7 +47915,7 @@ var Sessions2 = class extends APIResource2 {
     super(...arguments);
     this.subagents = new Subagents(this._client);
     this.artifacts = new Artifacts3(this._client);
-    this.items = new Items(this._client);
+    this.items = new Items2(this._client);
     this.events = new Events3(this._client);
     this.traces = new Traces(this._client);
     this.turns = new Turns2(this._client);
@@ -46668,9 +47954,9 @@ var Sessions2 = class extends APIResource2 {
     })));
   }
   /**
-   * Updates session tools, metadata, model, reasoning effort, service tier, or the
-   * default prompt cache lifetime. Model settings apply to subsequent turns. Omitted
-   * fields are unchanged. See
+   * Updates session tools, vaults, metadata, model, reasoning effort, service tier,
+   * or the default prompt cache lifetime. Model settings apply to subsequent turns.
+   * Omitted fields are unchanged. See
    * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
    *
    * @example
@@ -46728,7 +48014,7 @@ var Sessions2 = class extends APIResource2 {
 };
 Sessions2.Subagents = Subagents;
 Sessions2.Artifacts = Artifacts3;
-Sessions2.Items = Items;
+Sessions2.Items = Items2;
 Sessions2.Events = Events3;
 Sessions2.Traces = Traces;
 Sessions2.Turns = Turns2;
@@ -46839,7 +48125,10 @@ var Credentials2 = class extends APIResource2 {
    * const credential =
    *   await client.beta.agents.vaults.credentials.update(
    *     'credential_id',
-   *     { vault_id: 'vault_id', metadata: {} },
+   *     {
+   *       vault_id: 'vault_id',
+   *       metadata: { environment: 'staging' },
+   *     },
    *   );
    * ```
    */
@@ -49538,7 +50827,7 @@ function normalizeRequestOptionsForQuery50(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Items5 = class extends APIResource2 {
+var Items6 = class extends APIResource2 {
   /**
    * Create items in a conversation with the given ID.
    */
@@ -49591,7 +50880,7 @@ function resolveResourceRequestOptions79(options, buildOptions) {
 var Conversations = class extends APIResource2 {
   constructor() {
     super(...arguments);
-    this.items = new Items5(this._client);
+    this.items = new Items6(this._client);
   }
   /**
    * Create a conversation.
@@ -49626,7 +50915,7 @@ var Conversations = class extends APIResource2 {
     return this._client.delete(path4`/conversations/${conversationID}`, resolveResourceRequestOptions79(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
-Conversations.Items = Items5;
+Conversations.Items = Items6;
 
 // ../../../node_modules/openai/resources/decisions.mjs
 function resolveResourceRequestOptions80(options, buildOptions) {
@@ -50188,7 +51477,7 @@ var Permissions3 = class extends APIResource2 {
    * ```ts
    * // Automatically fetches more pages as needed.
    * for await (const permissionCreateResponse of client.fineTuning.checkpoints.permissions.create(
-   *   'ft:gpt-4o-mini-2024-07-18:org:weather:B7R9VjQd',
+   *   'ft:gpt-4.1-mini-2025-04-14:org:weather:B7R9VjQd',
    *   { project_ids: ['string'] },
    * )) {
    *   // ...
@@ -50243,7 +51532,7 @@ var Permissions3 = class extends APIResource2 {
    *     'cp_zc4Q7MP6XxulcVzj4MZdwsAB',
    *     {
    *       fine_tuned_model_checkpoint:
-   *         'ft:gpt-4o-mini-2024-07-18:org:weather:B7R9VjQd',
+   *         'ft:gpt-4.1-mini-2025-04-14:org:weather:B7R9VjQd',
    *     },
    *   );
    * ```
@@ -50391,7 +51680,7 @@ var Jobs = class extends APIResource2 {
    * @example
    * ```ts
    * const fineTuningJob = await client.fineTuning.jobs.create({
-   *   model: 'gpt-4o-mini',
+   *   model: 'gpt-4.1-mini-2025-04-14',
    *   training_file: 'file-abc123',
    * });
    * ```
@@ -53111,7 +54400,7 @@ var Alerts = class extends APIResource2 {
 function resolveResourceRequestOptions101(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var Cases = class extends APIResource2 {
+var Cases2 = class extends APIResource2 {
   /**
    * Get a safety case by ID.
    */
@@ -53124,11 +54413,11 @@ var Cases = class extends APIResource2 {
 var Safety = class extends APIResource2 {
   constructor() {
     super(...arguments);
-    this.cases = new Cases(this._client);
+    this.cases = new Cases2(this._client);
     this.alerts = new Alerts(this._client);
   }
 };
-Safety.Cases = Cases;
+Safety.Cases = Cases2;
 Safety.Alerts = Alerts;
 
 // ../../../node_modules/openai/resources/skills/content.mjs

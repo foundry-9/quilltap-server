@@ -24,6 +24,7 @@ import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { extractPluginExport } from './dynamic-loader';
 import { AbstractProviderRegistry, type ProviderRegistryBaseState } from './abstract-provider-registry';
 import { evaluateThinkingTurn } from '@/lib/llm/thinking-turn';
+import { withOutputCeiling } from '@/lib/llm/output-ceiling';
 
 // ============================================================================
 // TYPES
@@ -101,7 +102,9 @@ class ProviderRegistry extends AbstractProviderRegistry<LLMProviderPlugin> {
 
     try {
       const resolvedUrl = this.resolveBaseUrl(baseUrl);
-      return plugin.createProvider(resolvedUrl);
+      // Every request this provider sends is clamped to the output ceiling
+      // the provider has told us about (lib/llm/output-ceiling.ts).
+      return withOutputCeiling(name, resolvedUrl, plugin.createProvider(resolvedUrl));
     } catch (error) {
       this.registryLogger.error('Failed to create LLM provider', {
         provider: name,

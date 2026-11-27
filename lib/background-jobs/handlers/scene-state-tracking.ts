@@ -9,7 +9,7 @@
 import { BackgroundJob, MessageEvent, isParticipantPresent } from '@/lib/schemas/types';
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { getCheapLLMProvider, CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { getCheapLLMProvider, CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection, selectionFromProfile } from '@/lib/llm/cheap-llm';
 import { updateSceneState, extractVisibleConversation, throwIfLostToTimeout } from '@/lib/memory/cheap-llm-tasks';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
@@ -91,14 +91,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
   if (uncensoredProfileId) {
     const uncensoredProfile = availableProfiles.find(p => p.id === uncensoredProfileId);
     if (uncensoredProfile) {
-      const isLocal = uncensoredProfile.provider === 'OLLAMA';
-      uncensoredLLMSelection = {
-        provider: uncensoredProfile.provider,
-        modelName: uncensoredProfile.modelName,
-        connectionProfileId: uncensoredProfile.id,
-        baseUrl: isLocal ? (uncensoredProfile.baseUrl || 'http://localhost:11434') : undefined,
-        isLocal,
-      };
+      uncensoredLLMSelection = selectionFromProfile(uncensoredProfile, { localBaseUrlFallback: true });
     }
   }
 

@@ -223,7 +223,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
           <div className="py-8 text-center qt-text-small">Click on characters to add them to the chat</div>
         ) : (
           <div className="space-y-4">
-            {selectedCharacters.map((sc, index) => {
+            {selectedCharacters.map((sc) => {
               const avatarSrc = getAvatarSrc(sc.character)
               return (
                 <div key={sc.character.id} className="border qt-border-default rounded-lg p-4 qt-bg-muted/30">
@@ -242,13 +242,9 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
                       </div>
                     )}
                     <div className="flex-1">
+                      {/* No "speaks first" mark: the opener is drawn by talkativeness, not list order. */}
                       <div className="flex items-center gap-2">
                         <span className="qt-text-primary">{sc.character.name}</span>
-                        {index === 0 && (
-                          <span className="rounded qt-bg-primary/20 px-2 py-0.5 text-xs font-medium qt-text-brand">
-                            Speaks First
-                          </span>
-                        )}
                       </div>
                       {sc.character.title && <div className="qt-text-small">{sc.character.title}</div>}
                       <div className="mt-3">

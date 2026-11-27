@@ -28,6 +28,10 @@ Reach for the lever when:
 
 It is a one-off restorative, not a routine chore — the live summariser keeps the shelves current of its own accord every time a conversation is summarised, and refreshes a character's *relevant past conversations* on each fold. You should rarely need this lever more than once.
 
+## Titles That Keep Up
+
+A conversation's title is a restless thing — the house retitles a chat as the story wanders from the station platform to the ballroom to the rooftop — while its dossier was labelled with whatever the title happened to be on the day it was last summarised. Each time Quilltap starts, it goes along the shelves and puts a fresh label on every dossier whose conversation has since changed its name: the file is renamed to the conversation's current title, and the title written inside the file is set to match, so a character reminded of a past conversation hears it called by its present name. The dossier is matched to its conversation by that permanent identifier, never by its old label, so nothing is mislaid. Files already correctly labelled are left untouched, and a dossier whose conversation has been deleted is left where it lies.
+
 ## Watching the Work
 
 While the regeneration runs, the *Sum* badge in the page header shows the queue depth, and the card itself displays a count of the regeneration jobs still in flight, refreshed on a five-second poll. When the count reaches zero, every summary has been filed.

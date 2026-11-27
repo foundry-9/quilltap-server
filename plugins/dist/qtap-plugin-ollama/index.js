@@ -1474,7 +1474,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "7.62.0";
+var VERSION = "7.65.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -14954,9 +14954,9 @@ var Sessions = class extends APIResource {
     })));
   }
   /**
-   * Updates session tools, metadata, model, reasoning effort, service tier, or the
-   * default prompt cache lifetime. Model settings apply to subsequent turns. Omitted
-   * fields are unchanged. See
+   * Updates session tools, vaults, metadata, model, reasoning effort, service tier,
+   * or the default prompt cache lifetime. Model settings apply to subsequent turns.
+   * Omitted fields are unchanged. See
    * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
    *
    * @example
@@ -15125,7 +15125,10 @@ var Credentials = class extends APIResource {
    * const credential =
    *   await client.beta.agents.vaults.credentials.update(
    *     'credential_id',
-   *     { vault_id: 'vault_id', metadata: {} },
+   *     {
+   *       vault_id: 'vault_id',
+   *       metadata: { environment: 'staging' },
+   *     },
    *   );
    * ```
    */
@@ -18474,7 +18477,7 @@ var Permissions = class extends APIResource {
    * ```ts
    * // Automatically fetches more pages as needed.
    * for await (const permissionCreateResponse of client.fineTuning.checkpoints.permissions.create(
-   *   'ft:gpt-4o-mini-2024-07-18:org:weather:B7R9VjQd',
+   *   'ft:gpt-4.1-mini-2025-04-14:org:weather:B7R9VjQd',
    *   { project_ids: ['string'] },
    * )) {
    *   // ...
@@ -18529,7 +18532,7 @@ var Permissions = class extends APIResource {
    *     'cp_zc4Q7MP6XxulcVzj4MZdwsAB',
    *     {
    *       fine_tuned_model_checkpoint:
-   *         'ft:gpt-4o-mini-2024-07-18:org:weather:B7R9VjQd',
+   *         'ft:gpt-4.1-mini-2025-04-14:org:weather:B7R9VjQd',
    *     },
    *   );
    * ```
@@ -18677,7 +18680,7 @@ var Jobs = class extends APIResource {
    * @example
    * ```ts
    * const fineTuningJob = await client.fineTuning.jobs.create({
-   *   model: 'gpt-4o-mini',
+   *   model: 'gpt-4.1-mini-2025-04-14',
    *   training_file: 'file-abc123',
    * });
    * ```

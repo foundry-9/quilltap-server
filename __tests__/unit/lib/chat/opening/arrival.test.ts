@@ -32,7 +32,11 @@ jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
   resolveProjectMountPointIds: jest.fn(async () => []),
 }))
 jest.mock('@/lib/wardrobe/pool', () => ({
-  loadWearablePool: jest.fn(async () => ({ getMany: () => [{ id: 'shirt-1', title: 'Linen shirt' }] })),
+  loadWearablePool: jest.fn(async () => ({
+    getMany: () => [{ id: 'shirt-1', title: 'Linen shirt' }],
+    wearable: () => [{ id: 'shirt-1', title: 'Linen shirt' }],
+    unread: [],
+  })),
 }))
 jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueCharacterAvatarGeneration: jest.fn(async () => 'job-1'),
@@ -48,13 +52,14 @@ import { applyInventoryDefaults } from '@/lib/inventory/apply-defaults'
 import { postHostAddAnnouncement } from '@/lib/services/host-notifications/writer'
 import { postOpeningOutfitWhisper } from '@/lib/services/aurora-notifications/writer'
 import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-service'
+import { loadWearablePool } from '@/lib/wardrobe/pool'
 
 const CHAT = 'chat-1'
 const SOURCE = 'chat-source'
 const CHOOSER = 'char-chooser'
 const PLAIN = 'char-plain'
 
-function makeRepos(opts: { avatarGenerationEnabled?: boolean; sourceOutfitFor?: string[] } = {}) {
+function makeRepos(opts: { avatarGenerationEnabled?: boolean; sourceOutfitFor?: string[]; equipped?: Record<string, string[]> } = {}) {
   const chat = {
     id: CHAT,
     projectId: null,
@@ -78,7 +83,7 @@ function makeRepos(opts: { avatarGenerationEnabled?: boolean; sourceOutfitFor?: 
   return {
     chats: {
       findById: jest.fn(async (id: string) => (id === CHAT ? chat : id === SOURCE ? source : null)),
-      getEquippedOutfitForCharacter: jest.fn(async () => ({ top: ['shirt-1'], bottom: [], footwear: [], accessories: [], hair: [] })),
+      getEquippedOutfitForCharacter: jest.fn(async () => opts.equipped ?? ({ top: ['shirt-1'], bottom: [], footwear: [], accessories: [], hair: [] })),
     },
     characters: { findById: jest.fn(async (id: string) => characters[id] ?? null) },
     chatSettings: { findByUserId: jest.fn(async () => null) },
@@ -184,5 +189,25 @@ describe('every arrival is announced and drawn', () => {
     const lastWelcome = Math.max(...(postHostAddAnnouncement as jest.Mock).mock.invocationCallOrder)
     const firstWhisper = Math.min(...(postOpeningOutfitWhisper as jest.Mock).mock.invocationCallOrder)
     expect(lastWelcome).toBeLessThan(firstWhisper)
+  })
+})
+
+// Fresh-instance dogfood (4.14.1): the operator's own persona and a hand-made
+// character own no wardrobe, so Aurora announced each as "completely naked and
+// unadorned" — and the scene tracker and the Lantern drew them that way.
+describe('the opening-outfit whisper needs a wardrobe to speak of', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  const NOTHING = { top: [], bottom: [], footwear: [], accessories: [], hair: [] }
+
+  it('is skipped when nothing is worn and nothing is in reach', async () => {
+    ;(loadWearablePool as jest.Mock).mockResolvedValueOnce({ getMany: () => [], wearable: () => [], unread: [] })
+    await seatArrival(makeRepos({ equipped: NOTHING }), CHAT, { characterId: PLAIN, redress: true }, { source: 'participant-added', userId: 'u1' })
+    expect(postOpeningOutfitWhisper).not.toHaveBeenCalled()
+  })
+
+  it('still announces a character who owns clothes and wears none', async () => {
+    await seatArrival(makeRepos({ equipped: NOTHING }), CHAT, { characterId: PLAIN, redress: true }, { source: 'participant-added', userId: 'u1' })
+    expect(postOpeningOutfitWhisper).toHaveBeenCalledTimes(1)
   })
 })

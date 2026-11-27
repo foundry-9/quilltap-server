@@ -53,8 +53,18 @@ describe('queryKeysForTopic', () => {
       queryKeys.wardrobe.outfit('chat-1'),
       queryKeys.wardrobe.histories('chat-1'),
       queryKeys.inventory.equipped('chat-1'),
+      queryKeys.customTools.byChat('chat-1'),
       queryKeys.chats.scenarioSource('chat-1'),
     ]);
+  });
+
+  it('re-resolves the chat\'s custom-tool roster on the chats topic', () => {
+    // A gate on `inventory` (or the fact sheet) flips when the operator equips
+    // something; the equip publishes `chats`, and without this row the wand and
+    // the `/` commands kept the roster they loaded with until the tab remounted.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(
+      queryKeys.customTools.byChat('chat-1'),
+    );
   });
 
   it('refreshes the Inventory dialog\'s lists, folders, archetype pickers and carried sets on the inventory topic', () => {

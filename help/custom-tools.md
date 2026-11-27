@@ -700,6 +700,8 @@ The tests are written exactly as an outcome's `metadata` clause is, and several 
 
 A character with a sword in hand is offered `swing_sword`; one without is not — and, since a gate with nothing to read declines, neither is a roll made as nobody from the composer.
 
+The Salon keeps up with the gate as the scene moves. Hand her the sword — from the Inventory dialog, by a character's own tool call, or by a Pascal effect — and `swing_sword` turns up in the wand's list and the `/` commands at once; take it away and it bows out just as promptly. There is no need to close the conversation and open it again.
+
 `inventoryAggregate` in a gate asks after the whole bag at once — offer `jam_signal` to anyone with *something* equipped that can suppress:
 
 ```json

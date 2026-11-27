@@ -152,10 +152,20 @@ function buildSummaryFile(
   return `${frontmatter}\n${input.summary.trim()}\n`;
 }
 
-/** Target filename for a conversation, from its current title. */
-function summaryFileName(chatId: string, chatTitle: string): string {
+/**
+ * Target filename for a conversation, from its current title. When that name
+ * is taken by a different conversation the writer falls back to
+ * {@link disambiguatedSummaryFileName}.
+ */
+export function summaryFileName(chatId: string, chatTitle: string): string {
   const stem = sanitizeLeafName(chatTitle);
   return `${stem && stem !== 'unnamed' ? stem : `conversation-${chatId}`}.md`;
+}
+
+/** The collision fallback: the title's filename plus the short chat id. */
+export function disambiguatedSummaryFileName(chatId: string, chatTitle: string): string {
+  const stem = summaryFileName(chatId, chatTitle).replace(/\.md$/i, '');
+  return `${stem} (${chatId.slice(0, 8)}).md`;
 }
 
 /**
@@ -235,8 +245,7 @@ export async function writeConversationSummaryToVaults(
       let fileName = desiredName;
       let relativePath = `${SUMMARIES_FOLDER}/${fileName}`;
       if (await databaseDocumentExists(target.mountPointId, relativePath)) {
-        const stem = fileName.replace(/\.md$/i, '');
-        fileName = `${stem} (${input.chatId.slice(0, 8)}).md`;
+        fileName = disambiguatedSummaryFileName(input.chatId, input.chatTitle);
         relativePath = `${SUMMARIES_FOLDER}/${fileName}`;
       }
 

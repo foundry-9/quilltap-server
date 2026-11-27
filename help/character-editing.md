@@ -19,7 +19,7 @@ Old bookmarks to a character's "view" or "edit" page still work; they are quietl
 
 Across the top, holding its place as you scroll, sits the character's calling card:
 
-- **The avatar**, as tall as the header itself — the largest the portrait appears anywhere short of opening it in a picture viewer — is a menu: **Choose from photos…** (pick from the character's gallery), **Upload…**, or **Generate portrait…** (which opens the [Wardrobe](wardrobe.md) dialog, where portraits are painted in whatever the character happens to be wearing).
+- **The avatar**, as tall as the header itself — the largest the portrait appears anywhere short of opening it in a picture viewer — is a menu: **Choose from photos…** (pick from the character's gallery), **Upload…**, or **Generate portrait…** (which opens the [Wardrobe](wardrobe.md) dialog, where portraits are painted in whatever the character happens to be wearing; each one is filed among the character's photos, and becomes the avatar once you pick it through **Choose from photos…**).
 - **The name**, and beneath it the **title**, **pronouns**, **age** (when they have a birthday), a **Roleplay** or **Assistant** badge, and badges for **NPC**, **User-controlled**, **Carina** and **Archived** when any of those is so.
 - **Alias chips** and **group chips**. Group membership is arranged on the group's own page; each chip carries a **Manage ↗** link there.
 - **A line of figures** — memories, conversations, wardrobe items, inventory objects (and how many of them are carried by default), archetypes and kits, photos, scenarios, knowledge, core files, character files — every one of them a link to the place it counts. Memories and conversations lead to **History**, opening the list in question; wardrobe opens the Wardrobe; the four inventory figures open the Inventory; photos lead to **Appearance**, with the album opened; scenarios to **Prompts**; knowledge and core open the vault in the Scriptorium; character files lead to the **Vault** card on **Details**.
@@ -433,7 +433,7 @@ The settings a new chat with the character begins with — exactly what the New 
 
 ## History
 
-- **Conversations** — every chat the character has appeared in
+- **Conversations** — every chat the character has appeared in, each card bearing a line on where matters stand, taken from the conversation's running summary (the very line the home page's **Where You Left Off** card shows). A conversation too young to have been summarised shows its latest line instead
 - **Memories** — the character's Commonplace Book, each memory opened and saved in its own dialog. See [Memory Maintenance](memory-maintenance.md)
 
 Conversations and Memories both arrive folded shut, their counts beside their headings; click a heading to open the list. Once open, each shows one page at a time — ten conversations, thirty memories — with **← Previous** and **Next →** at the foot and a note of where you stand, rather than growing ever longer as you scroll. A search or filter returns you to the first page.

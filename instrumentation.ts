@@ -672,6 +672,15 @@ export async function register() {
             );
             await moveSharedWardrobeToGeneral();
 
+            // Conversation summary files are named (and their frontmatter
+            // title stamped) from the chat's title at the last fold; chats are
+            // retitled between folds. Rename each to its chat's current title,
+            // matched by the frontmatter conversationId. No-op when they agree.
+            const { syncConversationSummaryTitles } = await import(
+              './lib/startup/sync-conversation-summary-titles'
+            );
+            await syncConversationSummaryTitles();
+
             // One-time scan that enqueues a head-and-shoulders portrait-prompt
             // backfill job for every character that has appearance text but no
             // `headAndShouldersPrompt` yet (avatars prefer that variant). Jobs

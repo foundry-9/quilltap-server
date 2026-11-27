@@ -12,7 +12,18 @@
 /** Tokens added to an answer budget for a model's own reasoning. */
 export const REASONING_HEADROOM_TOKENS = 4000
 
-/** The `maxTokens` to send for a call whose answer needs `answerTokens`. */
-export function withReasoningHeadroom(answerTokens: number): number {
-  return answerTokens + REASONING_HEADROOM_TOKENS
+/**
+ * The `maxTokens` to send for a call whose answer needs `answerTokens`.
+ *
+ * `ceiling` is the model's own output limit, when known. The headroom never
+ * pushes past it: a caller that already asks for a profile's whole output
+ * budget (128k on a DeepSeek-class profile) would otherwise send 132k to a
+ * provider that refuses anything over 131,072, and every call fails with a
+ * 400. The ceiling only trims the headroom — it never cuts below the answer
+ * budget the caller asked for.
+ */
+export function withReasoningHeadroom(answerTokens: number, ceiling?: number): number {
+  const padded = answerTokens + REASONING_HEADROOM_TOKENS
+  if (ceiling == null || !Number.isFinite(ceiling) || ceiling <= 0) return padded
+  return Math.max(answerTokens, Math.min(padded, ceiling))
 }
