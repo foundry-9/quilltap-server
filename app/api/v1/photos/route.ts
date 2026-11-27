@@ -4,7 +4,8 @@
  * GET  /api/v1/photos          List the user's gallery (with optional query/tags/pagination);
  *                              `album=<mountPointId>` lists one store's album instead
  * GET  /api/v1/photos?action=albums  Every album `/photos` can show (characters, projects, stores)
- * POST /api/v1/photos          Save an image (image-v2 FileEntry id) to the gallery
+ * POST /api/v1/photos          Save an image (image-v2 FileEntry `fileId`, or an album
+ *                              picture's `linkId`) to the gallery
  *
  * Backed by `lib/photos/user-gallery-service.ts`. The gallery lives at
  * `<userUploadsMountPointId>/photos/` and dedupes by sha256, so saving the
@@ -22,12 +23,19 @@ import {
   listUserGallery,
 } from '@/lib/photos/user-gallery-service';
 
-const saveSchema = z.object({
-  fileId: z.string().min(1, 'fileId is required'),
-  caption: z.string().nullable().optional(),
-  tags: z.array(z.string()).optional(),
-  chatId: z.string().nullable().optional(),
-});
+const saveSchema = z
+  .object({
+    fileId: z.string().min(1).optional(),
+    // An album picture (doc_mount_file_links.id) has no FileEntry (#260).
+    linkId: z.string().min(1).optional(),
+    caption: z.string().nullable().optional(),
+    tags: z.array(z.string()).optional(),
+    chatId: z.string().nullable().optional(),
+  })
+  .refine(
+    v => (v.fileId ? 1 : 0) + (v.linkId ? 1 : 0) === 1,
+    { message: 'Provide exactly one of fileId or linkId' }
+  );
 
 const listQuerySchema = z.object({
   album: z.string().min(1).optional(),
@@ -97,6 +105,7 @@ export const POST = createContextHandler(async (req: NextRequest, { user, repos 
 
     const result = await saveToUserGallery({
       fileId: parsed.data.fileId,
+      linkId: parsed.data.linkId,
       caption: parsed.data.caption ?? null,
       tags: parsed.data.tags,
       chatId: parsed.data.chatId ?? null,
@@ -112,6 +121,7 @@ export const POST = createContextHandler(async (req: NextRequest, { user, repos 
     if (
       message.includes('already saved') ||
       message.includes('not an image') ||
+      message.includes('Provide exactly one of') ||
       message.includes('not owned') ||
       message.includes('Image not found') ||
       message.includes('Quilltap Uploads mount has not been provisioned')

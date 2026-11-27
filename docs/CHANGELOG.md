@@ -4,6 +4,20 @@
 
 ### 4.15-dev
 
+#### Fix: image viewer, photo albums, My Photos and item pictures
+
+- "Save to my gallery" from a character's photo album failed with "Image not found", and the viewer's "In Photo Albums" panel came up empty: album pictures are photo-album links with no `files` row, and both lookups wanted a file id. `POST /api/v1/photos` and `saveToUserGallery` now take exactly one of `fileId` or `linkId` (a link is read from its blob), the viewer sends `linkId` when it has one, and `GET /api/v1/images/[id]` answers a link id with that picture's album links. Fixes #260.
+- The image viewer's album toasts said "character's photo album" when the character list was not cached on open. `useImageActions` reads the live list instead of a copy taken on first render. Fixes #297.
+- After paging onto a missing image, every later image in the viewer showed the deleted-image placeholder, and a slow album lookup for an earlier image could overwrite the current one's links. The placeholder resets when the image changes, and stale lookups are ignored. Fixes #300.
+- The photo gallery modal's and the Generate Image page's thumbnail actions stayed transparent when reached by keyboard. They show on `group-focus-within`, and the Generate Image buttons have `aria-label`s. Fixes #298.
+- A failed delete in a character's embedded photo gallery still removed the tile. `handleDeleteImage` returns whether the delete succeeded, and the tile is removed only then. Fixes #301.
+- A failing "load more" on My Photos was retried as fast as it failed while the end of the grid was in view. A failed next page now stops automatic loading (`isFetchNextPageError`) and shows a Try again button. Fixes #350.
+- The library file picker's photo gallery ignored the Salon's quick-hide. Its thumbnails use `HiddenImageTile` while images are hidden. Fixes #290.
+- Delete under an Inventory or Atlas picture removed it permanently on one click. `ItemPicturesSection` now asks first, with the Wardrobe's wording. Fixes #311.
+- The Inventory and Atlas picture Upload control was a label around a `display: none` input, so the keyboard could not reach it, the same file could not be uploaded twice, and it stayed live while another picture action ran. It is a button that opens the hidden input, clears the input after each pick, and is disabled while busy. Fixes #265.
+- Create NPC dropped the chosen avatar and left the uploaded image attached to nothing: it read the image id at the top level of a response that nests it under `data`. It reads `data.id`, and a failed avatar step now shows an error toast instead of the success toast. Fixes #243.
+- Tests: link saves in `user-gallery-service.test.ts`, avatar cases in `CreateNPCDialog.test.tsx`, plus component tests for the viewer, gallery hooks, My Photos paging, the library picker and the item pictures section.
+
 #### Feature: Auto-Configure reads observed tool reliability from the LLM logs
 
 - Auto-Configure now has a source stronger than any catalog for native tool support: what the route's own logs show. `lookupModelFacts` (`lib/llm/model-catalog.ts`) takes `routeProfileIds` (the user's profiles with the target's provider, model and base URL, from `sameRouteProfileIds`) and, before any catalog, asks `observeToolReliability` (new `lib/llm/tool-reliability.ts`). A decisive verdict sets `supportsTools` with the new source kind `'observed'`, labelled "observed in your last N native tool calls on this route (F failed)"; an inconclusive one leaves the catalogs to answer. A verdict of unreliable makes `autoConfigureProfile` recommend Simple JSON; `profileUpdateFromAutoConfigure` still moves only from `auto` or `native`.

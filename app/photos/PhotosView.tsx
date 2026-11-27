@@ -159,6 +159,10 @@ export function PhotosView() {
   const { data, hasNextPage, isFetchingNextPage: loadingMore, fetchNextPage, refetch } = listQuery;
   const loading = listQuery.isPending || listQuery.isPlaceholderData;
   const hasMore = Boolean(hasNextPage);
+  // A failed next page stops the automatic loading until the user asks again:
+  // the observer would otherwise re-fire on the still-visible sentinel as
+  // fast as each request failed (#350). A new search is a new key and clears it.
+  const loadMoreFailed = listQuery.isFetchNextPageError;
 
   // Pages appended in order. Defensive de-dupe: if the underlying ordering
   // shifted (a save happened mid-scroll), the same linkId could appear twice.
@@ -187,9 +191,13 @@ export function PhotosView() {
   });
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || loading || !hasMore) return;
+    if (loadingMore || loading || !hasMore || loadMoreFailed) return;
     await fetchNextPage();
-  }, [hasMore, loading, loadingMore, fetchNextPage]);
+  }, [hasMore, loading, loadingMore, loadMoreFailed, fetchNextPage]);
+
+  const retryLoadMore = useCallback(() => {
+    void fetchNextPage();
+  }, [fetchNextPage]);
 
   // IntersectionObserver — fires loadMore when the sentinel scrolls into
   // view. rootMargin pre-loads the next page before the user hits the
@@ -403,6 +411,14 @@ export function PhotosView() {
             <div className="mt-8 flex items-center justify-center gap-3 qt-text-muted text-sm">
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-b-2 qt-border-primary" />
               Loading more photos…
+            </div>
+          )}
+
+          {loadMoreFailed && !loadingMore && (
+            <div className="mt-8 flex items-center justify-center">
+              <button type="button" className="qt-button qt-button-secondary qt-button-sm" onClick={retryLoadMore}>
+                Try again
+              </button>
             </div>
           )}
 

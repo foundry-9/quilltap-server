@@ -136,8 +136,12 @@ export default function CreateNPCDialog({
           throw new Error(errorData.error || 'Failed to upload avatar')
         }
 
-        const uploadData = await uploadResponse.json()
-        uploadedImageId = uploadData.id
+        // The upload route answers `{ data: { id, … } }` (#243).
+        const uploadData = (await uploadResponse.json()) as { data?: { id?: string } }
+        uploadedImageId = uploadData.data?.id ?? null
+        if (!uploadedImageId) {
+          throw new Error('The avatar upload returned no image id')
+        }
       }
 
       // Step 2: Create character with npc flag. One create carries everything;
@@ -178,6 +182,7 @@ export default function CreateNPCDialog({
       const characterId = createdCharacter.id
 
       // Step 3: Set avatar if it was uploaded
+      let avatarFailed = false
       if (uploadedImageId) {
         const avatarResponse = await fetch(`/api/v1/characters/${characterId}?action=avatar`, {
           method: 'POST',
@@ -190,15 +195,23 @@ export default function CreateNPCDialog({
         })
 
         if (!avatarResponse.ok) {
-          // Log error but don't fail the whole operation
+          // The NPC exists; say the avatar did not take rather than fail the whole operation.
+          avatarFailed = true
+          const errorData = (await avatarResponse.json().catch(() => ({}))) as { error?: string }
           console.error('[CreateNPCDialog] Failed to set avatar', {
             characterId,
             imageId: uploadedImageId,
+            status: avatarResponse.status,
+            error: errorData.error,
           })
         }
       }
 
-      showSuccessToast(`NPC "${name}" created successfully`)
+      if (avatarFailed) {
+        showErrorToast(`NPC "${name}" was created, but the avatar could not be set`)
+      } else {
+        showSuccessToast(`NPC "${name}" created successfully`)
+      }
       // Every character picker (Add Character, the Aurora list) shows the new NPC.
       void queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
 

@@ -130,7 +130,7 @@ export function useGalleryData(entityId: string, _entityType: EntityType) {
     image: GalleryImage,
     currentAvatarId: string | undefined,
     onAvatarChange?: (imageId: string | null) => void
-  ) => {
+  ): Promise<boolean> => {
     try {
       const isCurrentAvatar = currentAvatarId === image.id
       const res = await fetch(`/api/v1/characters/${entityId}/photos/${image.id}`, {
@@ -150,11 +150,13 @@ export function useGalleryData(entityId: string, _entityType: EntityType) {
 
       await refetch()
       showSuccessToast('Image deleted')
+      return true
     } catch (error) {
       showErrorToast(error instanceof Error ? error.message : 'Failed to delete image')
       console.error('Error deleting image:', {
         error: error instanceof Error ? error.message : String(error),
       })
+      return false
     }
   }
 

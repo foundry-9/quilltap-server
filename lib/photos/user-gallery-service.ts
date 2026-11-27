@@ -67,8 +67,14 @@ async function isUserGalleryLink(
 }
 
 export interface SaveToUserGalleryInput {
-  /** image-v2 FileEntry id to save. */
-  fileId: string;
+  /** image-v2 FileEntry id to save. Exactly one of `fileId` / `linkId`. */
+  fileId?: string;
+  /**
+   * An existing `doc_mount_file_links.id` (a picture in any album) to save.
+   * Album pictures have no images-v2 FileEntry, so the bytes are read from
+   * the link's blob (#260).
+   */
+  linkId?: string;
   caption?: string | null;
   tags?: string[];
   /** Optional chat id so scene state can be captured (matches keep_image). */
@@ -146,36 +152,15 @@ const DEFAULT_LIMIT = 24;
 export async function saveToUserGallery(
   input: SaveToUserGalleryInput
 ): Promise<SaveToUserGalleryOutput> {
-  const { fileId, caption, tags, chatId, userId, repos } = input;
+  const { caption, tags, chatId, userId, repos } = input;
 
   const target = await getUserUploadsStore();
   if (!target) {
     throw new Error('Quilltap Uploads mount has not been provisioned');
   }
 
-  const fileEntry = await repos.files.findById(fileId);
-  if (!fileEntry) {
-    throw new Error(`Image not found: ${fileId}`);
-  }
-  if (fileEntry.category !== 'IMAGE' && !fileEntry.mimeType.startsWith('image/')) {
-    throw new Error(`File ${fileId} is not an image (category=${fileEntry.category})`);
-  }
-  if (fileEntry.userId !== userId) {
-    throw new Error(`File ${fileId} is not owned by the calling user`);
-  }
-
-  // Read the bytes via the file storage manager (handles mount-blob / disk /
-  // legacy storage all the same). Done lazy-import to keep sharp/webp out of
-  // the gallery service module load. Hash the actual bytes once and reuse the
-  // value for both the re-save guard and the link write — the FileEntry's
-  // sha256 is an upload-time input hash that can diverge from the stored bytes
-  // across a transcode, which would let the guard miss duplicates and record a
-  // hash that won't match what we store.
-  const { fileStorageManager } = await import('@/lib/file-storage/manager');
-  const buffer = await fileStorageManager.downloadFile(fileEntry);
-  if (!buffer || buffer.length === 0) {
-    throw new Error(`Image ${fileId} has empty bytes`);
-  }
+  const source = await resolveGallerySource(input);
+  const { buffer } = source;
   const sha256 = sha256OfBuffer(buffer);
 
   // Re-save guard: refuse a second save for the same sha256 in the user's
@@ -209,9 +194,9 @@ export async function saveToUserGallery(
 
   const keptAt = new Date().toISOString();
   const markdown = buildKeptImageMarkdown({
-    generationPrompt: fileEntry.generationPrompt ?? null,
-    generationRevisedPrompt: fileEntry.generationRevisedPrompt ?? null,
-    generationModel: fileEntry.generationModel ?? null,
+    generationPrompt: source.generationPrompt,
+    generationRevisedPrompt: source.generationRevisedPrompt,
+    generationModel: source.generationModel,
     sceneState: parsedSceneState,
     sceneStateMalformed,
     linkedByName: USER_LINKED_BY_NAME,
@@ -225,8 +210,8 @@ export async function saveToUserGallery(
 
   const { filename } = buildSlugAndFilename({
     caption: caption ?? null,
-    generationPrompt: fileEntry.generationPrompt ?? null,
-    mimeType: fileEntry.mimeType,
+    generationPrompt: source.generationPrompt,
+    mimeType: source.mimeType,
     keptAt,
   });
   const desiredPath = buildPhotosRelativePath(filename);
@@ -238,9 +223,9 @@ export async function saveToUserGallery(
     relativePath,
     fileName: basenameOfRelativePath(relativePath),
     folderId,
-    originalFileName: fileEntry.originalFilename,
-    originalMimeType: fileEntry.mimeType,
-    storedMimeType: fileEntry.mimeType,
+    originalFileName: source.originalFilename,
+    originalMimeType: source.mimeType,
+    storedMimeType: source.mimeType,
     sha256,
     data: buffer,
     description: caption ?? '',
@@ -267,7 +252,8 @@ export async function saveToUserGallery(
   });
 
   logger.info('Saved image to user gallery', {
-    fileEntryId: fileEntry.id,
+    fileEntryId: source.fileId,
+    sourceLinkId: input.linkId ?? null,
     sha256,
     linkId: link.id,
     mountPointId: target.mountPointId,
@@ -282,8 +268,87 @@ export async function saveToUserGallery(
     mountPointName: mp?.name ?? 'Quilltap Uploads',
     relativePath,
     keptAt,
-    fileId: fileEntry.id,
+    fileId: source.fileId,
     sha256,
+  };
+}
+
+interface GallerySource {
+  buffer: Buffer;
+  /** The FileEntry id, or the source link's blob file id for an album picture. */
+  fileId: string;
+  mimeType: string;
+  originalFilename: string;
+  generationPrompt: string | null;
+  generationRevisedPrompt: string | null;
+  generationModel: string | null;
+}
+
+/**
+ * Read the bytes and provenance of what is being saved: an images-v2
+ * FileEntry by `fileId`, or an album picture by `linkId`.
+ */
+async function resolveGallerySource(input: SaveToUserGalleryInput): Promise<GallerySource> {
+  const { fileId, linkId, userId, repos } = input;
+  if ((fileId ? 1 : 0) + (linkId ? 1 : 0) !== 1) {
+    throw new Error('Provide exactly one of fileId or linkId');
+  }
+
+  if (linkId) {
+    const link = await repos.docMountFileLinks.findByIdWithContent(linkId);
+    if (!link) {
+      throw new Error(`Image not found: ${linkId}`);
+    }
+    const mimeType = link.originalMimeType ?? 'application/octet-stream';
+    if (!mimeType.startsWith('image/')) {
+      throw new Error(`Link ${linkId} is not an image`);
+    }
+    const buffer = await repos.docMountBlobs.readDataByFileId(link.fileId);
+    if (!buffer || buffer.length === 0) {
+      throw new Error(`Image ${linkId} has empty bytes`);
+    }
+    logger.debug('Resolved album link for user gallery save', { linkId, fileId: link.fileId });
+    return {
+      buffer,
+      fileId: link.fileId,
+      mimeType,
+      originalFilename: link.originalFileName ?? link.fileName,
+      generationPrompt: null,
+      generationRevisedPrompt: null,
+      generationModel: null,
+    };
+  }
+
+  const fileEntry = await repos.files.findById(fileId!);
+  if (!fileEntry) {
+    throw new Error(`Image not found: ${fileId}`);
+  }
+  if (fileEntry.category !== 'IMAGE' && !fileEntry.mimeType.startsWith('image/')) {
+    throw new Error(`File ${fileId} is not an image (category=${fileEntry.category})`);
+  }
+  if (fileEntry.userId !== userId) {
+    throw new Error(`File ${fileId} is not owned by the calling user`);
+  }
+
+  // Read the bytes via the file storage manager (handles mount-blob / disk /
+  // legacy storage all the same). Done lazy-import to keep sharp/webp out of
+  // the gallery service module load. The caller hashes the actual bytes once
+  // and reuses the value for both the re-save guard and the link write — the
+  // FileEntry's sha256 is an upload-time input hash that can diverge from the
+  // stored bytes across a transcode.
+  const { fileStorageManager } = await import('@/lib/file-storage/manager');
+  const buffer = await fileStorageManager.downloadFile(fileEntry);
+  if (!buffer || buffer.length === 0) {
+    throw new Error(`Image ${fileId} has empty bytes`);
+  }
+  return {
+    buffer,
+    fileId: fileEntry.id,
+    mimeType: fileEntry.mimeType,
+    originalFilename: fileEntry.originalFilename,
+    generationPrompt: fileEntry.generationPrompt ?? null,
+    generationRevisedPrompt: fileEntry.generationRevisedPrompt ?? null,
+    generationModel: fileEntry.generationModel ?? null,
   };
 }
 

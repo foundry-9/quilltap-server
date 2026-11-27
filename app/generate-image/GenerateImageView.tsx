@@ -241,25 +241,29 @@ export function GenerateImageView() {
                   className="w-full aspect-square object-cover rounded-lg border qt-border-default"
                 />
                 {/* Overlay with actions */}
-                <div className="absolute inset-0 qt-bg-overlay-medium opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+                <div className="absolute inset-0 qt-bg-overlay-medium opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
                   <button
+                    type="button"
                     onClick={() => handleDownload(image)}
                     className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full transition-colors"
                     title="Download"
+                    aria-label="Download image"
                   >
                     <Icon name="download" className="w-5 h-5 qt-text-overlay" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => setPreviewImage({ src: image.filepath, filename: image.filename })}
                     className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full transition-colors"
                     title="View image"
+                    aria-label="View image"
                   >
                     <Icon name="eye" className="w-5 h-5 qt-text-overlay" />
                   </button>
                 </div>
                 {/* Prompt tooltip */}
                 {image.generationPrompt && (
-                  <div className="absolute bottom-0 left-0 right-0 p-2 qt-bg-overlay-medium qt-text-overlay text-xs rounded-b-lg opacity-0 group-hover:opacity-100 transition-opacity line-clamp-2">
+                  <div className="absolute bottom-0 left-0 right-0 p-2 qt-bg-overlay-medium qt-text-overlay text-xs rounded-b-lg opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity line-clamp-2">
                     {image.generationRevisedPrompt || image.generationPrompt}
                   </div>
                 )}

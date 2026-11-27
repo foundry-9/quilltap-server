@@ -14,9 +14,10 @@
  * @module components/item-browser/ItemPicturesSection
  */
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { showErrorToast } from '@/lib/toast'
+import { showConfirmation } from '@/lib/alert'
 import type { ItemImageSummary } from '@/lib/mount-index/item-family-images'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 import { ItemImageViewer } from './ItemImageViewer'
@@ -64,6 +65,7 @@ export function ItemPicturesSection({ spec, container, itemId, itemTitle }: Item
   const { images, current, loading } = spec.useImages(container, itemId)
   const [busy, setBusy] = useState<string | null>(null)
   const [viewing, setViewing] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const refresh = () => Promise.all(spec.refreshKeys(itemId).map((queryKey) => queryClient.invalidateQueries({ queryKey })))
   const run = async (label: string, fn: () => Promise<unknown>) => {
     setBusy(label)
@@ -85,6 +87,12 @@ export function ItemPicturesSection({ spec, container, itemId, itemTitle }: Item
     })
   const imageAction = (label: string, action: string, body: Record<string, unknown>) =>
     void run(label, () => spec.request(spec.imagesUrl(container, itemId, action), 'POST', body))
+  // A deleted picture is gone for good — a generated one would have to be
+  // drawn (and paid for) again — so ask first, as the Wardrobe does (#311).
+  const deleteImage = async (fileId: string) => {
+    if (!(await showConfirmation('Take this picture down for good? It cannot be rehung.'))) return
+    imageAction('delete', 'delete-image', { fileId })
+  }
   const inherited = images.some((image) => image.inherited)
   const headingId = spec.headingIdPrefix ? `${spec.headingIdPrefix}-${itemId}` : undefined
 
@@ -93,16 +101,30 @@ export function ItemPicturesSection({ spec, container, itemId, itemTitle }: Item
       <div className="flex items-center justify-between gap-2">
         <h3 id={headingId} className="text-sm qt-text">Pictures</h3>
         <div className="flex items-center gap-2">
-          <label className="qt-button-ghost qt-button-sm cursor-pointer">
-            Upload…
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              aria-label={spec.uploadLabel?.(itemTitle)}
-              onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])}
-            />
-          </label>
+          {/* A real button opens the chooser, so the keyboard can reach it; the
+              input is cleared after each pick so the same file can go up twice (#265). */}
+          <button
+            type="button"
+            className="qt-button-ghost qt-button-sm"
+            disabled={busy !== null}
+            aria-label={spec.uploadLabel?.(itemTitle)}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {busy === 'upload' ? 'Uploading…' : 'Upload…'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) void upload(file)
+            }}
+          />
           <button
             type="button"
             className="qt-button-secondary qt-button-sm"
@@ -143,7 +165,7 @@ export function ItemPicturesSection({ spec, container, itemId, itemTitle }: Item
                     type="button"
                     className="qt-button-ghost qt-button-sm qt-text-destructive"
                     disabled={busy !== null}
-                    onClick={() => imageAction('delete', 'delete-image', { fileId: image.fileId })}
+                    onClick={() => void deleteImage(image.fileId)}
                   >
                     Delete
                   </button>

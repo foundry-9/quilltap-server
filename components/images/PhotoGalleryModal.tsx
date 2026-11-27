@@ -385,7 +385,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
 
         {/* Hover actions — the same shape and the same qt-* classes the
             character gallery's thumbnails use. */}
-        <div className="absolute bottom-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute bottom-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
           <button
             type="button"
             onClick={(e) => {

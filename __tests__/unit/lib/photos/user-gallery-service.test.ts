@@ -77,6 +77,9 @@ function buildRepos() {
       findEnabled: jest.fn().mockResolvedValue([]),
       refreshStats: jest.fn().mockResolvedValue(undefined),
     },
+    docMountBlobs: {
+      readDataByFileId: jest.fn(),
+    },
   };
 }
 
@@ -202,6 +205,64 @@ describe('saveToUserGallery', () => {
         extractionStatus: 'converted',
       })
     );
+  });
+});
+
+describe('saveToUserGallery from an album link (#260)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetStore.mockResolvedValue({ mountPointId: 'mp-uploads' });
+  });
+
+  function primeLinkSave(repos: ReturnType<typeof buildRepos>) {
+    repos.docMountFileLinks.findByIdWithContent.mockResolvedValue({
+      id: 'album-link',
+      fileId: 'blob-file-1',
+      fileName: 'portrait.webp',
+      originalFileName: 'portrait.png',
+      originalMimeType: 'image/png',
+    });
+    repos.docMountBlobs.readDataByFileId.mockResolvedValue(BYTES);
+    mockLinkSummary.mockResolvedValue({ count: 1, linkers: [] });
+    repos.docMountFileLinks.linkBlobContent.mockResolvedValue({
+      link: { id: 'new-link', mountPointId: 'mp-uploads', relativePath: 'photos/x.png', sha256: BYTES_SHA },
+      file: { id: 'new-file' },
+      blobId: 'new-blob',
+    });
+    repos.docMountPoints.findById.mockResolvedValue({ id: 'mp-uploads', name: 'Quilltap Uploads' });
+  }
+
+  it('saves the linked bytes without looking for a FileEntry', async () => {
+    const repos = buildRepos();
+    primeLinkSave(repos);
+
+    const result = await saveToUserGallery({ linkId: 'album-link', userId: 'user-1', repos: repos as any });
+
+    expect(repos.files.findById).not.toHaveBeenCalled();
+    expect(mockDownload).not.toHaveBeenCalled();
+    expect(repos.docMountBlobs.readDataByFileId).toHaveBeenCalledWith('blob-file-1');
+    expect(result).toMatchObject({ linkId: 'new-link', fileId: 'blob-file-1', sha256: BYTES_SHA });
+    expect(repos.docMountFileLinks.linkBlobContent).toHaveBeenCalledWith(
+      expect.objectContaining({ originalFileName: 'portrait.png', originalMimeType: 'image/png', sha256: BYTES_SHA })
+    );
+  });
+
+  it('reports a missing link as "Image not found"', async () => {
+    const repos = buildRepos();
+    repos.docMountFileLinks.findByIdWithContent.mockResolvedValue(null);
+    await expect(
+      saveToUserGallery({ linkId: 'gone', userId: 'user-1', repos: repos as any })
+    ).rejects.toThrow('Image not found: gone');
+  });
+
+  it('refuses both or neither of fileId and linkId', async () => {
+    const repos = buildRepos();
+    await expect(
+      saveToUserGallery({ fileId: 'f', linkId: 'l', userId: 'user-1', repos: repos as any })
+    ).rejects.toThrow('Provide exactly one of fileId or linkId');
+    await expect(
+      saveToUserGallery({ userId: 'user-1', repos: repos as any })
+    ).rejects.toThrow('Provide exactly one of fileId or linkId');
   });
 });
 

@@ -31,6 +31,36 @@ const removeTagSchema = z.object({
 });
 
 
+type CharacterGalleryLink = { characterId: string; characterName: string; linkId: string };
+
+/**
+ * Which character vaults hold a copy of these bytes in their photo album,
+ * from the photo-link summary.
+ */
+async function characterGalleryLinksFor(
+  sha256: string,
+  allCharacters: Array<{ id: string; name: string }>,
+  repos: Parameters<typeof getPhotoLinkSummaryBySha256>[1]
+): Promise<CharacterGalleryLink[]> {
+  const links: CharacterGalleryLink[] = [];
+  const mountToCharacter = new Map<string, { id: string; name: string }>();
+  for (const c of allCharacters) {
+    if ((c as any).characterDocumentMountPointId) {
+      mountToCharacter.set((c as any).characterDocumentMountPointId, { id: c.id, name: c.name });
+    }
+  }
+  const summary = await getPhotoLinkSummaryBySha256(sha256, repos);
+  for (const linker of summary.linkers) {
+    if (linker.mountStoreType === 'character' && linker.isPhotoAlbum) {
+      const char = mountToCharacter.get(linker.mountPointId);
+      if (char) {
+        links.push({ characterId: char.id, characterName: char.name, linkId: linker.linkId });
+      }
+    }
+  }
+  return links;
+}
+
 // ============================================================================
 // GET Handler
 // ============================================================================
@@ -40,6 +70,24 @@ export const GET = createContextParamsHandler<{ id: string }>(async (req, { user
     const image = await repos.files.findById(id);
 
     if (!image) {
+      // An album picture is a doc_mount_file_links row with no FileEntry; the
+      // image viewer is handed its link id (#260). Answer with its albums.
+      const link = await repos.docMountFileLinks.findByIdWithContent(id);
+      if (link && (link.originalMimeType ?? '').startsWith('image/')) {
+        const allCharacters = await repos.characters.findByUserId(user.id);
+        const characterGalleryLinks = await characterGalleryLinksFor(link.sha256, allCharacters, repos);
+        logger.debug('[Images v1] Resolved an album link id', { linkId: id, albums: characterGalleryLinks.length });
+        return successResponse({
+          data: {
+            id,
+            linkId: id,
+            userId: user.id,
+            filename: link.originalFileName ?? link.fileName,
+            mimeType: link.originalMimeType,
+            characterGalleryLinks,
+          },
+        });
+      }
       return notFound('Image');
     }
 
@@ -71,30 +119,9 @@ export const GET = createContextParamsHandler<{ id: string }>(async (req, { user
       return { tagId, tagType };
     });
 
-    // Build character gallery links from the photo-link-summary: which
-    // character vaults contain a copy of this image's bytes?
-    const characterGalleryLinks: Array<{ characterId: string; characterName: string; linkId: string }> = [];
-    if (image.sha256) {
-      const mountToCharacter = new Map<string, { id: string; name: string }>();
-      for (const c of allCharacters) {
-        if ((c as any).characterDocumentMountPointId) {
-          mountToCharacter.set((c as any).characterDocumentMountPointId, { id: c.id, name: c.name });
-        }
-      }
-      const summary = await getPhotoLinkSummaryBySha256(image.sha256, repos);
-      for (const linker of summary.linkers) {
-        if (linker.mountStoreType === 'character' && linker.isPhotoAlbum) {
-          const char = mountToCharacter.get(linker.mountPointId);
-          if (char) {
-            characterGalleryLinks.push({
-              characterId: char.id,
-              characterName: char.name,
-              linkId: linker.linkId,
-            });
-          }
-        }
-      }
-    }
+    const characterGalleryLinks = image.sha256
+      ? await characterGalleryLinksFor(image.sha256, allCharacters, repos)
+      : [];
 
     return successResponse({
       data: {
@@ -136,6 +163,24 @@ export const DELETE = createContextParamsHandler<{ id: string }>(withActionDispa
     const image = await repos.files.findById(id);
 
     if (!image) {
+      // An album picture is a doc_mount_file_links row with no FileEntry; the
+      // image viewer is handed its link id (#260). Answer with its albums.
+      const link = await repos.docMountFileLinks.findByIdWithContent(id);
+      if (link && (link.originalMimeType ?? '').startsWith('image/')) {
+        const allCharacters = await repos.characters.findByUserId(user.id);
+        const characterGalleryLinks = await characterGalleryLinksFor(link.sha256, allCharacters, repos);
+        logger.debug('[Images v1] Resolved an album link id', { linkId: id, albums: characterGalleryLinks.length });
+        return successResponse({
+          data: {
+            id,
+            linkId: id,
+            userId: user.id,
+            filename: link.originalFileName ?? link.fileName,
+            mimeType: link.originalMimeType,
+            characterGalleryLinks,
+          },
+        });
+      }
       return notFound('Image');
     }
 

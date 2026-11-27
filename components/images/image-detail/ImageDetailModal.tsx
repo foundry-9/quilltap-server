@@ -26,7 +26,10 @@ export default function ImageDetailModal({
     useCharactersList<Character>(undefined, { enabled: isOpen })
   const [loadingLinks, setLoadingLinks] = useState(true)
   const loadingEntities = loadingCharacters || loadingLinks
-  const [imageMissing, setImageMissing] = useState(false)
+  // Which image failed to load. The viewer stays mounted while Prev/Next swap
+  // the `image` prop, so the placeholder is tied to that image alone (#300).
+  const [missingImageId, setMissingImageId] = useState<string | null>(null)
+  const imageMissing = missingImageId === image.id
   const dialogRef = useRef<HTMLDivElement>(null)
   const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
 
@@ -45,31 +48,44 @@ export default function ImageDetailModal({
   } = useImageActions(image, characters, onAvatarSet)
 
   // Load the image's character gallery links on open (the characters are the shared list above).
+  // A link id resolves to the album picture's links (#260); a response for an
+  // image the viewer has paged away from is ignored (#300).
   useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    const lookupId = image.linkId ?? image.id
+
     const loadEntities = async () => {
       try {
         setLoadingLinks(true)
+        updateCharacterGalleryLinks([])
 
-        const imageRes = await fetch(`/api/v1/images/${image.id}`)
+        const imageRes = await fetch(`/api/v1/images/${lookupId}`)
+        if (cancelled) return
 
         if (imageRes.ok) {
           const imageData = await imageRes.json()
+          if (cancelled) return
           const links: CharacterGalleryLink[] = imageData?.data?.characterGalleryLinks ?? []
           updateCharacterGalleryLinks(links)
+        } else {
+          console.warn('Image album lookup failed', { imageId: lookupId, status: imageRes.status })
         }
       } catch (error) {
+        if (cancelled) return
         console.error('Failed to load entities:', {
           error: error instanceof Error ? error.message : String(error),
         })
       } finally {
-        setLoadingLinks(false)
+        if (!cancelled) setLoadingLinks(false)
       }
     }
 
-    if (isOpen) {
-      loadEntities()
+    void loadEntities()
+    return () => {
+      cancelled = true
     }
-  }, [isOpen, image.id, updateCharacterGalleryLinks])
+  }, [isOpen, image.id, image.linkId, updateCharacterGalleryLinks])
 
   // Keyboard navigation (Escape, arrow keys)
   useImageNavigation({
@@ -129,7 +145,7 @@ export default function ImageDetailModal({
             src={imageSrc}
             alt={image.filename}
             className="max-w-full max-h-[70vh] w-auto h-auto object-contain"
-            onError={() => setImageMissing(true)}
+            onError={() => setMissingImageId(image.id)}
           />
         )}
 

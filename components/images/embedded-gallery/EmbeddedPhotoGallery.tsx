@@ -105,8 +105,11 @@ export function EmbeddedPhotoGallery({
     setDeletingImage(image.id)
     setConfirmDelete(null)
     try {
-      await handleDeleteImage(image, currentAvatarId, onAvatarChange)
-      setAllImages((prev: GalleryImage[]) => prev.filter((img: GalleryImage) => img.id !== image.id))
+      // Only a delete the server accepted takes the tile down (#301).
+      const deleted = await handleDeleteImage(image, currentAvatarId, onAvatarChange)
+      if (deleted) {
+        setAllImages((prev: GalleryImage[]) => prev.filter((img: GalleryImage) => img.id !== image.id))
+      }
     } finally {
       setDeletingImage(null)
     }

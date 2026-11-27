@@ -32,6 +32,8 @@ A click on a thumbnail unfolds a detail card with the picture, the original gene
 
 Along the bottom of the card sit a **Download** button and a **Copy** button. Download hands you the picture as a proper file — a native save dialog in the desktop application, your browser's usual arrangements otherwise — and Copy places it on the clipboard, ready to be pasted wherever pictures are welcome. No right-clicking or other conjuring required.
 
+The grid fetches more photographs as you scroll toward the bottom. Should the next batch fail to arrive, the page says so and waits, offering a **Try again** button rather than knocking at the same door over and over; a fresh search starts afresh.
+
 There's a search bar at the top. Set it to *"sunroom"* and the gallery rummages, semantically, through every saved photograph's prompt, scene snapshot, caption, and tags, returning the ones whose stored description best matches your phrase.
 
 ## Removing a photograph

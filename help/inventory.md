@@ -139,7 +139,7 @@ It comes after the recalled memories and any [progressions](character-progressio
 
 ## Pictures
 
-Every item may keep pictures, in `Inventory/images/` beside it. Open the item's editor to **Upload…** one or **Generate** one: generation draws the item as a still life from its drawing hints (or its description, or failing both its name), through your image profile, with [the Concierge](the-concierge.md) standing by should the provider take fright. One picture is the item's current one.
+Every item may keep pictures, in `Inventory/images/` beside it. Open the item's editor to **Upload…** one (a proper button, so the Tab key finds it and the same file may be sent twice) or **Generate** one: generation draws the item as a still life from its drawing hints (or its description, or failing both its name), through your image profile, with [the Concierge](the-concierge.md) standing by should the provider take fright. One picture is the item's current one. **Delete** under a picture asks first, for a deleted picture cannot be rehung and a generated one would have to be drawn (and paid for) again.
 
 Pictures are for *choosing*, not for decoration: they appear where you pick from a wider array — the Take up… picker, the instantiate picker, the kit member picker, the transfer dialog — and in the item's own editor and full-screen viewer. Everywhere else an item shows its glyph. An instance with no pictures of its own shows its archetype's.
 

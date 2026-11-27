@@ -34,7 +34,7 @@ Each plate carries the same four courtesies the album offers, plus one of its ow
 - **Keep in the photo album** — the bookmark button. The plate is hard-linked into `photos/` and joins the album above. A plate already kept shows the bookmark filled in and the button goes quiet; keeping is never done twice.
 - **Download** — the downward arrow, exactly as in the album.
 - **Delete** — the bin, twice to confirm. The plate leaves the drawer and any conversation displaying it stops pointing at it, so nothing is left naming a picture that has gone. **If you had kept a copy in the album, that copy stays** — only the plate is discarded. The next time the character wears that ensemble, a fresh sitting is simply commissioned.
-- **View** — click the plate itself for the enlarged view, with its generation prompt, **Copy**, **Download**, and **Save to my gallery** (which files it in your own *My Photos* collection rather than the character's album).
+- **View** — click the plate itself for the enlarged view, with its generation prompt, **Copy**, **Download**, and **Save to my gallery** (which files it in your own *My Photos* collection rather than the character's album). Should a delete be refused, the photograph stays on the grid beside the error, so you are never shown a removal that did not happen.
 
 Avatar rolls do not appear in the album above unless you put them there. The album is what someone chose to keep; this drawer is what the house had to draw along the way.
 

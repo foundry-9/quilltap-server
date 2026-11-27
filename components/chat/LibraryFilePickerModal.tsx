@@ -25,6 +25,7 @@ import { useProjectsQuery } from '@/lib/hooks/use-projects'
 import { useCharacterPhotosQuery } from '@/components/images/embedded-gallery/hooks/useCharacterPhotosQuery'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
+import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import FileBrowser, { type FileInfo } from '@/components/files/FileBrowser'
 import { DocumentStoreBrowser } from '@/components/document-browser/DocumentStoreBrowser'
 import { ProjectStoreBrowser } from '@/components/document-browser/ProjectStoreBrowser'
@@ -558,6 +559,8 @@ function GalleryPanel({
   })
   const { data, isLoading, error } = personaCharacterId ? personaPhotos : generalPhotos
   const entries: GalleryEntry[] = data?.entries ?? []
+  // The Salon's quick-hide covers these thumbnails too (#290).
+  const imagesHidden = useImagesHidden()
 
   if (isLoading) {
     return <p className="qt-text-secondary py-8 text-center">Loading your gallery…</p>
@@ -588,12 +591,18 @@ function GalleryPanel({
               className="qt-card w-full text-left p-2 hover:qt-bg-surface-hover transition-colors cursor-pointer disabled:opacity-50"
               title={entry.caption || entry.fileName}
             >
-              <img
-                src={entry.blobUrl}
-                alt={entry.caption || entry.fileName}
-                loading="lazy"
-                className="w-full h-32 object-cover rounded"
-              />
+              {imagesHidden ? (
+                <span className="block h-32">
+                  <HiddenImageTile label={entry.caption || entry.fileName} className="rounded" />
+                </span>
+              ) : (
+                <img
+                  src={entry.blobUrl}
+                  alt={entry.caption || entry.fileName}
+                  loading="lazy"
+                  className="w-full h-32 object-cover rounded"
+                />
+              )}
               <p className="qt-text-xs qt-text-muted mt-2 truncate">
                 {entry.caption || entry.generationPromptExcerpt || entry.fileName}
               </p>

@@ -28,8 +28,6 @@ export function useImageActions(
   const [characterGalleryLinks, setCharacterGalleryLinks] = useState<CharacterGalleryLink[]>([])
   const [savingToGalleryFor, setSavingToGalleryFor] = useState<Set<string>>(new Set())
   const [settingAvatar, setSettingAvatar] = useState<Set<string>>(new Set())
-  // The names a new album link is labelled with: the list as first handed in.
-  const [internalCharacters] = useState<Character[]>(characters)
   const [savingToGallery, setSavingToGallery] = useState(false)
 
   const updateCharacterGalleryLinks = useCallback((links: CharacterGalleryLink[]) => {
@@ -56,7 +54,7 @@ export function useImageActions(
         }
 
         const data = await response.json()
-        const character = internalCharacters.find((c) => c.id === characterId)
+        const character = characters.find((c) => c.id === characterId)
 
         setCharacterGalleryLinks((prev) => [
           ...prev,
@@ -79,7 +77,7 @@ export function useImageActions(
         })
       }
     },
-    [image.id, image.linkId, internalCharacters]
+    [image.id, image.linkId, characters]
   )
 
   const removeFromCharacterGallery = useCallback(
@@ -174,7 +172,8 @@ export function useImageActions(
       const response = await fetch('/api/v1/photos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId: image.id }),
+        // An album picture has no FileEntry; save it by its link (#260).
+        body: JSON.stringify(image.linkId ? { linkId: image.linkId } : { fileId: image.id }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
@@ -188,7 +187,7 @@ export function useImageActions(
     } finally {
       setSavingToGallery(false)
     }
-  }, [image.id])
+  }, [image.id, image.linkId])
 
   const handleCopyToClipboard = useCallback(async () => {
     try {

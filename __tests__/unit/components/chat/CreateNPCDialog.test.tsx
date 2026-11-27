@@ -103,3 +103,77 @@ describe('CreateNPCDialog payload shape', () => {
     expect(body.physicalDescription).not.toHaveProperty('name')
   })
 })
+
+describe('CreateNPCDialog avatar (#243)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  function routeAvatarFetch(avatarOk: boolean) {
+    return jest.spyOn(global as unknown as { fetch: typeof fetch }, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url
+      if (url.startsWith('/api/v1/connection-profiles')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ profiles: [PROFILE] }) } as Response)
+      }
+      if (url === '/api/v1/images') {
+        // The upload route nests the new row under `data`.
+        return Promise.resolve({ ok: true, status: 201, json: async () => ({ data: { id: 'img-1' } }) } as Response)
+      }
+      if (url === '/api/v1/characters') {
+        return Promise.resolve({ ok: true, status: 201, json: async () => ({ character: { id: 'new-char-1' } }) } as Response)
+      }
+      if (url.includes('?action=avatar')) {
+        return Promise.resolve({
+          ok: avatarOk,
+          status: avatarOk ? 200 : 400,
+          json: async () => (avatarOk ? {} : { error: 'nope' }),
+        } as Response)
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) } as Response)
+    })
+  }
+
+  async function createWithAvatar() {
+    const onCreated = jest.fn()
+    const { container } = renderWithQuery(
+      <CreateNPCDialog isOpen onClose={() => {}} chatId="chat-1" onNPCCreated={onCreated} />
+    )
+    await screen.findByRole('option', { name: /GPT/ })
+    fireEvent.change(screen.getByLabelText(/^Name/i), { target: { value: 'Bartender' } })
+    fireEvent.change(screen.getByLabelText('NPC description'), { target: { value: 'Gruff but kind.' } })
+    const input = container.ownerDocument.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['bytes'], 'face.png', { type: 'image/png' })
+    fireEvent.change(input, { target: { files: [file] } })
+
+    const createBtn = screen.getByRole('button', { name: /Create NPC/i })
+    await waitFor(() => expect(createBtn).not.toBeDisabled())
+    await act(async () => {
+      fireEvent.click(createBtn)
+    })
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith('new-char-1'), { timeout: 4000 })
+  }
+
+  it('sets the uploaded image as the new NPC avatar', async () => {
+    const fetchSpy = routeAvatarFetch(true)
+    await createWithAvatar()
+
+    const avatarCall = fetchSpy.mock.calls.find(([u]) => String(u) === '/api/v1/characters/new-char-1?action=avatar')
+    expect(avatarCall).toBeDefined()
+    expect(JSON.parse((avatarCall![1] as RequestInit).body as string)).toEqual({ imageId: 'img-1' })
+  })
+
+  it('says so when the avatar step fails', async () => {
+    const { showErrorToast, showSuccessToast } = jest.requireMock('@/lib/toast') as {
+      showErrorToast: jest.Mock
+      showSuccessToast: jest.Mock
+    }
+    showErrorToast.mockClear()
+    showSuccessToast.mockClear()
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    routeAvatarFetch(false)
+    await createWithAvatar()
+
+    expect(showErrorToast).toHaveBeenCalledWith(expect.stringContaining('avatar could not be set'))
+    expect(showSuccessToast).not.toHaveBeenCalled()
+  })
+})
