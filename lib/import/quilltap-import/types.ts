@@ -160,7 +160,11 @@ export type PreserveIdsMode =
     };
 
 export interface ImportOptions extends ExportImportOptions {
-  /** Which entity IDs to import (empty = import all) */
+  /**
+   * The preview's selection, keyed by preview entity kind. A kind listed is
+   * cut to its ids (an empty list keeps none); a kind absent is imported
+   * whole. Applied by `applyImportSelection` (`selection.ts`).
+   */
   selectedIds?: Record<string, string[]>;
   /** Whether to preserve source IDs and fail on collisions */
   preserveIds?: boolean;

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useCallback, useContext, useId, useRef, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useId, useLayoutEffect, useRef, useState, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
@@ -121,6 +121,30 @@ export function ModalTitle({ children, className = 'qt-dialog-title' }: { childr
   return <h2 id={titleId ?? undefined} className={className}>{children}</h2>
 }
 
+/**
+ * A BaseModal's place in the tree of open modals: its overlay and the open
+ * modals rendered inside its children. The stack is the DOM order of the
+ * overlays, and React appends portals in commit order — child first — so a
+ * parent and a nested child mounting in one commit (a workspace tab shown
+ * again, or both opened at once) land child-under-parent (#351). After the
+ * commit each modal moves any nested child that landed before it, with that
+ * child's own nested modals, to the top.
+ */
+interface ModalNestNode {
+  overlay: { current: HTMLDivElement | null }
+  children: Set<ModalNestNode>
+}
+
+const ModalNestContext = createContext<ModalNestNode | null>(null)
+
+/** Append a modal's overlay to the end of the body, then its nested modals' in turn. */
+function moveToTop(node: ModalNestNode): void {
+  const overlay = node.overlay.current
+  if (!overlay || overlay.parentNode !== document.body) return
+  document.body.appendChild(overlay)
+  for (const child of node.children) moveToTop(child)
+}
+
 /** The dialog (or alert) an element belongs to, if any. */
 function dialogOf(node: EventTarget | null): Element | null {
   return node instanceof Element ? node.closest('[role="dialog"],[role="alertdialog"]') : null
@@ -215,6 +239,9 @@ export function BaseModal({
   const tabVisible = useWorkspaceTabVisible()
   const shown = isOpen && tabVisible
   const modalRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const [nest] = useState<ModalNestNode>(() => ({ overlay: overlayRef, children: new Set() }))
+  const parentNest = useContext(ModalNestContext)
   const titleId = useId()
   const subtitleId = useId()
   const handleFocusKeyDown = useDialogFocus(modalRef, shown)
@@ -239,6 +266,28 @@ export function BaseModal({
     onEscape: closeIfOnTop,
   })
 
+  // A nested modal paints above its parent, whatever order the portals were
+  // appended in (#351). Layout effects run child first, after every portal of
+  // the commit is in the DOM: a nested modal registers with its parent, and
+  // the parent — whose overlay ref is attached only after its descendants'
+  // effects have run — then moves any child that landed before it. A child
+  // opened on its own later is appended last and needs nothing.
+  useLayoutEffect(() => {
+    if (!shown) return
+    const node = nest
+    parentNest?.children.add(node)
+    const mine = node.overlay.current
+    if (mine) {
+      for (const child of node.children) {
+        const theirs = child.overlay.current
+        if (theirs && (theirs.compareDocumentPosition(mine) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+          moveToTop(child)
+        }
+      }
+    }
+    return () => { parentNest?.children.delete(node) }
+  }, [shown, parentNest, nest])
+
   if (!shown || typeof document === 'undefined') return null
 
   const closeButton = showCloseButton ? (
@@ -255,7 +304,7 @@ export function BaseModal({
 
   // p-4 keeps a margin round the dialog on narrow screens.
   return createPortal(
-    <div className={`qt-dialog-overlay p-4 ${overlayClassName}`}>
+    <div ref={overlayRef} className={`qt-dialog-overlay p-4 ${overlayClassName}`}>
       <div
         ref={modalRef}
         className={`qt-dialog ${maxWidthClasses[maxWidth]} max-h-[90vh] flex flex-col ${className}`}
@@ -269,6 +318,7 @@ export function BaseModal({
         data-testid={testId}
         {...{ [MODAL_ATTR]: '' }}
       >
+        <ModalNestContext.Provider value={nest}>
         <ModalTitleContext.Provider value={titleId}>
           {!headerless && (
             <div className="qt-dialog-header flex items-start justify-between gap-4">
@@ -291,6 +341,7 @@ export function BaseModal({
 
           {footer && <div className={`qt-dialog-footer ${footerClassName}`}>{footer}</div>}
         </ModalTitleContext.Provider>
+        </ModalNestContext.Provider>
       </div>
     </div>,
     document.body

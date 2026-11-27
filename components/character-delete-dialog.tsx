@@ -55,10 +55,13 @@ export function CharacterDeleteDialog({
   const hasExclusiveData = preview &&
     (preview.exclusiveChats.length > 0 || preview.totalExclusiveImageCount > 0 || preview.memoryCount > 0)
 
+  // Cascade only what the preview showed and offered a choice over (#241).
+  // When the preview failed, or showed nothing of a kind, the character goes
+  // alone and its chats and images stay.
   const handleConfirm = () => {
     onConfirm({
-      cascadeChats: deleteChats,
-      cascadeImages: deleteImages,
+      cascadeChats: !!preview && preview.exclusiveChats.length > 0 && deleteChats,
+      cascadeImages: !!preview && preview.totalExclusiveImageCount > 0 && deleteImages,
     })
   }
 
@@ -80,9 +83,14 @@ export function CharacterDeleteDialog({
           Loading...
         </div>
       ) : error ? (
-        <div className="py-4 qt-text-destructive">
-          {error}
-        </div>
+        <>
+          <div className="py-4 qt-text-destructive">
+            {error}
+          </div>
+          <p className="qt-text-small mb-4">
+            Deleting <strong className="qt-text">{characterName}</strong> now removes the character only; its chats and images are kept.
+          </p>
+        </>
       ) : (
         <>
           <p className="qt-text-small mb-4">

@@ -358,6 +358,33 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     return savers.current.get(docId)?.save() ?? Promise.resolve(true)
   }, [])
 
+  /**
+   * Take down panes the server has closed (a character's doc_close_document,
+   * or the last document closed server-side), writing each one's unsaved
+   * text first (#261). The save targets the file, which a close leaves in
+   * place. A pane whose save the store refuses stays open with its text, as
+   * an operator's close would, and its id is returned.
+   */
+  const dropServerClosedDocs = useCallback(async (docIds: string[]): Promise<string[]> => {
+    const held: string[] = []
+    for (const docId of docIds) {
+      clearTimerFor(docId)
+      if (hasUnsavedEdits(docId)) {
+        console.debug('[DocumentMode] Saving unsaved edits before a server-side close', { docId })
+        if (!(await saveDocument(docId))) {
+          held.push(docId)
+          continue
+        }
+      }
+      removeEntry(docId)
+    }
+    if (held.length > 0) {
+      console.warn('[DocumentMode] Kept server-closed documents open over refused saves', { held })
+      showErrorToast(UNSAVED_EDITS_MESSAGE)
+    }
+    return held
+  }, [clearTimerFor, hasUnsavedEdits, saveDocument, removeEntry])
+
   const handleContentChange = useCallback((docId: string, content: string) => {
     updateEntry(docId, e => ({ ...e, document: { ...e.document, content } }))
     const change = savers.current.get(docId)?.change(content) ?? 'clean'
@@ -507,10 +534,11 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
       const serverDocs = openList.documents
       const serverIds = new Set(serverDocs.map(d => d.id))
 
-      // Remove documents the server no longer reports open.
-      for (const e of openDocsRef.current) {
-        if (!serverIds.has(e.document.id)) removeEntry(e.document.id)
-      }
+      // Remove documents the server no longer reports open, saving their
+      // unsaved edits first (#261).
+      const held = new Set(await dropServerClosedDocs(
+        openDocsRef.current.filter(e => !serverIds.has(e.document.id)).map(e => e.document.id),
+      ))
 
       // Add new documents and refresh changed content.
       for (const rec of serverDocs) {
@@ -534,13 +562,13 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
       }
 
       const focused = focusedDocIdRef.current
-      if (!focused || !serverIds.has(focused)) {
+      if (!focused || (!serverIds.has(focused) && !held.has(focused))) {
         setFocusedDocId(serverDocs.length ? serverDocs[serverDocs.length - 1].id : null)
       }
     } catch (error) {
       console.error('[DocumentMode] Failed to reconcile open documents', error)
     }
-  }, [chatId, readDocumentContent, applyDocContent, removeEntry, updateEntry])
+  }, [chatId, readDocumentContent, applyDocContent, dropServerClosedDocs, updateEntry])
 
   const reloadFromServer = useCallback(async () => {
     try {
@@ -661,11 +689,19 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     if (mode !== 'normal') {
       void reconcileOpenDocuments()
     } else {
-      for (const e of openDocsRef.current) removeEntry(e.document.id)
-      setOpenDocs([])
-      setFocusedDocId(null)
+      // The server closed the last document. Save what the panes hold before
+      // taking them down (#261); a pane whose save is refused stays, and the
+      // view stays split so it can be seen.
+      void dropServerClosedDocs(openDocsRef.current.map(e => e.document.id)).then(held => {
+        if (held.length > 0) {
+          setDocumentMode('split')
+          setFocusedDocId(held[held.length - 1])
+        } else {
+          setFocusedDocId(null)
+        }
+      })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on chat.documentMode/dividerPosition so a refetched chat object does not re-reconcile; chat, reconcileOpenDocuments and removeEntry omitted on purpose
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on chat.documentMode/dividerPosition so a refetched chat object does not re-reconcile; chat, reconcileOpenDocuments and dropServerClosedDocs omitted on purpose
   }, [applyChatState, chat?.documentMode, chat?.dividerPosition])
 
   // Cleanup all autosave timers on unmount.

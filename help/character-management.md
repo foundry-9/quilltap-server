@@ -223,6 +223,8 @@ Delete a character when:
 
 When you delete a character, what else happens?
 
+The confirmation dialog first takes an inventory: the chats only this character took part in, the pictures used nowhere else, and the memories. Each of the first two comes with its own box, ticked to begin with, and you may untick either to keep those chats or pictures. Should the inventory fail to arrive ("Failed to load preview"), the dialog says so plainly, and **Delete Character** then removes the character alone — every chat and picture stays exactly where it was, since nobody was shown them or asked.
+
 **Auto-deleted:**
 
 - All conversations with this character

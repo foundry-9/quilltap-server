@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { renderHook, act } from '@testing-library/react';
-import { useImportData } from '@/components/tools/import-export/hooks/useImportData';
+import { useImportData, selectAllInPreview } from '@/components/tools/import-export/hooks/useImportData';
 
 // Mock fetch
 const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
@@ -360,6 +360,22 @@ describe('useImportData', () => {
   // ============================================================================
   // Import Tests
   // ============================================================================
+  describe('selectAllInPreview (#267)', () => {
+    it('starts with every listed entity ticked, skipping the memory count', () => {
+      const selection = selectAllInPreview({
+        manifest: validExportData.manifest as never,
+        entities: {
+          characters: [
+            { id: 'char-1', exists: false },
+            { id: 'char-2', exists: true },
+          ],
+          memories: { count: 3 } as never,
+        },
+      });
+      expect(selection).toEqual({ characters: ['char-1', 'char-2'] });
+    });
+  });
+
   describe('handleImport', () => {
     it('should not import without export data', async () => {
       const { result } = renderHook(() => useImportData({ isOpen: true }));

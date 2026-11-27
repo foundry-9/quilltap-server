@@ -127,8 +127,9 @@ Import lets you load exported data from `.quilltap` files back into your system.
    - **Skip Memories:** Don't import memories (import only items)
 
 8. **Select which items to import**
-   - You can deselect specific characters, chats, or templates
-   - Only checked items will be imported
+   - Every item in the file arrives ticked; untick any you would rather leave in the archive
+   - Only ticked items are imported. An unticked item is left entirely alone — not imported, not counted as skipped, and never overwritten, whichever conflict strategy you chose
+   - An unticked character takes its memories and its vault with it; an unticked project or group leaves its own document store behind too
 
 9. **Review your choices** and click "Import"
 

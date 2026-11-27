@@ -4,6 +4,13 @@
 
 ### 4.14.2
 
+#### Fix: import selection, server-side document close, character delete preview, nested dialog order
+
+- The import preview's checkboxes did nothing; every entity in the file was imported, and Overwrite replaced entities left unticked. `applyImportSelection` (`lib/import/quilltap-import/selection.ts`) now cuts the bundle to `selectedIds` before any write: a listed kind keeps only its ids, an absent kind is imported whole, a left-out row is neither imported nor counted as skipped, and a left-out character's memories and vault (and a left-out project's or group's official store, and a left-out store's folders, documents, blobs and links) go with it. The preview now starts with everything ticked. Fixes #267.
+- Unsaved Document Mode edits were dropped when the server closed the document (a character's `doc_close_document`, or the chat returning to normal mode). `useDocumentMode` now saves a dirty pane before removing it and keeps it open with a toast if the save is refused, as an operator's close does. Fixes #261.
+- Deleting a character when the cascade preview failed also deleted its exclusive chats and images. `CharacterDeleteDialog` now cascades only what a loaded preview showed, so a failed preview deletes the character alone. Fixes #241.
+- A dialog nested inside another BaseModal's children came back below its parent after a workspace tab switch (or when both opened in one commit), and Escape closed the parent. `BaseModal` keeps a tree of open nested modals and, after the commit, moves a child that landed before its parent to the top of the body. Fixes #351.
+
 #### Fix: problems found dogfooding the front-end pass
 
 - Document Mode could not save a Quilltap General document. The open-document row stores `mountPoint: null` for a document outside any store, Document Mode sends it back on every save, and the request schemas accepted only a string or nothing, so each autosave was a 400 and the pane stayed "Unsaved". `documentTargetFields` / `openDocumentFields` (`lib/documents/operator-doc-http.ts`) now read `null` as no mount.

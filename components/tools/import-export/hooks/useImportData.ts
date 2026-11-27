@@ -42,6 +42,16 @@ const initialState: ImportState = {
   error: null,
 }
 
+/** Every listed entity's id, per kind — the preview's starting selection. */
+export function selectAllInPreview(preview: ImportPreviewUI): Record<string, string[]> {
+  const selection: Record<string, string[]> = {}
+  for (const [kind, entities] of Object.entries(preview.entities ?? {})) {
+    if (!Array.isArray(entities)) continue
+    selection[kind] = entities.map((entity: { id: string }) => entity.id)
+  }
+  return selection
+}
+
 export function useImportData({
   isOpen,
   onSuccess,
@@ -218,6 +228,9 @@ export function useImportData({
           ...prev,
           preview,
           loadingPreview: false,
+          // Everything starts ticked, so "N of N" says what an untouched
+          // import brings in; unticking is what the server honours (#267).
+          selectedEntityIds: selectAllInPreview(preview),
           ...(hasMemories && { importMemories: true }),
         }))
       } catch (error) {
