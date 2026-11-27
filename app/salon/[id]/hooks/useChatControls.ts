@@ -132,12 +132,16 @@ export function useChatControls({
 
   // Sync agentModeEnabled state when chat loads, using the resolved cascade value
   const chatResolvedAgentModeEnabled = chat?.resolvedAgentModeEnabled
+  // Keyed on the field, not the chat object: several writers hand back a new
+  // object spread from the old one, and re-seeding from that stale copy put
+  // the pre-toggle value back on screen (#262).
+  const hasChat = chat !== null
   useEffect(() => {
-    if (chat) {
+    if (hasChat) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic local copy of a chat field: re-seeded when the chat record changes, also set by the toggle handlers
       setAgentModeEnabled(chatResolvedAgentModeEnabled ?? null)
     }
-  }, [chat, chatResolvedAgentModeEnabled])
+  }, [hasChat, chatResolvedAgentModeEnabled])
 
   // Reconcile the local pause flag with the server's on EVERY fetch, not only
   // when the fetched value changes. Keying this on `chat?.isPaused` alone let
@@ -284,6 +288,12 @@ export function useChatControls({
         chatId, 'toggle-agent-mode', { enabled: newEnabled },
       )
       setAgentModeEnabled((data.resolvedAgentModeEnabled ?? data.agentModeEnabled) as boolean | null)
+      // Keep the chat record in step, so the next spread of it agrees (#262).
+      setChat(prev => prev ? {
+        ...prev,
+        ...(data.agentModeEnabled !== undefined ? { agentModeEnabled: data.agentModeEnabled } : {}),
+        resolvedAgentModeEnabled: data.resolvedAgentModeEnabled ?? undefined,
+      } : prev)
 
       const status = data.resolvedAgentModeEnabled === true
         ? 'enabled'
@@ -295,7 +305,7 @@ export function useChatControls({
     } catch (err) {
       showErrorToast(apiErrorMessage(err, 'Failed to toggle agent mode'))
     }
-  }, [chatId, agentModeEnabled])
+  }, [chatId, agentModeEnabled, setChat])
 
   const handleRegenerateBackground = useCallback(async () => {
     try {
@@ -323,8 +333,9 @@ export function useChatControls({
       })
       await fetchChat()
     } catch (err) {
-      // A refusal is left unannounced, as it always was; a network fault is logged.
+      // The blur stays, so say why (#306).
       if (!(err instanceof ApiFetchError)) console.error('Failed to override danger flag', err)
+      showErrorToast(apiErrorMessage(err, 'Could not clear the danger flag on that message.'))
     }
   }, [chat, fetchChat])
 

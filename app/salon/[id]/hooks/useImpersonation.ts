@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { apiErrorMessage } from '@/lib/query/fetcher'
 import { postChatAction } from './chat-actions'
@@ -31,13 +31,24 @@ export function useImpersonation({
   const [allLLMPauseTurnCount, setAllLLMPauseTurnCount] = useState(0)
   const chatParticipants = chat?.participants
 
+  // The local list as of the last render, so the sync below can tell which
+  // seats the server has just taken out of it.
+  const localIdsRef = useRef<string[]>(impersonatingParticipantIds)
+  useEffect(() => {
+    localIdsRef.current = impersonatingParticipantIds
+  }, [impersonatingParticipantIds])
+
   // Initialize/sync impersonation state from chat metadata
   useEffect(() => {
     const impersonatingIds = chat?.impersonatingParticipantIds
     const activeTypingId = chat?.activeTypingParticipantId
     const pauseTurnCount = chat?.allLLMPauseTurnCount
 
-    if (impersonatingIds && impersonatingIds.length > 0) {
+    if (impersonatingIds) {
+      // Adopt the server's list even when it is empty: the server ends an
+      // impersonation on its own (an LLM profile chosen on the card, another
+      // window), and keeping the old list kept "Speaking as" on screen (#313).
+      const dropped = localIdsRef.current.filter(id => !impersonatingIds.includes(id))
       // eslint-disable-next-line react-hooks/set-state-in-effect -- user state must re-sync when chat prop changes (parent renders unconditionally)
       setImpersonatingParticipantIds(impersonatingIds)
       // The persisted `activeTypingParticipantId` is only the INITIAL default for
@@ -45,8 +56,16 @@ export function useImpersonation({
       // clobbers the turn-follow (Bug 49) and any manual SpeakerSelector choice —
       // the composer would snap back to the stale persisted seat after each turn,
       // so one seat "hogs" every turn. Seed it once (when still unset); the
-      // turn-follow and the set-active-speaker handler own it thereafter.
-      setActiveTypingParticipantId(prev => prev ?? activeTypingId ?? null)
+      // turn-follow and the set-active-speaker handler own it thereafter. The
+      // one exception is a seat the server has just stopped impersonating:
+      // that one is let go, for the server's choice of who speaks now.
+      setActiveTypingParticipantId(prev => {
+        if (prev && dropped.includes(prev)) {
+          return activeTypingId && !dropped.includes(activeTypingId) ? activeTypingId : null
+        }
+        if (impersonatingIds.length === 0) return prev
+        return prev ?? activeTypingId ?? null
+      })
     }
     if (pauseTurnCount !== undefined) {
       setAllLLMPauseTurnCount(pauseTurnCount)

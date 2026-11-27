@@ -143,15 +143,12 @@ export async function openDocumentForChat(
 }
 
 /**
- * Close one document. The answer's status is not read: the pane closes
- * whatever the server said.
+ * Close one document. Throws (an `ApiFetchError`) when the server refuses, so
+ * the caller can keep the pane open rather than lose it until the next
+ * reconcile brings it back (#306).
  */
 export async function closeDocumentForChat(chatId: string, chatDocumentId?: string): Promise<void> {
-  await fetch(`/api/v1/chats/${chatId}?action=close-document`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ chatDocumentId }),
-  })
+  await postDocumentAction<unknown>(chatId, 'close-document', { chatDocumentId })
 }
 
 export async function requestDocumentWrite(

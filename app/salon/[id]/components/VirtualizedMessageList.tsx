@@ -42,7 +42,8 @@ interface VirtualizedMessageListProps {
   /** Toggle expansion state for a system-author message */
   onToggleSystemMessageExpanded: (messageId: string) => void
   swipeStates: Record<string, SwipeState>
-  setSwipeStates: React.Dispatch<React.SetStateAction<Record<string, SwipeState>>>
+  /** Swipe a group one variant left or right (reads live state, #264). */
+  onSwitchSwipe: (groupId: string, direction: 'prev' | 'next') => void
   // Appearance
   /** `undefined` while the settings query is in flight; every read below defaults. */
   chatSettings: ChatSettings | null | undefined
@@ -67,8 +68,7 @@ interface VirtualizedMessageListProps {
     setRegenerateMemoriesOnSave: (value: boolean) => void
     toggleSourceView: (messageId: string) => void
     deleteMessage: (messageId: string) => Promise<void>
-    switchSwipe: (groupId: string, direction: 'prev' | 'next', swipeStates: Record<string, SwipeState>, setSwipeStates: (value: any) => void) => void
-    copyMessageContent: (content: string) => void
+    copyMessageContent: (content: string) => void | Promise<void>
     resendMessage: (message: Message) => Promise<void>
     canResendMessage: (messageId: string) => boolean
   }
@@ -147,7 +147,7 @@ export function VirtualizedMessageList({
   expandedSystemMessageIds,
   onToggleSystemMessageExpanded,
   swipeStates,
-  setSwipeStates,
+  onSwitchSwipe,
   chatSettings,
   roleplayRenderingPatterns,
   roleplayDialogueDetection,
@@ -369,7 +369,7 @@ export function VirtualizedMessageList({
                   onDelete={messageActions.deleteMessage}
                   onGenerateSwipe={onRegenerate}
                   regeneration={regeneration?.messageId === message.id ? regeneration : null}
-                  onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
+                  onSwitchSwipe={onSwitchSwipe}
                   onCopyContent={messageActions.copyMessageContent}
                   onResend={messageActions.resendMessage}
                   onImageClick={onImageClick}

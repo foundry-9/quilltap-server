@@ -98,12 +98,19 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
     }
   }, [chatId])
 
-  // Hydrate from chat on first load + when the chat record changes from beneath us.
+  // Hydrate from chat on first load + when the chat's terminal fields change
+  // from beneath us. Keyed on the fields, never the object: several writers
+  // hand back a new chat spread from the old one, and re-hydrating from that
+  // stale copy re-opened a pane the user had just hidden (#262).
+  const hasChat = chat !== null
+  const chatTerminalMode = chat?.terminalMode
+  const chatTerminalSessionId = chat?.activeTerminalSessionId
+  const chatVerticalSplit = chat?.rightPaneVerticalSplit
   useEffect(() => {
-    if (!chat) return
-    const incomingMode = (chat.terminalMode ?? 'normal') as TerminalMode
-    const incomingSessionId = chat.activeTerminalSessionId ?? null
-    const incomingSplit = chat.rightPaneVerticalSplit ?? 50
+    if (!hasChat) return
+    const incomingMode = (chatTerminalMode ?? 'normal') as TerminalMode
+    const incomingSessionId = chatTerminalSessionId ?? null
+    const incomingSplit = chatVerticalSplit ?? 50
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local mirror of chat record on mount/refresh, mirrors useDocumentMode pattern
     setRightPaneVerticalSplitState(incomingSplit)
@@ -131,7 +138,7 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
 
     setTerminalModeState(incomingMode)
     setActiveTerminalSessionIdState(incomingSessionId)
-  }, [chat, chatId, persist])
+  }, [hasChat, chatTerminalMode, chatTerminalSessionId, chatVerticalSplit, chatId, persist])
 
   // Listen for the in-page terminal-exited custom event so a Hide-pane → Kill
   // happening from the message embed cleans the pane up too.

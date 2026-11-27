@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useChatSettingsMutation } from '@/hooks/useChatSettingsMutation'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
@@ -21,6 +21,8 @@ export interface MemoryCascadeConfirmation {
   messageId: string
   memoryCount: number
   isSwipeGroup: boolean
+  /** How many variants the swipe group holds (all go with the delete). */
+  swipeCount?: number
 }
 
 export function useMessageActions(
@@ -39,6 +41,14 @@ export function useMessageActions(
   chatSettings?: ChatSettings | null,
 ) {
   const { save: saveChatSettings } = useChatSettingsMutation()
+  // The actions are handed to memoised rows that keep whichever closure they
+  // last rendered with, so every read of the transcript goes through this ref
+  // and every write is a functional update. A row's stale closure writing back
+  // the array it closed over is how one swipe or delete undid another (#264).
+  const messagesRef = useRef(messages)
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
   // State for memory cascade dialog
   const [memoryCascadeConfirmation, setMemoryCascadeConfirmation] = useState<MemoryCascadeConfirmation | null>(null)
   // What editing the open line would disturb (fetched when the editor opens),
@@ -113,9 +123,10 @@ export function useMessageActions(
     memoryAction: MemoryCascadeAction
   ) => {
     // Find the index of the message being deleted to determine scroll target
-    const messageIndex = messages.findIndex(m => m.id === messageId)
-    const nextMessage = messageIndex >= 0 && messageIndex < messages.length - 1
-      ? messages[messageIndex + 1]
+    const current = messagesRef.current
+    const messageIndex = current.findIndex(m => m.id === messageId)
+    const nextMessage = messageIndex >= 0 && messageIndex < current.length - 1
+      ? current[messageIndex + 1]
       : null
 
     try {
@@ -129,12 +140,7 @@ export function useMessageActions(
       const result = await res.json()
 
       // Remove message from display (handle swipe groups too)
-      const messageToDelete = messages.find(m => m.id === messageId)
-      if (messageToDelete?.swipeGroupId) {
-        setMessages(messages.filter(m => m.swipeGroupId !== messageToDelete.swipeGroupId))
-      } else {
-        setMessages(messages.filter(m => m.id !== messageId))
-      }
+      setMessages(prev => withoutDeleted(prev, messageId))
 
       // Show success message if memories were deleted
       if (result.memoriesDeleted > 0) {
@@ -201,9 +207,10 @@ export function useMessageActions(
     const defaultAction = chatSettings?.memoryCascadePreferences?.onMessageDelete || 'ASK_EVERY_TIME'
 
     // Find the index of the message being deleted to determine scroll target
-    const messageIndex = messages.findIndex(m => m.id === messageId)
-    const nextMessage = messageIndex >= 0 && messageIndex < messages.length - 1
-      ? messages[messageIndex + 1]
+    const current = messagesRef.current
+    const messageIndex = current.findIndex(m => m.id === messageId)
+    const nextMessage = messageIndex >= 0 && messageIndex < current.length - 1
+      ? current[messageIndex + 1]
       : null
 
     try {
@@ -226,6 +233,7 @@ export function useMessageActions(
           messageId,
           memoryCount: result.memoryCount,
           isSwipeGroup: result.isSwipeGroup,
+          swipeCount: Array.isArray(result.messageIds) ? result.messageIds.length : undefined,
         })
         return
       }
@@ -234,12 +242,7 @@ export function useMessageActions(
       if (!res.ok) throw new Error('Failed to delete message')
 
       // Remove message from display
-      const messageToDelete = messages.find(m => m.id === messageId)
-      if (messageToDelete?.swipeGroupId) {
-        setMessages(messages.filter(m => m.swipeGroupId !== messageToDelete.swipeGroupId))
-      } else {
-        setMessages(messages.filter(m => m.id !== messageId))
-      }
+      setMessages(prev => withoutDeleted(prev, messageId))
 
       // Scroll to next message or bottom after deletion
       setTimeout(() => {
@@ -295,11 +298,12 @@ export function useMessageActions(
     const originalAttachments = message.attachments || []
 
     // Find the index of this message
-    const messageIndex = messages.findIndex(m => m.id === message.id)
+    const current = messagesRef.current
+    const messageIndex = current.findIndex(m => m.id === message.id)
     if (messageIndex === -1) return
 
     // Delete blank assistant messages after this one (from the server)
-    const messagesAfter = messages.slice(messageIndex + 1)
+    const messagesAfter = current.slice(messageIndex + 1)
     for (const msg of messagesAfter) {
       if (msg.role === 'ASSISTANT' && (!msg.content || msg.content.trim().length === 0)) {
         try {
@@ -352,34 +356,15 @@ export function useMessageActions(
     showSuccessToast('Message restored to input. Press Enter to resend.')
   }
 
-  const switchSwipe = (
-    groupId: string,
-    direction: 'prev' | 'next',
-    swipeStates: Record<string, { current: number; total: number; messages: Message[] }>,
-    setSwipeStates: (value: any) => void,
-  ) => {
-    const state = swipeStates[groupId]
-    if (!state) return
-
-    const newIndex = direction === 'next'
-      ? Math.min(state.current + 1, state.total - 1)
-      : Math.max(state.current - 1, 0)
-
-    if (newIndex === state.current) return
-
-    const newMessage = state.messages[newIndex]
-    setMessages(messages.map(m =>
-      m.swipeGroupId === groupId ? newMessage : m
-    ))
-    setSwipeStates({
-      ...swipeStates,
-      [groupId]: { ...state, current: newIndex }
-    })
-  }
-
-  const copyMessageContent = (content: string) => {
-    navigator.clipboard.writeText(content)
-    showSuccessToast('Message copied to clipboard!')
+  const copyMessageContent = async (content: string) => {
+    // Only claim success once the clipboard has taken it (#306).
+    try {
+      await navigator.clipboard.writeText(content)
+      showSuccessToast('Message copied to clipboard!')
+    } catch (err) {
+      console.warn('[Salon] Clipboard write refused', err)
+      showErrorToast('The message could not be copied to the clipboard.')
+    }
   }
 
   const toggleSourceView = (messageId: string) => {
@@ -404,7 +389,6 @@ export function useMessageActions(
     deleteMessage,
     canResendMessage,
     resendMessage,
-    switchSwipe,
     copyMessageContent,
     toggleSourceView,
     getDisplayContent,
@@ -413,4 +397,13 @@ export function useMessageActions(
     handleMemoryCascadeConfirm,
     cancelMemoryCascadeConfirmation,
   }
+}
+
+/** The transcript without a deleted line — and its whole swipe group, if it had one. */
+function withoutDeleted(messages: Message[], messageId: string): Message[] {
+  const doomed = messages.find(m => m.id === messageId)
+  if (doomed?.swipeGroupId) {
+    return messages.filter(m => m.swipeGroupId !== doomed.swipeGroupId)
+  }
+  return messages.filter(m => m.id !== messageId)
 }

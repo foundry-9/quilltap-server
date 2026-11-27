@@ -167,6 +167,10 @@ export function useTurnManagement(
     const response = await callTurnAction(chatId, 'queue', participantId)
     if (response) {
       applyServerResponse(response, setTurnState, setTurnSelectionResult, turnState)
+    } else {
+      // The server refused: take the optimistic change back and say so (#306).
+      setTurnState(turnState)
+      showErrorToast('Could not add them to the queue. Please try again.')
     }
   }, [chatId, turnState, setTurnState, setTurnSelectionResult])
 
@@ -179,6 +183,10 @@ export function useTurnManagement(
     const response = await callTurnAction(chatId, 'dequeue', participantId)
     if (response) {
       applyServerResponse(response, setTurnState, setTurnSelectionResult, turnState)
+    } else {
+      // The server refused: take the optimistic change back and say so (#306).
+      setTurnState(turnState)
+      showErrorToast('Could not take them out of the queue. Please try again.')
     }
   }, [chatId, turnState, setTurnState, setTurnSelectionResult])
 

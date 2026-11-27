@@ -88,6 +88,9 @@ import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications
 import { isMessageVisibleToOperator } from './whisper-visibility'
 import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
+import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { salonOwnsKeyboard, isFromDialog } from './salon-keyboard'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
@@ -140,7 +143,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   useEffect(() => {
     if (error && hasChat) showErrorToast(`The chat could not be refreshed: ${error}`)
   }, [error, hasChat])
-  const { setChat, setMessages, setSwipeStates, selectSwipeVariant } = chatDataHook
+  const { setChat, setMessages, selectSwipeVariant, stepSwipe } = chatDataHook
   const { fetchChat, refreshTranscript, clearProvisionalMessages, fetchChatMemoryCount } = chatDataHook
 
   // --- Chat settings ---
@@ -982,12 +985,24 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshLogs and handleLLMEditEnd are stable (useCallback)
   }, [isGenerating, llmLogs.refreshLogs, documentModeHook.documentActive])
 
+  // Only the Salon the focused pane is showing (or one of its child tabs)
+  // answers document-level shortcuts; hidden Salon tabs stay mounted (#263).
+  // Read through a ref so a workspace state change does not re-register them.
+  const workspaceForKeys = useWorkspaceOptional()
+  const salonTabId = useWorkspaceTabId()
+  const ownsKeyboard = salonOwnsKeyboard(workspaceForKeys?.state, salonTabId)
+  const ownsKeyboardRef = useRef(true)
+  useEffect(() => {
+    ownsKeyboardRef.current = ownsKeyboard
+  }, [ownsKeyboard])
+
   // Keyboard shortcut: Cmd+Shift+L / Ctrl+Shift+L to toggle inspector
   const llmLoggingEnabled = chatSettings?.llmLoggingSettings?.enabled !== false
   useEffect(() => {
     if (!llmLoggingEnabled) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!ownsKeyboardRef.current) return
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'L') {
         e.preventDefault()
         toggleInspector()
@@ -1001,6 +1016,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   // Keyboard shortcuts for Document Mode (Scriptorium Phase 3.5)
   useEffect(() => {
     const handleDocKeyDown = (e: KeyboardEvent) => {
+      if (!ownsKeyboardRef.current) return
       // Cmd+Shift+D / Ctrl+Shift+D: Toggle document mode (normal ↔ split)
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'D') {
         e.preventDefault()
@@ -1027,8 +1043,9 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
         return
       }
 
-      // Escape: Exit focus mode to split
-      if (e.key === 'Escape' && documentModeHook.documentMode === 'focus') {
+      // Escape: Exit focus mode to split — unless it was pressed in a
+      // dialog, which takes the Escape for itself (#304).
+      if (e.key === 'Escape' && documentModeHook.documentMode === 'focus' && !isFromDialog(e)) {
         e.preventDefault()
         documentModeHook.toggleFocusMode()
       }
@@ -1041,6 +1058,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   // Keyboard shortcuts for Terminal Mode (mirrors Document Mode's pattern).
   useEffect(() => {
     const handleTerminalKeyDown = (e: KeyboardEvent) => {
+      if (!ownsKeyboardRef.current) return
       // Cmd+Shift+T / Ctrl+Shift+T: toggle Terminal Mode
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'T' || e.key === 't')) {
         e.preventDefault()
@@ -1053,7 +1071,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
       }
 
       // Escape exits terminal focus back to split.
-      if (e.key === 'Escape' && terminalModeHook.terminalMode === 'focus') {
+      if (e.key === 'Escape' && terminalModeHook.terminalMode === 'focus' && !isFromDialog(e)) {
         e.preventDefault()
         terminalModeHook.toggleFocusMode()
       }
@@ -1070,9 +1088,13 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   const { setModalImage } = modals
 
   // Create a stable key for character list to avoid re-running the effect on every render
-  // (useParticipants returns a new array reference each time)
+  // (useParticipants returns a new array reference each time). It carries
+  // every field the header reads, so a rename or a new avatar redraws the
+  // chips (#305).
   const llmCharacters = participantsWithImpersonation.llmCharacters
-  const llmCharacterKey = llmCharacters.map(c => c.id).join(',')
+  const llmCharacterKey = llmCharacters
+    .map(c => [c.id, c.name, characterAvatarSrc(c) ?? ''].join('|'))
+    .join(',')
 
   useEffect(() => {
     if (chat?.title) {
@@ -1402,7 +1424,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           expandedSystemMessageIds={expandedSystemMessageIds}
           onToggleSystemMessageExpanded={toggleSystemMessageExpanded}
           swipeStates={swipeStates}
-          setSwipeStates={setSwipeStates}
+          onSwitchSwipe={stepSwipe}
           chatSettings={chatSettings}
           roleplayRenderingPatterns={roleplayRenderingPatterns}
           roleplayDialogueDetection={roleplayDialogueDetection}
@@ -1939,7 +1961,9 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           speakingAsParticipantId={impersonation.activeTypingParticipantId}
           onClose={() => setWhisperTarget(null)}
           onSent={async () => {
-            setWhisperTarget(null)
+            // The dialog already closed itself through onClose. Clearing the
+            // target here would close a second whisper opened while this
+            // one's reply streamed (#288).
             await fetchChat()
           }}
         />

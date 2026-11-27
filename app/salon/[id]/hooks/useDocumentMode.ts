@@ -451,7 +451,11 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     try {
       await closeDocumentForChat(chatId, targetId)
     } catch (error) {
+      // The server still has it open; keep the pane rather than let the next
+      // reconcile bring it back unexplained (#306).
       console.error('[DocumentMode] Failed to close document', error)
+      showErrorToast(apiErrorMessage(error, 'The document could not be closed. Please try again.'))
+      return
     }
 
     removeEntry(targetId)

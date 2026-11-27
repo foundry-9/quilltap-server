@@ -62,7 +62,7 @@ interface ChatModalsProps {
   onReattributed: () => Promise<void>
   onConfirmStopImpersonation: (participantId: string, connectionProfileId: string) => Promise<void>
   // Memory cascade
-  memoryCascadeConfirmation: { memoryCount: number; isSwipeGroup: boolean } | null
+  memoryCascadeConfirmation: { memoryCount: number; isSwipeGroup: boolean; swipeCount?: number } | null
   cancelMemoryCascadeConfirmation: () => void
   handleMemoryCascadeConfirm: (action: import('../types').MemoryCascadeAction, rememberChoice: boolean) => Promise<void>
   // All-LLM pause
@@ -483,6 +483,7 @@ export function ChatModals({
           isOpen={true}
           memoryCount={memoryCascadeConfirmation.memoryCount}
           isSwipeGroup={memoryCascadeConfirmation.isSwipeGroup}
+          swipeCount={memoryCascadeConfirmation.swipeCount}
           onClose={cancelMemoryCascadeConfirmation}
           onConfirm={handleMemoryCascadeConfirm}
         />

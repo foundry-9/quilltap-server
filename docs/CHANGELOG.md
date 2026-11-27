@@ -4,6 +4,19 @@
 
 ### 4.14.2
 
+#### Fix: Salon shortcuts, message actions, turn controls and pane state
+
+- Cmd+Shift+T, Cmd+Shift+D, Cmd+Shift+F, Cmd+Shift+L and Escape acted on every open Salon tab, hidden ones included. A Salon now answers its document-level shortcuts only while the focused pane shows it or one of its own child tabs (`salonOwnsKeyboard`, `app/salon/[id]/salon-keyboard.ts`). Fixes #263.
+- Escape in a dialog over a maximized document or terminal pane also dropped the pane back to split. The Salon's Escape handlers ignore a key pressed inside a `dialog` / `alertdialog` (`isFromDialog`). Fixes #304.
+- The header's character chips kept a character's old name and avatar after a rename or a new portrait. The effect's key now includes the name and avatar source, not just the ids. Fixes #305.
+- A finished whisper closed a second whisper dialog opened while its reply streamed, losing the typed text. `onSent` only refreshes the chat now (the dialog already closed itself). A failed whisper shows an error toast and keeps the dialog open with its text. Fixes #288.
+- Swiping one reply after swiping another reverted the first, and a delete run from a row's old closure could restore a deleted message or remove one that had arrived since. Swipes go through `stepSwipe` in `useChatData` (reads the live refs), and `useMessageActions` reads the transcript through a ref and writes only functional updates. `switchSwipe` and the `setSwipeStates` prop on `VirtualizedMessageList` are gone. Fixes #264.
+- The delete-message dialog always said "1 swipes". The confirmation carries the length of the server's `messageIds`, and "swipe" is singular for one. Fixes #281.
+- Four Salon actions failed silently: a refused queue / dequeue kept its optimistic badge (now rolled back with a toast); a failed "Not dangerous" left the blur with no message (now toasts); Copy claimed success before the clipboard answered (now awaited, with an error toast on refusal); a failed document close removed the pane anyway (`closeDocumentForChat` now throws on a refusal, and the pane stays open with a toast). Fixes #306.
+- While one character spoke, the others' cards read "Nudge" and the nudge was refused. `ParticipantCard` takes `roomIsGenerating` from the sidebar, so those buttons read "Queue" and queue. Fixes #254.
+- "Speaking as" stayed on after the server ended an impersonation (an LLM profile picked on the card, or another window). `useImpersonation` adopts the server's list even when empty, and lets go of an active speaker the server dropped. Fixes #313.
+- A hidden terminal pane reappeared, and the agent-mode toggle flipped back, whenever another writer spread the chat object. `useTerminalMode` re-hydrates on the terminal fields, not the object; the agent-mode sync keys on `resolvedAgentModeEnabled`, and a toggle writes its result into the chat. Fixes #262.
+
 #### Fix: connection, embedding and image profiles, and the default-profile pickers
 
 - Re-saving a profile made by the setup wizard (or imported with no sampling parameters) wrote `max_tokens: 1000`, `temperature: 1` and `top_p: 1` into it, because the editor filled absent values in on load. An absent value now stays absent and is left out of the save, so the provider keeps its own default; the form shows "provider default" with a "Use provider default" button on each slider, and the profile card shows "provider default" instead of invented numbers. Fixes #256.

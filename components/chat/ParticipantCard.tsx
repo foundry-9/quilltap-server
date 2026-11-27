@@ -80,6 +80,13 @@ interface ParticipantCardProps {
   isCurrentTurn: boolean
   queuePosition: number // 0 = not in queue, 1+ = position in queue
   isGenerating: boolean
+  /**
+   * Whether anyone in the room is speaking. `isGenerating` is this card's own
+   * reply; while someone else speaks the action button queues rather than
+   * nudges, since a nudge mid-stream is refused (#254). Defaults to
+   * `isGenerating`.
+   */
+  roomIsGenerating?: boolean
   onNudge: (participantId: string) => void
   onQueue: (participantId: string) => void
   onDequeue: (participantId: string) => void
@@ -128,6 +135,7 @@ export function ParticipantCard({
   isCurrentTurn,
   queuePosition,
   isGenerating,
+  roomIsGenerating = isGenerating,
   onNudge,
   onQueue,
   onDequeue,
@@ -180,7 +188,7 @@ export function ParticipantCard({
     if (queuePosition > 0) {
       // Already in queue - dequeue
       onDequeue(participant.id)
-    } else if (isGenerating) {
+    } else if (roomIsGenerating) {
       // Someone is actively generating - add to queue for later
       onQueue(participant.id)
     } else if (!isUserControlledCharacter) {
@@ -240,7 +248,7 @@ export function ParticipantCard({
   const getActionButtonLabel = () => {
     if (queuePosition > 0) return 'Dequeue'
     if (isGenerating && isCurrentTurn) return 'Speaking...'
-    if (isGenerating) return 'Queue'
+    if (roomIsGenerating) return 'Queue'
     if (isCurrentTurn) return isUserControlledCharacter ? 'Queue' : 'Nudge' // Their turn but not yet generating - can nudge to start (LLM only)
     // Only LLM-controlled characters show "Nudge", user-controlled show "Queue"
     return !isUserControlledCharacter ? 'Nudge' : 'Queue'

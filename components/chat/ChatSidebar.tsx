@@ -946,6 +946,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               isCurrentTurn={isCurrentTurn}
               queuePosition={queuePos}
               isGenerating={p.isGenerating && isCurrentTurn}
+              roomIsGenerating={p.isGenerating}
               isUserParticipant={isUserParticipant}
               turnPosition={turnEntry?.position ?? null}
               turnStatus={turnEntry?.status}

@@ -196,6 +196,8 @@ Control how often each character speaks:
 2. Click **Nudge** button
 3. They'll respond next, bypassing the normal queue
 
+While someone else has the floor, the other cards' buttons read **Queue** rather than **Nudge**: one does not summon a speaker mid-sentence, so the character is put in line to go next instead. Should the server decline to queue or dequeue them, the badge returns to what it was and a note says so.
+
 **Queue** — Add a character to the speaking queue:
 
 1. Click **Queue** on a character's card

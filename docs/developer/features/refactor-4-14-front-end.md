@@ -109,7 +109,7 @@ All verified by reading the code at `HEAD` by two readers; none was reproduced i
 | #251 | Medium | Tag style editor saves per keystroke and a pending colour save undoes Bold | open |
 | #252 | Medium | Roleplay and prompt template save errors appear behind the open modal | open |
 | #253 | Medium | AI import wizard is stuck on Generation after a failure, with no way back | open |
-| #254 | Medium | Nudge on another character while one is speaking does nothing but a toast | open |
+| #254 | Medium | Nudge on another character while one is speaking does nothing but a toast | fixed |
 | #255 | Medium | Connection profile dialog says nothing when Save, Fetch Models, Test or Auto-configure fails | open |
 | #256 | Medium | Re-saving a wizard-made connection profile silently caps replies at 1000 tokens | open |
 | #257 | Medium | Escape in the model search box closes the whole profile dialog and discards edits | open |
@@ -117,9 +117,9 @@ All verified by reading the code at `HEAD` by two readers; none was reproduced i
 | #259 | Medium | Range sliders in Context Compression and Tasks Queue ignore the keyboard | open |
 | #260 | Medium | "Save to my gallery" from a character photo album fails with "Image not found" | open |
 | #261 | Medium | Unsaved document edits are discarded when a character closes the document | open |
-| #262 | Medium | Hidden terminal pane pops back open, and the agent-mode toggle flips back | open |
-| #263 | Medium | Salon keyboard shortcuts act on every open Salon tab, including hidden ones | open |
-| #264 | Medium | Swiping one reply after swiping another undoes the first swipe | open |
+| #262 | Medium | Hidden terminal pane pops back open, and the agent-mode toggle flips back | fixed |
+| #263 | Medium | Salon keyboard shortcuts act on every open Salon tab, including hidden ones | fixed |
+| #264 | Medium | Swiping one reply after swiping another undoes the first swipe | fixed |
 | #265 | Medium | Inventory and Atlas picture "Upload…" cannot be reached or used from the keyboard | open |
 | #266 | Medium | Workbench condition key can't be typed when a prefix matches another key on the line | open |
 | #267 | Medium | Import preview checkboxes do nothing: every entity in the file is imported | open |
@@ -139,14 +139,14 @@ All verified by reading the code at `HEAD` by two readers; none was reproduced i
 | #278 | Low | LLM Inspector panel stays open over other workspace tabs | open |
 | #279 | Low | State editor throws away my JSON edits when the state changes in the background | open |
 | #280 | Low | Dressing instructions can show another wardrobe's text after switching quickly | open |
-| #281 | Low | Delete-message dialog always says the message has "1 swipes" | open |
+| #281 | Low | Delete-message dialog always says the message has "1 swipes" | fixed |
 | #282 | Low | A failed autonomous-room start, pause or resume gives no message | open |
 | #283 | Low | Every plugin enable/disable re-runs the npm upgrade check | open |
 | #284 | Low | AI import success message never shows how many items were imported | open |
 | #285 | Low | Uninstalling a theme from its preview leaves the preview open as "Default" | open |
 | #286 | Low | Settings page jumps to another group on its own | open |
 | #287 | Low | Attention chip does not open the provider card when Providers is already showing | open |
-| #288 | Low | A finished whisper closes the next whisper dialog and loses its text | open |
+| #288 | Low | A finished whisper closes the next whisper dialog and loses its text | fixed |
 | #289 | Low | Run Tool form: a required yes/no field cannot be sent as "no" without toggling twice | open |
 | #290 | Low | Library file picker shows gallery thumbnails while Salon images are quick-hidden | open |
 | #291 | Low | Run Tool form resets while being filled if the chat's first active character changes | open |
@@ -162,16 +162,16 @@ All verified by reading the code at `HEAD` by two readers; none was reproduced i
 | #301 | Low | A failed photo delete in a character album still removes the tile | open |
 | #302 | Low | Edit Enclave can throw away typed edits when the room's status is re-read | open |
 | #303 | Low | Help chat swallows a failed new conversation, and New Chat leaves the old reply streaming | open |
-| #304 | Low | Escape in a dialog also takes the document or terminal pane out of focus mode | open |
-| #305 | Low | Salon header keeps a character's old name and avatar after they change | open |
-| #306 | Low | Salon actions fail with no message and no rollback | open |
+| #304 | Low | Escape in a dialog also takes the document or terminal pane out of focus mode | fixed |
+| #305 | Low | Salon header keeps a character's old name and avatar after they change | fixed |
+| #306 | Low | Salon actions fail with no message and no rollback | fixed |
 | #307 | Low | A single edit typed in Markdown source mode after a reload shows Saved but is not written | open |
 | #308 | Low | A private Pascal roll's announcement bar says "to unknown" instead of "to you" | open |
 | #309 | Low | doc_focus "line" lands on different places in Markdown and in JSON/CSS documents | open |
 | #310 | Low | Salon terminal, save-image and speaking-as controls hide state from screen readers | open |
 | #311 | Low | One click on Delete permanently removes an Inventory or Atlas picture with no confirmation | open |
 | #312 | Low | Inventory and Wardrobe lists file "The …" titles under T, unlike the Atlas and scenarios | open |
-| #313 | Low | Salon keeps showing "Speaking as" after the server has ended the impersonation | open |
+| #313 | Low | Salon keeps showing "Speaking as" after the server has ended the impersonation | fixed |
 | #314 | Low | Workbench "Insert value" menu has no Escape, arrow keys or focus handling | open |
 | #315 | Low | Workbench JSON mode can save broken JSON without the "save it broken?" confirm | open |
 | #316 | Low | Workbench ?new=1&mount= link does not preselect the destination store | open |
