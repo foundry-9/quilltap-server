@@ -57,7 +57,9 @@ export function AutoConfigureSources({ result }: AutoConfigureSourcesProps) {
       </dl>
       {result.pseudoToolMode === 'simple-json' && (
         <p className="qt-text-secondary qt-settings-sources-note">
-          This route does not offer native tool calling, so the tool format has been set to Simple JSON.
+          {result.fieldSources.supportsTools?.kind === 'observed'
+            ? 'Native tool calls on this route have been coming back malformed or unmade, so the tool format has been set to Simple JSON.'
+            : 'This route does not offer native tool calling, so the tool format has been set to Simple JSON.'}
         </p>
       )}
       {result.catalogError && (

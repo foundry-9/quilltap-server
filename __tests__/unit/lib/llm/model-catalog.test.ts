@@ -13,6 +13,8 @@ import {
   hasModelCatalog,
 } from '@/lib/plugins/provider-registry'
 import { findOpenRouterPublicModel } from '@/lib/llm/pricing-fetcher'
+import { getRepositories } from '@/lib/repositories/factory'
+import type { NativeToolSample } from '@/lib/llm/tool-reliability'
 
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -29,11 +31,23 @@ jest.mock('@/lib/llm/pricing-fetcher', () => ({
   findOpenRouterPublicModel: jest.fn(),
 }))
 
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(),
+}))
+
 const mockMetadata = jest.mocked(getProviderMetadata)
 const mockCatalog = jest.mocked(getProviderModelCatalog)
 const mockStatic = jest.mocked(getStaticModelInfo)
 const mockHasCatalog = jest.mocked(hasModelCatalog)
 const mockOpenRouter = jest.mocked(findOpenRouterPublicModel)
+const mockFindSamples = jest.fn<Promise<NativeToolSample[]>, [readonly string[], number]>()
+jest.mocked(getRepositories).mockReturnValue({
+  llmLogs: { findRecentNativeToolSamples: mockFindSamples },
+} as unknown as ReturnType<typeof getRepositories>)
+
+const NATIVE_OK: NativeToolSample = { toolCount: 12, toolCalls: [{ name: 'search' }], finishReason: 'STOP' }
+const NATIVE_MALFORMED: NativeToolSample = { toolCount: 12, toolCalls: [], finishReason: 'MALFORMED_FUNCTION_CALL' }
+const NATIVE_PROSE: NativeToolSample = { toolCount: 12, toolCalls: [], finishReason: 'STOP', content: 'She smiles.' }
 
 const QUERY = { provider: 'NANOGPT', modelName: 'google/gemini-2.5-pro', apiKey: 'sk-1' }
 
@@ -61,9 +75,70 @@ beforeEach(() => {
   mockCatalog.mockResolvedValue([])
   mockStatic.mockReturnValue([])
   mockOpenRouter.mockResolvedValue(null)
+  mockFindSamples.mockResolvedValue([])
 })
 
 describe('lookupModelFacts', () => {
+  describe('observed tool reliability', () => {
+    const GOOGLE = { provider: 'GOOGLE', modelName: 'gemini-2.5-pro', apiKey: 'k', routeProfileIds: ['g-1'] }
+
+    it("overrides a catalog's native tool support when the route's own calls keep failing", async () => {
+      mockMetadata.mockReturnValue({ displayName: 'Google' } as ReturnType<typeof getProviderMetadata>)
+      mockCatalog.mockResolvedValue([{ id: 'gemini-2.5-pro', name: 'Gemini', supportsTools: true, contextWindow: 1_000_000 }])
+      mockFindSamples.mockResolvedValue([
+        NATIVE_MALFORMED, NATIVE_MALFORMED, NATIVE_MALFORMED, NATIVE_MALFORMED,
+        NATIVE_OK, NATIVE_OK, NATIVE_PROSE, NATIVE_PROSE,
+      ])
+
+      const facts = await lookupModelFacts(GOOGLE)
+
+      expect(mockFindSamples).toHaveBeenCalledWith(['g-1'], 50)
+      expect(facts.supportsTools).toBe(false)
+      expect(facts.sources.supportsTools).toEqual({
+        kind: 'observed',
+        label: 'observed in your last 6 native tool calls on this route (4 failed)',
+      })
+      // Everything else still comes from the catalog.
+      expect(facts.maxContext).toBe(1_000_000)
+      expect(facts.sources.maxContext?.kind).toBe('provider-catalog')
+    })
+
+    it('states native tool support where no catalog does, when the calls have worked', async () => {
+      mockFindSamples.mockResolvedValue(Array.from({ length: 6 }, () => NATIVE_OK))
+
+      const facts = await lookupModelFacts(GOOGLE)
+
+      expect(facts.supportsTools).toBe(true)
+      expect(facts.sources.supportsTools?.kind).toBe('observed')
+    })
+
+    it('leaves the catalog to answer when the evidence is thin', async () => {
+      mockCatalog.mockResolvedValue([{ id: 'gemini-2.5-pro', name: 'Gemini', supportsTools: true }])
+      mockFindSamples.mockResolvedValue([NATIVE_MALFORMED, NATIVE_MALFORMED, NATIVE_OK])
+
+      const facts = await lookupModelFacts(GOOGLE)
+
+      expect(facts.supportsTools).toBe(true)
+      expect(facts.sources.supportsTools?.kind).toBe('provider-catalog')
+      expect(facts.toolReliability).toMatchObject({ ok: 1, failed: 2, verdict: 'inconclusive' })
+    })
+
+    it('reads no logs without route profiles', async () => {
+      await lookupModelFacts(QUERY)
+      expect(mockFindSamples).not.toHaveBeenCalled()
+    })
+
+    it('carries on with the catalogs when the logs cannot be read', async () => {
+      mockFindSamples.mockRejectedValue(new Error('logs degraded'))
+      mockCatalog.mockResolvedValue([{ id: 'gemini-2.5-pro', name: 'Gemini', supportsTools: true }])
+
+      const facts = await lookupModelFacts(GOOGLE)
+
+      expect(facts.supportsTools).toBe(true)
+      expect(facts.sources.supportsTools?.kind).toBe('provider-catalog')
+    })
+  })
+
   it('takes every stated field from the provider catalog, labelled as such', async () => {
     mockCatalog.mockResolvedValue([
       { id: 'google/gemini-2.5-pro', name: 'Gemini', contextWindow: 1_000_000, maxOutputTokens: 32_000, supportsTools: true, supportsImages: false },

@@ -74,6 +74,11 @@ jest.mock('@/lib/llm/model-catalog', () => ({
   lookupModelFacts: jest.fn(),
 }))
 
+// tool-reliability's pure route matcher runs for real; its log read never does here.
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(),
+}))
+
 jest.mock('@/lib/plugins/provider-registry', () => ({
   getProviderMetadata: jest.fn((name: string) => ({ displayName: name === 'ANTHROPIC' ? 'Anthropic' : name })),
 }))
@@ -545,7 +550,42 @@ describe('autoConfigureProfile', () => {
         modelName: 'google/gemini-2.5-pro',
         apiKey: 'sk-test-key',
         baseUrl: 'https://example.test/v1',
+        routeProfileIds: [],
       })
+    })
+
+    it('should hand over the profiles on the same route as the observed-tool evidence', async () => {
+      const route = { provider: 'GOOGLE', modelName: 'gemini-2.5-pro', baseUrl: null }
+      mockGetUserRepositories.mockReturnValue(createMockRepos({
+        findAll: jest.fn().mockResolvedValue([
+          { ...createMockDefaultProfile(), id: 'g-1', ...route },
+          { ...createMockDefaultProfile(), id: 'g-2', ...route, baseUrl: '' },
+          { ...createMockDefaultProfile(), id: 'g-other-url', ...route, baseUrl: 'https://proxy.test/v1' },
+          { ...createMockDefaultProfile(), id: 'nano', provider: 'NANOGPT', modelName: 'gemini-2.5-pro', baseUrl: null },
+        ]),
+      }) as unknown as ReturnType<typeof getUserRepositories>)
+
+      await autoConfigureProfile({ provider: 'GOOGLE', modelName: 'gemini-2.5-pro' }, TEST_USER_ID)
+
+      expect(mockLookupModelFacts.mock.calls[0][0].routeProfileIds).toEqual(['g-1', 'g-2'])
+    })
+
+    it('should recommend Simple JSON and name the evidence when native tools are observed failing', async () => {
+      const observed = { kind: 'observed' as const, label: 'observed in your last 8 native tool calls on this route (6 failed)' }
+      mockLookupModelFacts.mockResolvedValue({
+        ...facts,
+        supportsTools: false,
+        sources: { ...facts.sources, supportsTools: observed },
+        toolReliability: { sampled: 20, ok: 2, failed: 6, verdict: 'unreliable' },
+      })
+
+      const result = await autoConfigureProfile({ provider: 'GOOGLE', modelName: 'gemini-2.5-pro' }, TEST_USER_ID)
+
+      expect(result.supportsTools).toBe(false)
+      expect(result.pseudoToolMode).toBe('simple-json')
+      expect(result.fieldSources.supportsTools).toEqual(observed)
+      expect(profileUpdateFromAutoConfigure({ parameters: {}, pseudoToolMode: 'auto' }, result).pseudoToolMode).toBe('simple-json')
+      expect(profileUpdateFromAutoConfigure({ parameters: {}, pseudoToolMode: 'text-block' }, result)).not.toHaveProperty('pseudoToolMode')
     })
 
     it('should let facts outrank the LLM estimate and report their source', async () => {

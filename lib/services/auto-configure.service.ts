@@ -6,10 +6,12 @@
  * what those cannot answer.
  *
  * Flow:
- * 1. Gather facts from `lookupModelFacts` (`lib/llm/model-catalog.ts`): the
- *    provider's live catalog, the plugin's model table, OpenRouter's public
- *    catalog. These settle context, output, tool and image support where
- *    stated, and are never overruled by the LLM.
+ * 1. Gather facts from `lookupModelFacts` (`lib/llm/model-catalog.ts`): what
+ *    the route's own logs show of native tool calls (observed reliability),
+ *    the provider's live catalog, the plugin's model table, OpenRouter's
+ *    public catalog. These settle context, output, tool and image support
+ *    where stated, and are never overruled by the LLM. When native tools are
+ *    observed to fail, the result recommends Simple JSON.
  * 2. Web-search (when configured) for whatever the facts leave open — limits
  *    only if unknown, sampling settings always — by the upstream model's name.
  * 3. Ask the default (high-capability) LLM for the rest; a cheap LLM repairs
@@ -28,6 +30,7 @@ import { parseLLMJson } from '@/lib/llm/llm-json'
 import { getCheapLLMProvider, profileParams } from '@/lib/llm/cheap-llm'
 import { MODEL_CLASSES } from '@/lib/llm/model-classes'
 import { lookupModelFacts, type ModelFacts, type ModelFactSource } from '@/lib/llm/model-catalog'
+import { sameRouteProfileIds } from '@/lib/llm/tool-reliability'
 import { getProviderMetadata } from '@/lib/plugins/provider-registry'
 import { getUserRepositories } from '@/lib/repositories/user-scoped'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
@@ -79,7 +82,8 @@ export interface AutoConfigureResult {
   supportsImages: boolean | null
   /**
    * A tool-mode recommendation: 'simple-json' when the route is known to lack
-   * native tool calling, otherwise null (leave the profile's mode alone).
+   * native tool calling — a catalog says so, or its own logs show native
+   * calls failing — otherwise null (leave the profile's mode alone).
    */
   pseudoToolMode: 'simple-json' | null
   /** Where each field came from */
@@ -404,6 +408,30 @@ async function resolveTargetApiKey(target: AutoConfigureTarget, userId: string):
 }
 
 /**
+ * The ids of the user's profiles on the target's route (provider, model and
+ * base URL), whose logs are the observed tool evidence. Empty when they
+ * cannot be read: the observation is only skipped.
+ */
+async function resolveRouteProfileIds(target: AutoConfigureTarget, userId: string): Promise<string[]> {
+  try {
+    const profiles = await getUserRepositories(userId).connections.findAll()
+    const ids = sameRouteProfileIds(profiles, target)
+    logger.debug('[Auto-Configure] Route profiles for observed tool reliability', {
+      provider: target.provider,
+      modelName: target.modelName,
+      profiles: ids.length,
+    })
+    return ids
+  } catch (error) {
+    logger.warn('[Auto-Configure] Could not list profiles; skipping observed tool reliability', {
+      provider: target.provider,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return []
+  }
+}
+
+/**
  * Ask the analysis LLMs for an estimate, trying the default profile and then
  * one profile per other provider. Returns null (with the reasons logged) when
  * no profile is configured or every candidate fails.
@@ -471,8 +499,11 @@ export async function autoConfigureProfile(
   logger.info('[Auto-Configure] Starting auto-configuration', { provider, modelName, hasBaseUrl: !!baseUrl, userId })
 
   // 1. Known facts.
-  const apiKey = await resolveTargetApiKey(target, userId)
-  const facts = await lookupModelFacts({ provider, modelName, apiKey, baseUrl })
+  const [apiKey, routeProfileIds] = await Promise.all([
+    resolveTargetApiKey(target, userId),
+    resolveRouteProfileIds(target, userId),
+  ])
+  const facts = await lookupModelFacts({ provider, modelName, apiKey, baseUrl, routeProfileIds })
   const limitsKnown = facts.maxContext !== undefined && facts.maxTokens !== undefined
 
   // 2. Web search for what the facts leave open.
@@ -590,6 +621,7 @@ export async function autoConfigureProfile(
       supportsTools,
       supportsImages,
     },
+    toolReliability: facts.toolReliability,
     sources: Object.fromEntries(Object.entries(fieldSources).map(([k, v]) => [k, v.kind])),
   })
 

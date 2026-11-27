@@ -144,7 +144,9 @@ function summarizeResponse(
     finishReason: response.finishReason ?? null,
   };
 
-  if (response.toolCalls && response.toolCalls.length > 0) {
+  // An empty array is kept: it records that native tools were sent and the
+  // provider's parser found no call, which observed tool reliability reads.
+  if (Array.isArray(response.toolCalls)) {
     summary.toolCalls = response.toolCalls.map(tc => ({
       name: tc.name,
       arguments: tc.arguments,

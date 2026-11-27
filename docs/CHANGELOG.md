@@ -4,6 +4,14 @@
 
 ### 4.15-dev
 
+#### Feature: Auto-Configure reads observed tool reliability from the LLM logs
+
+- Auto-Configure now has a source stronger than any catalog for native tool support: what the route's own logs show. `lookupModelFacts` (`lib/llm/model-catalog.ts`) takes `routeProfileIds` (the user's profiles with the target's provider, model and base URL, from `sameRouteProfileIds`) and, before any catalog, asks `observeToolReliability` (new `lib/llm/tool-reliability.ts`). A decisive verdict sets `supportsTools` with the new source kind `'observed'`, labelled "observed in your last N native tool calls on this route (F failed)"; an inconclusive one leaves the catalogs to answer. A verdict of unreliable makes `autoConfigureProfile` recommend Simple JSON; `profileUpdateFromAutoConfigure` still moves only from `auto` or `native`.
+- The sample is the newest 50 requests that sent native tools (`request.toolCount > 0`, so text-protocol rows never count), read by `LLMLogsRepository.findRecentNativeToolSamples` from the newest 300 rows of those profiles. `classifyNativeToolOutcome` counts a parsed native call (or, on older rows, a `tool_calls` / `tool_use` finish) as ok; a `MALFORMED_FUNCTION_CALL` / `UNEXPECTED_TOOL_CALL` finish, a tool-call finish with nothing parsed, a tool-unsupported error, or a tool call written into the prose as failed; anything else as no evidence. Unreliable needs at least 5 decisive samples, 3 failures and a failure share of 1/3; reliable needs a share of 10% or less.
+- The Salon's streaming log row (`streamMessage`, `streaming.service.ts`) now records `response.toolCalls` — what the provider plugin's `parseToolCalls` found — whenever native tools were sent, an empty list included; `logLLMCall` keeps an empty list instead of dropping it. Before this no streamed row recorded its calls, so a Gemini call that finishes `STOP` with a function call looked like plain prose.
+- The profile form's Auto-Configure note says when Simple JSON was chosen because native calls were observed failing.
+- Tests: `__tests__/unit/lib/llm/tool-reliability.test.ts`, `__tests__/unit/lib/database/repositories/llm-logs-native-tool-samples.test.ts` (real SQLite, compressed columns), additions to `model-catalog.test.ts`, `auto-configure.test.ts` and `streaming-message-logging.test.ts`.
+
 ### 4.14.1
 
 #### Dependencies: npm update across root, packages and plugins (second pass)

@@ -7,6 +7,12 @@
  *
  * Sources, strongest first (a field takes the first source that states it):
  *
+ * 0. **Observed tool reliability** — for `supportsTools` only: whether native
+ *    tool calls have actually worked on this route, read from the LLM logs of
+ *    the profiles that share its provider, model and base URL
+ *    (`lib/llm/tool-reliability.ts`). Used only when the evidence is
+ *    decisive, and then it outranks every catalog: a catalog says what a
+ *    route claims, the logs what it did.
  * 1. **The provider's live catalog** — the plugin's `getModelCatalog`, read
  *    with the profile's own key and base URL. True of this model *on this
  *    route*, so it is the only source trusted for tool and image support on a
@@ -30,6 +36,7 @@ import {
 } from '@/lib/plugins/provider-registry'
 import { findOpenRouterPublicModel } from '@/lib/llm/pricing-fetcher'
 import { processSingleton } from '@/lib/utils/process-singleton'
+import { describeToolReliability, observeToolReliability, type ToolReliabilitySummary } from '@/lib/llm/tool-reliability'
 import { logger } from '@/lib/logger'
 
 /** The facts a structured source can settle. */
@@ -37,6 +44,7 @@ export type ModelFactField = 'maxContext' | 'maxTokens' | 'supportsTools' | 'sup
 
 /** Where a value came from, shown beside it in the profile editor. */
 export type ModelFactSourceKind =
+  | 'observed'
   | 'provider-catalog'
   | 'plugin-table'
   | 'openrouter-public'
@@ -60,6 +68,8 @@ export interface ModelFacts {
   sources: Partial<Record<ModelFactField, ModelFactSource>>
   /** Why the live catalog could not be read, when it was tried and failed */
   catalogError?: string
+  /** What the route's own logs showed of native tool calls, when they were read */
+  toolReliability?: ToolReliabilitySummary
 }
 
 export interface ModelFactsQuery {
@@ -68,6 +78,12 @@ export interface ModelFactsQuery {
   /** Decrypted key for the profile's provider ('' when keyless or unknown) */
   apiKey: string
   baseUrl?: string
+  /**
+   * The connection profiles that reach this provider and model by this base
+   * URL (`sameRouteProfileIds`). Their logs are the observed evidence; empty
+   * or absent, nothing is observed.
+   */
+  routeProfileIds?: readonly string[]
 }
 
 const CATALOG_TTL_MS = 60 * 60 * 1000
@@ -198,6 +214,16 @@ export async function lookupModelFacts(query: ModelFactsQuery): Promise<ModelFac
   const facts: ModelFacts = { sources: {} }
   const providerLabel = getProviderMetadata(query.provider)?.displayName ?? query.provider
 
+  // 0. Observed tool reliability — decisive evidence only, `supportsTools` only.
+  if (query.routeProfileIds && query.routeProfileIds.length > 0) {
+    const observed = await observeToolReliability(query.routeProfileIds)
+    facts.toolReliability = observed
+    if (observed.verdict !== 'inconclusive') {
+      facts.supportsTools = observed.verdict === 'reliable'
+      facts.sources.supportsTools = { kind: 'observed', label: describeToolReliability(observed) }
+    }
+  }
+
   // 1. The provider's live catalog.
   try {
     const live = await readLiveCatalog(query)
@@ -261,6 +287,7 @@ export async function lookupModelFacts(query: ModelFactsQuery): Promise<ModelFac
     modelName: query.modelName,
     known: Object.keys(facts.sources),
     catalogError: facts.catalogError,
+    toolReliability: facts.toolReliability?.verdict,
   })
   return facts
 }

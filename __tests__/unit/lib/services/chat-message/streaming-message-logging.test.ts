@@ -15,6 +15,11 @@ jest.mock('@/lib/services/llm-logging.service', () => ({
   logLLMCall: (...args: unknown[]) => logLLMCall(...(args as [])),
 }))
 
+const detectToolCalls = jest.fn((_raw: unknown, _provider: string) => [] as Array<{ name: string; arguments: Record<string, unknown> }>)
+jest.mock('@/lib/chat/tool-executor', () => ({
+  detectToolCalls: (raw: unknown, provider: string) => detectToolCalls(raw, provider),
+}))
+
 let providerStream: () => AsyncGenerator<Record<string, unknown>>
 jest.mock('@/lib/llm', () => ({
   createLLMProvider: jest.fn(async () => ({
@@ -54,6 +59,7 @@ async function drain(gen: AsyncGenerator<unknown>, stopAfter = Infinity): Promis
 describe('streamMessage LLM logging', () => {
   beforeEach(() => {
     logLLMCall.mockClear()
+    detectToolCalls.mockClear()
   })
 
   it('logs a finished call once, with usage and cache usage, against the chat and message', async () => {
@@ -125,6 +131,38 @@ describe('streamMessage LLM logging', () => {
     const row = logLLMCall.mock.calls[0][0] as { response: { content: string; error?: string } }
     expect(row.response.content).toBe('No terminal chunk here.')
     expect(row.response.error).toBeUndefined()
+  })
+
+  it("records what the provider's parser made of a native tool request, an empty list included", async () => {
+    const raw = { candidates: [{ finishReason: 'MALFORMED_FUNCTION_CALL' }] }
+    providerStream = async function* () {
+      yield { content: '', done: true, rawResponse: raw }
+    }
+    const tool = { type: 'function', function: { name: 'search', parameters: {} } }
+
+    await drain(streamMessage({ ...options(), tools: [tool] as unknown as StreamOptions['tools'] }))
+    expect(detectToolCalls).toHaveBeenCalledWith(raw, 'OPENAI')
+    expect(logLLMCall.mock.calls[0][0]).toMatchObject({
+      response: { finishReason: 'MALFORMED_FUNCTION_CALL', toolCalls: [] },
+    })
+
+    logLLMCall.mockClear()
+    detectToolCalls.mockReturnValueOnce([{ name: 'search', arguments: { query: 'tea' } }])
+    await drain(streamMessage({ ...options(), tools: [tool] as unknown as StreamOptions['tools'] }))
+    expect(logLLMCall.mock.calls[0][0]).toMatchObject({
+      response: { toolCalls: [{ name: 'search', arguments: { query: 'tea' } }] },
+    })
+  })
+
+  it('records no tool calls when no native tools were sent', async () => {
+    providerStream = async function* () {
+      yield { content: 'Hello', done: true }
+    }
+
+    await drain(streamMessage(options()))
+
+    expect(detectToolCalls).not.toHaveBeenCalled()
+    expect((logLLMCall.mock.calls[0][0] as { response: object }).response).not.toHaveProperty('toolCalls')
   })
 
   it('writes nothing without a user to attribute the call to', async () => {

@@ -15,6 +15,7 @@ import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
+import { detectToolCalls } from '@/lib/chat/tool-executor'
 import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
 import { currentTurnStopSignal } from '@/lib/chat/turn-control'
 import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
@@ -584,7 +585,11 @@ export async function* streamMessage(
   // the row is written on the terminal chunk when there is one, and from the
   // `finally` below when there is not.
   let logged = false
-  const record = (outcome: { finishReason?: string | null; error?: string }) => {
+  const record = (outcome: {
+    finishReason?: string | null
+    error?: string
+    toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>
+  }) => {
     if (logged || !userId) return
     logged = true
     const durationMs = Date.now() - startTime
@@ -613,6 +618,7 @@ export async function* streamMessage(
         content: accumulatedContent,
         finishReason: outcome.finishReason ?? null,
         ...(outcome.error ? { error: outcome.error } : {}),
+        ...(outcome.toolCalls ? { toolCalls: outcome.toolCalls } : {}),
       },
       usage: lastUsage,
       cacheUsage: lastCacheUsage,
@@ -689,7 +695,15 @@ export async function* streamMessage(
         lastRawProviderUsage = chunk.rawProviderUsage as Record<string, unknown>
       }
       if (chunk.done) {
-        record({ finishReason: extractFinishReason(chunk.rawResponse) })
+        record({
+          finishReason: extractFinishReason(chunk.rawResponse),
+          // What the provider's parser made of a native tool request — an
+          // empty list included — so the logs show whether the call worked
+          // (observed tool reliability, `lib/llm/tool-reliability.ts`).
+          ...(tools.length > 0
+            ? { toolCalls: detectToolCalls(chunk.rawResponse, connectionProfile.provider).map(tc => ({ name: tc.name, arguments: tc.arguments })) }
+            : {}),
+        })
       }
       yield chunk
     }

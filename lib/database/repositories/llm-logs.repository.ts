@@ -49,6 +49,9 @@ const USAGE_AGGREGATE_COLUMNS = `
          AVG(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN "durationMs" END) AS avgDurationMs,
          SUM(CASE WHEN json_extract(qt_text("response"), '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS failures`;
 
+/** How many of a route's newest rows are decoded when looking for native-tool requests. */
+const NATIVE_TOOL_SCAN_ROWS = 300;
+
 /** The attribution keys a per-profile roll-up can group by. */
 type ProfileGroupBy = 'connectionProfileId' | 'imageProfileId' | 'providerModel';
 
@@ -711,6 +714,81 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
     return rows.some(r => r.name === 'connectionProfileId');
   }
 
+  /**
+   * The most recent requests that sent native tools, from the given
+   * connection profiles, reduced to what decides whether the call worked
+   * (`lib/llm/tool-reliability.ts`).
+   *
+   * Bounded twice so a route with a long history costs little: the newest
+   * {@link NATIVE_TOOL_SCAN_ROWS} rows of those profiles are taken on the
+   * uncompressed columns first, and only they are decoded to test
+   * `toolCount`; only the native requests among them have their response
+   * decoded, once each (the CTEs are materialized so no column is decoded
+   * twice).
+   */
+  async findRecentNativeToolSamples(
+    profileIds: readonly string[],
+    limit: number,
+  ): Promise<NativeToolSampleRow[]> {
+    if (profileIds.length === 0) return [];
+    const placeholders = profileIds.map(() => '?').join(', ');
+    const rows = this.aggregate<{
+      toolCount: number | null;
+      toolCalls: string | null;
+      finishReason: string | null;
+      error: string | null;
+      content: string | null;
+    }>(
+      `WITH recent AS MATERIALIZED (
+         SELECT "request", "response", "createdAt"
+         FROM "llm_logs"
+         WHERE "connectionProfileId" IN (${placeholders})
+         ORDER BY "createdAt" DESC
+         LIMIT ?
+       ),
+       decoded AS MATERIALIZED (
+         SELECT json_extract(qt_text("request"), '$.toolCount') AS toolCount,
+                "response", "createdAt"
+         FROM recent
+       ),
+       native AS MATERIALIZED (
+         SELECT toolCount, qt_text("response") AS response
+         FROM decoded
+         WHERE toolCount > 0
+         ORDER BY "createdAt" DESC
+         LIMIT ?
+       )
+       SELECT toolCount,
+              json_extract(response, '$.toolCalls')    AS toolCalls,
+              json_extract(response, '$.finishReason') AS finishReason,
+              json_extract(response, '$.error')        AS error,
+              json_extract(response, '$.content')      AS content
+       FROM native`,
+      [...profileIds, NATIVE_TOOL_SCAN_ROWS, limit],
+      'llm-logs.findRecentNativeToolSamples',
+      [],
+    );
+    logger.debug('[LLMLogs] Native tool samples read', { profiles: profileIds.length, rows: rows.length });
+    return rows.map(row => {
+      let toolCalls: Array<{ name: string }> | undefined;
+      if (row.toolCalls) {
+        try {
+          const parsed = JSON.parse(row.toolCalls);
+          if (Array.isArray(parsed)) toolCalls = parsed;
+        } catch {
+          // A row whose toolCalls is not JSON counts as not recorded.
+        }
+      }
+      return {
+        toolCount: Number(row.toolCount) || 0,
+        toolCalls,
+        finishReason: row.finishReason,
+        error: row.error,
+        content: row.content,
+      };
+    });
+  }
+
   /** Per-`type` request counts, token totals and measured-latency averages. */
   async getStatsByType(userId: string): Promise<LLMLogTypeStatsRow[]> {
     return this.aggregate<LLMLogTypeStatsRow>(
@@ -832,6 +910,16 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
       [],
     );
   }
+}
+
+/** One row of {@link LLMLogsRepository.findRecentNativeToolSamples}. */
+export interface NativeToolSampleRow {
+  toolCount: number;
+  /** Undefined when the row did not record its parsed calls */
+  toolCalls?: Array<{ name: string }>;
+  finishReason: string | null;
+  error: string | null;
+  content: string | null;
 }
 
 /** One row of {@link LLMLogsRepository.getStatsByType}. */
