@@ -14,6 +14,8 @@
 #### Docs: 4.14.1 release notes
 
 - New `docs/releases/4.14.1.md` covering the output-token ceiling, cheap-LLM reasoning headroom, summary file titles, History card previews and the custom-tool roster refresh
+- Release notes extended with the swipe memory fix (#236) and the fresh-instance dogfood fixes (sample wardrobes, empty-outfit whisper, seatless group chat rotation, project file upload, Speaks First badge, portrait preview wording, Test All background model, job-child DDL)
+- `docs/developer/API.md`: documented `GET /api/v1/characters/[id]?action=chats`, including the new `summaryExcerpt` field
 
 #### Fix: the sample characters keep their wardrobes on a fresh instance
 
