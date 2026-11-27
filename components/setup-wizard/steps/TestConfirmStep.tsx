@@ -13,7 +13,11 @@ import {
   createEmbeddingProfile,
   createImageProfile,
   updateChatSettings,
+  updateConnectionProfile,
+  updateEmbeddingProfile,
+  updateImageProfile,
 } from '../wizard-api'
+import { planProfileWrite, type DesiredProfile } from '../profile-plan'
 
 interface StepProps {
   state: WizardState
@@ -161,54 +165,94 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
     dispatch({ type: 'SET_ERROR', error: null })
     setSaveSuccess(false)
 
+    // Each part is kept, updated or created by `planProfileWrite`: a re-run
+    // from Settings over an existing setup must not re-create what is already
+    // there under a taken name (#268). On a fresh instance every part creates.
+    const displayName = (provider: string) =>
+      state.availableProviders.find((p) => p.id === provider)?.displayName || provider
+    const autoName = (d: DesiredProfile) => `${displayName(d.provider)} - ${d.model}`
+    const cheapAutoName = (d: DesiredProfile) => `Cheap - ${autoName(d)}`
+    const existing = state.existingProfiles ?? {}
+    const taken = state.takenProfileNames ?? { connection: [], embedding: [], image: [] }
+    // Names created during this save are taken too, for the parts after them
+    const takenConnection = [...taken.connection]
+
     try {
-      // 1. Create main connection profile
-      await createConnectionProfile({
-        name: `${chatProvider?.displayName || state.chatConfig.provider} - ${state.chatConfig.model}`,
+      // 1. Main (default) connection profile
+      const chatDesired = { provider: state.chatConfig.provider, model: state.chatConfig.model }
+      const chatPlan = planProfileWrite(existing.chat, chatDesired, autoName, takenConnection)
+      const chatWrite = {
         provider: state.chatConfig.provider,
         apiKeyId: state.apiKeys[state.chatConfig.provider]?.apiKeyId,
         baseUrl: state.baseUrls[state.chatConfig.provider],
         modelName: state.chatConfig.model,
         isDefault: true,
-      })
+      }
+      if (chatPlan.kind === 'create') {
+        await createConnectionProfile({ ...chatWrite, name: chatPlan.name })
+        takenConnection.push(chatPlan.name)
+      } else if (chatPlan.kind === 'update') {
+        await updateConnectionProfile(chatPlan.id, { ...chatWrite, name: chatPlan.name })
+        takenConnection.push(chatPlan.name)
+      }
 
       let cheapProfileId: string | undefined
-      // 2. If cheap LLM is manual, create separate cheap connection profile
+      // 2. If the background model is manual, its own connection profile
       if (state.cheapConfig.strategy === 'USER_DEFINED' && state.cheapConfig.provider && state.cheapConfig.model) {
-        const cheapProfile = await createConnectionProfile({
-          name: `Cheap - ${cheapProvider?.displayName || state.cheapConfig.provider} - ${state.cheapConfig.model}`,
+        const cheapDesired = { provider: state.cheapConfig.provider, model: state.cheapConfig.model }
+        const cheapPlan = planProfileWrite(existing.cheap, cheapDesired, cheapAutoName, takenConnection)
+        const cheapWrite = {
           provider: state.cheapConfig.provider,
           apiKeyId: state.apiKeys[state.cheapConfig.provider]?.apiKeyId,
           baseUrl: state.baseUrls[state.cheapConfig.provider],
           modelName: state.cheapConfig.model,
           isCheap: true,
-        })
-        cheapProfileId = cheapProfile.id
+        }
+        if (cheapPlan.kind === 'create') {
+          cheapProfileId = (await createConnectionProfile({ ...cheapWrite, name: cheapPlan.name })).id
+        } else {
+          if (cheapPlan.kind === 'update') {
+            await updateConnectionProfile(cheapPlan.id, { ...cheapWrite, name: cheapPlan.name })
+          }
+          cheapProfileId = cheapPlan.id
+        }
       }
 
-      // 3. Create embedding profile if configured
+      // 3. Embedding profile, if configured
       if (state.embeddingConfig) {
-        await createEmbeddingProfile({
-          name: `${embeddingProvider?.displayName || state.embeddingConfig.provider} - ${state.embeddingConfig.model}`,
-          provider: state.embeddingConfig.provider,
-          apiKeyId: state.apiKeys[state.embeddingConfig.provider]?.apiKeyId,
-          baseUrl: state.baseUrls[state.embeddingConfig.provider],
-          modelName: state.embeddingConfig.model,
-          dimensions: state.embeddingConfig.dimensions,
+        const emb = state.embeddingConfig
+        const embPlan = planProfileWrite(existing.embedding, { provider: emb.provider, model: emb.model }, autoName, taken.embedding)
+        const embWrite = {
+          provider: emb.provider,
+          apiKeyId: state.apiKeys[emb.provider]?.apiKeyId,
+          baseUrl: state.baseUrls[emb.provider],
+          modelName: emb.model,
+          dimensions: emb.dimensions,
           isDefault: true,
-        })
+        }
+        if (embPlan.kind === 'create') {
+          await createEmbeddingProfile({ ...embWrite, name: embPlan.name })
+        } else if (embPlan.kind === 'update') {
+          await updateEmbeddingProfile(embPlan.id, { ...embWrite, name: embPlan.name })
+        }
       }
 
-      // 4. Create image profile if configured
+      // 4. Image profile, if configured
       if (state.imageConfig) {
-        await createImageProfile({
-          name: `${imageProvider?.displayName || state.imageConfig.provider} - ${state.imageConfig.model}`,
-          provider: state.imageConfig.provider,
-          apiKeyId: state.apiKeys[state.imageConfig.provider]?.apiKeyId,
-          baseUrl: state.baseUrls[state.imageConfig.provider],
-          modelName: state.imageConfig.model,
+        const img = state.imageConfig
+        const imgPlan = planProfileWrite(existing.image, { provider: img.provider, model: img.model }, autoName, taken.image)
+        const imgWrite = {
+          provider: img.provider,
+          apiKeyId: state.apiKeys[img.provider]?.apiKeyId,
+          baseUrl: state.baseUrls[img.provider],
+          modelName: img.model,
           isDefault: true,
-        })
+        }
+        if (imgPlan.kind === 'create') {
+          await createImageProfile({ ...imgWrite, name: imgPlan.name })
+        } else if (imgPlan.kind === 'update') {
+          await updateImageProfile(imgPlan.id, { ...imgWrite, name: imgPlan.name })
+        }
       }
 
       // 5. Update chat settings with cheap LLM strategy
@@ -230,7 +274,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
       })
       dispatch({ type: 'SET_SAVING', saving: false })
     }
-  }, [state, chatProvider, cheapProvider, embeddingProvider, imageProvider, dispatch, invalidateProfileLists, queryClient])
+  }, [state, dispatch, invalidateProfileLists, queryClient])
 
   // ------------------------------------------------------------------
   // Render

@@ -16,7 +16,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
-import { orderProfilesByChatUse } from '@/lib/llm/profile-usage'
+import { orderProfilesByChatUse, resolveDefaultConnectionProfileId } from '@/lib/llm/profile-usage'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 import { BaseModal } from '@/components/ui/BaseModal'
@@ -51,7 +51,8 @@ export default function CreateNPCDialog({
   const [physicalDescription, setPhysicalDescription] = useState('')
   const [scenario, setScenario] = useState('')
   const [systemPrompt, setSystemPrompt] = useState('')
-  // The operator's pick; until there is one, the first profile in the list.
+  // The operator's pick; until there is one, the profile marked default, then
+  // the first profile in the list (the shared rule, #246).
   const [pickedProfileId, setSelectedConnectionProfileId] = useState<string | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [isCreating, setIsCreating] = useState(false)
@@ -61,7 +62,8 @@ export default function CreateNPCDialog({
   const { data: profilesData, isLoading } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen, select: orderProfilesByChatUse })
   const connectionProfiles = profilesData ?? EMPTY_PROFILES
 
-  const selectedConnectionProfileId = pickedProfileId ?? connectionProfiles[0]?.id ?? null
+  const selectedConnectionProfileId =
+    pickedProfileId ?? resolveDefaultConnectionProfileId(null, connectionProfiles) ?? connectionProfiles[0]?.id ?? null
 
   // Load connection profiles when dialog opens and focus name input
   useEffect(() => {

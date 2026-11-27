@@ -79,7 +79,7 @@ export interface Character {
   physicalDescription?: CharacterPhysicalDescription | null
   avatarUrl?: string
   defaultImageId?: string
-  defaultConnectionProfileId?: string
+  defaultConnectionProfileId?: string | null
   defaultImageProfileId?: string | null
   defaultPartnerId?: string | null
   controlledBy?: 'llm' | 'user'

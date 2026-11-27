@@ -524,7 +524,7 @@ function LoadedCharacterPage({
           characterId={characterId}
           characterName={character.name}
           profiles={profiles.map((p) => ({ id: p.id, name: p.name }))}
-          defaultConnectionProfileId={character.defaultConnectionProfileId}
+          defaultConnectionProfileId={character.defaultConnectionProfileId ?? undefined}
           vaultAvailable={!!character.characterDocumentMountPointId}
           onClose={() => setShowOptimizer(false)}
           onApplied={() => {

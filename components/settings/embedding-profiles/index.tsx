@@ -81,7 +81,9 @@ export default function EmbeddingProfilesTab() {
         onProfilesChange={refreshProfiles}
       />
 
-      {/* Profile Modal - key ensures remount when switching profiles */}
+      {/* Mounted only while open, so every opening starts fresh — a shared
+          'new' key kept the last session's fetched models (#294) */}
+      {isModalOpen && (
       <ProfileModal
         key={editingProfile?.id || 'new'}
         isOpen={isModalOpen}
@@ -92,6 +94,7 @@ export default function EmbeddingProfilesTab() {
         embeddingModels={embeddingModels}
         embeddingProviders={embeddingProviders}
       />
+      )}
     </div>
   )
 }

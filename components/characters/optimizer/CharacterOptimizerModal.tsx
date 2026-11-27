@@ -21,6 +21,7 @@ import type {
 } from './types';
 import { OPTIMIZER_INSTRUCTIONS_MAX_LENGTH } from '@/lib/characters/optimizer-limits';
 import { useCharacterOptimizer } from './hooks/useCharacterOptimizer';
+import { resolveDefaultConnectionProfileId } from '@/lib/llm/profile-usage';
 import { AnalysisSummary } from './components/AnalysisSummary';
 import { SuggestionCard } from './components/SuggestionCard';
 import { ApplyConfirmation } from './components/ApplyConfirmation';
@@ -83,7 +84,8 @@ export function CharacterOptimizerModal({
 }: CharacterOptimizerModalProps) {
   const optimizer = useCharacterOptimizer();
   const [selectedProfileId, setSelectedProfileId] = useState(
-    defaultConnectionProfileId ?? profiles[0]?.id ?? ''
+    // The shared rule, so a deleted character default is never preselected (#246)
+    () => resolveDefaultConnectionProfileId({ defaultConnectionProfileId }, profiles) ?? profiles[0]?.id ?? ''
   );
   const [applySuccess, setApplySuccess] = useState(false);
   const [maxMemories, setMaxMemories] = useState(30);

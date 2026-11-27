@@ -59,6 +59,8 @@ export function TextReplacementSettings({
 
   const [form, setForm] = useState<NewRuleForm>(EMPTY_FORM)
   const [addError, setAddError] = useState<string | null>(null)
+  // A refused edit or delete, said on screen rather than only logged (#296)
+  const [ruleError, setRuleError] = useState<string | null>(null)
 
   const queryClient = useQueryClient()
   const refreshRules = () => queryClient.invalidateQueries({ queryKey: queryKeys.settings.textReplacements })
@@ -83,8 +85,11 @@ export function TextReplacementSettings({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       }),
+    onMutate: () => setRuleError(null),
     onError: (err) => {
-      console.error('[TextReplacementSettings] patch failed', ruleErrorMessage(err, 'update'))
+      const message = ruleErrorMessage(err, 'update')
+      console.error('[TextReplacementSettings] patch failed', message)
+      setRuleError(message)
     },
     // On failure too: re-fetch to restore the on-screen value to whatever the server has.
     onSettled: () => refreshRules(),
@@ -93,8 +98,11 @@ export function TextReplacementSettings({
   const deleteRule = useMutation({
     mutationFn: (id: string) => apiFetch(`${RULES_URL}/${id}`, { method: 'DELETE' }),
     onSuccess: () => refreshRules(),
+    onMutate: () => setRuleError(null),
     onError: (err) => {
-      console.error('[TextReplacementSettings] delete failed', ruleErrorMessage(err, 'delete'))
+      const message = ruleErrorMessage(err, 'delete')
+      console.error('[TextReplacementSettings] delete failed', message)
+      setRuleError(message)
     },
   })
 
@@ -239,6 +247,11 @@ export function TextReplacementSettings({
               ? 'Loading…'
               : `${rules?.length ?? 0} rule${(rules?.length ?? 0) === 1 ? '' : 's'} defined.`}
           </div>
+          {ruleError && (
+            <div role="alert" className="qt-text-small qt-text-destructive mt-2">
+              {ruleError}
+            </div>
+          )}
         </div>
         {rules && rules.length > 0 ? (
           <ul>

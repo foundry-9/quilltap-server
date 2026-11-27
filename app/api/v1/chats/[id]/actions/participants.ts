@@ -108,6 +108,21 @@ export async function handleStopImpersonate(
     return notFound('Participant');
   }
 
+  // Validate a profile that accompanies the hand-back *before* touching the
+  // seat: refusing it after the impersonation was already removed handed the
+  // seat back with no profile and answered 404 (#246).
+  if (newConnectionProfileId) {
+    const profile = await repos.connections.findById(newConnectionProfileId);
+    if (!profile) {
+      logger.debug('[Chats v1] Stop-impersonate refused: unknown connection profile', {
+        chatId,
+        participantId,
+        newConnectionProfileId,
+      });
+      return notFound('Connection profile');
+    }
+  }
+
   // Impersonation is an overlay (Bug 44): the seat was never disturbed on start,
   // so there is nothing to restore. `removeImpersonation` — which drops the id
   // from `impersonatingParticipantIds` and re-points `activeTypingParticipantId`
@@ -125,11 +140,6 @@ export async function handleStopImpersonate(
   // through a plain participant update (profile only — `controlledBy` never
   // moved, so there is nothing to flip and nothing to recompile).
   if (newConnectionProfileId) {
-    const profile = await repos.connections.findById(newConnectionProfileId);
-    if (!profile) {
-      return notFound('Connection profile');
-    }
-
     updatedChat = await repos.chats.updateParticipant(chatId, participantId, {
       connectionProfileId: newConnectionProfileId,
     }) ?? updatedChat;

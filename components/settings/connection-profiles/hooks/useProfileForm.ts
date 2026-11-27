@@ -34,6 +34,13 @@ export interface AutoConfigureResponse {
   suggestions: AutoConfigureResult
 }
 
+/** A sampling field as a number, or null when it is unset or unparseable. */
+function finiteOrNull(value: number | null | undefined, parse: (raw: string) => number): number | null {
+  if (value === null || value === undefined) return null
+  const parsed = parse(String(value))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 /** What the form needs to know about a provider (defaults when it is unknown). */
 export interface ProviderRequirements {
   requiresApiKey: boolean
@@ -80,16 +87,20 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
   /**
    * The editor's sampling controls as they are allowed to leave the form.
    * `temperature` / `top_p` are dropped for a provider that declares
-   * `capabilities.samplingParameters: false` (the sliders are hidden there);
-   * `max_tokens` always goes.
+   * `capabilities.samplingParameters: false` (the sliders are hidden there).
+   * A knob left unset (null, or not a finite number) is omitted, so the
+   * provider keeps its own default — a profile made with `parameters: {}` must
+   * not come back from an unrelated edit capped at an invented ceiling (#256).
    */
   const outboundSamplingParameters = useCallback((): Record<string, number> => {
-    const out: Record<string, number> = {
-      max_tokens: parseInt(String(form.formData.maxTokens)),
-    }
+    const out: Record<string, number> = {}
+    const maxTokens = finiteOrNull(form.formData.maxTokens, parseInt)
+    if (maxTokens !== null) out.max_tokens = maxTokens
     if (getProviderRequirements(form.formData.provider).supportsSamplingParameters) {
-      out.temperature = parseFloat(String(form.formData.temperature))
-      out.top_p = parseFloat(String(form.formData.topP))
+      const temperature = finiteOrNull(form.formData.temperature, parseFloat)
+      const topP = finiteOrNull(form.formData.topP, parseFloat)
+      if (temperature !== null) out.temperature = temperature
+      if (topP !== null) out.top_p = topP
     }
     return out
   }, [getProviderRequirements, form.formData.provider, form.formData.maxTokens, form.formData.temperature, form.formData.topP])
@@ -186,9 +197,10 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
         apiKeyId: profile.apiKeyId || '',
         baseUrl: profile.baseUrl || '',
         modelName: profile.modelName,
-        temperature: profile.parameters?.temperature ?? 1,
-        maxTokens: profile.parameters?.max_tokens ?? 1000,
-        topP: profile.parameters?.top_p ?? 1,
+        // Absent stays absent: the provider's own default applies (#256).
+        temperature: profile.parameters?.temperature ?? null,
+        maxTokens: profile.parameters?.max_tokens ?? null,
+        topP: profile.parameters?.top_p ?? null,
         isDefault: profile.isDefault,
         isCheap: profile.isCheap ?? false,
         isDangerousCompatible: profile.isDangerousCompatible ?? false,

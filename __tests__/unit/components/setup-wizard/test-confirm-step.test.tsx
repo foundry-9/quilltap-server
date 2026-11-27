@@ -16,7 +16,14 @@ import {
   type ProviderInfo,
   type WizardState,
 } from '@/components/setup-wizard/useProviderWizardState'
-import { testEmbedding, testMessage } from '@/components/setup-wizard/wizard-api'
+import {
+  createConnectionProfile,
+  createEmbeddingProfile,
+  testEmbedding,
+  testMessage,
+  updateChatSettings,
+  updateConnectionProfile,
+} from '@/components/setup-wizard/wizard-api'
 
 jest.mock('@/components/setup-wizard/wizard-api', () => ({
   testMessage: jest.fn(),
@@ -25,6 +32,9 @@ jest.mock('@/components/setup-wizard/wizard-api', () => ({
   createEmbeddingProfile: jest.fn(),
   createImageProfile: jest.fn(),
   updateChatSettings: jest.fn(),
+  updateConnectionProfile: jest.fn(),
+  updateEmbeddingProfile: jest.fn(),
+  updateImageProfile: jest.fn(),
 }))
 jest.mock('@/components/ui/icon', () => ({
   Icon: ({ title }: { title?: string }) => <span>{title}</span>,
@@ -129,5 +139,52 @@ describe('testedSummary', () => {
     expect(testedSummary(true, false)).toBe('Chat and the background model work')
     expect(testedSummary(false, true)).toBe('Chat and embeddings work')
     expect(testedSummary(true, true)).toBe('Chat, the background model and embeddings work')
+  })
+})
+
+describe('TestConfirmStep — Save from Settings over an existing setup (#268)', () => {
+  const existingState = (chatModel: string) =>
+    baseState({
+      chatConfig: { provider: 'ANTHROPIC', model: chatModel },
+      cheapConfig: { strategy: 'USER_DEFINED', provider: 'OPENAI', model: 'gpt-5.4-nano' },
+      embeddingConfig: { provider: 'BUILTIN', model: 'tfidf' },
+      existingProfiles: {
+        chat: { id: 'chat-1', name: 'Anthropic - claude-haiku-5-5', provider: 'ANTHROPIC', model: 'claude-haiku-5-5' },
+        cheap: { id: 'cheap-1', name: 'Cheap - OpenAI - gpt-5.4-nano', provider: 'OPENAI', model: 'gpt-5.4-nano' },
+        embedding: { id: 'emb-1', name: 'Built-in', provider: 'BUILTIN', model: 'tfidf' },
+      },
+      takenProfileNames: {
+        connection: ['Anthropic - claude-haiku-5-5', 'Cheap - OpenAI - gpt-5.4-nano'],
+        embedding: ['Built-in'],
+        image: [],
+      },
+    })
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    ;(updateChatSettings as jest.Mock).mockResolvedValue(undefined)
+    ;(updateConnectionProfile as jest.Mock).mockResolvedValue(undefined)
+  })
+
+  it('changes nothing it was not asked to change', async () => {
+    renderWithQuery(<Harness initial={existingState('claude-haiku-5-5')} />)
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(updateChatSettings).toHaveBeenCalled())
+    expect(createConnectionProfile).not.toHaveBeenCalled()
+    expect(updateConnectionProfile).not.toHaveBeenCalled()
+    expect(createEmbeddingProfile).not.toHaveBeenCalled()
+    expect(updateChatSettings).toHaveBeenCalledWith({ strategy: 'USER_DEFINED', userDefinedProfileId: 'cheap-1' })
+  })
+
+  it('updates the existing chat profile when only its model moved', async () => {
+    renderWithQuery(<Harness initial={existingState('claude-sonnet-5-5')} />)
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(updateChatSettings).toHaveBeenCalled())
+    expect(updateConnectionProfile).toHaveBeenCalledTimes(1)
+    expect(updateConnectionProfile).toHaveBeenCalledWith(
+      'chat-1',
+      expect.objectContaining({ modelName: 'claude-sonnet-5-5', name: 'Anthropic - claude-sonnet-5-5', isDefault: true }),
+    )
+    expect(createConnectionProfile).not.toHaveBeenCalled()
   })
 })

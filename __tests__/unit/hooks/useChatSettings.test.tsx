@@ -166,3 +166,35 @@ describe('useChatSettings — optimistic update', () => {
     expect(lastPut).toEqual({ wardrobeImageSettings: { imageProfileId: 'profile-1', generateFromTools: true } })
   })
 })
+
+describe('useChatSettings — a profile list that fails (#293)', () => {
+  const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
+
+  it('stops "loading" once every list has settled, and says which one failed', async () => {
+    mockFetch.mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : (input as Request).url ?? String(input)
+      if (url === '/api/v1/settings/chat') {
+        return Promise.resolve({ ok: true, json: async () => initialSettings } as Response)
+      }
+      if (url.startsWith('/api/v1/embedding-profiles')) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: async () => ({ error: 'The embedding shelf is locked' }),
+        } as Response)
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ profiles: [] }) } as Response)
+    })
+    const client = createTestQueryClient()
+    const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+      <QueryClientProvider client={client}>
+        <AvatarDisplayProvider>{children}</AvatarDisplayProvider>
+      </QueryClientProvider>
+    )
+    const { result } = renderHook(() => useChatSettings(), { wrapper })
+
+    await waitFor(() => expect(result.current.loadingProfiles).toBe(false))
+    expect(result.current.profilesError).toContain('The embedding shelf is locked')
+    expect(result.current.embeddingProfiles).toEqual([])
+  })
+})

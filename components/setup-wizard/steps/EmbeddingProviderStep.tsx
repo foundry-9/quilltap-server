@@ -20,8 +20,10 @@ const BUILTIN_TFIDF_ID = '__builtin_tfidf__'
 
 export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
   const headingId = useId()
+  // A preloaded Built-in profile carries provider 'BUILTIN'; show it as the
+  // Built-in option rather than as nothing selected (#268)
   const [selectedProvider, setSelectedProvider] = useState<string>(
-    state.embeddingConfig?.provider || ''
+    state.embeddingConfig?.provider === 'BUILTIN' ? BUILTIN_TFIDF_ID : state.embeddingConfig?.provider || ''
   )
   const [models, setModels] = useState<EmbeddingModel[]>([])
   const [selectedModel, setSelectedModel] = useState<string>(

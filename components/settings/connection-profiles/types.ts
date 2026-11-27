@@ -137,9 +137,14 @@ export interface ProfileFormData {
   apiKeyId: string
   baseUrl: string
   modelName: string
-  temperature: number
-  maxTokens: number
-  topP: number
+  /**
+   * Sampling knobs. `null` means "unset": the profile stores no value and the
+   * provider keeps its own default (#256). A save omits an unset knob rather
+   * than inventing one.
+   */
+  temperature: number | null
+  maxTokens: number | null
+  topP: number | null
   isDefault: boolean
   isCheap: boolean
   isDangerousCompatible: boolean

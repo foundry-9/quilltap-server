@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from 'react'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
-import { orderProfilesByChatUse } from '@/lib/llm/profile-usage'
+import { orderProfilesByChatUse, resolveDefaultConnectionProfileId } from '@/lib/llm/profile-usage'
 import { showErrorToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
@@ -62,9 +62,11 @@ export function SelectLLMProfileDialog({
   } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen, select: orderProfilesByChatUse })
   const [pickedProfileId, setPickedProfileId] = useState<string>('')
 
-  // Until the operator picks one: the character's default profile if it has
-  // one, otherwise the first profile in the list.
-  const selectedProfileId = pickedProfileId || character?.defaultConnectionProfileId || profiles[0]?.id || ''
+  // Until the operator picks one: the shared default rule (the character's
+  // default while it still exists, then the profile marked default), then the
+  // first profile in the list — never a deleted profile's id (#246).
+  const selectedProfileId =
+    pickedProfileId || resolveDefaultConnectionProfileId(character, profiles) || profiles[0]?.id || ''
 
   useEffect(() => {
     if (!profilesError) return

@@ -55,11 +55,16 @@ interface ProfileModalProps {
   }
   operations: {
     saveLoading: boolean
+    /** Each probe's failure, shown in the dialog rather than only logged (#255). */
+    saveError?: string | null
     connectLoading: boolean
     connectError: string | null
     fetchModelsLoading: boolean
+    fetchModelsError?: string | null
     testMessageLoading: boolean
+    testMessageError?: string | null
     autoConfigureLoading: boolean
+    autoConfigureError?: string | null
     handleConnect: (callback: (data: ProfileCheckResult) => void) => Promise<ProfileCheckResult | null | undefined>
     handleFetchModels: (callback: (data: FetchModelsResult) => void) => Promise<FetchModelsResult | null | undefined>
     handleTestMessage: (callback: (data: ProfileCheckResult) => void) => Promise<ProfileCheckResult | null | undefined>
@@ -98,7 +103,7 @@ export function ProfileModal({
   const [autoConfigureMessage, setAutoConfigureMessage] = useState<string | null>(null)
   const [autoConfigureResult, setAutoConfigureResult] = useState<AutoConfigureResult | null>(null)
 
-  // Note: No need for state reset effect - modal is keyed by profile.id so it remounts fresh
+  // No state reset effect: the host keys the modal per opening, so it remounts fresh (#294)
 
   // A stored row can carry a base URL its provider does not take — every
   // profile saved before Bug 73 was fixed, and any import. Reading the
@@ -421,13 +426,20 @@ export function ProfileModal({
   }
 
   const footer = (
-    <FormActions
-      onCancel={handleClose}
-      onSubmit={handleFormSubmit}
-      submitLabel={operations.saveLoading ? 'Saving...' : profile?.id ? 'Update Profile' : 'Create Profile'}
-      isLoading={operations.saveLoading}
-      isDisabled={!isValid}
-    />
+    <div className="w-full space-y-2">
+      {operations.saveError && (
+        <div role="alert" className="qt-alert-error">
+          <span aria-hidden="true">✗</span> {operations.saveError}
+        </div>
+      )}
+      <FormActions
+        onCancel={handleClose}
+        onSubmit={handleFormSubmit}
+        submitLabel={operations.saveLoading ? 'Saving...' : profile?.id ? 'Update Profile' : 'Create Profile'}
+        isLoading={operations.saveLoading}
+        isDisabled={!isValid}
+      />
+    </div>
   )
 
   return (
@@ -715,6 +727,24 @@ export function ProfileModal({
                 </div>
               )}
 
+              {operations.fetchModelsError && (
+                <div role="alert" className="qt-alert-error">
+                  <span aria-hidden="true">✗</span> {operations.fetchModelsError}
+                </div>
+              )}
+
+              {operations.testMessageError && (
+                <div role="alert" className="qt-alert-error">
+                  <span aria-hidden="true">✗</span> {operations.testMessageError}
+                </div>
+              )}
+
+              {operations.autoConfigureError && (
+                <div role="alert" className="qt-alert-error">
+                  <span aria-hidden="true">✗</span> {operations.autoConfigureError}
+                </div>
+              )}
+
               {modelsMessage && (
                 <div className="text-sm qt-alert-info">
                   ✓ {modelsMessage}
@@ -812,7 +842,7 @@ export function ProfileModal({
                 {reqs.supportsSamplingParameters && (
                 <div>
                   <label htmlFor="temperature" className="block qt-text-label mb-2">
-                    Temperature ({form.formData.temperature})
+                    Temperature ({form.formData.temperature ?? 'provider default'})
                   </label>
                   <input
                     type="range"
@@ -820,11 +850,20 @@ export function ProfileModal({
                     min="0"
                     max="2"
                     step="0.1"
-                    value={form.formData.temperature}
+                    value={form.formData.temperature ?? 1}
                     onChange={(e) => form.setField('temperature', parseFloat(e.target.value))}
                     className="qt-range w-full"
                   />
                   <p className="qt-text-xs mt-1">0 = deterministic, 2 = creative</p>
+                  {form.formData.temperature !== null && (
+                    <button
+                      type="button"
+                      onClick={() => form.setField('temperature', null)}
+                      className="qt-button-ghost qt-text-xs mt-1"
+                    >
+                      Use provider default
+                    </button>
+                  )}
                 </div>
                 )}
 
@@ -835,8 +874,13 @@ export function ProfileModal({
                   <input
                     type="number"
                     id="maxTokens"
-                    value={form.formData.maxTokens}
-                    onChange={(e) => form.setField('maxTokens', parseInt(e.target.value))}
+                    value={form.formData.maxTokens ?? ''}
+                    onChange={(e) => {
+                      const parsed = parseInt(e.target.value)
+                      // Emptied means unset: the provider's own ceiling applies (#256).
+                      form.setField('maxTokens', Number.isFinite(parsed) ? parsed : null)
+                    }}
+                    placeholder="Provider default"
                     min="1"
                     max={getMaxTokensLimit()}
                     className="qt-input"
@@ -851,7 +895,7 @@ export function ProfileModal({
                 {reqs.supportsSamplingParameters && (
                 <div>
                   <label htmlFor="topP" className="block qt-text-label mb-2">
-                    Top P ({form.formData.topP})
+                    Top P ({form.formData.topP ?? 'provider default'})
                   </label>
                   <input
                     type="range"
@@ -859,11 +903,20 @@ export function ProfileModal({
                     min="0"
                     max="1"
                     step="0.05"
-                    value={form.formData.topP}
+                    value={form.formData.topP ?? 1}
                     onChange={(e) => form.setField('topP', parseFloat(e.target.value))}
                     className="qt-range w-full"
                   />
                   <p className="qt-text-xs mt-1">Nucleus sampling (0-1)</p>
+                  {form.formData.topP !== null && (
+                    <button
+                      type="button"
+                      onClick={() => form.setField('topP', null)}
+                      className="qt-button-ghost qt-text-xs mt-1"
+                    >
+                      Use provider default
+                    </button>
+                  )}
                 </div>
                 )}
               </div>

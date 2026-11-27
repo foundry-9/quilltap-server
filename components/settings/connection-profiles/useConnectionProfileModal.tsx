@@ -59,25 +59,42 @@ export function useConnectionProfileModal({
   const [isOpen, setIsOpen] = useState(false)
   const [editingProfile, setEditingProfile] = useState<ConnectionProfile | null>(null)
   const [initialProvider, setInitialProvider] = useState<string | undefined>(undefined)
+  // Bumped on every opening, so the modal remounts with no probe results from
+  // the last session — every new profile used to share the key 'new' (#294).
+  const [openingId, setOpeningId] = useState(0)
+
+  // A probe's failure lives in its operation, outside the modal; clear them all
+  // whenever a session starts or ends so an old error never greets a new one.
+  const clearOperationErrors = useCallback(() => {
+    saveOp.clearError()
+    connectOp.clearError()
+    fetchModelsOp.clearError()
+    testMessageOp.clearError()
+    autoConfigureOp.clearError()
+  }, [saveOp, connectOp, fetchModelsOp, testMessageOp, autoConfigureOp])
 
   const openEdit = useCallback(
     (profile: ConnectionProfile) => {
+      clearOperationErrors()
       loadProfileIntoForm(profile)
       setEditingProfile(profile)
       setInitialProvider(undefined)
+      setOpeningId((n) => n + 1)
       setIsOpen(true)
     },
-    [loadProfileIntoForm]
+    [loadProfileIntoForm, clearOperationErrors]
   )
 
   const openNew = useCallback(
     (provider?: string) => {
+      clearOperationErrors()
       resetForm()
       setEditingProfile(null)
       setInitialProvider(provider)
+      setOpeningId((n) => n + 1)
       setIsOpen(true)
     },
-    [resetForm]
+    [resetForm, clearOperationErrors]
   )
 
   const close = useCallback(() => {
@@ -85,7 +102,8 @@ export function useConnectionProfileModal({
     setEditingProfile(null)
     setInitialProvider(undefined)
     resetForm()
-  }, [resetForm])
+    clearOperationErrors()
+  }, [resetForm, clearOperationErrors])
 
   // Normalized names already in use, excluding the profile being edited — feeds
   // the modal's inline duplicate-name validation and unique auto-name suggestion.
@@ -100,9 +118,9 @@ export function useConnectionProfileModal({
   )
 
   const modal = (
-    // Keyed so the modal remounts when switching profiles
+    // Keyed per opening so the modal remounts fresh every time it opens (#294)
     <ProfileModal
-      key={editingProfile?.id || 'new'}
+      key={`${editingProfile?.id || 'new'}:${openingId}`}
       isOpen={isOpen}
       onClose={close}
       onSuccess={onSuccess}
@@ -120,11 +138,15 @@ export function useConnectionProfileModal({
       }}
       operations={{
         saveLoading: saveOp.loading,
+        saveError: saveOp.error,
         connectLoading: connectOp.loading,
         connectError: connectOp.error,
         fetchModelsLoading: fetchModelsOp.loading,
+        fetchModelsError: fetchModelsOp.error,
         testMessageLoading: testMessageOp.loading,
+        testMessageError: testMessageOp.error,
         autoConfigureLoading: autoConfigureOp.loading,
+        autoConfigureError: autoConfigureOp.error,
         handleConnect,
         handleFetchModels,
         handleTestMessage,

@@ -1,7 +1,7 @@
 'use client'
 
 import { readErrorMessage } from '@/lib/fetch-helpers'
-import { useState, useEffect, useCallback, useId } from 'react'
+import { useState, useEffect, useCallback, useId, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ImageLoraSpec, ImageLoraSupport, ProviderOptionsSchema } from '@quilltap/plugin-types'
 import { apiFetch } from '@/lib/query/fetcher'
@@ -151,7 +151,12 @@ export function ImageProfileForm({
 
   // Query the provider (or its plugin's built-in list) for image models.
   // Shared by the auto-load below and the explicit Fetch Models button.
+  // Only the newest request may write the list: switching provider or key
+  // mid-fetch must not let the slower, older answer land last (#295).
+  const modelsRequestRef = useRef(0)
   const fetchModels = useCallback(async () => {
+    const requestId = ++modelsRequestRef.current
+    const isCurrent = () => requestId === modelsRequestRef.current
     try {
       setIsFetchingModels(true)
       setModelsFetchError(null)
@@ -165,8 +170,10 @@ export function ImageProfileForm({
       }
 
       const res = await fetch(url.toString())
+      if (!isCurrent()) return
       if (res.ok) {
         const data = await res.json()
+        if (!isCurrent()) return
         setAvailableModels(data.models)
         setModelsSource(data.source === 'provider' ? 'provider' : 'builtin')
         setModelsFetchError(data.fetchError || null)
@@ -182,14 +189,15 @@ export function ImageProfileForm({
         setAvailableModels(providerInfo?.defaultModels || [])
         setModelsSource('builtin')
       }
-    } catch (err) {
+    } catch {
+      if (!isCurrent()) return
       // Fall back to default models on error
       const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
       const providerInfo = imageProviders.find(p => p.value === normalizedProvider || p.value === formData.provider)
       setAvailableModels(providerInfo?.defaultModels || [])
       setModelsSource('builtin')
     } finally {
-      setIsFetchingModels(false)
+      if (isCurrent()) setIsFetchingModels(false)
     }
   }, [formData.provider, formData.apiKeyId, imageProviders, queryClient])
 

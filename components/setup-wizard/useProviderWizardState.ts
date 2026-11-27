@@ -1,6 +1,7 @@
 'use client'
 
 import { useReducer, useCallback } from 'react'
+import type { ExistingProfileRef } from './profile-plan'
 
 // ============================================================================
 // Types
@@ -94,6 +95,22 @@ export interface WizardState {
   testResults: Record<string, TestStatus>
   saving: boolean
   error: string | null
+  /**
+   * Settings mode only: the profiles each part was preloaded from, so Save can
+   * keep or update them instead of creating duplicates (#268).
+   */
+  existingProfiles: {
+    chat?: ExistingProfileRef
+    cheap?: ExistingProfileRef
+    embedding?: ExistingProfileRef
+    image?: ExistingProfileRef
+  }
+  /** Settings mode only: names already taken, per profile kind. */
+  takenProfileNames: {
+    connection: string[]
+    embedding: string[]
+    image: string[]
+  }
 }
 
 // ============================================================================
@@ -134,6 +151,8 @@ export const INITIAL_WIZARD_STATE: WizardState = {
   testResults: {},
   saving: false,
   error: null,
+  existingProfiles: {},
+  takenProfileNames: { connection: [], embedding: [], image: [] },
 }
 
 // ============================================================================

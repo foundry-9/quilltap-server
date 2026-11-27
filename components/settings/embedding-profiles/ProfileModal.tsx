@@ -47,8 +47,12 @@ export function ProfileModal({
   const [showReembedDialog, setShowReembedDialog] = useState(false)
   const [reembedProfileId, setReembedProfileId] = useState<string | null>(null)
   const [reembedLoading, setReembedLoading] = useState(false)
+  const [reembedError, setReembedError] = useState<string | null>(null)
   const [fetchedModels, setFetchedModels] = useState<EmbeddingModel[]>([])
+  // The provider the fetched list belongs to, so it is never offered for another
+  const [fetchedModelsProvider, setFetchedModelsProvider] = useState<string | null>(null)
   const [fetchingModels, setFetchingModels] = useState(false)
+  const [fetchModelsError, setFetchModelsError] = useState<string | null>(null)
 
   // Default to first available provider or 'BUILTIN'
   const defaultProvider = embeddingProviders[0]?.name || 'BUILTIN'
@@ -127,20 +131,27 @@ export function ProfileModal({
   const handleReembedConfirm = async () => {
     if (!reembedProfileId) return
     setReembedLoading(true)
+    setReembedError(null)
     try {
-      await fetchJson(`/api/v1/embedding-profiles/${reembedProfileId}?action=reindex`, {
+      const result = await fetchJson(`/api/v1/embedding-profiles/${reembedProfileId}?action=reindex`, {
         method: 'POST',
       })
+      if (!result.ok) {
+        // Stay open and say so, rather than closing as if it had worked (#296)
+        setReembedError(result.error || 'The re-embed could not be queued')
+        return
+      }
       notifyQueueChange()
-    } finally {
-      setReembedLoading(false)
       setShowReembedDialog(false)
       setReembedProfileId(null)
       handleClose()
+    } finally {
+      setReembedLoading(false)
     }
   }
 
   const handleReembedDecline = () => {
+    setReembedError(null)
     setShowReembedDialog(false)
     setReembedProfileId(null)
     handleClose()
@@ -158,10 +169,14 @@ export function ProfileModal({
     form.setField('modelName', '')
     form.setField('dimensions', '')
     setFetchedModels([])
+    setFetchedModelsProvider(null)
+    setFetchModelsError(null)
   }
 
   const handleFetchModels = async () => {
     setFetchingModels(true)
+    setFetchModelsError(null)
+    const provider = form.formData.provider
     try {
       const baseUrl = form.formData.baseUrl || undefined
       const params = new URLSearchParams({
@@ -175,6 +190,9 @@ export function ProfileModal({
       )
       if (result.ok && result.data?.models) {
         setFetchedModels(result.data.models)
+        setFetchedModelsProvider(provider)
+      } else if (!result.ok) {
+        setFetchModelsError(result.error || 'Models could not be fetched')
       }
     } finally {
       setFetchingModels(false)
@@ -194,11 +212,12 @@ export function ProfileModal({
 
   const staticModels = embeddingModels[form.formData.provider] || []
   // Merge fetched models with static models, preferring fetched (they're installed)
-  const currentModels = fetchedModels.length > 0
+  const fetchedForProvider = fetchedModelsProvider === form.formData.provider ? fetchedModels : []
+  const currentModels = fetchedForProvider.length > 0
     ? [
-        ...fetchedModels,
+        ...fetchedForProvider,
         // Add static models not in the fetched list (as suggestions)
-        ...staticModels.filter(s => !fetchedModels.some(f => f.id === s.id)),
+        ...staticModels.filter(s => !fetchedForProvider.some(f => f.id === s.id)),
       ]
     : staticModels
   const canFetchModels = needsBaseUrl // Ollama-style providers with a base URL
@@ -342,6 +361,11 @@ export function ProfileModal({
                     </button>
                   )}
                 </div>
+                {fetchModelsError && (
+                  <div role="alert" className="qt-alert-error mb-2">
+                    {fetchModelsError}
+                  </div>
+                )}
                 {currentModels.length > 0 ? (
                   <div className="space-y-2">
                     <select
@@ -448,6 +472,11 @@ export function ProfileModal({
         </div>
       }
     >
+      {reembedError && (
+        <div role="alert" className="qt-alert-error mb-3">
+          {reembedError}
+        </div>
+      )}
       <p className="qt-text">
         You&apos;ve switched the default embedding profile. All existing
         embeddings were created with a different model and need to be

@@ -34,5 +34,14 @@ export function WithChatSettings({
   if (!ctx.settings) {
     return <div className="qt-alert-error">{failure}</div>
   }
-  return <>{children(ctx as LoadedChatSettings)}</>
+  return (
+    <>
+      {ctx.profilesError && (
+        <div role="alert" className="qt-alert-error mb-3">
+          {ctx.profilesError}
+        </div>
+      )}
+      {children(ctx as LoadedChatSettings)}
+    </>
+  )
 }

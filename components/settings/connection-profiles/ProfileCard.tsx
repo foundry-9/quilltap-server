@@ -187,12 +187,12 @@ function ProfileCardContent({
       <div className="qt-text-xs mt-2">
         {providerTakesSamplingParameters ? (
           <>
-            Temperature: {profile.parameters?.temperature ?? 0.7} •
-            Max Tokens: {profile.parameters?.max_tokens ?? 1000} •
-            Top P: {profile.parameters?.top_p ?? 1}
+            Temperature: {profile.parameters?.temperature ?? 'provider default'} •
+            Max Tokens: {profile.parameters?.max_tokens ?? 'provider default'} •
+            Top P: {profile.parameters?.top_p ?? 'provider default'}
           </>
         ) : (
-          <>Max Tokens: {profile.parameters?.max_tokens ?? 1000}</>
+          <>Max Tokens: {profile.parameters?.max_tokens ?? 'provider default'}</>
         )}
       </div>
 

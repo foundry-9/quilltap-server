@@ -134,4 +134,18 @@ describe('character page sections on a blank character', () => {
     expect(screen.queryByText(/Default System Prompt/i)).toBeNull()
     expect(screen.queryByText(/Default Scenario/i)).toBeNull()
   })
+
+  it('choosing "No default profile" sends null, so the stored profile is cleared (#237)', () => {
+    const { saveNow } = renderSection(<ChatDefaultsSection />, {
+      character: { ...blank, controlledBy: 'llm', defaultConnectionProfileId: 'p1' },
+      profiles: [{ id: 'p1', name: 'Primary' }] as CharacterPageContextValue['profiles'],
+    })
+    fireEvent.change(screen.getByLabelText('Default connection profile'), { target: { value: '' } })
+    expect(saveNow).toHaveBeenCalledWith(
+      { controlledBy: 'llm', defaultConnectionProfileId: null },
+      expect.any(String),
+    )
+    // JSON keeps a null key; an undefined one would vanish and mean "no change".
+    expect(JSON.stringify(saveNow.mock.calls[0][0])).toContain('"defaultConnectionProfileId":null')
+  })
 })
