@@ -56,11 +56,20 @@ import {
  * and (for `document_store`) the mount. `scope` is the route's own enum —
  * the chat route accepts `project`, the standalone route cannot resolve it.
  */
+/**
+ * A document's mount, as clients send it. A chat's open-document row stores
+ * `null` for anything outside a document store (Quilltap General, the
+ * project), and Document Mode echoes the row back, so `null` is accepted and
+ * read as "no mount" — refusing it turned every save of a General document
+ * into a silent 400.
+ */
+const mountPointField = z.string().nullish().transform((value) => value ?? undefined);
+
 export function documentTargetFields<S extends z.ZodType>(scope: S) {
   return {
     filePath: z.string(),
     scope,
-    mountPoint: z.string().optional(),
+    mountPoint: mountPointField,
   };
 }
 
@@ -70,7 +79,7 @@ export function openDocumentFields<S extends z.ZodType>(scope: S) {
     filePath: z.string().optional(),
     title: z.string().optional(),
     scope,
-    mountPoint: z.string().optional(),
+    mountPoint: mountPointField,
     /**
      * Folder (relative to scope root) where a new blank document should land.
      * Forward-slash separated; ignored when `filePath` is provided. Empty/unset

@@ -227,6 +227,8 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
   // -- Mode switch ----------------------------------------------------------
 
   const switchToJson = () => {
+    // Already in JSON: re-serializing the draft would overwrite the text being edited.
+    if (editorMode === 'json') return
     if (draft) setJsonText(serializeDraft(draft))
     setEditorMode('json')
   }
@@ -493,7 +495,9 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
                       ? (jsonState?.issues[0] ?? 'The JSON must validate before the form can hold it')
                       : undefined,
                 },
-                { value: 'json', label: 'JSON', disabled: editorMode === 'json' || !draft },
+                // The chosen option stays enabled: disabling it would drop keyboard
+                // focus to the page the moment the arrow keys chose it.
+                { value: 'json', label: 'JSON', disabled: editorMode === 'form' && !draft },
               ]}
               value={editorMode}
               onSelect={(mode) => (mode === 'form' ? switchToForm() : switchToJson())}

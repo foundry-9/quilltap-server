@@ -4,6 +4,14 @@
 
 ### 4.14.2
 
+#### Fix: problems found dogfooding the front-end pass
+
+- Document Mode could not save a Quilltap General document. The open-document row stores `mountPoint: null` for a document outside any store, Document Mode sends it back on every save, and the request schemas accepted only a string or nothing, so each autosave was a 400 and the pane stayed "Unsaved". `documentTargetFields` / `openDocumentFields` (`lib/documents/operator-doc-http.ts`) now read `null` as no mount.
+- Clicking a character's name (or its Chat button) on the Characters tab drilled into the character in place and also opened a second Character tab, because the workspace link interceptor handled the same click. Anchors that handle their own click in place now opt out with `workspaceInPlaceProps` (`components/workspace/WorkspaceLinkInterceptor.tsx`).
+- Pascal's Workbench: choosing JSON in the Form / JSON switch with the arrow keys dropped keyboard focus to the page, because the chosen option was disabled. It stays enabled, and choosing JSON again while already in JSON no longer re-serializes the draft over the text being edited (regression from the `SegmentedRadioGroup` conversion).
+- Delete All Data's dialog is an `alertdialog`; `WizardModal` passes `role` through to `BaseModal`.
+- `npm run lint` failed on a `qt-text-*` placeholder in `Spinner.tsx`'s doc comment, which the `qt-*` class check read as a class name; the comment is reworded.
+
 #### Refactor: front-end pass (shared hooks and components, dead code, server state into the query cache)
 
 A whole-tree audit of the client (`app/`, `components/`, `hooks/`, `lib/hooks`, `lib/query`) followed by the refactors it found. About 390 files, roughly 6,100 lines added and 12,200 removed. Meant to be behavior-neutral except where listed. Record, with what was examined and left alone: [refactor-4-14-front-end.md](developer/features/refactor-4-14-front-end.md). The audit's 115 verified bugs are filed as #237–#351; the ones this change fixes are listed below, the rest are open.

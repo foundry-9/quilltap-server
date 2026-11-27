@@ -5,7 +5,8 @@ import type { SVGProps } from 'react'
 /**
  * The app's drawn loading spinner: a faint ring with a bright quarter-arc,
  * turning. It takes the colour of the text around it (`currentColor`), so a
- * caller sets the colour with a `qt-text-*` class and the size with `w-*`/`h-*`.
+ * caller sets the colour with one of the theme's text-colour classes and the
+ * size with `w-*`/`h-*`.
  *
  * The CSS-only `qt-spinner` (a bordered ring the theme can recolour) is the
  * other spinner; this one is for places that want the glyph to follow text.

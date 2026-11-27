@@ -37,6 +37,18 @@ import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
 import { openHrefInWorkspace } from '@/components/workspace/open-href-in-workspace'
 
+/**
+ * Set on an anchor whose own `onClick` handles the click in place inside its
+ * workspace tab; the interceptor then leaves it alone. Spread
+ * {@link workspaceInPlaceProps} rather than spelling the attribute.
+ */
+export const WORKSPACE_IN_PLACE_ATTR = 'data-workspace-in-place'
+
+/** Props that mark an anchor as handling its own click in place (empty when not in a tab). */
+export function workspaceInPlaceProps(inTab: boolean): Record<string, string> {
+  return inTab ? { [WORKSPACE_IN_PLACE_ATTR]: '' } : {}
+}
+
 export function WorkspaceLinkInterceptor() {
   const ws = useWorkspaceOptional()
   const pathname = usePathname()
@@ -55,6 +67,10 @@ export function WorkspaceLinkInterceptor() {
       const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null
       if (!anchor) return
       if (anchor.hasAttribute('download')) return
+      // An anchor that handles its own click in place (a list drilling into an
+      // entry inside its tab) opts out; otherwise both would run and one click
+      // would open a second tab beside the drill-down.
+      if (anchor.hasAttribute(WORKSPACE_IN_PLACE_ATTR)) return
       const linkTarget = anchor.getAttribute('target')
       if (linkTarget && linkTarget !== '_self') return
 

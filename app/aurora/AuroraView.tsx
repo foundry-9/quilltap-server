@@ -26,6 +26,7 @@ import { Icon } from '@/components/ui/icon'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { useInTabDrilldown } from '@/components/workspace/useInTabDrilldown'
+import { workspaceInPlaceProps } from '@/components/workspace/WorkspaceLinkInterceptor'
 
 const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
   loading: () => <p className="qt-text-muted p-8 text-center">Loading wizard...</p>,
@@ -443,6 +444,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                     <h2 className="qt-heading-3 qt-text flex items-center gap-2">
                       <Link
                         href={`/aurora/${character.id}`}
+                        {...workspaceInPlaceProps(inTab)}
                         onClick={inTab ? (e) => {
                           e.preventDefault()
                           setOpenChatForSelected(false)
@@ -528,6 +530,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                   <>
                     <Link
                       href={`/aurora/${character.id}?action=chat`}
+                      {...workspaceInPlaceProps(inTab)}
                       onClick={inTab ? (e) => {
                         e.preventDefault()
                         setOpenChatForSelected(true)

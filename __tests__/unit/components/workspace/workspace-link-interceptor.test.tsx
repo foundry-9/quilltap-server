@@ -19,7 +19,7 @@ jest.mock('@/components/providers/new-chat-provider', () => ({
 
 import { render, screen, fireEvent } from '@testing-library/react'
 import { WorkspaceProvider, useWorkspace } from '@/components/providers/workspace-provider'
-import { WorkspaceLinkInterceptor } from '@/components/workspace/WorkspaceLinkInterceptor'
+import { WorkspaceLinkInterceptor, workspaceInPlaceProps } from '@/components/workspace/WorkspaceLinkInterceptor'
 
 function Probe() {
   const { state } = useWorkspace()
@@ -51,6 +51,8 @@ function setup() {
       <a href="/salon/new" data-testid="newchat">New chat</a>
       <a href="/salon/new?projectId=p1" data-testid="newchat-proj">New chat in project</a>
       <a href="/salon/new?autonomous=1" data-testid="newroom" onClick={(e) => e.preventDefault()}>New room</a>
+      {/* A list drilling into an entry in its own tab handles the click itself. */}
+      <a href="/aurora/c2" data-testid="inplace" {...workspaceInPlaceProps(true)} onClick={(e) => e.preventDefault()}>In place</a>
     </WorkspaceProvider>
   )
 }
@@ -68,6 +70,16 @@ describe('WorkspaceLinkInterceptor', () => {
     expect(countKind('settings')).toBe(1)
     fireEvent.click(screen.getByTestId('aurora'))
     expect(countKind('aurora')).toBe(1)
+  })
+
+  it('leaves an anchor marked in-place to its own handler (no second tab beside the drill-down)', () => {
+    setup()
+    fireEvent.click(screen.getByTestId('inplace'))
+    expect(countKind('character')).toBe(0)
+  })
+
+  it('marks nothing outside a tab', () => {
+    expect(workspaceInPlaceProps(false)).toEqual({})
   })
 
   it('de-dupes singleton tabs on repeated clicks', () => {

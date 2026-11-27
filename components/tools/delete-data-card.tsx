@@ -162,6 +162,7 @@ export function DeleteDataCard() {
       {showConfirmDialog && (
         <WizardModal
           onClose={handleClose}
+          role="alertdialog"
           title={
             <span className="flex items-center gap-3">
               <span className="w-10 h-10 qt-bg-destructive/10 rounded-full flex items-center justify-center">

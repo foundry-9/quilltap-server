@@ -56,6 +56,8 @@ export interface WizardModalProps {
   footer?: ReactNode
   /** Classes for the body wrapper, as BaseModal's `bodyClassName` */
   bodyClassName?: string
+  /** `alertdialog` for a destructive wizard (delete data), as BaseModal's `role` */
+  role?: 'dialog' | 'alertdialog'
 }
 
 /**
@@ -82,6 +84,7 @@ export function WizardModal({
   cancelLabel = 'Cancel',
   footer,
   bodyClassName,
+  role,
 }: WizardModalProps) {
   const subtitle = step ? `Step ${step.current} of ${step.total}` : description
 
@@ -122,6 +125,7 @@ export function WizardModal({
       maxWidth={maxWidth}
       className="w-[90vw]"
       bodyClassName={bodyClassName}
+      role={role}
       footer={footer === undefined ? standardFooter : footer}
       footerClassName={`qt-dialog-footer-default flex gap-3 flex-shrink-0 ${onBack || done ? 'justify-between' : ''}`}
     >
