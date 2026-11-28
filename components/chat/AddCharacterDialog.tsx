@@ -91,6 +91,9 @@ export default function AddCharacterDialog({
   const [isSummonOpen, setIsSummonOpen] = useState(false)
   const [outfitSelection, setOutfitSelection] = useState<OutfitSelection | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  // The character the profile default was last applied for, so a background
+  // refetch never overwrites the operator's own "Controlled By" pick (#274).
+  const defaultedForCharacterRef = useRef<string | null>(null)
 
   // NOTE: Debug logging during render causes React errors because DevConsoleProvider
   // intercepts console calls and triggers setState. Logging should only happen
@@ -114,6 +117,7 @@ export default function AddCharacterDialog({
       // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
       setSelectedCharacterId(null)
       setSelectedConnectionProfileId(null)
+      defaultedForCharacterRef.current = null
       setHasHistoryAccess(false)
       setJoinScenario('')
       setSearchTerm('')
@@ -128,14 +132,17 @@ export default function AddCharacterDialog({
   // skipping any character default that no longer exists in the user's profiles.
   useEffect(() => {
     if (!selectedCharacterId) return
+    // Apply the default only when the character changes, or while nothing is chosen yet
+    if (defaultedForCharacterRef.current === selectedCharacterId && selectedConnectionProfileId) return
     const character = characters.find(c => c.id === selectedCharacterId)
     const resolved = resolveDefaultConnectionProfileId(character, connectionProfiles)
       ?? connectionProfiles[0]?.id ?? null
     if (resolved) {
+      defaultedForCharacterRef.current = selectedCharacterId
       // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream selectedCharacterId changes (parent renders unconditionally)
       setSelectedConnectionProfileId(resolved)
     }
-  }, [selectedCharacterId, characters, connectionProfiles])
+  }, [selectedCharacterId, selectedConnectionProfileId, characters, connectionProfiles])
 
   // Filter out characters already in the chat and apply search
   const { regularCharacters, npcCharacters } = useMemo(() => {

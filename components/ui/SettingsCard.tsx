@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { ReactNode, useId } from 'react'
 import { DeleteConfirmPopover } from './DeleteConfirmPopover'
 
 /**
@@ -183,6 +183,7 @@ function ActionButtons({
   actions: SettingsCardAction[]
   deleteConfig?: SettingsCardDeleteConfig
 }) {
+  const deleteConfirmId = useId()
   return (
     <>
       {actions.map((action, index) => (
@@ -202,11 +203,14 @@ function ActionButtons({
           <button
             onClick={() => deleteConfig.onConfirmChange(!deleteConfig.isConfirming)}
             className="qt-button-destructive qt-button-sm"
+            aria-expanded={deleteConfig.isConfirming}
+            aria-controls={deleteConfirmId}
           >
             Delete
           </button>
 
           <DeleteConfirmPopover
+            id={deleteConfirmId}
             isOpen={deleteConfig.isConfirming}
             onCancel={() => deleteConfig.onConfirmChange(false)}
             onConfirm={deleteConfig.onConfirm}

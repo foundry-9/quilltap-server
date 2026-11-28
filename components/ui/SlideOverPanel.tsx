@@ -4,6 +4,7 @@ import { useRef, useEffect, useCallback, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useWorkspaceTabVisible } from '@/components/workspace/workspace-tab-context'
 
 export interface SlideOverPanelProps {
   isOpen: boolean
@@ -34,11 +35,16 @@ export function SlideOverPanel({
   headerActions,
 }: SlideOverPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
-  const handleKeyDown = useDialogFocus(panelRef, isOpen)
+  // Portaled to the body, so a panel opened in a kept-alive workspace tab would
+  // float over whichever tab the user moved to. While its tab is hidden it
+  // stands down (Escape included); the caller's state is untouched (#278).
+  const tabVisible = useWorkspaceTabVisible()
+  const shown = isOpen && tabVisible
+  const handleKeyDown = useDialogFocus(panelRef, shown)
 
   // Escape key handler
   useEffect(() => {
-    if (!isOpen) return
+    if (!shown) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -49,7 +55,7 @@ export function SlideOverPanel({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [shown, onClose])
 
   // Click scrim to close
   const handleScrimClick = useCallback((e: React.MouseEvent) => {
@@ -65,7 +71,7 @@ export function SlideOverPanel({
       {/* Scrim backdrop */}
       <div
         className="qt-slide-over-overlay"
-        data-open={isOpen}
+        data-open={shown}
         onClick={handleScrimClick}
         aria-hidden="true"
       />
@@ -74,7 +80,7 @@ export function SlideOverPanel({
       <div
         ref={panelRef}
         className={`qt-slide-over-panel ${className}`}
-        data-open={isOpen}
+        data-open={shown}
         style={{ width }}
         role="dialog"
         aria-modal="true"
@@ -85,7 +91,7 @@ export function SlideOverPanel({
         // but must be neither focusable nor announced: without `inert` its
         // controls sat in the Tab order beyond the viewport edge, and the
         // focus trap held keyboard users there (WCAG 2.1.2, 2.4.3).
-        inert={!isOpen}
+        inert={!shown}
       >
         <div className="qt-slide-over-header">
           <h2 className="text-base font-semibold qt-text truncate">{title}</h2>

@@ -33,7 +33,7 @@ import { ThemeStyleInjector } from '@/components/providers/theme-style-injector'
 import type { ThemeContextValue, ThemeProviderProps, ThemeSummary, SubsystemOverride, ThemePreview } from './types';
 import type { ColorMode } from '@/lib/themes/types';
 import type { RefusedTheme } from '@/lib/themes/refused';
-import { showWarningToast } from '@/lib/toast';
+import { showErrorToast, showWarningToast } from '@/lib/toast';
 import {
   resolveColorMode,
   applyThemeToDom,
@@ -128,6 +128,10 @@ export function ThemeProvider({
   // their caches on it.
   const [themeRevision, setThemeRevision] = useState(0);
   const lastCssRef = useRef<string | null>(null);
+  // Latest requested theme id (#276): a slow load for an earlier choice must not land
+  const latestThemeRequestRef = useRef(0);
+  // Preference saves run one after another so they cannot land out of order
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const lastPreviewRef = useRef<ThemePreview | null>(null);
   useEffect(() => {
     if (lastCssRef.current === shownCss && lastPreviewRef.current === previewState) return;
@@ -183,8 +187,10 @@ export function ThemeProvider({
   }, []);
 
   /** Load a theme's CSS; false when the theme is not registered. */
-  const loadThemeTokens = useCallback(async (themeId: string): Promise<boolean> => {
+  const loadThemeTokens = useCallback(async (themeId: string, requestId?: number): Promise<boolean> => {
     const result = await fetchThemeTokens(themeId);
+    // A newer choice has been made since; leave its styles alone.
+    if (requestId !== undefined && requestId !== latestThemeRequestRef.current) return true;
     if (!result) {
       clearTheme();
       return false;
@@ -257,24 +263,39 @@ export function ThemeProvider({
   // ACTIONS
   // ============================================================================
 
+  const enqueueSave = useCallback(
+    (preference: Parameters<typeof saveThemePreference>[0]): Promise<void> => {
+      const run = saveChainRef.current
+        .catch(() => undefined)
+        .then(() => saveThemePreference(preference))
+        .catch(() => {
+          showErrorToast('The gentleman at the ledger declined to note your preference; it will not outlast this visit.');
+        });
+      saveChainRef.current = run;
+      return run;
+    },
+    []
+  );
+
   const setTheme = useCallback(
     async (themeId: string | null) => {
       // Update local state immediately for responsiveness
+      const requestId = ++latestThemeRequestRef.current;
       setActiveThemeId(themeId);
 
       // Load the new theme's CSS
       if (themeId) {
-        await loadThemeTokens(themeId);
+        await loadThemeTokens(themeId, requestId);
       } else {
         clearTheme();
       }
 
       // Persist to server
       if (status === 'authenticated') {
-        await saveThemePreference({ activeThemeId: themeId });
+        await enqueueSave({ activeThemeId: themeId });
       }
     },
-    [status, loadThemeTokens, clearTheme]
+    [status, loadThemeTokens, clearTheme, enqueueSave]
   );
 
   const setColorMode = useCallback(
@@ -284,10 +305,10 @@ export function ThemeProvider({
 
       // Persist to server
       if (status === 'authenticated') {
-        await saveThemePreference({ colorMode: mode });
+        await enqueueSave({ colorMode: mode });
       }
     },
-    [status]
+    [status, enqueueSave]
   );
 
   const refreshThemes = useCallback(async () => {

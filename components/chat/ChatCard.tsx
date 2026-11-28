@@ -11,6 +11,7 @@
  * Configure via props to show/hide features based on context.
  */
 
+import { activateOnKey } from '@/components/ui/activate-on-key'
 import { useState } from 'react'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import Link from 'next/link'
@@ -211,13 +212,6 @@ export function ChatCard({
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      navigate(`/salon/${chat.id}`)
-    }
-  }
-
   return (
     <div
       ref={cardRef}
@@ -225,7 +219,7 @@ export function ChatCard({
       onClick={handleCardClick}
       role="button"
       tabIndex={0}
-      onKeyDown={handleKeyDown}
+      onKeyDown={activateOnKey}
     >
       {/* Highlight animation arrow for imported chats */}
       {highlighted && (

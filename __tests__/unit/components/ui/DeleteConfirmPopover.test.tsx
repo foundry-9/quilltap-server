@@ -161,4 +161,29 @@ describe('DeleteConfirmPopover', () => {
     expect(wrapper).toBeInTheDocument()
     expect(wrapper).toHaveClass('absolute', 'top-0', 'left-0', 'z-50')
   })
+
+  it('is a labelled dialog that focuses Cancel and closes on Escape (#277)', () => {
+    const onCancel = jest.fn()
+    render(
+      <DeleteConfirmPopover isOpen onCancel={onCancel} onConfirm={jest.fn()} message="Delete tag?" />
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Delete tag?' })
+    expect(dialog).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns focus to the opener when it closes (#277)', () => {
+    const opener = document.createElement('button')
+    document.body.appendChild(opener)
+    opener.focus()
+    const { rerender } = render(
+      <DeleteConfirmPopover isOpen onCancel={jest.fn()} onConfirm={jest.fn()} />
+    )
+    expect(opener).not.toHaveFocus()
+    rerender(<DeleteConfirmPopover isOpen={false} onCancel={jest.fn()} onConfirm={jest.fn()} />)
+    expect(opener).toHaveFocus()
+    opener.remove()
+  })
 })

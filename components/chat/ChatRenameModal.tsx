@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { usePatchChat } from '@/lib/chat/use-patch-chat'
@@ -30,12 +30,18 @@ export default function ChatRenameModal({
   const saving = isSaving('title')
   const [regenerating, setRegenerating] = useState(false)
 
-  // Sync local state when upstream props change
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream <prop> changes (parent renders unconditionally)
-    setTitle(currentTitle)
-    setUseAutoRename(!initialIsManuallyRenamed)
+  // Re-seed from the chat only as the dialog opens (#275): cancelled edits do
+  // not linger, and a retitle while it is open never replaces what is typed.
+  const latestProps = useRef({ currentTitle, initialIsManuallyRenamed })
+  useLayoutEffect(() => {
+    latestProps.current = { currentTitle, initialIsManuallyRenamed }
   }, [currentTitle, initialIsManuallyRenamed])
+  useEffect(() => {
+    if (!isOpen) return
+     
+    setTitle(latestProps.current.currentTitle)
+    setUseAutoRename(!latestProps.current.initialIsManuallyRenamed)
+  }, [isOpen])
 
   // Focus input when modal opens
   useEffect(() => {

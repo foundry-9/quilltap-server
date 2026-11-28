@@ -53,9 +53,28 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
 
   const required = useMemo(() => new Set(schema.required || []), [schema.required])
 
+  // Object/array fields whose text does not parse as JSON (#289)
+  const [badJsonKeys, setBadJsonKeys] = useState<Set<string>>(() => new Set())
+
+  // A required boolean with no value reads as unchecked, so it is "no", not missing
+  useEffect(() => {
+    const seeded: Record<string, unknown> = {}
+    for (const key of required) {
+      if (schema.properties[key]?.type === 'boolean' && values[key] === undefined) {
+        seeded[key] = false
+      }
+    }
+    if (Object.keys(seeded).length > 0) onChange({ ...values, ...seeded })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed on schema change or when a required boolean goes missing
+  }, [schema, values])
+
   const validateAll = useCallback((): boolean => {
+    for (const key of badJsonKeys) {
+      if (required.has(key) || includedOptionals.has(key)) return false
+    }
     for (const key of required) {
       const val = values[key]
+      if (schema.properties[key]?.type === 'boolean' && val === undefined) continue
       if (val === undefined || val === null || val === '') {
         return false
       }
@@ -72,14 +91,14 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
       }
     }
     return true
-  }, [values, schema.properties, required, includedOptionals])
+  }, [values, schema.properties, required, includedOptionals, badJsonKeys])
 
   // Validate whenever values change
   useEffect(() => {
     const isValid = validateAll()
     onValidChange(isValid)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- revalidate only when values or included optionals change; onValidChange is an unmemoized parent callback
-  }, [values, includedOptionals])
+  }, [values, includedOptionals, badJsonKeys])
 
   const handleChange = useCallback((key: string, value: unknown) => {
     const newValues = { ...values, [key]: value }
@@ -222,9 +241,23 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
           onChange={(e) => {
             try {
               const parsed = JSON.parse(e.target.value)
+              setBadJsonKeys(prev => {
+                if (!prev.has(key)) return prev
+                const next = new Set(prev)
+                next.delete(key)
+                return next
+              })
               handleChange(key, parsed)
             } catch {
-              // Keep raw string while user is typing
+              // Keep raw string while user is typing, but the field is not valid yet
+              const blank = e.target.value.trim() === ''
+              setBadJsonKeys(prev => {
+                if (blank === !prev.has(key)) return prev
+                const next = new Set(prev)
+                if (blank) next.delete(key)
+                else next.add(key)
+                return next
+              })
               handleChange(key, e.target.value)
             }
           }}

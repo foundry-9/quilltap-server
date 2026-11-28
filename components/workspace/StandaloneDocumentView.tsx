@@ -26,6 +26,7 @@ import {
   absorbsFirstChange,
   DocumentSaver,
   documentWriteOutcome,
+  refusalMessage,
 } from '@/app/salon/[id]/hooks/document-saver'
 import type { DocumentStandaloneTabPayload } from '@/lib/workspace/types'
 import { useWorkspace } from '@/components/providers/workspace-provider'
@@ -129,6 +130,9 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
         } else {
           setDoc(prev => (prev ? { ...prev, mtime: latest.mtime } : prev))
         }
+      },
+      onRefused: (current, { body }) => {
+        showErrorToast(refusalMessage(body, `"${current.filePath}" could not be saved. Your edits are still in the pane.`))
       },
     })
   }, [saver, adoptDocument])

@@ -17,7 +17,7 @@ import { formatAutosaveNotification } from '@/lib/doc-edit/unified-diff'
 import { showErrorToast } from '@/lib/toast'
 import { apiErrorMessage } from '@/lib/query/fetcher'
 import type { Chat, Message } from '../types'
-import { absorbsFirstChange, DocumentSaver, documentWriteOutcome, type DocumentSaverOptions } from './document-saver'
+import { absorbsFirstChange, DocumentSaver, documentWriteOutcome, refusalMessage, type DocumentSaverOptions } from './document-saver'
 import {
   closeDocumentForChat,
   deleteDocumentForChat,
@@ -346,6 +346,9 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
       } else {
         updateEntry(docId, e => ({ ...e, document: { ...e.document, mtime: latest.mtime } }))
       }
+    },
+    onRefused: (doc, { body }) => {
+      showErrorToast(refusalMessage(body, `"${doc.displayTitle || doc.filePath}" could not be saved. Your edits are still in the pane.`))
     },
   }))
 

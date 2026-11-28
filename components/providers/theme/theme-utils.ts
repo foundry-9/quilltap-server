@@ -213,7 +213,7 @@ export async function fetchThemePreference(): Promise<{
 }
 
 /**
- * Save theme preference to API
+ * Save theme preference to API. Throws when the save fails.
  */
 export async function saveThemePreference(
   preference: Partial<{
@@ -232,6 +232,7 @@ export async function saveThemePreference(
       throw new Error(`Failed to save preference: ${response.status}`);
     }
   } catch (err) {
-    // Don't re-throw - preference will be saved on next attempt
+    // Surface the failure; the caller tells the operator the preference was not kept.
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }

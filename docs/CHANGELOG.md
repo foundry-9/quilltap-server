@@ -4,6 +4,29 @@
 
 ### 4.15-dev
 
+#### Fix: Salon dialogs, typed edits, workspace panels and themes
+
+- Add Character reset the chosen "Controlled By" profile whenever the character list refreshed. The default is applied only when the selected character changes. Fixes #274.
+- Rename Chat reopened with text the user had cancelled, and an automatic retitle could overwrite typing. The dialog re-seeds from the chat only when it opens. Fixes #275.
+- Run Tool treated an untouched required yes/no field as missing, and showed "(valid)" for unparseable JSON in object and array fields. Required booleans start as `false`; a field with a JSON parse error fails validation. Fixes #289.
+- Run Tool cleared the chosen tool and form when the chat's first active character changed. The reset runs only on open; the speaker is refilled only when unset or no longer active. Fixes #291.
+- Mention chip cards could not be pinned open from the keyboard. Both chip variants use `activateOnKey`. Fixes #292.
+- Enter or Space on a button or link inside a chat card opened the chat. The card uses `activateOnKey`, which ignores keys aimed at inner controls. Fixes #245.
+- A private custom-tool roll's announcement bar said "to unknown". `WhisperTag` resolves names through `resolveWhisperTargetLabel` with the current user id. Fixes #308.
+- The terminal kill button's accessible name ignored its confirm state, the Save Image picker exposed no selection, and the Speaking As portrait had no image role. The kill button's `aria-label` follows `confirmKill`; the picker is a labelled group of `aria-pressed` buttons; the portrait is `role="img"`. Fixes #310.
+- A refused Document Mode or standalone-document save only reached the console. `DocumentSaver` takes an `onRefused` callback (also called when the write throws); both callers show the server's message in an error toast. Documented in `help/scriptorium.md`. Fixes #352.
+- The State editor threw away JSON being typed when the chat's state changed in the background. The text is held in `useDraft`. Fixes #279.
+- Edit Enclave threw away typed edits when the room's status was re-read. The form is held in `useDraft`. Fixes #302.
+- The Profile page kept the old name, email and avatar after a save. The returned profile is written into `queryKeys.userProfile.detail` and the key is invalidated. Fixes #299.
+- Rename/Replace executed whatever was typed at the moment, not what the preview showed. The preview is stored with the request body it was computed from and is shown, and executable, only while the inputs still produce that body. Fixes #240.
+- Search and Replace could show counts for an earlier search. Each preview request has an `AbortController`, out-of-date responses are dropped, and the preview clears when the inputs change. Fixes #324.
+- A failed autonomous-room start, pause or resume rolled back without a message. The hook shows the server's error in a toast. Fixes #282.
+- The autonomous-room badge nested a button inside a link and named it Pause / Resume when the room would start; the delete confirmation popover had no dialog role, focus handling or Escape. The badge is a link beside a button named Start / Resume / Pause; the popover is a labelled `role="dialog"` that focuses Cancel, closes on Escape and restores focus; the settings card's Delete toggle reports `aria-expanded`. Fixes #277.
+- The LLM Inspector slide-over stayed open, and answered Escape, over other workspace tabs. `SlideOverPanel` stands down while its tab is hidden, as `BaseModal` does. Fixes #278.
+- The help chat swallowed a failed new conversation, and New Chat left the previous reply streaming. A failed create shows an error on the ask view and puts the question back in the composer; New Chat and opening a past chat stop the stream. Fixes #303.
+- Switching themes quickly could leave an earlier theme's styles applied, and a failed preference save was silent. A stale token load is ignored, preference saves run in order, and a failed save shows an error toast. Fixes #276.
+- Uninstalling a theme from its preview left the preview open as "Default". The preview closes on a successful uninstall and whenever its theme leaves the list. Fixes #285.
+
 #### Fix: settings cards, tools cards and Aurora dialogs
 
 - Concierge refusal threshold, detection threshold and custom classification prompt saved on every keystroke or step and were disabled mid-save, losing characters and focus. They hold a `useDraft` copy and save on blur / Enter (slider on release). Fixes #250.

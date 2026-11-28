@@ -15,13 +15,15 @@
  *
  * `run(chatId, verb)` is the click handler: it marks that room busy (so its
  * buttons disable) until the POST settles. A failure is logged under
- * `errorLabel` and otherwise silent — the rolled-back state is the signal.
+ * `errorLabel`, the state is rolled back, and the server's message is shown
+ * in an error toast (#282).
  */
 
 import { useCallback, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { showErrorToast } from '@/lib/toast'
 
 export type AutonomousRoomActionVerb = 'start' | 'pause' | 'stop' | 'resume'
 
@@ -58,6 +60,7 @@ export function useAutonomousRoomAction(errorLabel: string) {
         queryClient.setQueryData(queryKeys.system.autonomousRooms, context.previous)
       }
       console.error(errorLabel, err)
+      showErrorToast(err instanceof Error ? err.message : errorLabel)
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.system.autonomousRooms })

@@ -8,6 +8,7 @@ import {
   AUTOSAVE_DEBOUNCE_MS,
   DocumentSaver,
   documentWriteOutcome,
+  refusalMessage,
   type DocumentSaverOptions,
   type DocumentWriteOutcome,
 } from '@/app/salon/[id]/hooks/document-saver'
@@ -192,5 +193,32 @@ describe('documentWriteOutcome', () => {
       body: '{"error":"no"}',
     })
     await expect(documentWriteOutcome(res(200, { mtime: 4 }))).resolves.toEqual({ kind: 'saved', data: { mtime: 4 } })
+  })
+})
+
+describe('DocumentSaver refusals (#352)', () => {
+  it('calls onRefused with the status and body of a refused write', async () => {
+    const onRefused = jest.fn()
+    const { saver } = makeSaver({
+      write: jest.fn(async (): Promise<DocumentWriteOutcome<Saved>> => ({ kind: 'refused', status: 400, body: '{"error":"Bad mount"}' })),
+      onRefused,
+    })
+    saver.change('v1')
+    expect(await saver.save()).toBe(false)
+    expect(onRefused).toHaveBeenCalledWith({ filePath: 'notes.txt', mtime: 1 }, { status: 400, body: '{"error":"Bad mount"}' })
+  })
+
+  it('calls onRefused with status 0 when the request itself throws', async () => {
+    const onRefused = jest.fn()
+    const { saver } = makeSaver({ write: jest.fn(async () => { throw new Error('offline') }), onRefused })
+    saver.change('v1')
+    expect(await saver.save()).toBe(false)
+    expect(onRefused).toHaveBeenCalledWith(expect.anything(), { status: 0, body: '' })
+  })
+
+  it('refusalMessage returns the server sentence, else the fallback', () => {
+    expect(refusalMessage('{"error":"Nope"}', 'fb')).toBe('Nope')
+    expect(refusalMessage('<html>', 'fb')).toBe('fb')
+    expect(refusalMessage('', 'fb')).toBe('fb')
   })
 })

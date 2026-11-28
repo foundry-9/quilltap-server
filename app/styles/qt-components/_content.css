@@ -462,6 +462,11 @@
     filter: brightness(1.1);
   }
 
+  .qt-autonomous-badge-link {
+    @apply inline-flex items-center gap-1 no-underline;
+    color: inherit;
+  }
+
   .qt-autonomous-badge-running {
     background: var(--qt-autonomous-badge-running-bg);
     color: var(--qt-autonomous-badge-running-fg);

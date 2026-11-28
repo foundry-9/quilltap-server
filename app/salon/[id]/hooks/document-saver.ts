@@ -49,6 +49,24 @@ export async function documentWriteOutcome<Saved>(res: Response): Promise<Docume
   return { kind: 'saved', data: (await res.json()) as Saved }
 }
 
+/**
+ * The server's sentence for a refused write: the `error` (or `message`) of a
+ * JSON body, else `fallback`. Never the raw body, which may be HTML or empty.
+ */
+export function refusalMessage(body: string, fallback: string): string {
+  try {
+    const parsed: unknown = JSON.parse(body)
+    if (parsed && typeof parsed === 'object') {
+      const record = parsed as Record<string, unknown>
+      if (typeof record.error === 'string' && record.error) return record.error
+      if (typeof record.message === 'string' && record.message) return record.message
+    }
+  } catch {
+    // not JSON; fall through
+  }
+  return fallback
+}
+
 /** The stored copy as re-read after a conflict. */
 export interface ReloadedDocument {
   content?: string
@@ -69,6 +87,11 @@ export interface DocumentSaverOptions<Doc extends { filePath: string; mtime?: nu
   onSaved: (content: string, data: Saved, stillDirty: boolean) => void
   /** A conflict's re-read came back; `hadLocalEdits` says whether the pane held unwritten text. */
   onConflict: (doc: Doc, latest: ReloadedDocument, hadLocalEdits: boolean) => void
+  /**
+   * A write was refused (any non-409 error, `status` 0 when the request itself
+   * failed). The edits are still only in the pane; show the user why.
+   */
+  onRefused?: (doc: Doc, refusal: { status: number; body: string }) => void
 }
 
 /** What a content change amounted to. */
@@ -197,6 +220,7 @@ export class DocumentSaver<Doc extends { filePath: string; mtime?: number }, Sav
 
         if (outcome.kind === 'refused') {
           console.warn(`${options.logPrefix} Failed to save document`, { status: outcome.status, body: outcome.body })
+          options.onRefused?.(doc, { status: outcome.status, body: outcome.body })
           return false
         }
 
@@ -208,6 +232,7 @@ export class DocumentSaver<Doc extends { filePath: string; mtime?: number }, Sav
       return true
     } catch (error) {
       console.error(`${options.logPrefix} Failed to save document`, error)
+      options.onRefused?.(doc, { status: 0, body: '' })
       return false
     } finally {
       options.setSaving(false)

@@ -126,6 +126,8 @@ export function ThemeSelector({
       if (activeThemeId === themeId) {
         onThemeSelect(null)
       }
+      // The removed theme can no longer be previewed (#285)
+      setPreviewThemeId((current) => (current === themeId ? null : current))
       // Refresh themes list
       await onRefreshThemes?.()
     } catch (err) {
@@ -163,6 +165,8 @@ export function ThemeSelector({
     previewThemeId && previewThemeId !== 'default'
       ? availableThemes.find((t) => t.id === previewThemeId) ?? null
       : null
+  // A preview naming a theme that has left the list is closed (#285)
+  const previewOpen = previewThemeId === 'default' || previewTheme !== null
   const previewIsActive =
     previewThemeId === 'default' ? activeThemeId === null : activeThemeId === previewThemeId
 
@@ -281,7 +285,7 @@ export function ThemeSelector({
         key={previewThemeId ?? 'closed'}
         theme={previewTheme}
         isActive={previewIsActive}
-        isOpen={previewThemeId !== null}
+        isOpen={previewOpen}
         onClose={() => setPreviewThemeId(null)}
         onApply={() => onThemeSelect(previewThemeId === 'default' ? null : previewThemeId)}
         onUninstall={

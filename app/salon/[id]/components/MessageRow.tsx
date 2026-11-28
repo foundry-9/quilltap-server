@@ -330,6 +330,7 @@ function MessageRowInner({
           onToggleExpanded={onToggleSystemMessageExpanded}
           participantNames={participantNames}
           announcerNames={announcerNames}
+          currentUserId={currentUserId}
         />
       </div>
     )
@@ -369,6 +370,7 @@ function MessageRowInner({
                 expanded
                 participantNames={participantNames}
                 announcerNames={announcerNames}
+                currentUserId={currentUserId}
               />
             </button>
           )

@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useDraft } from '@/lib/hooks/use-draft'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
@@ -90,7 +91,6 @@ export function EditEnclaveModal({
 }: EditEnclaveModalProps) {
   const queryClient = useQueryClient()
   const [title, setTitle] = useState(currentTitle)
-  const [auto, setAuto] = useState<NewChatAutonomousState>(EMPTY_STATE)
 
   // The room's current settings, re-read each time the modal opens; the user's
   // autonomous-room defaults ride the shared chat-settings query.
@@ -104,17 +104,18 @@ export function EditEnclaveModal({
   const loading = statusQuery.isFetching && !statusQuery.data
   const loadError = statusQuery.error ? 'Could not load this enclave’s settings.' : null
 
-  // Seed the editable form from each fresh read, and the title on each open
-  // (state adjusted during render, React's pattern for state that follows data).
-  const [seededFrom, setSeededFrom] = useState<RoomStatus | undefined>(undefined)
-  if (statusQuery.data && statusQuery.data !== seededFrom) {
-    setSeededFrom(statusQuery.data)
-    setAuto(statusToFormState(statusQuery.data))
-  }
+  // The editable form is a draft of the server's settings (#302): a refetch of
+  // a running room (its counters move every turn) must not overwrite edits in
+  // progress. The title is re-seeded on each open, and so is the form.
+  const serverForm = statusQuery.data ? statusToFormState(statusQuery.data) : EMPTY_STATE
+  const [auto, setAuto, autoDraft] = useDraft<NewChatAutonomousState>(serverForm)
   const [seenOpen, setSeenOpen] = useState(false)
   if (isOpen !== seenOpen) {
     setSeenOpen(isOpen)
-    if (isOpen) setTitle(currentTitle)
+    if (isOpen) {
+      setTitle(currentTitle)
+      autoDraft.reset()
+    }
   }
 
   const saveMutation = useMutation({
@@ -133,7 +134,7 @@ export function EditEnclaveModal({
 
   const updateAuto = useCallback((patch: Partial<NewChatAutonomousState>) => {
     setAuto((prev) => ({ ...prev, ...patch }))
-  }, [])
+  }, [setAuto])
 
   const handleSave = async () => {
     const trimmedTitle = title.trim()

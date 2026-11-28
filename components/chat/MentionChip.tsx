@@ -20,6 +20,7 @@
  * name is marked without breaking the roleplay styling around it.
  */
 
+import { activateOnKey } from '@/components/ui/activate-on-key'
 import { createContext, useContext, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -168,6 +169,7 @@ export function MentionChip({
           className="qt-mention-chip qt-mention-chip-thing"
           tabIndex={0}
           role="button"
+          onKeyDown={activateOnKey}
           aria-label={`${mention.card.name}, from the Atlas`}
         >
           {children}
@@ -182,6 +184,7 @@ export function MentionChip({
         className="qt-mention-chip"
         tabIndex={0}
         role="button"
+        onKeyDown={activateOnKey}
         aria-label={`${person.card.name}, not in this conversation`}
       >
         {children}

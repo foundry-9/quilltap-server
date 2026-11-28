@@ -263,6 +263,7 @@ export function VirtualizedMessageList({
                     onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
                     participantNames={participantNames}
                     announcerNames={announcerNames}
+                    currentUserId={currentUserId}
                   />
                 </div>
               )

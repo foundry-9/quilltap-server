@@ -65,7 +65,9 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
   const [additionalReplacements, setAdditionalReplacements] = useState<ReplacementPair[]>([])
 
   // Preview state
-  const [preview, setPreview] = useState<RenamePreviewResponse | null>(null)
+  // The preview is kept with the exact request body it was computed from (#240);
+  // it is shown (and executable) only while the inputs still produce that body.
+  const [previewState, setPreviewState] = useState<{ key: string; data: RenamePreviewResponse } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isExecuting, setIsExecuting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -112,10 +114,14 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
     [additionalReplacements, newName, characterName, caseSensitive],
   )
 
+  const currentKey = JSON.stringify(buildRenameBody(true))
+  const preview = previewState && previewState.key === currentKey ? previewState.data : null
+
   const handlePreview = useCallback(async () => {
+    const requestKey = JSON.stringify(buildRenameBody(true))
     setIsLoading(true)
     setError(null)
-    setPreview(null)
+    setPreviewState(null)
 
     try {
       const res = await fetch(`/api/v1/characters/${characterId}?action=rename`, {
@@ -130,7 +136,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
       }
 
       const data: RenamePreviewResponse = await res.json()
-      setPreview(data)
+      setPreviewState({ key: requestKey, data })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
@@ -173,7 +179,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
       // Reset form
       setNewName('')
       setAdditionalReplacements([])
-      setPreview(null)
+      setPreviewState(null)
 
       // Notify parent component
       if (onRenameComplete) {

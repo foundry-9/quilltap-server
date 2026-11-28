@@ -8,7 +8,7 @@
  * Phase 2: Parameter form + execute button
  */
 
-import { useState, useEffect, useCallback, useMemo, useId } from 'react'
+import { useState, useEffect, useCallback, useMemo, useId, useRef, useLayoutEffect } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
 import JsonSchemaForm from '@/components/chat/JsonSchemaForm'
@@ -80,6 +80,15 @@ export default function RunToolModal({
   // Stable identifier for the default character (avoids array ref in useEffect deps).
   // The enriched participant doesn't expose a top-level characterId, only `character.id`.
   const defaultCharacterId = activeCharacters[0]?.character?.id || null
+  // Read through a ref so a roster change while open never re-runs the reset (#291)
+  const defaultCharacterIdRef = useRef(defaultCharacterId)
+  useLayoutEffect(() => {
+    defaultCharacterIdRef.current = defaultCharacterId
+  }, [defaultCharacterId])
+  const activeCharacterIds = useMemo(
+    () => activeCharacters.map(p => p.character?.id).filter((v): v is string => Boolean(v)),
+    [activeCharacters]
+  )
 
   const handleSelectTool = useCallback((tool: AvailableTool) => {
     if (tool.available === false) return
@@ -111,7 +120,7 @@ export default function RunToolModal({
     setSelectedTool(null)
     setSearchQuery('')
     setFormValues({})
-    setSelectedCharacterId(defaultCharacterId)
+    setSelectedCharacterId(defaultCharacterIdRef.current)
     setIsPrivate(false)
 
     // Fresh on every open (staleTime 0), through the same cache entry the
@@ -148,7 +157,17 @@ export default function RunToolModal({
         showErrorToast('Failed to load available tools')
       })
       .finally(() => setLoading(false))
-  }, [isOpen, chatId, defaultCharacterId, requestedToolId, requestNonce, handleSelectTool, queryClient])
+  }, [isOpen, chatId, requestedToolId, requestNonce, handleSelectTool, queryClient])
+
+  // Keep the speaker valid as the roster changes: fill it when unset, or when
+  // the chosen character is no longer active. A still-active pick is left alone.
+  useEffect(() => {
+    if (!isOpen) return
+     
+    setSelectedCharacterId(prev =>
+      prev && activeCharacterIds.includes(prev) ? prev : defaultCharacterIdRef.current
+    )
+  }, [isOpen, activeCharacterIds])
 
   const handleBack = useCallback(() => {
     setSelectedTool(null)

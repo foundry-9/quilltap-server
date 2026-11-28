@@ -15,6 +15,7 @@ import {
   getAnnouncementAccentClasses,
 } from './system-message-labels'
 import type { Message } from '../types'
+import { resolveWhisperTargetLabel } from '../whisper-visibility'
 
 /**
  * Render the whisper audience of an announcement as a compact "to Alice, Bob"
@@ -27,13 +28,15 @@ import type { Message } from '../types'
 function WhisperTag({
   message,
   participantNames,
+  currentUserId,
 }: {
   message: Message
   participantNames?: Record<string, string>
+  currentUserId?: string | null
 }) {
   const targets = message.targetParticipantIds
   if (!targets || targets.length === 0) return null
-  const names = targets.map(id => participantNames?.[id] || 'unknown').join(', ')
+  const names = targets.map(id => resolveWhisperTargetLabel(id, participantNames, currentUserId)).join(', ')
   return (
     <span className="qt-chat-system-bar-whisper" title={`Whispered to ${names}`}>
       <span className="sr-only">whispered </span>
@@ -59,6 +62,7 @@ export const AnnouncementBarContents = memo(function AnnouncementBarContents({
   expanded = false,
   participantNames,
   announcerNames,
+  currentUserId,
 }: {
   message: Message
   /** When true, render the down-chevron (collapse affordance) instead of the right-chevron. */
@@ -67,6 +71,8 @@ export const AnnouncementBarContents = memo(function AnnouncementBarContents({
   participantNames?: Record<string, string>
   /** Character id → name, for naming a `customAnnouncer` in place of the Staff member. */
   announcerNames?: Record<string, string>
+  /** The operator's user id, so a private run's whisper reads "to you". */
+  currentUserId?: string | null
 }) {
   const senderName = getAnnouncementSenderName(message, announcerNames)
   const kindLabel = getSystemKindDisplayLabel(message)
@@ -90,7 +96,7 @@ export const AnnouncementBarContents = memo(function AnnouncementBarContents({
           <span className="sr-only">{adjusted}</span>
         </span>
       )}
-      <WhisperTag message={message} participantNames={participantNames} />
+      <WhisperTag message={message} participantNames={participantNames} currentUserId={currentUserId} />
       <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
       <Icon
         name={expanded ? 'chevron-down' : 'chevron-right'}
@@ -140,6 +146,7 @@ export const AnnouncementChip = memo(function AnnouncementChip({
   onToggleExpanded,
   participantNames,
   announcerNames,
+  currentUserId,
 }: {
   message: Message
   /** The chat, for the name chips first mentioned in this announcement. */
@@ -147,6 +154,7 @@ export const AnnouncementChip = memo(function AnnouncementChip({
   onToggleExpanded: (messageId: string) => void
   participantNames?: Record<string, string>
   announcerNames?: Record<string, string>
+  currentUserId?: string | null
 }) {
   const accent = getAnnouncementAccentClasses(message)
   const isWhisper = !!message.targetParticipantIds?.length
@@ -168,6 +176,7 @@ export const AnnouncementChip = memo(function AnnouncementChip({
         message={message}
         participantNames={participantNames}
         announcerNames={announcerNames}
+        currentUserId={currentUserId}
       />
     </button>
   )
@@ -191,6 +200,7 @@ export const AnnouncementGroup = memo(function AnnouncementGroup({
   onToggleSystemMessageExpanded,
   participantNames,
   announcerNames,
+  currentUserId,
 }: {
   members: { message: Message }[]
   /** The chat, for the name chips first mentioned in a collapsed announcement. */
@@ -198,6 +208,7 @@ export const AnnouncementGroup = memo(function AnnouncementGroup({
   onToggleSystemMessageExpanded: (messageId: string) => void
   participantNames?: Record<string, string>
   announcerNames?: Record<string, string>
+  currentUserId?: string | null
 }) {
   return (
     <div className="qt-chat-announcement-group">
@@ -209,6 +220,7 @@ export const AnnouncementGroup = memo(function AnnouncementGroup({
           onToggleExpanded={onToggleSystemMessageExpanded}
           participantNames={participantNames}
           announcerNames={announcerNames}
+          currentUserId={currentUserId}
         />
       ))}
     </div>

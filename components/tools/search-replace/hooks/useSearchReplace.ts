@@ -66,19 +66,28 @@ export function useSearchReplace(options: UseSearchReplaceOptions): UseSearchRep
   // Debounce timer ref
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // The one preview request that may still land (#324): starting another, or
+  // changing any input, aborts it and its response is discarded.
+  const previewAbortRef = useRef<AbortController | null>(null);
+
   // Fetch preview when search text changes (debounced)
   const fetchPreview = useCallback(async () => {
+    previewAbortRef.current?.abort();
     if (!scope || !searchText.trim()) {
+      previewAbortRef.current = null;
       setField('preview', null);
       return;
     }
 
+    const controller = new AbortController();
+    previewAbortRef.current = controller;
     setState((prev) => ({ ...prev, loadingPreview: true, previewError: null }));
 
     try {
       const response = await fetch('/api/v1/search-replace?action=preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           scope,
           searchText,
@@ -94,15 +103,35 @@ export function useSearchReplace(options: UseSearchReplaceOptions): UseSearchRep
       }
 
       const data: SearchReplacePreview = await response.json();
+      if (previewAbortRef.current !== controller) return;
       setField('preview', data);
     } catch (err) {
+      if (previewAbortRef.current !== controller) return;
       const message = err instanceof Error ? err.message : 'Failed to fetch preview';
       setField('previewError', message);
       console.error('[useSearchReplace] Preview fetch error', { error: message });
     } finally {
-      setField('loadingPreview', false);
+      if (previewAbortRef.current === controller) {
+        previewAbortRef.current = null;
+        setField('loadingPreview', false);
+      }
     }
   }, [scope, searchText, replaceText, includeMessages, includeMemories, setState, setField]);
+
+  // Any change to what a preview describes makes the shown one stale: drop it
+  // (so Next is unavailable) and abort a request still in flight.
+  useEffect(() => {
+    previewAbortRef.current?.abort();
+    previewAbortRef.current = null;
+    setState((prev) =>
+      prev.preview === null && !prev.loadingPreview
+        ? prev
+        : { ...prev, preview: null, loadingPreview: false },
+    );
+    return () => {
+      previewAbortRef.current?.abort();
+    };
+  }, [scope, searchText, replaceText, includeMessages, includeMemories, setState]);
 
   // Debounced preview fetch
   useEffect(() => {

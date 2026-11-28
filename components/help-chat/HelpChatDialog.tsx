@@ -72,6 +72,10 @@ export function HelpChatDialog() {
   // and tearing the workspace down; other URLs push normally.
   const navigate = useWorkspaceNavigate()
   const composerInputRef = useRef<HTMLTextAreaElement>(null)
+  // A failed attempt to start a conversation (#303): the message to show and
+  // the question to hand back to the ask-view composer.
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [askSeed, setAskSeed] = useState<{ text: string; nonce: number } | null>(null)
   const [activeTab, setActiveTab] = useState<HelpTab>(getInitialTab)
   const [pastChats, setPastChats] = useState<PastChat[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -150,6 +154,7 @@ export function HelpChatDialog() {
     isExecutingTools,
     error: streamError,
     sendMessage,
+    stopStreaming,
   } = useHelpChatStreaming({
     chatId: currentChatId,
     onMessageComplete: handleMessageComplete,
@@ -195,7 +200,14 @@ export function HelpChatDialog() {
     if (charIds.length === 0 && eligible.length > 0) {
       charIds.push(eligible[0].id)
     }
-    if (charIds.length === 0) return
+    const fail = (message: string) => {
+      setCreateError(message)
+      setAskSeed({ text: question, nonce: Date.now() })
+    }
+    if (charIds.length === 0) {
+      fail('No character with a tool-capable connection profile is available to answer.')
+      return
+    }
 
     try {
       const res = await fetch('/api/v1/help-chats', {
@@ -207,25 +219,45 @@ export function HelpChatDialog() {
         }),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        const chatId = data.chat?.id
-        if (chatId) {
-          setCurrentChatId(chatId)
-
-          if (data.chat?.participants) {
-            buildParticipantMaps(data.chat.participants)
-          }
-
-          sendMessage(question, undefined, chatId)
+      if (!res.ok) {
+        let serverMessage: string | null = null
+        try {
+          const info = await res.json()
+          if (info && typeof info.error === 'string' && info.error) serverMessage = info.error
+        } catch {
+          // No parseable body; the fallback wording is used.
         }
+        fail(serverMessage ?? 'Could not start the conversation. Please try again.')
+        return
       }
+
+      const data = await res.json()
+      const chatId = data.chat?.id
+      if (!chatId) {
+        fail('Could not start the conversation. Please try again.')
+        return
+      }
+      setCurrentChatId(chatId)
+
+      if (data.chat?.participants) {
+        buildParticipantMaps(data.chat.participants)
+      }
+
+      sendMessage(question, undefined, chatId)
     } catch (error) {
       console.error('Failed to create help chat:', error)
+      fail('Could not start the conversation. Please try again.')
     }
   }, [eligibleCharacters, selectedCharacterIds, currentPageUrl, setCurrentChatId, sendMessage, buildParticipantMaps])
 
   const handleSend = useCallback((content: string) => {
+    setCreateError(null)
+    if (!currentChatId) {
+      // The ask view shows no transcript; the question stays in the composer
+      // seed until the conversation exists (or comes back if creation fails).
+      handleCreateChat(content)
+      return
+    }
     const optimisticMessage: ChatMessage = {
       id: `optimistic-${Date.now()}`,
       role: 'USER',
@@ -233,22 +265,23 @@ export function HelpChatDialog() {
       createdAt: new Date().toISOString(),
     }
     setMessages(prev => [...prev, optimisticMessage])
-
-    if (!currentChatId) {
-      handleCreateChat(content)
-    } else {
-      sendMessage(content)
-    }
+    sendMessage(content)
   }, [currentChatId, sendMessage, handleCreateChat])
 
+  // Leaving a conversation ends any reply still streaming into it, so its text
+  // and disabled composer never follow the author into the next one (#303).
   const handleSelectPastChat = useCallback((chatId: string) => {
+    stopStreaming()
+    setCreateError(null)
     setCurrentChatId(chatId)
-  }, [setCurrentChatId])
+  }, [setCurrentChatId, stopStreaming])
 
   const handleNewChat = useCallback(() => {
+    stopStreaming()
+    setCreateError(null)
     setCurrentChatId(null)
     setMessages([])
-  }, [setCurrentChatId])
+  }, [setCurrentChatId, stopStreaming])
 
   const handleDeleteChat = useCallback(async (chatId: string) => {
     try {
@@ -409,7 +442,13 @@ export function HelpChatDialog() {
                   onSend={handleSend}
                   disabled={eligibleCharacters.filter(c => c.hasToolCapableProfile).length === 0}
                   placeholder="What would you like help with?"
+                  seed={askSeed}
                 />
+                {createError && (
+                  <div className="qt-help-error" role="alert">
+                    {createError}
+                  </div>
+                )}
               </div>
             ) : (
               /* Chat view */

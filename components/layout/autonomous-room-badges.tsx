@@ -203,30 +203,28 @@ export function AutonomousRoomBadges() {
         const isRunning = room.runState === 'running'
         const readout = selectBudgetReadout(room, nowMs)
         const label = buildLabel(room)
+        const verbLabel = isRunning ? 'Pause' : room.runState === 'paused' ? 'Resume' : 'Start'
         const tooltip = buildTooltip(room, readout)
         const colorClass = isRunning
           ? 'qt-autonomous-badge-running'
           : 'qt-autonomous-badge-idle'
         return (
-          <a
-            key={room.id}
-            href={`/salon/${room.id}`}
-            className={`qt-autonomous-badge ${colorClass}`}
-            title={tooltip}
-          >
-            <span>{label}</span>
-            {readout && <span>{readout.label}</span>}
+          <div key={room.id} className={`qt-autonomous-badge ${colorClass}`} title={tooltip}>
+            <a href={`/salon/${room.id}`} className="qt-autonomous-badge-link">
+              <span>{label}</span>
+              {readout && <span>{readout.label}</span>}
+            </a>
             <button
               type="button"
               className="qt-autonomous-badge-button"
               onClick={(e) => handleToggle(room, e)}
               disabled={busyChatId === room.id}
-              aria-label={isRunning ? 'Pause' : 'Resume'}
-              title={isRunning ? 'Pause' : 'Resume'}
+              aria-label={`${verbLabel} ${label}`}
+              title={verbLabel}
             >
               {isRunning ? <Icon name="pause" className="w-2.5 h-2.5" /> : <Icon name="play" className="w-2.5 h-2.5" />}
             </button>
-          </a>
+          </div>
         )
       })}
     </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -19,6 +19,7 @@ import {
  * - Profile settings (editable: name, email, avatar)
  */
 export function ProfileView() {
+  const queryClient = useQueryClient()
   const { data, isLoading, error: loadError } = useQuery({
     queryKey: queryKeys.userProfile.detail,
     queryFn: ({ signal }) => apiFetch<{ profile: UserProfile } | UserProfile>('/api/v1/user/profile', { signal }),
@@ -26,7 +27,14 @@ export function ProfileView() {
   const profile = (data as any)?.profile || data || null
 
   const handleProfileUpdate = (updatedProfile: UserProfile) => {
-    // Profile will be refreshed by the query on next fetch
+    // Put the saved profile into the cache so the page shows it at once (#299),
+    // keeping whichever envelope shape the read returned.
+    queryClient.setQueryData(queryKeys.userProfile.detail, (prev: unknown) =>
+      prev && typeof prev === 'object' && 'profile' in prev
+        ? { ...(prev as object), profile: updatedProfile }
+        : updatedProfile,
+    )
+    void queryClient.invalidateQueries({ queryKey: queryKeys.userProfile.detail })
   }
 
   if (isLoading) {

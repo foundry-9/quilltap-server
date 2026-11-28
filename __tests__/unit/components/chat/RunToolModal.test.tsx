@@ -659,4 +659,36 @@ describe('RunToolModal', () => {
       expect(screen.getByText('Run Tool: Wear Wardrobe Items')).toBeInTheDocument()
     })
   })
+  describe('roster change while open (#291)', () => {
+    it('keeps the chosen tool and form values when the first active character changes', async () => {
+      mockFetchTools([createMockToolWithParams()])
+
+      let utils!: ReturnType<typeof renderWithQuery>
+      await act(async () => {
+        utils = renderWithQuery(<RunToolModal {...baseProps} />)
+      })
+
+      fireEvent.click(screen.getByText('Search Memories'))
+      fireEvent.click(screen.getByTestId('set-form-values'))
+      expect(screen.getByText('Parameters')).toBeInTheDocument()
+
+      const newRoster = [
+        {
+          id: 'participant-2',
+          type: 'CHARACTER' as const,
+          displayOrder: 0,
+          isActive: true,
+          characterId: 'char-xyz',
+          character: { name: 'Zed', id: 'char-xyz' },
+        },
+        ...mockParticipants,
+      ]
+      await act(async () => {
+        utils.rerender(<RunToolModal {...baseProps} participants={newRoster as any} />)
+      })
+
+      expect(screen.getByText('Parameters')).toBeInTheDocument()
+      expect(screen.queryByText('Search character memories')).toBeInTheDocument()
+    })
+  })
 })

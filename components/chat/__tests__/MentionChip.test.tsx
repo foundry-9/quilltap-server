@@ -90,3 +90,14 @@ describe('MentionChip in MessageContent', () => {
     expect(container.querySelector('.qt-mention-chip')).toBeNull()
   })
 })
+
+describe('MentionChip keyboard pinning', () => {
+  it('Enter pins the card so it survives blur (#292)', () => {
+    render(<MessageContent content="Abby came by." mentions={[abby]} />)
+    const chip = screen.getByRole('button', { name: 'Abigail, not in this conversation' })
+    act(() => { chip.focus() })
+    fireEvent.keyDown(chip, { key: 'Enter' })
+    act(() => { fireEvent.blur(chip) })
+    expect(screen.getByRole('tooltip', { hidden: true }).getAttribute('data-pinned')).toBe('true')
+  })
+})

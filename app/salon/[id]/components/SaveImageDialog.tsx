@@ -265,13 +265,14 @@ export function SaveImageDialog({
       <div className="space-y-4">
         {imageAttachments.length > 1 && (
           <div>
-            <label className="qt-label">Image</label>
-            <div className="flex gap-2 flex-wrap">
+            <span id="save-image-choose-label" className="qt-label">Image</span>
+            <div className="flex gap-2 flex-wrap" role="group" aria-labelledby="save-image-choose-label">
               {imageAttachments.map((attachment) => (
                 <button
                   key={attachment.id}
                   type="button"
                   onClick={() => setSelectedAttachmentId(attachment.id)}
+                  aria-pressed={attachment.id === selectedAttachmentId}
                   className={
                     'qt-button qt-chat-attachment-button' +
                     (attachment.id === selectedAttachmentId ? ' ring-2 ring-offset-1' : '')

@@ -30,7 +30,7 @@ describe('SpeakingAsAvatar', () => {
     expect(cue.className).toContain('opacity-100')
     expect(cue.className).not.toContain('brightness-50')
 
-    const img = screen.getByAltText('Charlie') as HTMLImageElement
+    const img = cue.querySelector('img') as HTMLImageElement
     expect(img.getAttribute('src')).toBe('/files/charlie.webp')
   })
 
@@ -80,5 +80,12 @@ describe('SpeakingAsAvatar', () => {
   it('falls back to the initial when there is no portrait', () => {
     render(<SpeakingAsAvatar name="Charlie" canType />)
     expect(screen.getByText('C')).toBeInTheDocument()
+  })
+})
+
+describe('SpeakingAsAvatar accessible name (#310)', () => {
+  it('is an image named with the waiting state', () => {
+    render(<SpeakingAsAvatar name="Charlie" canType={false} />)
+    expect(screen.getByRole('img', { name: /waiting for the room/ })).toBeInTheDocument()
   })
 })

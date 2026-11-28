@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useId } from 'react'
+import { useState, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useDraft } from '@/lib/hooks/use-draft'
 import { Spinner } from '@/components/ui/Spinner'
 
 export type StateEntityType = 'chat' | 'project' | 'group' | 'general'
@@ -25,6 +26,8 @@ interface GroupTier {
   candidates: Array<{ id: string; name: string }>
   appliedGroupId?: string
 }
+
+const EMPTY_OBJECT: Record<string, unknown> = {}
 
 interface StateResponse {
   state: Record<string, unknown>
@@ -89,12 +92,6 @@ export default function StateEditorModal({
   const id = useId()
   const cfg = endpointConfig(entityType, entityId)
 
-  const [state, setState] = useState<Record<string, unknown>>({})
-  const [projectState, setProjectState] = useState<Record<string, unknown> | null>(null)
-  const [groupState, setGroupState] = useState<Record<string, unknown> | null>(null)
-  const [generalState, setGeneralState] = useState<Record<string, unknown> | null>(null)
-  const [groupTier, setGroupTier] = useState<GroupTier | null>(null)
-  const [stateText, setStateText] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [jsonError, setJsonError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -112,23 +109,15 @@ export default function StateEditorModal({
     enabled: isOpen,
   })
 
-  // Sync state data when fetched
-  useEffect(() => {
-    if (!stateData) return
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
-    setState(stateData.state || {})
-    setStateText(JSON.stringify(stateData.state || {}, null, 2))
-
-    if (entityType === 'chat') {
-      setProjectState(stateData.projectState || null)
-      setGroupState(stateData.groupState || null)
-      setGeneralState(stateData.generalState || null)
-      setGroupTier(stateData.groupTier || null)
-    }
-
-    setIsEditing(false)
-  }, [stateData, entityType])
+  // Server values are read straight off the query; only the JSON text being
+  // edited is a draft, so a background state change never overwrites it (#279).
+  const state = stateData?.state || EMPTY_OBJECT
+  const projectState = entityType === 'chat' ? stateData?.projectState || null : null
+  const groupState = entityType === 'chat' ? stateData?.groupState || null : null
+  const generalState = entityType === 'chat' ? stateData?.generalState || null : null
+  const groupTier = entityType === 'chat' ? stateData?.groupTier || null : null
+  const serverText = JSON.stringify(state, null, 2)
+  const [stateText, setStateText, textDraft] = useDraft(serverText)
 
   const handleTextChange = (value: string) => {
     setStateText(value)
@@ -163,7 +152,6 @@ export default function StateEditorModal({
       }
 
       await mutateState()
-      setState(newState)
       setStateText(JSON.stringify(newState, null, 2))
       setIsEditing(false)
       showSuccessToast('State saved')
@@ -190,7 +178,6 @@ export default function StateEditorModal({
       }
 
       await mutateState()
-      setState({})
       setStateText(JSON.stringify({}, null, 2))
       setIsEditing(false)
       setShowResetConfirm(false)
@@ -207,7 +194,7 @@ export default function StateEditorModal({
   }
 
   const handleCancel = () => {
-    setStateText(JSON.stringify(state, null, 2))
+    textDraft.reset()
     setJsonError(null)
     setIsEditing(false)
   }

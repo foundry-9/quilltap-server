@@ -104,11 +104,12 @@ export function SpeakingAsAvatar({
             canType ? 'opacity-100' : 'opacity-60 brightness-50'
           }`}
           style={{ borderRadius: 'var(--radius-md)' }}
+          role="img"
           aria-label={canType ? `Speaking as ${name}` : `Speaking as ${name}, waiting for the room`}
         >
           {avatarSrc ? (
 
-            <img src={avatarSrc} alt={name} className="w-full h-full object-cover" />
+            <img src={avatarSrc} alt="" className="w-full h-full object-cover" />
           ) : (
             <span className="font-bold qt-text-secondary text-lg">{initial}</span>
           )}
