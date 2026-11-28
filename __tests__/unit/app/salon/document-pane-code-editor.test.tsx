@@ -18,6 +18,7 @@ import {
   CODE_EDITOR_MAX_CHARS,
   documentEditorKind,
   documentTypeLabel,
+  focusLineInText,
   lineOfText,
 } from '@/app/salon/[id]/components/document-editor-kind'
 import { $getCodeBlock, $selectOffsets } from '@/components/code-editor/lexical-text'
@@ -142,6 +143,17 @@ describe('which editor a file opens in', () => {
     expect(lineOfText(text, 'COLOR: RED')).toBe(3)
     expect(lineOfText(text, 'absent')).toBeNull()
     expect(lineOfText(text, '  ')).toBeNull()
+  })
+
+  it('reveals the text a focus names before its line, and the line only as a fallback (#309)', () => {
+    const text = Array.from({ length: 10 }, (_, i) => `.r${i + 1} { color: red; }`).join('\n')
+    expect(focusLineInText(text, { highlight: '.r8 ', line: 2 })).toBe(8)
+    expect(focusLineInText(text, { anchor: '.r3 ', line: 9 })).toBe(3)
+    expect(focusLineInText(text, { highlight: 'absent', line: 2 })).toBe(2)
+    expect(focusLineInText(text, { line: 0 })).toBeNull()
+    // A highlight is looked for from the anchor down first.
+    const repeated = 'a {}\nb { x: 1 }\nc {}\nd { x: 1 }'
+    expect(focusLineInText(repeated, { anchor: 'c {}', highlight: 'x: 1' })).toBe(4)
   })
 
   it('renders each branch in the pane, with its label in the status bar', () => {

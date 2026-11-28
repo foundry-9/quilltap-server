@@ -97,6 +97,14 @@ export interface DocumentSaverOptions<Doc extends { filePath: string; mtime?: nu
 /** What a content change amounted to. */
 export type DocumentChange = 'absorbed' | 'clean' | 'dirty'
 
+/**
+ * Where a pane's change came from. `'editor'` (the default) may be the rich
+ * editor re-serializing what it was just given; `'source'` is text the user
+ * typed into a raw surface (Markdown's Source view), which re-serializes
+ * nothing and so is never absorbed (#307).
+ */
+export type DocumentChangeOrigin = 'editor' | 'source'
+
 export class DocumentSaver<Doc extends { filePath: string; mtime?: number }, Saved extends { mtime?: number }> {
   private content = ''
   private saved = ''
@@ -139,8 +147,11 @@ export class DocumentSaver<Doc extends { filePath: string; mtime?: number }, Sav
   }
 
   /** The pane's text changed. A real edit (re)starts the autosave. */
-  change(content: string): DocumentChange {
+  change(content: string, origin: DocumentChangeOrigin = 'editor'): DocumentChange {
     this.content = content
+    // Only the rich editor re-serializes on load; a raw-text change is always
+    // the user's own, so the waiting flag is dropped rather than spent on it.
+    if (origin === 'source') this.absorbNext = false
     if (this.absorbNext) {
       this.absorbNext = false
       this.saved = content

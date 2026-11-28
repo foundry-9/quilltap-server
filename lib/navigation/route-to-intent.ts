@@ -151,3 +151,111 @@ export function characterChatActionFromHref(href: string): string | null {
   if (sp.get('action') !== 'chat') return null
   return (intent.payload as { characterId: string }).characterId
 }
+
+/** Read one string field of a tab payload, or undefined. */
+function payloadString(payload: unknown, key: string): string | undefined {
+  if (!payload || typeof payload !== 'object') return undefined
+  const value = (payload as Record<string, unknown>)[key]
+  return typeof value === 'string' && value ? value : undefined
+}
+
+/** `?a=1&b=2` from the defined entries, or '' when none are. */
+function queryOf(entries: Record<string, string | undefined>): string {
+  const sp = new URLSearchParams()
+  for (const [key, value] of Object.entries(entries)) {
+    if (value) sp.set(key, value)
+  }
+  const query = sp.toString()
+  return query ? `?${query}` : ''
+}
+
+/**
+ * The in-app href a workspace tab stands for — the inverse of
+ * {@link parseHrefToIntent}, so `parseHrefToIntent(hrefForTabIntent(t))`
+ * opens the same tab. The workspace never changes the pathname, so this is
+ * how anything that needs "the page the user is on" (the help chat's page
+ * context, #247) reads it. A Salon's terminal and document child tabs answer
+ * with their conversation; a kind with no route of its own (a standalone
+ * document, the Console, the rail-opened wardrobe / inventory / atlas) answers
+ * with the nearest one.
+ */
+export function hrefForTabIntent(kind: TabKind, payload?: unknown): string {
+  switch (kind) {
+    case 'home':
+      return '/'
+    case 'salon':
+    case 'terminal':
+    case 'document': {
+      const chatId = payloadString(payload, 'chatId')
+      return chatId ? `/salon/${chatId}` : '/salon'
+    }
+    case 'salon-list':
+      return '/salon'
+    case 'aurora': {
+      const groupId = payloadString(payload, 'groupId')
+      return groupId ? `/aurora/groups/${groupId}` : '/aurora'
+    }
+    case 'character-new':
+      return '/aurora/new'
+    case 'character': {
+      const characterId = payloadString(payload, 'characterId')
+      if (!characterId) return '/aurora'
+      return `/aurora/${characterId}${queryOf({ section: payloadString(payload, 'section') })}`
+    }
+    case 'prospero': {
+      const projectId = payloadString(payload, 'projectId')
+      return projectId ? `/prospero/${projectId}` : '/prospero'
+    }
+    case 'scriptorium': {
+      const storeId = payloadString(payload, 'storeId')
+      return storeId ? `/scriptorium/${storeId}` : '/scriptorium'
+    }
+    case 'document-standalone':
+      return '/scriptorium'
+    case 'settings':
+      return `/settings${queryOf({
+        group: payloadString(payload, 'group'),
+        tab: payloadString(payload, 'tab'),
+        section: payloadString(payload, 'section'),
+        persona: payloadString(payload, 'persona'),
+        q: payloadString(payload, 'q'),
+        provider: payloadString(payload, 'provider'),
+      })}`
+    case 'settings-wizard':
+      return '/settings/wizard'
+    case 'files':
+      return '/files'
+    case 'photos':
+      return '/photos'
+    case 'scenarios':
+      return '/scenarios'
+    case 'profile':
+      return '/profile'
+    case 'about':
+      return '/about'
+    case 'generate-image':
+      return '/generate-image'
+    case 'custom-tools': {
+      const create = !!payload && typeof payload === 'object' && (payload as { create?: unknown }).create === true
+      return `/custom-tools${queryOf({
+        mount: payloadString(payload, 'mountPointId'),
+        path: payloadString(payload, 'path'),
+        new: create ? '1' : undefined,
+      })}`
+    }
+    case 'theme-editor':
+      return `/calliope${queryOf({ draft: payloadString(payload, 'draftId') })}`
+    case 'theme-specimens':
+      return '/calliope/specimens'
+    case 'brahma':
+      return '/settings?persona=brahma'
+    case 'wardrobe':
+    case 'inventory':
+    case 'atlas':
+      return '/aurora'
+    default: {
+      const unreachable: never = kind
+      return unreachable
+    }
+  }
+}

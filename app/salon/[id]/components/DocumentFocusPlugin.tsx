@@ -17,9 +17,14 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { $getRoot } from 'lexical'
 import { $isHeadingNode } from '@lexical/rich-text'
 import type { FocusRequest } from '../hooks/useDocumentMode'
+import { markdownBlockIndexForLine } from './markdown-source-lines'
 
 interface DocumentFocusPluginProps {
   focusRequest: FocusRequest | null
+  /** The Markdown the editor was loaded from (the body, without frontmatter) — maps a `line` to its block. */
+  markdown: string
+  /** Lines of the file before `markdown` begins (its frontmatter), so `line` counts in the whole file. */
+  lineOffset?: number
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   onFocusResolved: (pixelTop: number) => void
   onFocusProcessed: () => void
@@ -120,6 +125,8 @@ function measureElementTop(el: HTMLElement, rootEl: HTMLElement): number {
 
 export default function DocumentFocusPlugin({
   focusRequest,
+  markdown,
+  lineOffset = 0,
   scrollContainerRef,
   onFocusResolved,
   onFocusProcessed,
@@ -136,6 +143,12 @@ export default function DocumentFocusPlugin({
     // Resolve target node key from editor state — the key is the single
     // canonical reference that both scrolling/eye and highlight consume.
     let resolvedNodeKey: string | null = null
+
+    // Resolved outside the read below: it imports into a throwaway editor,
+    // which must not run inside another editor's read.
+    const lineBlockIndex = typeof line === 'number'
+      ? markdownBlockIndexForLine(markdown, line - lineOffset)
+      : null
 
     editor.getEditorState().read(() => {
       const root = $getRoot()
@@ -210,9 +223,11 @@ export default function DocumentFocusPlugin({
       }
 
       // --- Line number fallback ---
+      // `line` is a 1-based line of the file, as in the code editor (#309);
+      // it is mapped to the block that line imports into.
       if (resolvedIndex === null) {
-        if (typeof line === 'number') {
-          resolvedIndex = Math.max(0, Math.min(line, blockCount - 1))
+        if (lineBlockIndex !== null) {
+          resolvedIndex = Math.min(lineBlockIndex, blockCount - 1)
         } else {
           resolvedIndex = 0
         }
@@ -302,6 +317,7 @@ export default function DocumentFocusPlugin({
         applyHighlightAndResolve()
       }
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- each request is handled once, against the text as it stands
   }, [focusRequest, editor, scrollContainerRef, onFocusResolved, onFocusProcessed])
 
   return null

@@ -4,6 +4,17 @@
 
 ### 4.15-dev
 
+#### Fix: remove-old-dev-tags handles bugfix tags and Docker Hub's per-arch indexes
+
+- The command now takes a label, `dev` (default) or `bugfix`, combinable with `all`, and sweeps that label's tags across every base. The default keeps the newest tag only if its version hasn't been released; a tag whose base already has a bare `X.Y.Z` tag goes too.
+- Step 7 assumed `X-amd64` / `X-arm64` were the image manifests. They are separate indexes (image + attestation), so Docker Hub refused the leaf deletes with `403 … referenced by other images`. It now deletes all three indexes first, then the four leaves, through one script with a keep set of the kept version, `latest` and `dev` (which bugfix builds also move).
+
+#### Fix: Source-view edits, doc_focus lines and help chat page context
+
+- In a Markdown document's Source view, the first change after a reload (a character's edit landing, a conflict re-read) was adopted as the saved baseline: the pane showed Saved, no autosave was scheduled, and the change was never written. The absorb flag exists for the rich editor's re-serialization, which the Source textarea never emits. `DocumentSaver.change` takes an origin; a `'source'` change (the Source textarea, its toolbar, the plain-text textarea) drops the flag and is saved normally. Documented in `help/scriptorium.md`. Fixes #307.
+- `doc_focus` `line` meant a 0-based top-level block in Markdown and a 1-based line in JSON/CSS, and the code editor used `line` ahead of the anchor/highlight text. `line` is now a 1-based line of the file (frontmatter included) in both: the Markdown pane maps it to the block it imports into (`markdownBlockIndexForLine`, `app/salon/[id]/components/markdown-source-lines.ts`), and the code editor tries the highlight (from the anchor down), then the anchor, then `line` (`focusLineInText`). Tool description updated. Documented in `help/tabbed-workspace.md`. Fixes #309.
+- The help chat reported the router pathname as the current page, which inside the workspace is always `/workspace`, so help chats started from any tab got the root help page and tab switches sent no context update. `HelpChatWorkspaceBridge` (mounted in `WorkspaceProviders`) reports the focused pane's active tab as an href (`hrefForTabIntent`, the inverse of `parseHrefToIntent`); `currentPageUrl` and the `update-context` PATCH follow it, and the Guide tab's category highlight with it. Documented in `help/help-chat.md`. Fixes #247.
+
 #### Fix: characters answered whispers out loud
 
 - A whisper reached its recipient looking like any other line, and nothing said the reply would post publicly, so characters answered private asides in their ordinary reply in front of everyone present. The `whisper` tool was offered but rarely used.

@@ -17,6 +17,7 @@ import { useCallback } from 'react'
 import DocumentPane from './DocumentPane'
 import { DocumentViewerPane } from './DocumentViewerPane'
 import type { OpenDocEntry, DocumentMode, UseDocumentModeReturn } from '../hooks/useDocumentMode'
+import type { DocumentChangeOrigin } from '../hooks/document-saver'
 
 interface DocumentPaneBindingProps {
   entry: OpenDocEntry
@@ -28,7 +29,10 @@ interface DocumentPaneBindingProps {
 export function DocumentPaneBinding({ entry, mode, roleplayTemplateId, doc }: DocumentPaneBindingProps) {
   const docId = entry.document.id
 
-  const onContentChange = useCallback((content: string) => doc.handleContentChange(docId, content), [doc, docId])
+  const onContentChange = useCallback(
+    (content: string, origin?: DocumentChangeOrigin) => doc.handleContentChange(docId, content, origin),
+    [doc, docId],
+  )
   const onBlur = useCallback(() => doc.flushSave(docId), [doc, docId])
   const onTitleChange = useCallback((title: string) => doc.renameDocument(docId, title), [doc, docId])
   const onCloseDocument = useCallback(() => doc.closeDocument(docId), [doc, docId])

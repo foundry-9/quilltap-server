@@ -59,3 +59,26 @@ export function lineOfText(content: string, text: string | undefined): number | 
   for (let i = content.indexOf('\n'); i !== -1 && i < at; i = content.indexOf('\n', i + 1)) line++
   return line
 }
+
+/**
+ * The 1-based line a `doc_focus` request reveals in the code editor. Text
+ * first, as the tool describes it and as the Markdown editor resolves it: the
+ * highlight (searched from the anchor's line when there is one), then the
+ * anchor, and `line` only when neither text is found (#309).
+ */
+export function focusLineInText(
+  content: string,
+  request: { anchor?: string; highlight?: string; line?: number },
+): number | null {
+  const anchorLine = lineOfText(content, request.anchor)
+  if (request.highlight) {
+    const lines = content.split('\n')
+    const from = (anchorLine ?? 1) - 1
+    const within = lineOfText(lines.slice(from).join('\n'), request.highlight)
+    if (within !== null) return within + from
+    const anywhere = lineOfText(content, request.highlight)
+    if (anywhere !== null) return anywhere
+  }
+  if (anchorLine !== null) return anchorLine
+  return typeof request.line === 'number' && request.line >= 1 ? Math.floor(request.line) : null
+}

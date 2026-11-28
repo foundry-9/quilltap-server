@@ -37,7 +37,7 @@ export const docFocusToolInputSchema = z
     line: llmNumber(
       z
         .number()
-        .describe('Line number to scroll to. Used as fallback when string matching is not viable.')
+        .describe('Line of the file to scroll to, counting from 1 (frontmatter included). Used as fallback when string matching is not viable.')
     )
       .optional(),
     clear_focus: z

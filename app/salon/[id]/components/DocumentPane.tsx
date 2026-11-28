@@ -26,11 +26,6 @@ import { CheckListPlugin } from '@lexical/react/LexicalCheckListPlugin'
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin'
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { HeadingNode, QuoteNode } from '@lexical/rich-text'
-import { ListNode, ListItemNode } from '@lexical/list'
-import { LinkNode } from '@lexical/link'
-import { CodeNode, CodeHighlightNode } from '@lexical/code'
-import { TableNode, TableCellNode, TableRowNode } from '@lexical/table'
 import YAML from 'yaml'
 import { composerTheme } from '@/components/chat/lexical/theme'
 import { MarkdownBridgePlugin, COMPOSER_TRANSFORMERS } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
@@ -50,7 +45,9 @@ import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
 import { activateOnKey } from '@/components/ui/activate-on-key'
 import { CodeEditor, type CodeEditorHandle } from '@/components/code-editor'
 import type { ActiveDocument, DocumentMode, FocusRequest } from '../hooks/useDocumentMode'
-import { documentEditorKind, documentTypeLabel, lineOfText } from './document-editor-kind'
+import type { DocumentChangeOrigin } from '../hooks/document-saver'
+import { documentEditorKind, documentTypeLabel, focusLineInText } from './document-editor-kind'
+import { DOCUMENT_EDITOR_NODES, frontmatterLineCount } from './markdown-source-lines'
 
 interface DocumentPaneProps {
   document: ActiveDocument
@@ -66,7 +63,8 @@ interface DocumentPaneProps {
   baselineContent: string
   getScrollPosition: (filePath: string) => number
   setScrollPosition: (filePath: string, pos: number) => void
-  onContentChange: (content: string) => void
+  /** `origin: 'source'` when the text came from a raw surface, never the rich editor's re-serialization (#307). */
+  onContentChange: (content: string, origin?: DocumentChangeOrigin) => void
   onBlur: () => void
   onFlushSave: () => void
   onToggleFocusMode: () => void
@@ -219,6 +217,7 @@ function FrontmatterTable({ data }: { data: Record<string, unknown> }) {
  */
 function DocumentEditorPlugins({
   content,
+  lineOffset,
   onContentChange,
   baselineContent,
   onChangedLines,
@@ -229,6 +228,8 @@ function DocumentEditorPlugins({
   onFocusProcessed,
 }: {
   content: string
+  /** Lines of the file before `content` (its frontmatter), for doc_focus `line`. */
+  lineOffset: number
   onContentChange: (content: string) => void
   baselineContent: string
   onChangedLines: (lines: Set<number>) => void
@@ -288,6 +289,8 @@ function DocumentEditorPlugins({
       {focusRequest !== undefined && onFocusResolved && onFocusProcessed && (
         <DocumentFocusPlugin
           focusRequest={focusRequest ?? null}
+          markdown={content}
+          lineOffset={lineOffset}
           scrollContainerRef={scrollContainerRef}
           onFocusResolved={onFocusResolved}
           onFocusProcessed={onFocusProcessed}
@@ -475,7 +478,7 @@ export default function DocumentPane({
     () => ({
       namespace: 'DocumentEditor',
       theme: composerTheme,
-      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, CodeHighlightNode, TableNode, TableCellNode, TableRowNode],
+      nodes: [...DOCUMENT_EDITOR_NODES],
       onError: (error: Error) => {
         console.error('[DocumentPane] Editor error:', error)
       },
@@ -517,6 +520,14 @@ export default function DocumentPane({
     onContentChange(`${currentFrontmatterRawBlock}${updatedBody}`)
   }, [currentFrontmatterRawBlock, onContentChange])
 
+  // A raw-text surface (Markdown's Source view, the plain textarea) mounts no
+  // Lexical bridge, so its first change after a reload is the user's own edit
+  // and must not be absorbed as a re-serialization (#307).
+  const handleSourceChange = useCallback(
+    (content: string) => onContentChange(content, 'source'),
+    [onContentChange],
+  )
+
   // Throttled scroll handler — saves position ~100ms after last scroll event
   const handleScroll = useCallback(() => {
     if (scrollThrottleRef.current) return
@@ -557,7 +568,9 @@ export default function DocumentPane({
   // holding the anchor or highlight) without taking the keyboard from the author.
   useEffect(() => {
     if (!codeLanguage || !focusRequest) return
-    const line = focusRequest.line ?? lineOfText(document.content, focusRequest.anchor ?? focusRequest.highlight)
+    // The text match first and `line` only as its fallback, as the tool
+    // describes it and as the Markdown editor resolves it (#309).
+    const line = focusLineInText(document.content, focusRequest)
     if (line) codeEditorRef.current?.revealLine(line, { focus: false })
     onFocusProcessed?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- each request is handled once, against the text as it stands
@@ -720,7 +733,7 @@ export default function DocumentPane({
             roleplayTemplateId={roleplayTemplateId}
             showSource={showSource}
             sourceTextareaRef={sourceTextareaRef}
-            onContentChange={onContentChange}
+            onContentChange={handleSourceChange}
             onToggleSource={toggleSourceMode}
           />
 
@@ -730,7 +743,7 @@ export default function DocumentPane({
               textareaRef={sourceTextareaRef}
               scrollContainerRef={scrollContainerRef}
               content={document.content}
-              onContentChange={onContentChange}
+              onContentChange={handleSourceChange}
               onBlur={onBlur}
               onScroll={handleScroll}
             />
@@ -748,6 +761,7 @@ export default function DocumentPane({
                 )}
                 <DocumentEditorPlugins
                   content={currentBodyContent}
+                  lineOffset={frontmatterLineCount(currentFrontmatterRawBlock)}
                   onContentChange={handleMarkdownBodyChange}
                   baselineContent={baselineBodyContent}
                   onChangedLines={handleChangedLines}
@@ -784,7 +798,7 @@ export default function DocumentPane({
           ariaLabel="Document content"
           scrollContainerRef={scrollContainerRef}
           content={document.content}
-          onContentChange={onContentChange}
+          onContentChange={handleSourceChange}
           onBlur={onBlur}
           onScroll={handleScroll}
         />

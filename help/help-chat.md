@@ -55,7 +55,7 @@ The character operates in agent mode, meaning it may consult multiple tools acro
 
 ## Page-Aware Context
 
-Here is the particularly clever bit: the Help Chat knows which page you are currently viewing. When you open a help conversation, the system automatically loads the relevant documentation for your current page into the character's context. If you navigate to a different page while the help dialog is open, the context updates accordingly, and the character is informed of the change.
+Here is the particularly clever bit: the Help Chat knows which page you are currently viewing. When you open a help conversation, the system automatically loads the relevant documentation for your current page into the character's context. If you navigate to a different page while the help dialog is open, the context updates accordingly, and the character is informed of the change. In the tabbed workspace, "the page you are viewing" means the tab in front of the pane you last attended to --- switch from the Foundry to a Salon tab mid-conversation and your help character is told of the move, just as though you had walked down the corridor yourself.
 
 This means you need not explain where you are or what you are looking at. Your help character already knows. Simply ask your question.
 

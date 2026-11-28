@@ -62,6 +62,24 @@ describe('DocumentSaver.change', () => {
     expect(saver.hasUnsavedEdits()).toBe(false)
   })
 
+  it('never absorbs a Source-view change, and autosaves it (#307)', () => {
+    jest.useFakeTimers()
+    const { saver, options } = makeSaver()
+    saver.reset('# Hi', true)
+    expect(saver.change('# Hi there', 'source')).toBe('dirty')
+    expect(saver.savedContent).toBe('# Hi')
+    expect(saver.hasUnsavedEdits()).toBe(true)
+    jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS)
+    expect(options.write).toHaveBeenCalledTimes(1)
+  })
+
+  it('a Source-view change spends the absorb flag, so a later editor change is an edit (#307)', () => {
+    const { saver } = makeSaver()
+    saver.reset('# Hi', true)
+    saver.change('# Hi there', 'source')
+    expect(saver.change('# Hi there, again')).toBe('dirty')
+  })
+
   it('reports a return to the saved text as clean', () => {
     const { saver } = makeSaver()
     expect(saver.change('v1')).toBe('dirty')

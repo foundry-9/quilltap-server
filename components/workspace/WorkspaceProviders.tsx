@@ -25,6 +25,7 @@ import { WorkspacePortalRegistryProvider } from '@/components/workspace/workspac
 import { WorkspaceBackdropProvider } from '@/components/workspace/workspace-backdrop'
 import { WorkspaceLinkInterceptor } from '@/components/workspace/WorkspaceLinkInterceptor'
 import { NewChatProvider } from '@/components/providers/new-chat-provider'
+import { HelpChatWorkspaceBridge } from '@/components/providers/help-chat-provider'
 
 export function WorkspaceProviders({ children }: { children: ReactNode }) {
   return (
@@ -43,6 +44,9 @@ export function WorkspaceProviders({ children }: { children: ReactNode }) {
                   header (mounted above the tab tree, so it targets the global
                   page toolbar, not a per-tab one). */}
               <WorkspaceToolbarBridge />
+              {/* Tell the help chat which tab is in front: the pathname is
+                  always /workspace, so it cannot tell on its own (#247). */}
+              <HelpChatWorkspaceBridge />
               {children}
             </NewChatProvider>
           </WorkspaceBackdropProvider>

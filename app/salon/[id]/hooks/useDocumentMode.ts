@@ -17,7 +17,7 @@ import { formatAutosaveNotification } from '@/lib/doc-edit/unified-diff'
 import { showErrorToast } from '@/lib/toast'
 import { apiErrorMessage } from '@/lib/query/fetcher'
 import type { Chat, Message } from '../types'
-import { absorbsFirstChange, DocumentSaver, documentWriteOutcome, refusalMessage, type DocumentSaverOptions } from './document-saver'
+import { absorbsFirstChange, DocumentSaver, documentWriteOutcome, refusalMessage, type DocumentChangeOrigin, type DocumentSaverOptions } from './document-saver'
 import {
   closeDocumentForChat,
   deleteDocumentForChat,
@@ -113,7 +113,8 @@ export interface UseDocumentModeReturn {
   closeDocument: (docId?: string) => Promise<void>
   renameDocument: (docId: string, newTitle: string) => Promise<void>
   deleteDocument: (docId: string) => Promise<void>
-  handleContentChange: (docId: string, content: string) => void
+  /** `origin: 'source'` for a raw-text edit, which is never absorbed as a re-serialization (#307). */
+  handleContentChange: (docId: string, content: string, origin?: DocumentChangeOrigin) => void
   flushSave: (docId: string) => void
   /** Resolves false when the store refused the write and edits remain unsaved. */
   saveDocument: (docId: string) => Promise<boolean>
@@ -388,9 +389,10 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     return held
   }, [clearTimerFor, hasUnsavedEdits, saveDocument, removeEntry])
 
-  const handleContentChange = useCallback((docId: string, content: string) => {
+  const handleContentChange = useCallback((docId: string, content: string, origin?: DocumentChangeOrigin) => {
     updateEntry(docId, e => ({ ...e, document: { ...e.document, content } }))
-    const change = savers.current.get(docId)?.change(content) ?? 'clean'
+    const change = savers.current.get(docId)?.change(content, origin) ?? 'clean'
+    if (change === 'absorbed') console.debug('[DocumentMode] Absorbed editor re-serialization as the saved baseline', { docId })
     // An absorbed change is Lexical's normalized re-serialization of just-loaded
     // content, adopted as the saved baseline so the status reads "Saved".
     updateEntry(docId, e => ({ ...e, isDirty: change === 'dirty' }))

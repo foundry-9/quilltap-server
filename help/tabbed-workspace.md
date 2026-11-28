@@ -122,7 +122,7 @@ it.
 When you reopen a conversation, every document you had open returns to its tab,
 just as you left it (save any whose file has since been spirited away). And
 should a character ask to draw your eye to a passage — by way of the Librarian's
-`doc_focus` — it knows precisely which of your open documents to point at.
+`doc_focus` — it knows precisely which of your open documents to point at. A character who names a line by number means a line of the file as written, counted from one with any frontmatter included, and the pane turns to the same place whether the document is Markdown in rich text or JSON and CSS in the code editor; when they name a passage as well, the passage wins and the number is only a fallback.
 
 ## Document Mode without a conversation
 

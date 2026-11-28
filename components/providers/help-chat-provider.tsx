@@ -19,6 +19,8 @@ import {
   type ReactNode,
 } from 'react'
 import { usePathname } from 'next/navigation'
+import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
+import { hrefForTabIntent } from '@/lib/navigation/route-to-intent'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -57,8 +59,17 @@ interface HelpChatContextValue {
   selectedCharacterIds: string[]
   /** Toggle character selection */
   toggleCharacter: (characterId: string) => void
-  /** Current page URL for context */
+  /**
+   * The page the user is on, as a help URL: inside the workspace (whose
+   * pathname never changes) the focused pane's active tab, else the pathname
+   * (#247).
+   */
   currentPageUrl: string
+  /**
+   * Report the workspace's focused tab as an in-app href (null when there is
+   * none). Called only by {@link HelpChatWorkspaceBridge}.
+   */
+  reportWorkspacePageUrl: (href: string | null) => void
   /** Refresh eligibility data */
   refreshEligibility: () => Promise<void>
 }
@@ -113,7 +124,9 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>(() =>
     loadStorageArray(STORAGE_KEY_SELECTED)
   )
-  const previousPathname = useRef(pathname)
+  const [workspacePageUrl, setWorkspacePageUrl] = useState<string | null>(null)
+  const currentPageUrl = isWorkspacePath(pathname) && workspacePageUrl ? workspacePageUrl : pathname
+  const previousPageUrl = useRef(currentPageUrl)
 
   const { data: eligibilityData, isPending: eligibilityIsLoading, refetch: mutateEligibility } = useQuery({
     queryKey: queryKeys.helpChat.eligibility,
@@ -139,23 +152,29 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     setEligibilityLoading(eligibilityIsLoading)
   }, [eligibilityData, eligibilityIsLoading, selectedCharacterIds.length])
 
-  // Track pathname changes for context updates
+  // Track page changes for context updates — a route change, or a tab switch
+  // inside the workspace, which never changes the pathname (#247).
   useEffect(() => {
-    if (pathname !== previousPathname.current) {
-      previousPathname.current = pathname
+    if (currentPageUrl !== previousPageUrl.current) {
+      previousPageUrl.current = currentPageUrl
 
       // If chat is open, update context
       if (isOpen && currentChatId) {
+        console.debug('[HelpChat] Page changed with a help chat open; updating its context', { pageUrl: currentPageUrl })
         fetch(`/api/v1/help-chats/${currentChatId}?action=update-context`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pageUrl: pathname }),
+          body: JSON.stringify({ pageUrl: currentPageUrl }),
         }).catch(error => {
           console.error('Failed to update help chat context:', error)
         })
       }
     }
-  }, [pathname, isOpen, currentChatId])
+  }, [currentPageUrl, isOpen, currentChatId])
+
+  const reportWorkspacePageUrl = useCallback((href: string | null) => {
+    setWorkspacePageUrl(href)
+  }, [])
 
   const openHelpChat = useCallback(() => {
     // Always open to the launcher view so past chats are visible
@@ -200,7 +219,8 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     eligibilityLoading,
     selectedCharacterIds,
     toggleCharacter,
-    currentPageUrl: pathname,
+    currentPageUrl,
+    reportWorkspacePageUrl,
     refreshEligibility: async () => { await mutateEligibility() },
   }
 
@@ -209,6 +229,38 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       {children}
     </HelpChatContext.Provider>
   )
+}
+
+/** Whether `pathname` is the workspace shell, where tabs (not routes) say which page is shown. */
+function isWorkspacePath(pathname: string | null): boolean {
+  return pathname === '/workspace' || (pathname?.startsWith('/workspace/') ?? false)
+}
+
+/**
+ * Renderless: tells the help chat which page the workspace is showing — the
+ * focused pane's active tab, as the href that tab stands for. Mounted inside
+ * the workspace providers, which sit below {@link HelpChatProvider}.
+ */
+export function HelpChatWorkspaceBridge(): null {
+  const workspace = useWorkspaceOptional()
+  const helpChat = useContext(HelpChatContext)
+  const report = helpChat?.reportWorkspacePageUrl
+
+  let href: string | null = null
+  if (workspace?.hydrated) {
+    const { state } = workspace
+    const activeTabId = state.panes[state.focusedPane]?.activeTabId ?? null
+    const tab = activeTabId ? state.tabs[activeTabId] : undefined
+    if (tab) href = hrefForTabIntent(tab.kind, tab.payload)
+  }
+
+  useEffect(() => {
+    report?.(href)
+  }, [report, href])
+
+  useEffect(() => () => report?.(null), [report])
+
+  return null
 }
 
 // ============================================================================

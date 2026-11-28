@@ -27,6 +27,7 @@ import {
   DocumentSaver,
   documentWriteOutcome,
   refusalMessage,
+  type DocumentChangeOrigin,
 } from '@/app/salon/[id]/hooks/document-saver'
 import type { DocumentStandaloneTabPayload } from '@/lib/workspace/types'
 import { useWorkspace } from '@/components/providers/workspace-provider'
@@ -207,9 +208,9 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
    */
   const saveDocument = useCallback((): Promise<boolean> => saver.save(), [saver])
 
-  const handleContentChange = useCallback((content: string) => {
+  const handleContentChange = useCallback((content: string, origin?: DocumentChangeOrigin) => {
     setDoc(prev => (prev ? { ...prev, content } : prev))
-    const change = saver.change(content)
+    const change = saver.change(content, origin)
     // An absorbed change is Lexical's normalized re-serialization of just-loaded
     // content, adopted as the saved baseline so the status reads "Saved".
     if (change === 'absorbed') setBaselineContent(content)
