@@ -23,20 +23,25 @@ export function RestoreDialog({
 }: RestoreDialogProps) {
   const { state, actions } = useRestoreData(isOpen)
 
-  const handleClose = () => {
-    if (!state.restoring && !state.uploading) {
-      actions.resetDialog()
-      onClose()
-    }
-  }
-
-  if (!isOpen) return null
-
   const handleCloseAfterRestore = () => {
     actions.resetDialog()
     onRestoreComplete()
     onClose()
   }
+
+  const handleClose = () => {
+    if (state.restoring || state.uploading) return
+    // A finished restore closes the same way whichever door is used — the X,
+    // Escape or an outside click must reload too (#333).
+    if (state.restoreSummary) {
+      handleCloseAfterRestore()
+      return
+    }
+    actions.resetDialog()
+    onClose()
+  }
+
+  if (!isOpen) return null
 
   const renderModeSelection = () => (
     <div className="space-y-4">
@@ -194,6 +199,7 @@ export function RestoreDialog({
           selectedFile={state.selectedFile}
           error={state.error}
           onFileSelect={actions.handleFileSelect}
+          onFileDrop={actions.selectFile}
         />
       )}
       {state.step === 'preview' && (

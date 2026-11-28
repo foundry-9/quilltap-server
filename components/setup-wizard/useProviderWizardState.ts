@@ -122,6 +122,8 @@ export type WizardAction =
   | { type: 'SET_AVAILABLE_PROVIDERS'; providers: ProviderInfo[] }
   | { type: 'TOGGLE_PROVIDER'; providerId: string }
   | { type: 'SET_API_KEY'; providerId: string; entry: ApiKeyEntry }
+  /** The key or base URL was edited after validating: it must be validated again (#332). */
+  | { type: 'INVALIDATE_API_KEY'; providerId: string }
   | { type: 'SET_BASE_URL'; providerId: string; url: string }
   | { type: 'SET_AVAILABLE_MODELS'; providerId: string; models: string[] }
   | { type: 'SET_CHAT_CONFIG'; config: Partial<ChatConfig> }
@@ -194,7 +196,32 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       const selectedProviders = isSelected
         ? state.selectedProviders.filter((id) => id !== action.providerId)
         : [...state.selectedProviders, action.providerId]
-      return { ...state, selectedProviders }
+      if (!isSelected) return { ...state, selectedProviders }
+      // Deselecting: nothing may still point at the removed provider, or Save
+      // would create its profiles anyway (#331).
+      const removed = action.providerId
+      return {
+        ...state,
+        selectedProviders,
+        chatConfig:
+          state.chatConfig.provider === removed ? { provider: '', model: '' } : state.chatConfig,
+        cheapConfig:
+          state.cheapConfig.provider === removed
+            ? { strategy: 'PROVIDER_CHEAPEST' }
+            : state.cheapConfig,
+        embeddingConfig:
+          state.embeddingConfig?.provider === removed ? null : state.embeddingConfig,
+        imageConfig: state.imageConfig?.provider === removed ? null : state.imageConfig,
+      }
+    }
+
+    case 'INVALIDATE_API_KEY': {
+      const entry = state.apiKeys[action.providerId]
+      if (!entry?.validated) return state
+      return {
+        ...state,
+        apiKeys: { ...state.apiKeys, [action.providerId]: { ...entry, validated: false } },
+      }
     }
 
     case 'SET_API_KEY':
@@ -203,11 +230,15 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
         apiKeys: { ...state.apiKeys, [action.providerId]: action.entry },
       }
 
-    case 'SET_BASE_URL':
+    case 'SET_BASE_URL': {
+      // An emptied field means "no URL", not an empty-string URL.
+      const { [action.providerId]: _previous, ...rest } = state.baseUrls
+      void _previous
       return {
         ...state,
-        baseUrls: { ...state.baseUrls, [action.providerId]: action.url },
+        baseUrls: action.url ? { ...rest, [action.providerId]: action.url } : rest,
       }
+    }
 
     case 'SET_AVAILABLE_MODELS':
       return {

@@ -7,7 +7,7 @@
  * Handles file uploads, SSE streaming, and import execution.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles';
 import type { ConnectionProfile } from '@/lib/schemas/types';
 import type { QuilltapExport } from '@/lib/export/types';
@@ -35,6 +35,19 @@ const INITIAL_STEPS: Record<AIImportStepName, StepProgress> = {
   validation: { status: 'pending' },
   repair: { status: 'pending' },
 };
+
+/**
+ * How many rows an import brought in. The server sends `imported` as a counts
+ * object (`QuilltapExportCounts`), never a number (#284).
+ */
+export function totalImportedCount(imported: unknown): number {
+  if (typeof imported === 'number') return imported;
+  if (!imported || typeof imported !== 'object') return 0;
+  return Object.values(imported as Record<string, unknown>).reduce<number>(
+    (n, v) => n + (typeof v === 'number' && Number.isFinite(v) ? v : 0),
+    0,
+  );
+}
 
 export function useAIImport() {
   // Wizard navigation
@@ -68,6 +81,11 @@ export function useAIImport() {
   });
   const [actionError, setError] = useState<string | null>(null);
   const error = actionError ?? (profilesFailed ? 'Failed to load connection profiles' : null);
+
+  // The running generation's stream. Aborted on unmount, on reset and when a
+  // new run starts, so closing the dialog stops the server's LLM steps (#253).
+  const generationAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => generationAbortRef.current?.abort(), []);
 
   // Import state
   const [importing, setImporting] = useState(false);
@@ -171,6 +189,10 @@ export function useAIImport() {
       // Auto-advance to step 3 if not already there
       setCurrentStep(3);
 
+      generationAbortRef.current?.abort();
+      const controller = new AbortController();
+      generationAbortRef.current = controller;
+
       try {
         const body = {
           profileId,
@@ -184,10 +206,11 @@ export function useAIImport() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
+          signal: controller.signal,
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
+          const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error || 'Generation failed');
         }
 
@@ -199,6 +222,7 @@ export function useAIImport() {
 
         const decoder = new TextDecoder();
         let buffer = '';
+        let sawDone = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -255,6 +279,7 @@ export function useAIImport() {
                     break;
 
                   case 'done':
+                    sawDone = true;
                     setGeneration((prev) => ({
                       ...prev,
                       generating: false,
@@ -277,11 +302,26 @@ export function useAIImport() {
             }
           }
         }
+
+        // The stream ended. A `done` event normally settles the run; if the
+        // stream closed without one, say so rather than spin forever (#253).
+        if (!sawDone) {
+          setError('The generation ended before it finished — do try again.');
+          setGeneration((prev) => ({ ...prev, generating: false }));
+        }
       } catch (err) {
+        if (controller.signal.aborted) {
+          // Closed, reset or superseded — nothing to report.
+          return;
+        }
         const errorMessage = err instanceof Error ? err.message : 'Generation failed';
         setError(errorMessage);
         setGeneration((prev) => ({ ...prev, generating: false }));
         console.error('AI Import generation failed', { error: errorMessage });
+      } finally {
+        if (generationAbortRef.current === controller) {
+          generationAbortRef.current = null;
+        }
       }
     },
     [profileId, uploadedFiles, sourceText, includeMemories, includeChats]
@@ -316,7 +356,7 @@ export function useAIImport() {
 
       const result = {
         success: !!data.success,
-        importedCount: data.imported || 0,
+        importedCount: totalImportedCount(data.imported),
         warnings: data.warnings || [],
         importedCharacterIds: (data.importedCharacterIds as string[] | undefined) ?? [],
       };
@@ -351,6 +391,8 @@ export function useAIImport() {
 
   // Reset wizard completely
   const reset = useCallback(() => {
+    generationAbortRef.current?.abort();
+    generationAbortRef.current = null;
     setCurrentStep(1);
     setUploadedFiles([]);
     setSourceText('');

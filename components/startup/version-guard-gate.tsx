@@ -47,10 +47,17 @@ export function VersionGuardGate() {
             </li>
             <li>
               If you are quite certain you know what you are doing and have a backup,
-              you may adjust the stored version via the CLI:<br />
+              you may adjust the stored version via the CLI. First stop Quilltap entirely
+              — the CLI will not write while a running server holds the instance lock —
+              then run:<br />
               <code className="qt-code-inline text-xs mt-1 inline-block">
-                npx quilltap db &quot;UPDATE instance_settings SET value = &apos;{versionBlock.currentVersion}&apos; WHERE key = &apos;highest_app_version&apos;;&quot;
+                npx quilltap db --write &quot;UPDATE instance_settings SET value = &apos;{versionBlock.currentVersion}&apos; WHERE key = &apos;highest_app_version&apos;;&quot;
               </code>
+              <br />
+              <span className="text-xs">
+                For an instance outside the usual place, add <code className="qt-code-inline">--instance &lt;name&gt;</code>{' '}
+                or <code className="qt-code-inline">--data-dir &lt;path&gt;</code>. Then start Quilltap again.
+              </span>
             </li>
           </ol>
         </div>

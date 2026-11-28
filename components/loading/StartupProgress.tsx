@@ -167,7 +167,7 @@ export function StartupProgress() {
 
   return (
     <div className="qt-pretheme-bg flex h-screen items-center justify-center p-6">
-      <div className="qt-card flex w-full max-w-xl flex-col gap-4 p-8">
+      <div className="qt-card qt-pretheme-card flex w-full max-w-xl flex-col gap-4 p-8">
         <div className="flex flex-col gap-1">
           <div className="qt-text-secondary text-xs uppercase tracking-wide">
             Quilltap is starting up

@@ -817,6 +817,25 @@ export default function AIImportWizard({ onClose, onImportSuccess }: AIImportWiz
           </button>
         </div>
       )}
+
+      {/* A failed generation keeps the material and settings: go back or try again (#253). */}
+      {currentStep === 3 && !generation.generating && !generation.result && (
+        <div className="flex justify-between pt-4 qt-border-default border-t">
+          <button
+            onClick={prevStep}
+            className="qt-button-secondary"
+          >
+            Back
+          </button>
+          <button
+            onClick={() => startGeneration()}
+            disabled={!canProceed}
+            className="qt-button-primary"
+          >
+            Retry
+          </button>
+        </div>
+      )}
     </div>
   );
 }

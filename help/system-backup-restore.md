@@ -139,8 +139,8 @@ problem: a thin pipe, a full disc, a mail attachment that will not have it.
 3. **Click "Restore from Backup"**
 
 4. **Select your backup file**
-   - Click to browse or drag and drop
-   - Supports .zip backup files
+   - Click to browse or drag and drop the file onto the box
+   - Supports .zip backup files (anything else is politely declined)
 
 5. **Preview the backup contents**
    - See what's included (characters, chats, files, etc.)
@@ -162,7 +162,7 @@ problem: a thin pipe, a full disc, a mail attachment that will not have it.
    - Do not close the browser tab
 
 9. **Restore complete**
-   - Your system reloads with the restored data
+   - Your system reloads with the restored data — however you close the dialog: the Close button, the X, Escape or a click outside
    - npm plugins are extracted and ready to use
    - The restore summary may mention re-indexing; see below
 

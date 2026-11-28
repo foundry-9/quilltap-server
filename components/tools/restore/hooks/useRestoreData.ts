@@ -28,16 +28,25 @@ const initialState: RestoreState = {
 export function useRestoreData(isOpen: boolean) {
   const { state, setState, reset } = useDialogState({ isOpen, initialState })
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * Choose the backup file — from the browse dialog or a drop (#334). Only a
+   * .zip backup can be restored; anything else is refused with a message.
+   */
+  const selectFile = useCallback((file: File | null) => {
+    const refused = file && !file.name.toLowerCase().endsWith('.zip')
     setState((prev) => ({
       ...prev,
-      selectedFile: e.target.files?.[0] || null,
-      error: null,
+      selectedFile: refused ? null : file,
+      error: refused ? `"${file.name}" is not a .zip backup file` : null,
       // Reset upload state when a new file is selected
       uploadId: null,
       uploadProgress: 0,
     }))
   }, [setState])
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    selectFile(e.target.files?.[0] || null)
+  }, [selectFile])
 
   /**
    * Upload the file as raw binary via XMLHttpRequest (for progress events),
@@ -216,6 +225,7 @@ export function useRestoreData(isOpen: boolean) {
     state,
     actions: {
       handleFileSelect,
+      selectFile,
       handleNext,
       handleBack,
       handleStartRestore,

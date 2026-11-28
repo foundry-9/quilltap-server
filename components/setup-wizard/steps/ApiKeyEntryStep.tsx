@@ -201,6 +201,7 @@ export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
                           validated: false,
                           error: null,
                         })
+                        dispatch({ type: 'INVALIDATE_API_KEY', providerId: provider.id })
                       }}
                       placeholder="Enter your API key"
                       className="qt-input w-full"
@@ -224,6 +225,10 @@ export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
                           validated: false,
                           error: null,
                         })
+                        // The wizard must not go on with the earlier URL or the
+                        // earlier validation (#332).
+                        dispatch({ type: 'INVALIDATE_API_KEY', providerId: provider.id })
+                        dispatch({ type: 'SET_BASE_URL', providerId: provider.id, url: e.target.value })
                       }}
                       placeholder={
                         provider.configRequirements.baseUrlPlaceholder || 'https://...'

@@ -77,6 +77,8 @@ export default function SetupPage() {
   const [generatedPepper, setGeneratedPepper] = useState('');
   const [requiresRestart, setRequiresRestart] = useState(false);
   const [error, setError] = useState('');
+  /** Set when the unlock-state check itself failed; the page then offers Retry instead of a spinner (#328). */
+  const [checkError, setCheckError] = useState('');
   const [loading, setLoading] = useState(false);
   const { copied, copy } = useCopyToClipboard();
 
@@ -121,19 +123,29 @@ export default function SetupPage() {
   }, [router]);
 
   const checkState = useCallback(async () => {
+    setCheckError('');
+    setDbKeyState('loading');
     try {
       const res = await fetch('/api/v1/system/unlock');
-      const data = await res.json();
-      setDbKeyState(data.state);
+      const data = await res.json().catch(() => null);
+      const state = data?.state as ServerDbKeyState | undefined;
+      if (!res.ok || !state) {
+        setCheckError(
+          (typeof data?.error === 'string' && data.error) ||
+            'The pepper vault would not say whether it is locked.'
+        );
+        return;
+      }
+      setDbKeyState(state);
 
-      if (data.state === 'resolved') {
+      if (state === 'resolved') {
         navigateAfterSetup();
-      } else if (data.state === 'needs-passphrase') {
+      } else if (state === 'needs-passphrase') {
         // Passphrase unlock is handled by /unlock, not /setup
         router.push('/unlock');
       }
     } catch {
-      setError('Failed to check pepper vault status');
+      setCheckError('Failed to check pepper vault status');
     }
   }, [navigateAfterSetup, router]);
 
@@ -209,6 +221,27 @@ export default function SetupPage() {
   };
 
   const handleCopy = () => copy(generatedPepper);
+
+  if (checkError) {
+    return (
+      <div className="qt-auth-page flex items-center justify-center min-h-screen p-4">
+        <div className="qt-card max-w-lg w-full p-6 space-y-4" role="alert">
+          <h1 className="qt-heading-2">The Strongroom Will Not Answer</h1>
+          <p className="qt-text-muted">
+            Quilltap could not learn whether its encryption key is ready. The server may still be
+            starting up, or may have stepped out for a moment.
+          </p>
+          <p className="qt-alert qt-alert-error text-sm">{checkError}</p>
+          <button
+            onClick={() => checkState()}
+            className="qt-button qt-button-primary w-full py-2"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (pepperState === 'loading') {
     return (

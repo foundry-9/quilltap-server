@@ -53,6 +53,14 @@ export function DeleteDataCard() {
   const [error, setError] = useState<string | null>(null)
 
   const handleClose = () => {
+    if (step === 'deleting') return
+    if (step === 'complete') {
+      // Every list, picker, sidebar and open tab still holds the deleted rows
+      // in its client cache; reload so the whole app reads the empty instance,
+      // as a finished restore does (#349). Every way out of the dialog lands here.
+      window.location.reload()
+      return
+    }
     setShowConfirmDialog(false)
     setStep('preview')
     setPreview(null)

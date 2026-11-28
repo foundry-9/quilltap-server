@@ -30,9 +30,11 @@ Each provider card shows capability badges:
 - **Images** — Can generate images for The Lantern
 - **Web Search** — Can search the internet during conversations
 
+Change your mind and untick a provider later in the tour, and the wizard forgets every model you had chosen from it — chat, background, embedding and image alike — so nothing is saved for a provider you have shown the door.
+
 ### Step 2: Present Your Credentials
 
-For each selected provider that requires an API key, you'll enter your key and the wizard will validate it against the provider's servers. A green checkmark confirms all is in order; a red notice means something's amiss — usually a miscopied key or insufficient credits. A key is put away in the vault only once the provider has accepted it, so a mistyped one leaves no trace, and validating again with a corrected key replaces the one the wizard saved rather than filing a second copy. When you revisit the wizard from Settings, a key you already have shows as asterisks; leave it be and **Re-validate** tests the stored key without touching it.
+For each selected provider that requires an API key, you'll enter your key and the wizard will validate it against the provider's servers. A green checkmark confirms all is in order; a red notice means something's amiss — usually a miscopied key or insufficient credits. A key is put away in the vault only once the provider has accepted it, so a mistyped one leaves no trace, and validating again with a corrected key replaces the one the wizard saved rather than filing a second copy. When you revisit the wizard from Settings, a key you already have shows as asterisks; leave it be and **Re-validate** tests the stored key without touching it. Alter a key or a base URL after it has been validated and the checkmark withdraws: **Next** waits until you validate again, so the wizard never carries on with the old key or the old address while showing you the new one.
 
 Providers like Ollama, which run locally and don't require credentials, need only a base URL (typically `http://localhost:11434`).
 

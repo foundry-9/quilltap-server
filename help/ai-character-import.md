@@ -62,6 +62,8 @@ Watch the AI work through each extraction step:
 
 Each step shows its status: pending, in progress, complete, or warning. Non-critical failures (like dialogue generation) won't block the import — only character basics are required.
 
+Should the generation fail outright — the model says nothing, the profile has gone missing, the server stumbles — the error is shown with two buttons beneath it: **Back** returns you to the configuration with your material and settings intact, and **Retry** runs the generation again. Closing the dialog while the generation is still under way stops the work on the server as well.
+
 A step whose answer the model could not finish — it ran out of room mid-sentence — is marked as a warning rather than quietly kept half-written, so you will never import a system prompt that stops in the middle of a thought or a memory without its summary. Such a step is first in line for **Add More & Regenerate**. The shorter physical description prompts have firm length limits; when the model overshoots one, the prompt is trimmed back to its last whole phrase rather than cut off mid-word. Should the final validation turn up a fault, the repair may mend values but is never permitted to throw memories or wardrobe pieces overboard.
 
 ### Step 4: Review & Import
@@ -74,7 +76,7 @@ Review the generated character before importing:
 
 Four actions are available:
 
-- **Import Character** — Imports the character into Quilltap immediately
+- **Import Character** — Imports the character into Quilltap immediately; the success notice counts everything that came in with them (the character, their memories, their example chat and the rest)
 - **Export as .qtap** — Saves the freshly conjured soul to a `.qtap` file instead, without admitting them to your library. The file carries everything the wizard drew up (memories, prompts, wardrobe and example chat included) and may be brought in later through the ordinary import, here or on another instance entirely. The button lingers on the success page as well, should you wish to keep a copy of someone you have already let in.
 - **Add More & Regenerate** — Go back to Step 1 with existing material preserved, add new sources, and re-run generation. Only failed or missing steps re-run.
 - **Start Over** — Clear everything and begin fresh

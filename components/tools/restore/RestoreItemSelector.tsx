@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { activateOnKey } from '@/components/ui/activate-on-key'
 
@@ -8,14 +8,33 @@ interface RestoreItemSelectorProps {
   selectedFile: File | null
   error: string | null
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
+  /** A file dropped on the zone (#334). */
+  onFileDrop: (file: File | null) => void
 }
 
 export function RestoreItemSelector({
   selectedFile,
   error,
   onFileSelect,
+  onFileDrop,
 }: RestoreItemSelectorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [dragActive, setDragActive] = useState(false)
+
+  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
+    // Without preventDefault the browser opens or downloads the dropped file.
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(e.type === 'dragenter' || e.type === 'dragover')
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) onFileDrop(file)
+  }
 
   return (
     <div className="space-y-4">
@@ -24,7 +43,13 @@ export function RestoreItemSelector({
           Select Backup File
         </label>
         <div
-          className="border-2 border-dashed qt-border-default rounded-lg p-6 text-center cursor-pointer hover:qt-border-input transition-colors"
+          className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:qt-border-input transition-colors ${
+            dragActive ? 'qt-border-primary qt-bg-primary/10' : 'qt-border-default'
+          }`}
+          onDragEnter={handleDrag}
+          onDragOver={handleDrag}
+          onDragLeave={handleDrag}
+          onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
           onKeyDown={activateOnKey}
           role="button"
@@ -46,7 +71,7 @@ export function RestoreItemSelector({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".json,.zip"
+            accept=".zip,application/zip"
             onChange={onFileSelect}
             className="hidden"
           />

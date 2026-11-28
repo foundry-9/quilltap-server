@@ -133,8 +133,7 @@ A complete data deletion removes:
 9. **Deletion complete**
    - Account is now empty
    - All data permanently removed
-   - You're logged out
-   - Can optionally delete account entirely
+   - Closing the dialog (Done, the X, Escape or a click outside) reloads the page, so no list, picker or sidebar goes on showing what was deleted
 
 ## Sparing the Archive Shelf
 

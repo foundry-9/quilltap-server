@@ -4,6 +4,20 @@
 
 ### 4.15-dev
 
+#### Fix: setup, startup, restore, delete-all-data and AI import
+
+- `/setup` spun forever when the unlock-state check failed, and a non-OK response without a `state` left an empty card. `checkState` now checks `res.ok` and `data.state`; on failure the page shows the error and a Retry button that runs the check again. Fixes #328.
+- The version-guard page's CLI remedy could not work as written: it omitted `--write`, and `--write` refuses while the running server holds the instance lock. The page now says to stop Quilltap first, shows `npx quilltap db --write "UPDATE ..."`, and mentions `--instance` / `--data-dir`. Documented in `help/database-protection.md`. Fixes #329.
+- The startup progress card flashed white with dark-mode text before the theme loaded. It now wears `qt-pretheme-card`, which pins a dark surface and its text colours (the bootstrap backdrop is dark in every mode) and turns off the card transition, so background and text never disagree. Fixes #354.
+- Unticking a provider in the setup wizard left `chatConfig`, `cheapConfig`, `embeddingConfig` and `imageConfig` pointing at it, so Save still created its profiles. `TOGGLE_PROVIDER` now clears every config that names a removed provider. Fixes #331.
+- Editing a key or base URL after validating it in the setup wizard kept Next enabled and saved the earlier key and URL. The inputs now dispatch the new `INVALIDATE_API_KEY` (wizard state goes unvalidated, the stored key id is kept) and the base URL field writes through `SET_BASE_URL`, which drops an emptied URL. Fixes #332.
+- Closing a finished restore with the X, Escape or an outside click skipped the page reload. `RestoreDialog`'s `handleClose` runs the restore-complete path whenever a `restoreSummary` is set. Fixes #333.
+- The restore drop zone invited a drop but had no drop handler, so the browser opened or downloaded the file. `RestoreItemSelector` now handles drag and drop (with an active-drop highlight) through the hook's new `selectFile`, which refuses anything but a `.zip`; the file input's `accept` is `.zip` only. Fixes #334.
+- After Delete All Data, the rest of the app kept showing deleted rows from its client caches. Closing the dialog after a completed delete (Done, X, Escape or outside click) reloads the page, as a finished restore does; the dialog cannot be closed mid-delete. Projects were already counted. Fixes #349.
+- A failed AI import generation left step 3 with no way out but closing the dialog, closing it did not stop the server's stream, and a stream that ended without a `done` event spun forever. Step 3 now offers Back and Retry after a failure; `useAIImport` aborts the run's `AbortController` on unmount, reset and a new run, and settles the run with an error when the stream ends without `done`. Fixes #253.
+- The AI import success message never showed "(N entities imported)": the server sends `imported` as a counts object. `totalImportedCount` sums it. Fixes #284.
+- Tests: `wizard-reducer-provider-edits.test.ts`, `restore-dialog-close-and-drop.test.tsx`, `setup-page-check-failure.test.tsx`, `ai-import-wizard-failed-generation.test.tsx`, `total-imported-count.test.ts`.
+
 #### Fix: image viewer, photo albums, My Photos and item pictures
 
 - "Save to my gallery" from a character's photo album failed with "Image not found", and the viewer's "In Photo Albums" panel came up empty: album pictures are photo-album links with no `files` row, and both lookups wanted a file id. `POST /api/v1/photos` and `saveToUserGallery` now take exactly one of `fileId` or `linkId` (a link is read from its blob), the viewer sends `linkId` when it has one, and `GET /api/v1/images/[id]` answers a link id with that picture's album links. Fixes #260.

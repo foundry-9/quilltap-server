@@ -1114,6 +1114,30 @@
     background: var(--qt-pretheme-backdrop);
   }
 
+  /**
+   * Pre-theme card — the startup progress card on the bootstrap backdrop,
+   * the first thing every full page load shows. The backdrop is dark
+   * art in every mode, and these screens paint before the theme's tokens
+   * arrive, so the card pins its own dark surface and text colours rather
+   * than following .dark / the theme part-way through loading (#354: the
+   * surface stayed white while the text had already turned dark-mode grey).
+   * Background and text therefore always switch together — never at all.
+   */
+  .qt-pretheme-card {
+    --color-card: hsl(225 16% 12%);
+    --color-card-foreground: hsl(225 10% 92%);
+    --color-foreground: hsl(225 10% 92%);
+    --color-muted-foreground: hsl(225 8% 62%);
+    --color-destructive: hsl(0 70% 68%);
+    --color-border: hsl(225 12% 22%);
+    --qt-card-bg: var(--color-card);
+    --qt-card-fg: var(--color-card-foreground);
+    --qt-card-border: var(--color-border);
+    --qt-text-primary-fg: var(--color-foreground);
+    --qt-text-secondary-fg: var(--color-muted-foreground);
+    transition: none;
+  }
+
   /* ==========================================================================
      AUTH LAYOUT
      ========================================================================== */
