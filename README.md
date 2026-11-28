@@ -14,7 +14,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
 
 <p align="center">
-  <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
+  <img src="https://quilltap.ai/images/welcome-to-quilltap-5-0.png" alt="Welcome to Quilltap" />
 </p>
 
 **Website:** [quilltap.ai](https://quilltap.ai) · **Discord:** [Join us](https://discord.gg/fnTPEZDE4) · **Docker:** [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap)
