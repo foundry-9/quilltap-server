@@ -4,6 +4,10 @@
 
 ### 4.15-dev
 
+#### Tooling: remove-old-dev-tags handles bugfix prereleases
+
+- `/remove-old-dev-tags` takes a label, `dev` (default) or `bugfix`, and cleans `X.Y.Z-<label>.N` tags, releases and Docker images for that label; `all` still removes every one.
+
 #### Fix: remove-old-dev-tags handles bugfix tags and Docker Hub's per-arch indexes
 
 - The command now takes a label, `dev` (default) or `bugfix`, combinable with `all`, and sweeps that label's tags across every base. The default keeps the newest tag only if its version hasn't been released; a tag whose base already has a bare `X.Y.Z` tag goes too.

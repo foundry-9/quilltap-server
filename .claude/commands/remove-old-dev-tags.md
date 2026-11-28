@@ -1,60 +1,95 @@
-# Remove old development release tags
+# Remove old prerelease tags
 
 $ARGUMENTS
 
-This skill accepts an optional argument: `all`. When no argument is provided, it keeps the latest dev tag and removes older ones. When `all` is provided, it removes **every** dev tag, release, and Docker image for the current release candidate — nothing is kept.
+This skill cleans up prerelease tags, GitHub releases and Docker Hub images for one **label**:
+
+- **`dev`** (the default): `X.Y.Z-dev.N` tags, cut from `main`.
+- **`bugfix`**: `X.Y.Z-bugfix.N` tags, cut from `bugfix`.
+
+It also accepts **`all`**. Without it, the newest tag of the label is kept if its version hasn't been released yet, and everything older goes. With it, every tag of the label goes and nothing is kept. Arguments combine in any order, e.g. `bugfix`, `bugfix all`, `all`. If the arguments name neither label, use `dev`. If they say something like "just the bugfix ones", that means `bugfix`.
 
 **Where this runs:** only in the human's local checkout, and only when they ask for it. It deletes remote tags, GitHub releases and Docker Hub manifests, none of which can be undone. Never run it from a cloud session or a worktree; if you are in one, stop and say so. In step 1, if the working tree has uncommitted changes, stop and ask rather than switching branches over them.
 
 ## Steps
 
-1. Checkout the main branch if we aren't already on it.
+1. Checkout the main branch if we aren't already on it. (Tags are global, so this works for `bugfix` too; nothing reads the bugfix branch.)
 2. Fetch all tags from the remote so our local state is current: `git fetch --tags`
-3. Figure out what the current development release pattern is:
-   - Read the `version` field from `package.json`. It will be in the form `{base}-{label}.{number}`, e.g. `3.3.0-dev.71`.
-   - Split on `-` to extract the base semver (e.g. `3.3.0`) and the prerelease portion (e.g. `dev.71`).
-   - Split the prerelease portion on `.` to get the label (e.g. `dev`) and the number (e.g. `71`).
-   - The grep pattern is `{base}-{label}` — e.g. `3.3.0-dev`.
-4. Find all tags matching that pattern: `git tag | grep '{base}-{label}'`
-   - **Default mode (no argument):** If there are zero or one matching tags, there is nothing to clean up. Report that and stop. Otherwise, find the latest one — the tag with the largest integer after `-{label}`. For example, given `3.3.0-dev.21`, `3.3.0-dev.45`, and `3.3.0-dev.73`, the latest is `3.3.0-dev.73`. Previous bases - for example, if the base was `3.2.0-dev.222` - should also be included in the sweep; consider those a dev version to delete as well.
-   - **`all` mode:** If there are zero matching tags, there is nothing to clean up. Report that and stop. There is no "latest" to keep — all matching tags will be removed.
-5. Clean up dev GitHub releases:
-   - List the existing pre-release and draft releases with this: `gh release list --json name,tagName,createdAt,isPrerelease,isDraft --jq '[.[] | select(.isPrerelease or .isDraft)]'`
-   - **Default mode:** Remove the old releases from GitHub (all except the latest tag's release), like this: `gh release delete --yes 4.0.0-dev.1`
-   - **`all` mode:** Remove **all** matching releases from GitHub, including the latest one.
-6. Delete the development release tags:
-   - **Default mode:** Delete all matching tags that are **NOT** the latest.
-   - **`all` mode:** Delete **all** matching tags.
-   - First, delete them from GitHub: `git push origin --delete 3.3.0-dev.21 3.3.0-dev.45` (etc.)
-   - Then, delete them locally: `git tag --delete 3.3.0-dev.21 3.3.0-dev.45` (etc.)
-7. Remove the images from Docker Hub **by digest, not by tag.** On Docker Hub, `regctl tag rm` only removes the tag: the manifests and their layers stay behind untagged and keep counting against the repository's storage (that is how `foundry9/quilltap` grew past 200 GB). Deleting the manifest by digest is what frees it.
-
-   Each dev version `X` (e.g. `3.3.0-dev.21`) on Docker Hub is five manifests under three tags:
-   - `X` → a multi-arch index, whose children are the `linux/amd64` image, the `linux/arm64` image, and one attestation manifest (SBOM + provenance) for each.
-   - `X-amd64` and `X-arm64` → the same two image manifests the index lists (not separate copies).
-
-   The floating `dev` tag points at the latest dev version's index, so `all` mode removes `dev` along with it. That is expected.
-
-   Work out the versions to remove (the same set as step 6; construct the regex like this):
-   - **Default mode:** `regctl tag ls foundry9/quilltap | grep -E '^3\.3\.0-dev\.[0-9]+$' | grep -v '^3\.3\.0-dev\.129$'` if the latest is `3.3.0-dev.129` (also include older dev bases, as in step 4).
-   - **`all` mode:** the same without the `grep -v`.
-
-   First record the digests to keep, so nothing still tagged is deleted: `regctl image digest` of the kept dev version (default mode) and of `foundry9/quilltap:latest`, plus every child digest of each of those indexes. Then, for each version `X` to remove:
+3. List every tag of the label, across **all** bases and minor versions:
 
    ```bash
-   IDX=$(regctl image digest foundry9/quilltap:X)
-   CHILDREN=$(regctl manifest get foundry9/quilltap@$IDX --format '{{range .Manifests}}{{println .Digest}}{{end}}')
-   regctl manifest rm foundry9/quilltap@$IDX            # index first, so no child is still referenced
-   for d in $CHILDREN; do regctl manifest rm --ignore-missing foundry9/quilltap@$d; done
+   git tag | grep -E "^[0-9]+\.[0-9]+\.[0-9]+-${LABEL}\.[0-9]+$" | sort -V
    ```
 
-   - Skip any digest that is in the keep set.
-   - If a version has no `X` index (only `X-amd64` / `X-arm64`, e.g. a build whose manifest job failed), delete the digests those tags resolve to instead.
-   - Deleting a manifest by digest removes every tag that points at it, so `X`, `X-amd64` and `X-arm64` all disappear. Afterwards run `regctl tag ls foundry9/quilltap | grep 'X'` to confirm, and delete any straggler with `regctl tag rm`.
-   - If Docker Hub refuses the digest delete (`401`/`403`/`405`), stop and tell the user: the token regctl is logged in with needs the **Delete** scope. Do not fall back to `regctl tag rm` without saying so, because that leaves the storage behind.
+   If there are none, report that and stop.
+4. Decide what to keep:
+   - **`all` mode:** keep nothing.
+   - **Default mode:** the candidate is the last tag in the `sort -V` list (highest base, then highest number). Keep it **only if its base hasn't been released**, i.e. there is no bare `X.Y.Z` tag for it (`git tag -l "$BASE"` prints nothing). If the base has shipped, the candidate is stale too and nothing is kept. Example: given `4.14.1-bugfix.9` and `4.14.2-bugfix.1`, with `4.14.1` released and `4.14.2` not, keep `4.14.2-bugfix.1` and delete `4.14.1-bugfix.9`.
+   - The delete set is every listed tag except the kept one. If it's empty, report that and stop.
+   - State the delete set and the kept tag (if any) before deleting.
+5. Delete the GitHub releases for the delete set. Check which ones exist with `gh release list --limit 200 --json tagName,isPrerelease,isDraft --jq '.[] | select(.isPrerelease or .isDraft) | .tagName'`, then `gh release delete --yes <tag>` for each one in the delete set. A tag with no release is fine; skip it.
+6. Delete the tags, first from GitHub with `git push origin --delete <tag> <tag> …`, then locally with `git tag --delete <tag> <tag> …`.
+7. Remove the images from Docker Hub **by digest, not by tag** (see below).
 
-   This frees only what this run removes. Untagged images left by earlier tag-only cleanups can't be listed through the registry API; the user has to clear them from Docker Hub's web UI.
+## Docker Hub
+
+On Docker Hub, `regctl tag rm` only removes the tag: the manifests and their layers stay behind untagged and keep counting against the repository's storage (that is how `foundry9/quilltap` grew past 200 GB). Deleting the manifest by digest is what frees it.
+
+### What one version is
+
+`release.yml` builds each arch with buildx, then joins them with `docker buildx imagetools create`. So each version `X` (dev or bugfix alike) is **seven manifests under three tags**:
+
+- `X-amd64` → an **index** of two: the `linux/amd64` image and its attestation manifest (SBOM + provenance).
+- `X-arm64` → the same for `linux/arm64`.
+- `X` → a multi-arch **index** of four: both images and both attestations (the same leaf manifests, not copies).
+
+The two per-arch tags are indexes of their own, not the images. Docker Hub refuses to delete a manifest that any index still lists, with `403 DENIED … cannot be deleted as it is referenced by other images`. So **delete all three indexes first, then the four leaves.** Deleting `X`'s index alone isn't enough.
+
+The same workflow points the floating tags at new indexes: `latest` for a bare `X.Y.Z` tag, `dev` for **every** prerelease, bugfix included. So `dev` may point at a bugfix version.
+
+### The keep set
+
+Before deleting anything, resolve the digests that must survive: the kept version from step 4 (if any), `latest`, and `dev`, plus everything each of those indexes lists. Exception: in `all` mode, if `dev` resolves to the same index as a version in the delete set, leave `dev` out of the keep set. It goes with that version, which is expected. In default mode `dev` always stays in the keep set; a digest of a doomed version that `dev` still needs is skipped and reported, not deleted.
+
+### The delete
+
+Run it as one script so the keep set and the order are applied the same way every time. Set `DOOMED` to the delete set from step 4, and `KEEP_TAGS` to the kept version (if any) plus `latest`, plus `dev` unless the `all`-mode exception applies:
+
+```bash
+R=foundry9/quilltap
+DOOMED="4.14.1-bugfix.9 4.14.2-bugfix.1"      # the delete set
+KEEP_TAGS="latest dev"                         # + the kept version, if any
+
+children() { regctl manifest get "$R@$1" --format '{{range .Manifests}}{{println .Digest}}{{end}}' 2>/dev/null; }
+KEEP=""
+for k in $KEEP_TAGS; do for t in "$k" "$k-amd64" "$k-arm64"; do   # a kept version keeps its per-arch indexes too
+  d=$(regctl image digest "$R:$t" 2>/dev/null) || continue; KEEP="$KEEP $d $(children "$d")"
+done; done
+KEEP=$(echo $KEEP)   # one space-separated line, so the match below sees every digest
+del() { case " $KEEP " in *" $1 "*) echo "KEPT (still referenced by a kept tag): $1";; *) regctl manifest rm --ignore-missing "$R@$1" && echo "removed $1";; esac; }
+
+for X in $DOOMED; do
+  echo "== $X"
+  INDEXES=""; LEAVES=""
+  for t in "$X" "$X-amd64" "$X-arm64"; do
+    d=$(regctl image digest "$R:$t" 2>/dev/null) || { echo "no tag $t"; continue; }
+    INDEXES="$INDEXES $d"; LEAVES="$LEAVES $(children "$d")"
+  done
+  for d in $INDEXES; do del "$d"; done                                     # indexes first
+  for d in $(echo $LEAVES | tr ' ' '\n' | sort -u); do del "$d"; done      # then images and attestations
+done
+
+echo "== left behind:"; regctl tag ls "$R" | grep -E "$(echo $DOOMED | sed 's/\./\\./g; s/ /|/g')" || echo "(nothing)"
+```
+
+- A version may be missing one of its three tags (a build whose arch or manifest job failed). The script deletes whichever ones exist.
+- If a tag is still listed at the end, find out why before reaching for `regctl tag rm`. It is usually a leaf that a kept tag still references (the script says `KEPT`), and that is correct.
+- If Docker Hub refuses with `401`, `405`, or a `403` that does **not** say "referenced by other images", stop and tell the user: the token regctl is logged in with needs the **Delete** scope. Do not fall back to `regctl tag rm` without saying so, because that leaves the storage behind. A `403` that does say "referenced by other images" means an index pointing at that manifest is still there, so find it and delete it first.
+
+This frees only what this run removes. Untagged images left by earlier tag-only cleanups can't be listed through the registry API; the user has to clear them from Docker Hub's web UI.
 
 ## Rules
 
-You must not delete any tags that are bare semver tags without the `-{label}.{number}` suffix. You would **NOT** delete `3.3.0` or `3.2.1`, but you would delete `3.3.0-dev.21`. Only tags for the current release candidate's label are in scope — do not touch tags from older release series.
+- Never delete a bare semver tag (`4.14.1`, `4.15.0`), and never `latest`. Only `X.Y.Z-{label}.N` tags of the chosen label are in scope: a `bugfix` run never touches dev tags, and a `dev` run never touches bugfix tags.
+- Older bases of the same label are in scope (a `dev` run sweeps `4.14.0-dev.*` as well as `4.15.0-dev.*`). Tags of other labels are not.
+- Report at the end: the tags and releases deleted, the tag kept (if any), how many manifests were removed, and anything the keep set protected.
