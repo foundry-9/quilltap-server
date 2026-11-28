@@ -412,6 +412,12 @@ A whisper is an aside, not a round of conversation. The character you addressed 
 
 Should you whisper while the room is already in full flow, with characters taking their turns one after another, your note waits politely until the present round is done, and only then does its recipient answer it. The house will not have two speakers at once on your account.
 
+### Answering in Kind
+
+A character who has been whispered to is told, in so many words, that the note reached them alone, who else is in the room and did *not* hear it, and that whatever they say in their ordinary reply is said aloud to the whole company. If they mean to answer you privately, they do it with the `whisper` tool, and their spoken reply keeps to what the others could plainly see: a glance, a pause, a perfectly innocent remark about the weather. They are asked never to recite the private matter where the room can hear it — not as dialogue, not as narration, not as a knowing aside. (When the character holds no `whisper` tool on that turn, they are simply told to keep the matter out of their reply.)
+
+Whispers they received earlier in the conversation are marked as private in their own reading of it, so a confidence from three courses ago does not come back to them sounding like table talk.
+
 ### Visibility
 
 - **Default:** Whispers between AI characters are hidden from the chat display, preserving the illusion that some things are, in fact, private.

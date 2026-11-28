@@ -37,7 +37,8 @@ const TRAILING_SECTION_SEPARATOR = '\n\n---\n\n'
  * (the inform block — after recall, so a memory that contradicts it comes
  * first — then the established facts posted since the seat last spoke, so
  * the operator's vouched words travel together), who the conversation is about (the referent ledger), the line being
- * answered (the closing echo), and the turn notes last. Empty-is-absent: an
+ * answered (the closing echo), the whisper-reply note when that line (or any
+ * since the seat last spoke) was whispered to it, and the turn notes last. Empty-is-absent: an
  * empty section adds nothing, not even a separator.
  */
 export interface TrailingSections {
@@ -51,6 +52,8 @@ export interface TrailingSections {
   establishedFacts?: string
   referentLedger: string
   closingEcho: string
+  /** A whisper reached this seat since it last spoke (`whisper-privacy.ts`); '' otherwise. */
+  whisperReply?: string
   turnSkip: string
   turnYield: string
   /** The chat's first line: the opening note (`buildOpeningInstruction`); '' otherwise. */
@@ -69,6 +72,7 @@ function orderedSections(s: TrailingSections): string[] {
     s.establishedFacts,
     s.referentLedger,
     s.closingEcho,
+    s.whisperReply,
     s.turnSkip,
     s.turnYield,
     s.turnOpening,

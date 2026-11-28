@@ -4,6 +4,13 @@
 
 ### 4.15-dev
 
+#### Fix: characters answered whispers out loud
+
+- A whisper reached its recipient looking like any other line, and nothing said the reply would post publicly, so characters answered private asides in their ordinary reply in front of everyone present. The `whisper` tool was offered but rarely used.
+- A seat's whisper to the responding character is now marked private in that character's context (`WHISPER_MARK`, read time only), in history and on the new user message.
+- New trailing section, the whisper-reply note (`buildWhisperReplyNote`, `lib/chat/context/whisper-privacy.ts`): when a whisper reached the seat since it last spoke, it names the whisperer and the present seats who did not hear it, says the reply is public, points at the `whisper` tool when the seat holds it this turn (`whisperToolOffered`, from the turn's tool offer), and forbids narrating the private exchange. Empty-is-absent; swipes cut history at the re-rolled row.
+- Documented in `help/chat-multi-character.md`. Test: `__tests__/unit/lib/chat/context/whisper-privacy.test.ts`.
+
 #### Fix: startup failed after a General-scope document was created
 
 - On a database that never ran `migrate-remaining-general-to-uploads-v1` (created after 4.4, or one that never had `_general/` files), creating a General-scope document wrote a file under `files/_general/`, which made the migration's `shouldRun` answer true. Its `run()` inserts into `doc_mount_blobs` as that table was before the content/link split, so it failed with "no column named mountPointId" and startup exited, on every boot.

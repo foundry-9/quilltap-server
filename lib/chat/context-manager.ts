@@ -68,6 +68,7 @@ import {
 } from './context/turn-recall'
 import { createTurnTranscript, minutesSinceLastHostTimestamp, type TurnTranscript } from './context/turn-transcript'
 import { buildEstablishedFactReminder } from './context/established-fact-reminder'
+import { buildWhisperReplyNote } from './context/whisper-privacy'
 import { resolveSpeakerNames } from './speaker-names'
 import { announceTurnMail, offerCoreWhisper, postCommonplaceWhispers, postTurnTimestamp } from './context/turn-whispers'
 import { buildReferentSections, buildTurnNotes, composeTrailingMessage, recentSpokenLines } from './context/turn-trailing'
@@ -290,6 +291,11 @@ export interface BuildContextOptions {
 
   /** Tool instructions injected into system prompt (native tool rules or text-block tool instructions) */
   toolInstructions?: string
+  /**
+   * The responding seat holds the `whisper` tool this turn. Shapes the
+   * whisper-reply note (`whisper-privacy.ts`); absent means it does not.
+   */
+  whisperToolOffered?: boolean
 
   // ============================================================================
   // Timestamp Injection
@@ -757,7 +763,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // their one vouching header; empty-is-absent.
   // The recent spoken window and the workspace's characters were read once
   // above (step 4) and are shared with the referent ledger here.
-  const [progressions, inventory, referents, inform, establishedFacts] = await Promise.all([
+  const [progressions, inventory, referents, inform, establishedFacts, whisperReply] = await Promise.all([
     buildProgressionsSection({
       character,
       // A thunk: a character carrying no progressions — nearly all of them —
@@ -810,6 +816,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           return ''
         })
       : Promise.resolve(''),
+    // A whisper reached this seat since it last spoke: its reply is heard by
+    // everyone, so a private answer goes through the whisper tool. Multi-
+    // character only (there is no one to whisper in front of otherwise);
+    // empty-is-absent.
+    respondingParticipant && cast
+      ? transcript.events().then(events => buildWhisperReplyNote({
+          events,
+          respondingParticipantId: respondingParticipant.id,
+          allParticipants: cast.allParticipants,
+          whisperToolOffered: options.whisperToolOffered === true,
+          regenerationOfMessageIds: options.regenerationOfMessageIds,
+          loadSpeakerNames: () => resolveSpeakerNames(chat),
+          chatId: chat.id,
+        })).catch(error => {
+          logger.warn('[WhisperReply] Could not build the whisper-reply note', {
+            chatId: chat.id,
+            error: getErrorMessage(error),
+          })
+          return ''
+        })
+      : Promise.resolve(''),
   ])
   const notes = buildTurnNotes({
     turnSkip: options.turnSkip,
@@ -837,6 +864,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     establishedFacts,
     referentLedger: referents.referentLedger,
     closingEcho: referents.closingEcho,
+    whisperReply,
     turnSkip: notes.turnSkip,
     turnYield: notes.turnYield,
     turnOpening: notes.turnOpening,

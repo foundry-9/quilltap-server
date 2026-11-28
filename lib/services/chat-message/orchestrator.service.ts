@@ -23,6 +23,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import { takeRaisedHand, waitForEarlierTurns } from '@/lib/chat/turn-control'
 import { collectAttachmentMimeTypes } from '@/lib/chat/image-transport-budget'
 import { frameEstablishedFact } from '@/lib/chat/established-fact'
+import { WHISPER_MARK, WHISPER_MARK_SHARED } from '@/lib/chat/context/whisper-privacy'
 import { postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
@@ -890,12 +891,19 @@ async function processMessage(
         defaultTimestampConfig: chatSettings.defaultTimestampConfig,
       } : null,
       toolInstructions: slate.toolInstructions,
+      whisperToolOffered: slate.toolOffer.kind === 'offered' && slate.toolOffer.names.has('whisper'),
       // An established fact reaches the model framed, exactly as the stored
       // row will read from history on every later turn.
+      // A whisper to this character carries the private mark, as the stored
+      // row will in history on every later turn (whisper-privacy.ts).
       newUserMessage: isContinueMode
         ? undefined
         : fileProcessing.messageContentPrefix
-          + (options.isEstablishedFact && content ? frameEstablishedFact(content, { kind: 'seat', voice: 'plain' }) : content),
+          + (options.isEstablishedFact && content
+            ? frameEstablishedFact(content, { kind: 'seat', voice: 'plain' })
+            : content && options.targetParticipantIds?.includes(characterParticipant.id)
+              ? `${options.targetParticipantIds.length > 1 ? WHISPER_MARK_SHARED : WHISPER_MARK} ${content}`
+              : content),
       activeUserParticipantId: speakingAsParticipantId,
       isContinueMode,
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,

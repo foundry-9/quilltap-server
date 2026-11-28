@@ -44,6 +44,7 @@ import type {
 import type { AttachedFile } from './types'
 import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 import { countEstablishedFacts, frameEstablishedFacts, isEstablishedFact } from '@/lib/chat/established-fact';
+import { frameIncomingWhispers } from '@/lib/chat/context/whisper-privacy';
 import { resolveToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils'
 import { DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types'
 
@@ -65,6 +66,8 @@ export interface BuildMessageContextOptions {
   roleplayTemplate: { systemPrompt: string } | null
   chatSettings: { cheapLLMSettings?: Record<string, unknown>; defaultTimestampConfig?: TimestampConfig | null; timezone?: string | null } | null
   toolInstructions?: string
+  /** The responding seat holds the `whisper` tool this turn (shapes the whisper-reply note). */
+  whisperToolOffered?: boolean
   newUserMessage?: string
   /** The user-controlled participant the human is "Speaking As" for this turn */
   activeUserParticipantId?: string | null
@@ -1042,10 +1045,24 @@ export async function buildMessageContext(
     })
   }
 
+  // Seat whispers to this character: marked as private in its context (read
+  // time, never stored), while `systemSender` still tells a seat's whisper
+  // from a Staff one. See lib/chat/context/whisper-privacy.ts.
+  const whispersMarked = respondingParticipantId
+    ? frameIncomingWhispers(messagesFramed, respondingParticipantId)
+    : { rows: messagesFramed, framed: 0 }
+  if (whispersMarked.framed > 0) {
+    logger.debug('[Context] Marked incoming whispers as private', {
+      chatId: chat.id,
+      participantId: respondingParticipantId,
+      framed: whispersMarked.framed,
+    })
+  }
+
   // Whisper-role normalization (re-role Staff whispers to USER, preserve
   // attachment-bearing whispers as ASSISTANT, apply opaque body swap). See
   // `normalizeWhisperRoles` for the full rationale.
-  const filteredExistingMessages = normalizeWhisperRoles(messagesFramed, isOpaqueAnywhere)
+  const filteredExistingMessages = normalizeWhisperRoles(whispersMarked.rows, isOpaqueAnywhere)
 
   // Row ids of the *human's* own turns, captured before normalization erases
   // the distinction. Staff whispers are re-roled to USER above, so after this
@@ -1181,6 +1198,7 @@ export async function buildMessageContext(
     messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
     // Tool instructions (native tool rules or text-block tool instructions)
     toolInstructions,
+    whisperToolOffered: options.whisperToolOffered,
     // Timestamp injection
     timestampConfig,
     isInitialMessage,
