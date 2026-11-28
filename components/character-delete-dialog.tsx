@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -27,7 +27,12 @@ interface CharacterDeleteDialogProps {
   characterId: string
   characterName: string
   onClose: () => void
-  onConfirm: (options: { cascadeChats: boolean; cascadeImages: boolean }) => void
+  /**
+   * Runs the delete. Return its promise: the dialog holds both buttons
+   * disabled until it settles, so a second click cannot send a second
+   * DELETE (#271).
+   */
+  onConfirm: (options: { cascadeChats: boolean; cascadeImages: boolean }) => void | Promise<void>
 }
 
 export function CharacterDeleteDialog({
@@ -38,6 +43,10 @@ export function CharacterDeleteDialog({
 }: CharacterDeleteDialogProps) {
   const [deleteChats, setDeleteChats] = useState(true)
   const [deleteImages, setDeleteImages] = useState(true)
+  const [deleting, setDeleting] = useState(false)
+  // The ref answers a second click that lands before the re-render disables
+  // the button; the state drives the markup.
+  const deletingRef = useRef(false)
 
   // Read fresh on every opening (no cache kept, no retry): it is the account
   // of what this delete would take, so it must be current.
@@ -58,17 +67,28 @@ export function CharacterDeleteDialog({
   // Cascade only what the preview showed and offered a choice over (#241).
   // When the preview failed, or showed nothing of a kind, the character goes
   // alone and its chats and images stay.
-  const handleConfirm = () => {
-    onConfirm({
-      cascadeChats: !!preview && preview.exclusiveChats.length > 0 && deleteChats,
-      cascadeImages: !!preview && preview.totalExclusiveImageCount > 0 && deleteImages,
-    })
+  const handleConfirm = async () => {
+    if (deletingRef.current) return
+    deletingRef.current = true
+    setDeleting(true)
+    try {
+      await onConfirm({
+        cascadeChats: !!preview && preview.exclusiveChats.length > 0 && deleteChats,
+        cascadeImages: !!preview && preview.totalExclusiveImageCount > 0 && deleteImages,
+      })
+    } finally {
+      // On success the caller has usually unmounted the dialog; on failure
+      // it stays open and the buttons come back.
+      deletingRef.current = false
+      setDeleting(false)
+    }
   }
 
   return (
     <BaseModal
       isOpen
       onClose={onClose}
+      busy={deleting}
       role="alertdialog"
       headerless
       className="p-6"
@@ -175,13 +195,15 @@ export function CharacterDeleteDialog({
       <div className="flex gap-3 justify-end">
         <button
           onClick={onClose}
+          disabled={deleting}
           className="qt-button qt-button-secondary"
         >
           Cancel
         </button>
         <button
-          onClick={handleConfirm}
-          disabled={loading}
+          onClick={() => void handleConfirm()}
+          disabled={loading || deleting}
+          aria-busy={deleting || undefined}
           className="qt-button qt-button-destructive"
         >
           Delete Character

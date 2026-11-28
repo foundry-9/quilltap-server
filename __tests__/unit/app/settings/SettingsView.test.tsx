@@ -44,9 +44,10 @@ jest.mock('@/components/settings/chat-settings/ChatSettingsProvider', () => ({
 }))
 
 const mockChips = { current: [] as AttentionChip[] }
+const mockChipsReady = { current: true }
 jest.mock('@/components/settings/AttentionStrip', () => ({
   ...jest.requireActual('@/components/settings/AttentionStrip'),
-  useAttentionChips: () => ({ chips: mockChips.current, ready: true }),
+  useAttentionChips: () => ({ chips: mockChips.current, ready: mockChipsReady.current }),
 }))
 
 // Card bodies: the Moderation group's are real; the rest are labelled stubs.
@@ -113,6 +114,7 @@ describe('SettingsView', () => {
   beforeEach(() => {
     mockContext.current = makeContext()
     mockChips.current = []
+    mockChipsReady.current = true
     mockBackdrop.mockClear()
     scrollIntoView = jest.fn()
     Element.prototype.scrollIntoView = scrollIntoView
@@ -169,6 +171,33 @@ describe('SettingsView', () => {
       expect(currentGroup()).toBe('Connections')
       const strip = screen.getByRole('list', { name: 'Settings that need attention' })
       expect(within(strip).getByRole('link', { name: /missing its key/ })).toHaveAttribute('href', '/settings?section=providers')
+    })
+
+    it('latches the default once the chips are ready and never moves after (#286)', async () => {
+      mockChipsReady.current = false
+      mockChips.current = []
+      let rerender: (ui: React.ReactElement) => void = () => {}
+      await act(async () => {
+        ;({ rerender } = renderWithQuery(<SettingsView />))
+      })
+      expect(currentGroup()).toBe('Connections')
+
+      mockChipsReady.current = true
+      mockChips.current = [{ id: 'concierge-off-duty', label: 'The Concierge is off duty', card: 'on-duty', group: 'moderation' }]
+      await act(async () => rerender(<SettingsView />))
+      expect(currentGroup()).toBe('Moderation')
+
+      // A chip that lights later (a failed task, a finished backfill) leaves the page where it is.
+      mockChips.current = [
+        { id: 'profile-key', label: '“Prim” is missing its key or provider', card: 'providers', group: 'connections' },
+        { id: 'concierge-off-duty', label: 'The Concierge is off duty', card: 'on-duty', group: 'moderation' },
+      ]
+      await act(async () => rerender(<SettingsView />))
+      expect(currentGroup()).toBe('Moderation')
+
+      mockChips.current = []
+      await act(async () => rerender(<SettingsView />))
+      expect(currentGroup()).toBe('Moderation')
     })
 
     it('does not override an explicit address', async () => {

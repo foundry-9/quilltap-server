@@ -57,8 +57,19 @@ const MEMORIES_PER_PAGE = 30
 
 const EMPTY_MEMORIES: Memory[] = []
 
+/** How long typing must pause before the search term reaches the query (#269). */
+export const MEMORY_SEARCH_DEBOUNCE_MS = 300
+
 export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
+  // What the box shows, updated per keystroke, and the term the query uses,
+  // which follows it once typing pauses — one request per word, not per letter.
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  useEffect(() => {
+    if (searchInput === search) return
+    const timer = setTimeout(() => setSearch(searchInput), MEMORY_SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [searchInput, search])
   const [sortBy, setSortBy] = useState<SortBy>('createdAt')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [sourceFilter, setSourceFilter] = useState<'ALL' | 'AUTO' | 'MANUAL' | 'CONSOLIDATED'>('ALL')
@@ -123,10 +134,9 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
 
   const goToPage = setPage
 
-  // Debounced search handler
+  // The box updates at once; the query follows after the debounce above.
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setSearch(value)
+    setSearchInput(e.target.value)
   }, [])
 
   const handleDelete = useCallback(async (id: string) => {
@@ -230,7 +240,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
             type="text"
             placeholder="Search memories..."
             aria-label="Search memories"
-            value={search}
+            value={searchInput}
             onChange={handleSearchChange}
             className="qt-input text-sm"
           />

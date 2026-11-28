@@ -371,7 +371,7 @@ function CharacterOutfitSection({
                   checked={mode === opt.value}
                   onChange={() => handleModeChange(opt.value)}
                   disabled={disabled}
-                  className="mt-0.5 accent-[var(--primary)]"
+                  className="mt-0.5 accent-[var(--color-primary)]"
                 />
                 <div className="flex-1 min-w-0">
                   <span className="qt-text-primary">{opt.label}</span>

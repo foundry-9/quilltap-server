@@ -22,6 +22,7 @@ import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { processTemplate } from '@/lib/templates/processor'
 import { useGroups } from '@/app/aurora/hooks/useGroups'
 import { GroupsGrid } from '@/app/aurora/components/GroupsGrid'
+import { confirmAndDeleteGroup } from '@/app/aurora/shared/confirm-delete-group'
 import { Icon } from '@/components/ui/icon'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
@@ -247,9 +248,10 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     }
   }
 
+  // The trash icon on a group card asks first, naming the group (#272).
   const handleDeleteGroup = useCallback((groupId: string) => {
-    deleteGroup(groupId)
-  }, [deleteGroup])
+    void confirmAndDeleteGroup(groupId, groups, deleteGroup)
+  }, [groups, deleteGroup])
 
   const handleImport = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()

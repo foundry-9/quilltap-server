@@ -122,8 +122,10 @@ export function CharacterOptimizerModal({
   };
 
   const handleApply = async () => {
-    await optimizer.applyChanges(characterId);
-    if (!optimizer.error) {
+    // Branch on the result, not optimizer.error: this closure holds the error
+    // from the render it was made in, which is stale here (#238).
+    const applied = await optimizer.applyChanges(characterId);
+    if (applied) {
       setApplySuccess(true);
       setTimeout(() => {
         onApplied();

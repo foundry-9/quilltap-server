@@ -47,7 +47,7 @@ export function ProjectDetailHeader({
         )}
         <div
           className="w-12 h-12 rounded-lg flex items-center justify-center text-xl"
-          style={{ backgroundColor: project.color || 'var(--muted)' }}
+          style={{ backgroundColor: project.color || 'var(--color-muted)' }}
         >
           {project.icon || <Icon name="folder" className="w-6 h-6 qt-text-secondary" />}
         </div>

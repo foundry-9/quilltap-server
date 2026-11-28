@@ -64,10 +64,10 @@ export function ProgressionsSection({ characterId, characterName }: Readonly<Pro
   const handleSave = async (id: string, progression: Progression) => {
     try {
       await save.mutateAsync({
-        ...progressions,
+        id,
         // Stamped here so the character's very next turn reports the change
         // regardless of the entry's own cadence.
-        [id]: { ...progression, updatedAt: new Date().toISOString() },
+        progression: { ...progression, updatedAt: new Date().toISOString() },
       })
       showSuccessToast(editing ? 'Progression updated' : 'Progression added')
       setEditing(null)
@@ -78,10 +78,9 @@ export function ProgressionsSection({ characterId, characterName }: Readonly<Pro
   }
 
   const handleDelete = async (id: string) => {
-    const next = { ...progressions }
-    delete next[id]
     try {
-      await remove.mutateAsync(next)
+      // Only this id goes; entries the card could not read stay in the file (#239).
+      await remove.mutateAsync(id)
       showSuccessToast('Progression removed')
     } catch (err) {
       showErrorToast(apiErrorMessage(err, 'The progression could not be removed.'))

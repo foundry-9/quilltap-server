@@ -1,5 +1,5 @@
 import { render, screen, waitFor, act, fireEvent, within } from '@testing-library/react'
-import { MemoryList } from '@/components/memory/memory-list'
+import { MemoryList, MEMORY_SEARCH_DEBOUNCE_MS } from '@/components/memory/memory-list'
 import { createQueryWrapper } from '../../../helpers/renderWithQuery'
 
 // Mock IntersectionObserver for infinite scroll
@@ -194,11 +194,37 @@ describe('MemoryList', () => {
 
     const searchInput = screen.getByPlaceholderText(/search memories/i)
     fireEvent.change(searchInput, { target: { value: 'a' } })
+    // Past the debounce, so 'a' really is requested and is slow to answer.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, MEMORY_SEARCH_DEBOUNCE_MS + 20)) })
     fireEvent.change(searchInput, { target: { value: 'ab' } })
 
     await waitFor(() => expect(screen.getAllByText('Fresh answer').length).toBeGreaterThan(0))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)) })
     expect(screen.queryAllByText('Stale answer')).toHaveLength(0)
     expect(screen.getAllByText('Fresh answer').length).toBeGreaterThan(0)
+  })
+
+  it('waits for typing to pause before searching: one request for a typed word (#269)', async () => {
+    await renderMemoryList()
+    const searchCalls = () =>
+      mockFetch.mock.calls
+        .map(([url]) => new URL(String(url), 'http://localhost').searchParams.get('search'))
+        .filter((term) => term !== null)
+
+    jest.useFakeTimers()
+    try {
+      const searchInput = screen.getByPlaceholderText(/search memories/i)
+      for (const value of ['w', 'wo', 'wor', 'word']) {
+        fireEvent.change(searchInput, { target: { value } })
+        act(() => { jest.advanceTimersByTime(50) })
+      }
+      expect(searchInput).toHaveValue('word')
+      expect(searchCalls()).toEqual([])
+
+      act(() => { jest.advanceTimersByTime(MEMORY_SEARCH_DEBOUNCE_MS) })
+    } finally {
+      jest.useRealTimers()
+    }
+    await waitFor(() => expect(searchCalls()).toEqual(['word']))
   })
 })

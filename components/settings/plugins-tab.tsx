@@ -155,8 +155,9 @@ export default function PluginsTab() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('installed')
   const [toggling, setToggling] = useState<Set<string>>(new Set())
 
-  // The registry, the deployment shape and the upgrade check are cached reads; every write below invalidates
-  // `queryKeys.plugins.all`, which also refreshes the attention strip.
+  // The registry, the deployment shape and the upgrade check are cached reads; install, uninstall and
+  // upgrade invalidate `queryKeys.plugins.all`, which also refreshes the attention strip. A toggle
+  // re-reads only the registry (`queryKeys.plugins.list()`).
   const pluginsQuery = usePluginsQuery<Plugin>()
   const plugins = pluginsQuery.data?.plugins ?? EMPTY_PLUGINS
   const stats = pluginsQuery.data?.stats ?? null
@@ -183,7 +184,10 @@ export default function PluginsTab() {
   })
   const availableUpgrades = upgradesQuery.data?.upgrades ?? EMPTY_UPGRADES
   const upgradesLastChecked = upgradesQuery.data ? upgradesQuery.data.lastChecked ?? null : null
-  const upgradesLoading = upgradesQuery.isFetching
+  // The button shows any check in flight; the list waits only for the first one and keeps
+  // its rows through a refetch (#283).
+  const upgradesChecking = upgradesQuery.isFetching
+  const upgradesLoading = upgradesQuery.isPending
   useEffect(() => {
     if (upgradesQuery.error) showErrorToast(apiErrorMessage(upgradesQuery.error, 'Failed to check for upgrades'))
   }, [upgradesQuery.error])
@@ -197,6 +201,15 @@ export default function PluginsTab() {
   /** Re-read every plugin list (the registry, installed, upgrades, the attention strip). */
   const refreshPlugins = useCallback(
     () => queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all }),
+    [queryClient],
+  )
+
+  /**
+   * Re-read the plugin registry only — enabling or disabling a plugin changes no version,
+   * so the npm upgrade check is left alone (#283).
+   */
+  const refreshPluginList = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.plugins.list() }),
     [queryClient],
   )
 
@@ -244,7 +257,7 @@ export default function PluginsTab() {
     try {
       await toggleMutation.mutateAsync({ pluginName, enabled: !currentEnabled })
 
-      await refreshPlugins()
+      await refreshPluginList()
 
       showSuccessToast(
         !currentEnabled ? 'Plugin enabled successfully' : 'Plugin disabled successfully'
@@ -554,10 +567,10 @@ export default function PluginsTab() {
             </div>
             <button
               onClick={fetchAvailableUpgrades}
-              disabled={upgradesLoading}
+              disabled={upgradesChecking}
               className="qt-button-secondary flex items-center gap-2 flex-shrink-0"
             >
-              {upgradesLoading ? (
+              {upgradesChecking ? (
                 <>
                   <div className="qt-spinner-sm" />
                   Checking...

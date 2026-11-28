@@ -51,7 +51,8 @@ import {
 } from '../shared/wizard-text-fields'
 import { saveGeneratedWardrobeItems } from '../shared/save-generated-wardrobe'
 import { saveGeneratedPhysicalDescription } from '../shared/save-generated-physical-description'
-import { saveGeneratedScenarios } from '../shared/save-generated-scenarios'
+import { saveGeneratedScenarios, scenarioFailureMessage } from '../shared/save-generated-scenarios'
+import { showErrorToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
@@ -204,7 +205,8 @@ export function NewCharacterView() {
       const characterId = data.character.id as string
 
       if (pendingScenarios.current && pendingScenarios.current.length > 0) {
-        await saveGeneratedScenarios(characterId, pendingScenarios.current)
+        const { failed } = await saveGeneratedScenarios(characterId, pendingScenarios.current)
+        if (failed > 0) showErrorToast(`Character created, but ${scenarioFailureMessage(failed)}`)
         pendingScenarios.current = null
       }
       if (pendingPhysicalDescription.current) {

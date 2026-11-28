@@ -792,7 +792,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
               className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
               style={{
                 backgroundColor:
-                  availableProjects.find((p) => p.id === selectedProjectId)?.color || 'var(--muted)',
+                  availableProjects.find((p) => p.id === selectedProjectId)?.color || 'var(--color-muted)',
               }}
             >
               <Icon name="folder" className="w-3 h-3 qt-text-secondary" />
@@ -818,7 +818,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
           <div className="flex items-center gap-3">
             <div
               className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
-              style={{ backgroundColor: project.color || 'var(--muted)' }}
+              style={{ backgroundColor: project.color || 'var(--color-muted)' }}
             >
               <Icon name="folder" className="w-3 h-3 qt-text-secondary" />
             </div>

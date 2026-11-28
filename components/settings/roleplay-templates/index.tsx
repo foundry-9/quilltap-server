@@ -138,6 +138,7 @@ export default function RoleplayTemplatesTab() {
     saving,
     defaultSaving,
     error,
+    saveError,
     success,
     isModalOpen,
     editingTemplate,
@@ -850,6 +851,12 @@ export default function RoleplayTemplatesTab() {
                 )}
               </div>
             </div>
+
+            {saveError && (
+              <div className="qt-alert-error mt-6" role="alert">
+                {saveError}
+              </div>
+            )}
 
             <div className="flex justify-end gap-3 mt-6">
               <button

@@ -168,7 +168,9 @@ Group of its own. The particulars are in
 - Removing a character from a Group revokes their key at once — their next turn
   will no longer reach that Group's shelves.
 - Deleting a Group drops its memberships and unlinks its stores. The official
-  store's files are left where they sit, in case you want them.
+  store's files are left where they sit, in case you want them. Deleting one
+  from the Aurora grid asks you to confirm first, naming the Group, since there
+  is no taking it back.
 
 ## In-Chat Navigation
 

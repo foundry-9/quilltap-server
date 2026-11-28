@@ -10,6 +10,8 @@ import type { TagVisualStyle } from '@/lib/schemas/types'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import { useDraft } from '@/lib/hooks/use-draft'
 
 interface TagUsageCount {
   characterTags: number
@@ -33,6 +35,34 @@ const EMPTY_TAGS: TagOption[] = []
 
 type TagPatch = { visualStyle?: TagVisualStyle | null; quickHide?: boolean }
 
+/**
+ * A tag's emoji, typed into a local draft and saved on blur or Enter — never
+ * per keystroke, and never disabled while a save is pending, which used to
+ * drop focus and the next character (#251).
+ */
+function TagEmojiField({ value, onCommit }: { value: string; onCommit: (emoji: string | null) => void }) {
+  const [draft, setDraft] = useDraft(value)
+  const commit = () => {
+    const next = draft.trim()
+    if (next !== draft) setDraft(next)
+    if (next !== value) onCommit(next || null)
+  }
+  return (
+    <input
+      type="text"
+      maxLength={8}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit()
+      }}
+      placeholder="😀"
+      className="qt-input mt-1 block w-full text-sm"
+    />
+  )
+}
+
 export default function TagsTab() {
   const id = useId()
   const queryClient = useQueryClient()
@@ -41,10 +71,14 @@ export default function TagsTab() {
   const [quickHideSavingId, setQuickHideSavingId] = useState<string | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
   const colorDebounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map())
+  // Colour edits waiting on the debounce, per tag. Only these fields are
+  // pending; the rest of the style is read from the cache when the save goes
+  // out, so a Bold ticked meanwhile is not overwritten by a stale copy (#251).
+  const pendingColors = useRef<Map<string, Partial<TagVisualStyle>>>(new Map())
 
   // The shared tag list: the badges' styles and the quick-hide menu read the
   // same cache entry, so patching it here reaches them too.
-  const { data, isLoading, refetch: mutateTags } = useTagsQuery<TagOption>()
+  const { data, isLoading, error: loadError, refetch: mutateTags } = useTagsQuery<TagOption>()
   const tagOptions = data ?? EMPTY_TAGS
 
   /** Patch one tag in the cached list (the edits show at once; the server's answer follows). */
@@ -72,13 +106,34 @@ export default function TagsTab() {
   const { mutateAsync: deleteTagAsync } = deleteTagMutation
   const deleting = deleteTagMutation.isPending
 
+  /** The tag's style as the cache holds it right now (not as a render closed over it). */
+  const currentStyleOf = useCallback(
+    (tagId: string): TagVisualStyle | null | undefined =>
+      queryClient.getQueryData<{ tags?: TagOption[] }>(queryKeys.tags.list())?.tags?.find((t) => t.id === tagId)
+        ?.visualStyle,
+    [queryClient],
+  )
+
+  /** Take a tag's pending colour edits off the debounce, to be sent now. */
+  const takePendingColors = useCallback((tagId: string): Partial<TagVisualStyle> => {
+    const timer = colorDebounceTimers.current.get(tagId)
+    if (timer) clearTimeout(timer)
+    colorDebounceTimers.current.delete(tagId)
+    const pending = pendingColors.current.get(tagId) ?? {}
+    pendingColors.current.delete(tagId)
+    return pending
+  }, [])
+
   const updateTagVisualStyle = useCallback(async (tagId: string, visualStyle: TagVisualStyle | null) => {
     setTagSaving(tagId)
 
     try {
       const { tag } = await updateTagAsync({ tagId, patch: { visualStyle } })
 
-      patchCachedTag(tagId, { visualStyle: tag.visualStyle ?? null })
+      // Keep the preview of any colour still waiting on its debounce.
+      const pending = pendingColors.current.get(tagId)
+      const saved = tag.visualStyle ?? null
+      patchCachedTag(tagId, { visualStyle: saved && pending ? { ...saved, ...pending } : saved })
 
       showSuccessToast('Tag style saved')
     } catch (err) {
@@ -89,12 +144,14 @@ export default function TagsTab() {
   }, [updateTagAsync, patchCachedTag])
 
   const handleTagStyleFieldChange = useCallback((tagId: string, updates: Partial<TagVisualStyle>) => {
-    const tag = tagOptions.find(t => t.id === tagId)
-    if (!tag) return
+    if (!tagOptions.some(t => t.id === tagId)) return
 
-    const merged = mergeWithDefaultTagStyle(tag.visualStyle)
+    // An immediate save carries any colour still waiting on its debounce, so
+    // the delayed one cannot land afterwards and undo this change (#251).
+    const pending = takePendingColors(tagId)
     const newStyle: TagVisualStyle = {
-      ...merged,
+      ...mergeWithDefaultTagStyle(currentStyleOf(tagId)),
+      ...pending,
       ...updates,
     }
 
@@ -103,21 +160,17 @@ export default function TagsTab() {
 
     // Persist to server
     updateTagVisualStyle(tagId, newStyle)
-  }, [tagOptions, patchCachedTag, updateTagVisualStyle])
+  }, [tagOptions, takePendingColors, currentStyleOf, patchCachedTag, updateTagVisualStyle])
 
   // Debounced handler for color picker changes to avoid toast spam while dragging
   const handleColorChange = useCallback((tagId: string, updates: Partial<TagVisualStyle>) => {
-    const tag = tagOptions.find(t => t.id === tagId)
-    if (!tag) return
+    if (!tagOptions.some(t => t.id === tagId)) return
 
-    const merged = mergeWithDefaultTagStyle(tag.visualStyle)
-    const newStyle: TagVisualStyle = {
-      ...merged,
-      ...updates,
-    }
+    const pending = { ...pendingColors.current.get(tagId), ...updates }
+    pendingColors.current.set(tagId, pending)
 
     // Update local state immediately for instant preview
-    patchCachedTag(tagId, { visualStyle: newStyle })
+    patchCachedTag(tagId, { visualStyle: { ...mergeWithDefaultTagStyle(currentStyleOf(tagId)), ...pending } })
 
     // Clear any existing debounce timer for this tag
     const existingTimer = colorDebounceTimers.current.get(tagId)
@@ -125,14 +178,15 @@ export default function TagsTab() {
       clearTimeout(existingTimer)
     }
 
-    // Set new debounced save
+    // The save reads the tag's latest style when it fires and sends only the
+    // colour fields merged into it.
     const timer = setTimeout(() => {
-      updateTagVisualStyle(tagId, newStyle)
-      colorDebounceTimers.current.delete(tagId)
+      const colors = takePendingColors(tagId)
+      updateTagVisualStyle(tagId, { ...mergeWithDefaultTagStyle(currentStyleOf(tagId)), ...colors })
     }, 500)
 
     colorDebounceTimers.current.set(tagId, timer)
-  }, [tagOptions, patchCachedTag, updateTagVisualStyle])
+  }, [tagOptions, currentStyleOf, takePendingColors, patchCachedTag, updateTagVisualStyle])
 
   // Clean up debounce timers on unmount
   useEffect(() => {
@@ -143,9 +197,10 @@ export default function TagsTab() {
   }, [])
 
   const handleRemoveTagStyle = useCallback((tagId: string) => {
-    // Remove visual style by setting it to null
+    // Remove visual style by setting it to null; a pending colour goes with it
+    takePendingColors(tagId)
     updateTagVisualStyle(tagId, null)
-  }, [updateTagVisualStyle])
+  }, [takePendingColors, updateTagVisualStyle])
 
   const handleAddTagStyle = useCallback(() => {
     if (!selectedTagId) return
@@ -204,6 +259,15 @@ export default function TagsTab() {
       <div className="qt-loading-state">
         <div className="qt-text-secondary">Loading settings...</div>
       </div>
+    )
+  }
+
+  if (loadError && !data) {
+    return (
+      <ErrorAlert
+        message={apiErrorMessage(loadError, 'The tags could not be loaded.')}
+        onRetry={() => void mutateTags()}
+      />
     )
   }
 
@@ -267,14 +331,9 @@ export default function TagsTab() {
                     <div className="space-y-3">
                       <label className="block qt-text-label qt-text">
                         Emoji
-                        <input
-                          type="text"
-                          maxLength={8}
+                        <TagEmojiField
                           value={mergedStyle.emoji ?? ''}
-                          onChange={(e) => handleTagStyleFieldChange(tag.id, { emoji: e.target.value.trim() || null })}
-                          disabled={isSaving}
-                          placeholder="😀"
-                          className="qt-input mt-1 block w-full text-sm"
+                          onCommit={(emoji) => handleTagStyleFieldChange(tag.id, { emoji })}
                         />
                       </label>
 

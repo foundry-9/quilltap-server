@@ -29,7 +29,7 @@ export function GroupCard({ group, onClick, onDelete, onOpen }: GroupCardProps) 
         <div className="flex items-center gap-3">
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
-            style={{ backgroundColor: group.color || 'var(--muted)' }}
+            style={{ backgroundColor: group.color || 'var(--color-muted)' }}
           >
             {group.icon || <Icon name="users" className="w-5 h-5 qt-text-secondary" />}
           </div>

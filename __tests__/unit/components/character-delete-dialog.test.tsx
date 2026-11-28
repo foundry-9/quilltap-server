@@ -60,4 +60,23 @@ describe('CharacterDeleteDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete Character' }))
     await waitFor(() => expect(onConfirm).toHaveBeenCalledWith({ cascadeChats: true, cascadeImages: false }))
   })
+
+  // #271: a second click while the delete runs must not send a second DELETE.
+  it('sends the delete once and holds the buttons while it runs', async () => {
+    answer(preview)
+    let finish!: () => void
+    const onConfirm = jest.fn(() => new Promise<void>((resolve) => { finish = resolve }))
+    renderDialog(onConfirm)
+    await screen.findByText('Delete exclusive chats')
+    const del = screen.getByRole('button', { name: 'Delete Character' })
+    fireEvent.click(del)
+    fireEvent.click(del)
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(del).toBeDisabled())
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+
+    finish()
+    // A failed delete leaves the dialog open; the buttons come back.
+    await waitFor(() => expect(del).not.toBeDisabled())
+  })
 })

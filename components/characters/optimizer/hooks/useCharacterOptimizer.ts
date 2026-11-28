@@ -66,7 +66,13 @@ interface UseCharacterOptimizerReturn {
   nextSuggestion: () => void;
   prevSuggestion: () => void;
   getAcceptedChanges: () => Array<{ suggestion: OptimizerSuggestion; finalValue: string }>;
-  applyChanges: (characterId: string) => Promise<void>;
+  /**
+   * Applies the accepted suggestions. Resolves `true` when every write
+   * succeeded and `false` when any failed (the message is in `error`) — the
+   * caller branches on this, never on `error`, which a closure reads stale
+   * (#238).
+   */
+  applyChanges: (characterId: string) => Promise<boolean>;
   reset: () => void;
   setPhase: (phase: OptimizerPhase) => void;
 }
@@ -314,9 +320,9 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
   );
 
   const applyChanges = useCallback(
-    async (characterId: string) => {
+    async (characterId: string): Promise<boolean> => {
       const accepted = getAcceptedChanges();
-      if (accepted.length === 0) return;
+      if (accepted.length === 0) return true;
 
       setApplying(true);
       setError(null);
@@ -482,12 +488,14 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
         if (allErrors.length > 0) {
           throw new Error(allErrors.join(' '));
         }
+        return true;
       } catch (err) {
         const errorMessage =
           err instanceof Error
             ? err.message
             : 'The application of refinements met with an unforeseen impediment.';
         setError(errorMessage);
+        return false;
       } finally {
         setApplying(false);
       }

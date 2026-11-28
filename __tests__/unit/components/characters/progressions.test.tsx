@@ -215,6 +215,64 @@ describe('ProgressionsSection — the save payload', () => {
   })
 })
 
+/**
+ * #239. The card lists the parsed map, which drops entries it cannot read, and
+ * promises those are only being skipped. A write built from the parsed map
+ * erased them; the write must hand every id it did not touch back raw.
+ */
+describe('ProgressionsSection — unreadable entries survive a write (#239)', () => {
+  const BROKEN = { ...CANNON, name: 'Broken', endTime: '2019-01-01T00:00:00Z' }
+
+  it('keeps an unreadable entry, unchanged, when another is edited', async () => {
+    const puts = stubCharacter({ progressions: { cannon: CANNON, broken: BROKEN } })
+    renderSection()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Edit progression/ }))
+    fireEvent.change(screen.getByPlaceholderText('Cannon recharge'), {
+      target: { value: 'Main gun recharge' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(puts).toHaveLength(1))
+    const written = (puts[0].set as Record<string, unknown>).progressions as Record<
+      string,
+      Record<string, unknown>
+    >
+    expect(written.broken).toEqual(BROKEN)
+    expect(written.cannon.name).toBe('Main gun recharge')
+  })
+
+  it('keeps an unreadable entry when the last readable one is deleted', async () => {
+    const puts = stubCharacter({ progressions: { cannon: CANNON, broken: BROKEN } })
+    renderSection()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Delete progression/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => expect(puts).toHaveLength(1))
+    expect(puts[0]).toEqual({ set: { progressions: { broken: BROKEN } } })
+  })
+
+  it('refuses to write over a progressions key that is not an object', async () => {
+    const puts = stubCharacter({ progressions: ['not', 'an', 'object'] })
+    renderSection()
+
+    fireEvent.click(await screen.findByRole('button', { name: '+ Add Progression' }))
+    fireEvent.change(screen.getByPlaceholderText('Cannon recharge'), {
+      target: { value: 'Fuse' },
+    })
+    fireEvent.change(screen.getByLabelText('Begins'), { target: { value: '2020-01-01T10:00' } })
+    fireEvent.change(screen.getByLabelText('Ends'), { target: { value: '2020-01-01T11:00' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add progression' }))
+
+    // The refusal leaves the editor open (a successful save closes it) and sends nothing.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add progression' })).not.toBeDisabled())
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.getByRole('button', { name: 'Add progression' })).toBeInTheDocument()
+    expect(puts).toHaveLength(0)
+  })
+})
+
 describe('ProgressionsSection — the editor modal', () => {
   it('opens on Add and coerces an id from the name', async () => {
     stubCharacter({ progressions: {} })

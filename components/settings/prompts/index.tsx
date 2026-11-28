@@ -21,28 +21,33 @@ export default function PromptsTab() {
   const form = useFormState(INITIAL_FORM_DATA)
   const prompts = usePrompts()
 
+  const { clearSaveError } = prompts
+
   const openCreateModal = useCallback(() => {
+    clearSaveError()
     setEditingTemplate(null)
     form.resetForm()
     setIsModalOpen(true)
-  }, [form])
+  }, [form, clearSaveError])
 
   const openEditModal = useCallback(
     (template: PromptTemplate) => {
+      clearSaveError()
       setEditingTemplate(template)
       form.setField('name', template.name)
       form.setField('description', template.description || '')
       form.setField('content', template.content)
       setIsModalOpen(true)
     },
-    [form]
+    [form, clearSaveError]
   )
 
   const closeModal = useCallback(() => {
     setIsModalOpen(false)
     setEditingTemplate(null)
     form.resetForm()
-  }, [form])
+    clearSaveError()
+  }, [form, clearSaveError])
 
   const handleSave = useCallback(async () => {
     const result = await prompts.saveTemplate(form.formData, editingTemplate?.id)
@@ -53,13 +58,14 @@ export default function PromptsTab() {
 
   const handleCopyAsNew = useCallback(
     (template: PromptTemplate) => {
+      clearSaveError()
       setEditingTemplate(null)
       form.setField('name', `${template.name} (Copy)`)
       form.setField('description', template.description || '')
       form.setField('content', template.content)
       setIsModalOpen(true)
     },
-    [form]
+    [form, clearSaveError]
   )
 
   const handleDelete = useCallback(
@@ -91,19 +97,8 @@ export default function PromptsTab() {
         </div>
       )}
 
-      {prompts.saveError && (
-        <ErrorAlert
-          message={prompts.saveError}
-          onRetry={() => {}}
-        />
-      )}
-
-      {prompts.deleteError && (
-        <ErrorAlert
-          message={prompts.deleteError}
-          onRetry={() => {}}
-        />
-      )}
+      {/* A failed save is shown inside the modal, which stays open (#252). */}
+      {prompts.deleteError && <ErrorAlert message={prompts.deleteError} />}
 
       {/* Built-in templates list */}
       <PromptList
@@ -155,6 +150,7 @@ export default function PromptsTab() {
         editingTemplate={editingTemplate}
         formData={form.formData}
         isSaving={prompts.saving}
+        error={prompts.saveError}
         onClose={closeModal}
         onSave={handleSave}
         onFormChange={form.handleChange}

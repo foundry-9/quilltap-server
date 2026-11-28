@@ -22,6 +22,8 @@ export interface UseRoleplayTemplatesReturn {
   saving: boolean
   defaultSaving: boolean
   error: string | null
+  /** A refused save, shown inside the open modal rather than behind it (#252). */
+  saveError: string | null
   success: string | null
 
   // Modal states
@@ -188,6 +190,7 @@ function templateToFormData(template: RoleplayTemplate, name: string): TemplateF
 
 export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
   const [error, setError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -227,18 +230,21 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
   }
 
   const openCreateModal = () => {
+    setSaveError(null)
     setEditingTemplate(null)
     setFormData(INITIAL_FORM_DATA)
     setIsModalOpen(true)
   }
 
   const openEditModal = (template: RoleplayTemplate) => {
+    setSaveError(null)
     setEditingTemplate(template)
     setFormData(templateToFormData(template, template.name))
     setIsModalOpen(true)
   }
 
   const closeModal = () => {
+    setSaveError(null)
     setIsModalOpen(false)
     setEditingTemplate(null)
     setFormData(INITIAL_FORM_DATA)
@@ -263,7 +269,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
   const handleSave = async () => {
     try {
       setSaving(true)
-      setError(null)
+      setSaveError(null)
 
       const payload = {
         name: formData.name,
@@ -281,8 +287,9 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       closeModal()
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
+      // The modal stays open, so the refusal is shown there.
       const message = apiErrorMessage(err, 'An error occurred')
-      setError(message)
+      setSaveError(message)
       console.error('Error saving roleplay template:', message, err)
     } finally {
       setSaving(false)
@@ -321,6 +328,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
   }, [])
 
   const handleCopyAsNew = (template: RoleplayTemplate) => {
+    setSaveError(null)
     setEditingTemplate(null)
     setFormData(templateToFormData(template, `${template.name} (Copy)`))
     setIsModalOpen(true)
@@ -333,6 +341,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     saving,
     defaultSaving,
     error,
+    saveError,
     success,
     isModalOpen,
     editingTemplate,

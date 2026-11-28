@@ -43,19 +43,31 @@ export function MemoryRecallCard() {
     noun: 'recall settings',
   })
 
+  // Each control saves as soon as it changes. The new value is shown at once;
+  // if the save fails the control goes back to what was in force before (#326)
+  // rather than displaying a setting the server never took.
+  const applyAndSave = async <K extends keyof MemoryRecallSettings>(
+    key: K,
+    value: MemoryRecallSettings[K],
+  ) => {
+    const previous = config[key]
+    setConfig(c => ({ ...c, [key]: value }))
+    const saved = await save({ [key]: value } as Partial<MemoryRecallSettings>)
+    if (!saved) {
+      setConfig(c => (c[key] === value ? { ...c, [key]: previous } : c))
+    }
+  }
+
   const handleScopePolicyChange = (value: ScopePolicy) => {
-    setConfig(c => ({ ...c, scopePolicy: value }))
-    void save({ scopePolicy: value })
+    void applyAndSave('scopePolicy', value)
   }
 
   const handleExpandRelatedChange = (value: boolean) => {
-    setConfig(c => ({ ...c, expandRelated: value }))
-    void save({ expandRelated: value })
+    void applyAndSave('expandRelated', value)
   }
 
   const handlePerTurnConversationsChange = (value: boolean) => {
-    setConfig(c => ({ ...c, perTurnConversationSummaries: value }))
-    void save({ perTurnConversationSummaries: value })
+    void applyAndSave('perTurnConversationSummaries', value)
   }
 
   if (loading) {

@@ -72,8 +72,15 @@ export function ProvidersCard({ focusCard, focusProvider, highlight }: Providers
   const [storedView, setStoredView] = useStoredView()
   const hosted = hostedCardsOf('providers')
   const focusIsHosted = !!focusCard && hosted.some((c) => c.id === focusCard)
-  // A deep link to a kind card wins until the user picks a view themselves.
+  // A deep link to a kind card wins until the user picks a view themselves — and a new target
+  // (another chip or link arriving while the card is open) wins again (#287).
   const [overridden, setOverridden] = useState(false)
+  const focusKey = `${focusCard ?? ''}|${focusProvider ?? ''}`
+  const [seenFocusKey, setSeenFocusKey] = useState(focusKey)
+  if (focusKey !== seenFocusKey) {
+    setSeenFocusKey(focusKey)
+    setOverridden(false)
+  }
   const forced: ProvidersView | null = focusIsHosted ? 'kind' : focusProvider ? 'provider' : null
   const view: ProvidersView = forced && !overridden ? forced : storedView
 

@@ -101,6 +101,62 @@ describe('loading', () => {
   })
 })
 
+/**
+ * #280. Switching containers while a load is in flight must never show the
+ * earlier container's text under the later one — whichever answer lands
+ * last — and must not flash the previous container's text while loading.
+ */
+describe('switching containers mid-load (#280)', () => {
+  it('shows B\'s text when A\'s slower answer lands after B\'s', async () => {
+    let resolveA!: (r: Response) => void
+    let resolveB!: (r: Response) => void
+    mockFetch.mockImplementation((url) => {
+      const href = String(url)
+      if (href.startsWith('/api/v1/projects/proj-a/')) return new Promise<Response>((r) => { resolveA = r })
+      if (href.startsWith('/api/v1/projects/proj-b/')) return new Promise<Response>((r) => { resolveB = r })
+      return Promise.resolve(ok({ instructions: null }))
+    })
+
+    const { result, rerender } = renderHook(
+      ({ container }) => useWardrobeInstructions(container),
+      { initialProps: { container: { scope: 'project' as const, id: 'proj-a' } }, wrapper: createQueryWrapper().wrapper }
+    )
+    await waitFor(() => expect(resolveA).toBeDefined())
+
+    rerender({ container: { scope: 'project' as const, id: 'proj-b' } })
+    await waitFor(() => expect(resolveB).toBeDefined())
+
+    await act(async () => { resolveB(ok({ instructions: 'B text' })) })
+    await waitFor(() => expect(result.current.instructions).toBe('B text'))
+
+    await act(async () => { resolveA(ok({ instructions: 'A text' })) })
+    expect(result.current.instructions).toBe('B text')
+    expect(result.current.fetched).toBe(true)
+  })
+
+  it('does not carry the previous container\'s text while the next one loads', async () => {
+    let resolveB!: (r: Response) => void
+    mockFetch.mockImplementation((url) => {
+      if (String(url).startsWith('/api/v1/projects/proj-b/')) return new Promise<Response>((r) => { resolveB = r })
+      return Promise.resolve(ok({ instructions: 'A text' }))
+    })
+
+    const { result, rerender } = renderHook(
+      ({ container }) => useWardrobeInstructions(container),
+      { initialProps: { container: { scope: 'project' as const, id: 'proj-a' } }, wrapper: createQueryWrapper().wrapper }
+    )
+    await waitFor(() => expect(result.current.instructions).toBe('A text'))
+
+    rerender({ container: { scope: 'project' as const, id: 'proj-b' } })
+    expect(result.current.instructions).toBeNull()
+    expect(result.current.fetched).toBe(false)
+
+    await waitFor(() => expect(resolveB).toBeDefined())
+    await act(async () => { resolveB(ok({ instructions: 'B text' })) })
+    await waitFor(() => expect(result.current.instructions).toBe('B text'))
+  })
+})
+
 describe('saving', () => {
   it('posts the value and adopts what the server answers', async () => {
     mockFetch

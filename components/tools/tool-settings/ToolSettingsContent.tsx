@@ -76,6 +76,28 @@ export function ToolSettingsContent({
     return true
   }, [disabledTools, disabledGroups])
 
+  // Why a row's own checkbox cannot change anything (#323): a tool or subgroup
+  // whose plugin group is switched off — or a tool whose subgroup is — reads as
+  // disabled whatever its own entry says, so a click on it would only rewrite
+  // the stored disable lists invisibly. Such rows are rendered disabled with
+  // this hint, and the handlers refuse them.
+  const pluginBlockReason = useCallback((pluginName: string | undefined): string | null => {
+    if (pluginName && disabledGroups.has(makePluginGroupPattern(pluginName))) {
+      return 'Turn on the whole group above to choose individual tools.'
+    }
+    return null
+  }, [disabledGroups])
+
+  const toolBlockReason = useCallback((tool: AvailableTool): string | null => {
+    const pluginReason = pluginBlockReason(tool.pluginName)
+    if (pluginReason) return pluginReason
+    if (tool.pluginName && tool.subgroupId
+      && disabledGroups.has(makeSubgroupPattern(tool.pluginName, tool.subgroupId))) {
+      return 'Turn on this subgroup to choose individual tools.'
+    }
+    return null
+  }, [pluginBlockReason, disabledGroups])
+
   // Count enabled tools (only count tools that are actually available when showAvailability is true)
   const { enabledCount, availableCount } = useMemo(() => {
     const available = showAvailability
@@ -87,6 +109,7 @@ export function ToolSettingsContent({
 
   // Toggle individual tool
   const handleToggleTool = useCallback((tool: AvailableTool) => {
+    if (toolBlockReason(tool)) return
     const newSet = new Set(disabledTools)
     if (newSet.has(tool.id)) {
       newSet.delete(tool.id)
@@ -94,7 +117,7 @@ export function ToolSettingsContent({
       newSet.add(tool.id)
     }
     onDisabledToolsChange(newSet)
-  }, [disabledTools, onDisabledToolsChange])
+  }, [disabledTools, onDisabledToolsChange, toolBlockReason])
 
   // Toggle group (built-in or plugin)
   const handleToggleGroup = useCallback((group: ToolGroup) => {
@@ -147,6 +170,7 @@ export function ToolSettingsContent({
 
   // Toggle subgroup
   const handleToggleSubgroup = useCallback((subgroup: ToolSubgroup) => {
+    if (pluginBlockReason(subgroup.pluginName)) return
     const enabledInSubgroup = subgroup.tools.filter(isToolEnabled).length
     const shouldEnable = enabledInSubgroup < subgroup.tools.length
 
@@ -164,14 +188,11 @@ export function ToolSettingsContent({
       }
       onDisabledToolsChange(newTools)
     } else {
-      // Add the subgroup pattern (unless parent plugin is disabled)
-      const pluginPattern = makePluginGroupPattern(subgroup.pluginName)
-      if (!newGroups.has(pluginPattern)) {
-        newGroups.add(pattern)
-        onDisabledGroupsChange(newGroups)
-      }
+      // Add the subgroup pattern (the parent plugin is known to be enabled)
+      newGroups.add(pattern)
+      onDisabledGroupsChange(newGroups)
     }
-  }, [isToolEnabled, disabledTools, disabledGroups, onDisabledToolsChange, onDisabledGroupsChange])
+  }, [isToolEnabled, pluginBlockReason, disabledTools, disabledGroups, onDisabledToolsChange, onDisabledGroupsChange])
 
   // Enable all / disable all
   const handleEnableAll = useCallback(() => {
@@ -283,7 +304,9 @@ export function ToolSettingsContent({
             onToggleSubgroupExpand={toggleSubgroupExpanded}
             getSubgroupState={getSubgroupState}
             onToggleSubgroup={handleToggleSubgroup}
+            subgroupBlockReason={pluginBlockReason(group.pluginName)}
             isToolEnabled={isToolEnabled}
+            toolBlockReason={toolBlockReason}
             onToggleTool={handleToggleTool}
             showAvailability={showAvailability}
           />
@@ -320,7 +343,10 @@ interface GroupSectionProps {
   onToggleSubgroupExpand: (id: string) => void
   getSubgroupState: (subgroup: ToolSubgroup) => CheckState
   onToggleSubgroup: (subgroup: ToolSubgroup) => void
+  /** Non-null when the group's plugin is off, so its subgroups cannot be toggled */
+  subgroupBlockReason: string | null
   isToolEnabled: (tool: AvailableTool) => boolean
+  toolBlockReason: (tool: AvailableTool) => string | null
   onToggleTool: (tool: AvailableTool) => void
   showAvailability: boolean
 }
@@ -335,7 +361,9 @@ function GroupSection({
   onToggleSubgroupExpand,
   getSubgroupState,
   onToggleSubgroup,
+  subgroupBlockReason,
   isToolEnabled,
+  toolBlockReason,
   onToggleTool,
   showAvailability,
 }: Readonly<GroupSectionProps>) {
@@ -374,6 +402,7 @@ function GroupSection({
               key={tool.id}
               tool={tool}
               isEnabled={isToolEnabled(tool)}
+              blockReason={toolBlockReason(tool)}
               onToggle={() => onToggleTool(tool)}
               indentLevel={0}
               showAvailability={showAvailability}
@@ -389,7 +418,9 @@ function GroupSection({
               onToggleExpand={() => onToggleSubgroupExpand(makeSubgroupPattern(subgroup.pluginName, subgroup.id))}
               checkState={getSubgroupState(subgroup)}
               onToggleSubgroup={() => onToggleSubgroup(subgroup)}
+              blockReason={subgroupBlockReason}
               isToolEnabled={isToolEnabled}
+              toolBlockReason={toolBlockReason}
               onToggleTool={onToggleTool}
               showAvailability={showAvailability}
             />
@@ -406,7 +437,9 @@ interface SubgroupSectionProps {
   onToggleExpand: () => void
   checkState: CheckState
   onToggleSubgroup: () => void
+  blockReason: string | null
   isToolEnabled: (tool: AvailableTool) => boolean
+  toolBlockReason: (tool: AvailableTool) => string | null
   onToggleTool: (tool: AvailableTool) => void
   showAvailability: boolean
 }
@@ -417,7 +450,9 @@ function SubgroupSection({
   onToggleExpand,
   checkState,
   onToggleSubgroup,
+  blockReason,
   isToolEnabled,
+  toolBlockReason,
   onToggleTool,
   showAvailability,
 }: Readonly<SubgroupSectionProps>) {
@@ -443,6 +478,7 @@ function SubgroupSection({
           state={checkState}
           onChange={onToggleSubgroup}
           label={`Toggle all ${subgroup.displayName}`}
+          disabledReason={blockReason}
         />
       </div>
 
@@ -454,6 +490,7 @@ function SubgroupSection({
               key={tool.id}
               tool={tool}
               isEnabled={isToolEnabled(tool)}
+              blockReason={toolBlockReason(tool)}
               onToggle={() => onToggleTool(tool)}
               indentLevel={1}
               showAvailability={showAvailability}
@@ -469,18 +506,25 @@ interface TriStateCheckboxProps {
   state: CheckState
   onChange: () => void
   label: string
+  /** When set, the checkbox is disabled and this explains why */
+  disabledReason?: string | null
 }
 
-function TriStateCheckbox({ state, onChange, label }: Readonly<TriStateCheckboxProps>) {
+function TriStateCheckbox({ state, onChange, label, disabledReason }: Readonly<TriStateCheckboxProps>) {
+  const disabled = !!disabledReason
   return (
     <button
       type="button"
       role="checkbox"
       onClick={(e) => {
         e.stopPropagation()
-        onChange()
+        if (!disabled) onChange()
       }}
-      className="relative flex items-center justify-center w-5 h-5 rounded border qt-border-input hover:qt-border-primary transition-colors"
+      disabled={disabled}
+      title={disabledReason ?? undefined}
+      className={`relative flex items-center justify-center w-5 h-5 rounded border qt-border-input transition-colors ${
+        disabled ? 'opacity-50 cursor-not-allowed' : 'hover:qt-border-primary'
+      }`}
       aria-label={label}
       aria-checked={state === 'checked' ? true : state === 'indeterminate' ? 'mixed' : false}
     >
@@ -497,12 +541,14 @@ function TriStateCheckbox({ state, onChange, label }: Readonly<TriStateCheckboxP
 interface ToolToggleProps {
   tool: AvailableTool
   isEnabled: boolean
+  /** When set, the parent group is off: the checkbox is disabled and this explains why */
+  blockReason: string | null
   onToggle: () => void
   indentLevel: number
   showAvailability: boolean
 }
 
-function ToolToggle({ tool, isEnabled, onToggle, indentLevel, showAvailability }: Readonly<ToolToggleProps>) {
+function ToolToggle({ tool, isEnabled, blockReason, onToggle, indentLevel, showAvailability }: Readonly<ToolToggleProps>) {
   const checkboxId = `tool-toggle-${tool.id}`
   const paddingClass = indentLevel > 0 ? 'ml-4' : ''
   const isUnavailable = showAvailability && tool.available === false
@@ -537,23 +583,34 @@ function ToolToggle({ tool, isEnabled, onToggle, indentLevel, showAvailability }
     )
   }
 
+  const blocked = !!blockReason
+  const hintId = `${checkboxId}-blocked`
+
   return (
     <label
       htmlFor={checkboxId}
-      className={`flex items-start gap-3 p-2 rounded hover:qt-bg-muted/30 cursor-pointer transition-colors ${paddingClass}`}
+      title={blockReason ?? undefined}
+      className={`flex items-start gap-3 p-2 rounded transition-colors ${paddingClass} ${
+        blocked ? 'opacity-50 cursor-not-allowed' : 'hover:qt-bg-muted/30 cursor-pointer'
+      }`}
     >
       <input
         type="checkbox"
         id={checkboxId}
         checked={isEnabled}
         onChange={onToggle}
-        className="qt-checkbox mt-0.5"
+        disabled={blocked}
+        aria-describedby={blocked ? hintId : undefined}
+        className={`qt-checkbox mt-0.5 ${blocked ? 'cursor-not-allowed' : ''}`}
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm qt-text">{tool.name}</span>
         </div>
         <p className="text-xs qt-text-secondary mt-0.5 line-clamp-2">{tool.description}</p>
+        {blocked && (
+          <p id={hintId} className="sr-only">{blockReason}</p>
+        )}
       </div>
     </label>
   )

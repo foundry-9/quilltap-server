@@ -9,14 +9,19 @@
  * `progressId` — the same side-channel pattern the Green Room uses for chat
  * creation.
  *
- * The channel is buffered server-side, which matters here: this card lives
- * inside a `CollapsibleCard`, so it can be collapsed and reopened mid-run. The
- * reader that comes back replays the backlog and lands on the right phase.
+ * A run outlives the card (#325). This card lives inside a `CollapsibleCard`,
+ * which unmounts its body when closed, so the run — its `progressId`, the
+ * progress reader, the phase it has reached and the finished report — is kept
+ * in a module-level store rather than in component state. A card that mounts
+ * mid-run subscribes to it and draws the same bar with Generate disabled; a
+ * report that finished while no card was open is shown by the next one to
+ * mount. (The progress channel is also buffered server-side, so the reader
+ * never misses the first phase.)
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useState, useSyncExternalStore } from 'react'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
@@ -45,6 +50,12 @@ interface GenerateResponse {
   content: string
 }
 
+interface ShownReport {
+  id: string
+  filename: string
+  content: string
+}
+
 /**
  * A typical run takes on the order of half a minute with warm caches. The
  * per-phase estimates come from the manifest's `estimatedShare`, so re-weighting
@@ -60,24 +71,145 @@ const SEGMENTS: ProgressSegment[] = ALMANACK_PHASES.map(phase => ({
   estimatedDurationMs: Math.round(phase.estimatedShare * TYPICAL_RUN_MS),
 }))
 
+// ============================================================================
+// The run store — one Almanack run per page, independent of any card instance
+// ============================================================================
+
+interface AlmanackRunState {
+  running: boolean
+  startedAt: number | null
+  currentPhase: string | null
+  phaseLabel: string | null
+  /** The last run's failure, shown until the next run starts */
+  error: string | null
+  /** A finished report no card has shown yet */
+  finished: ShownReport | null
+}
+
+const IDLE_RUN: AlmanackRunState = {
+  running: false,
+  startedAt: null,
+  currentPhase: null,
+  phaseLabel: null,
+  error: null,
+  finished: null,
+}
+
+let runState: AlmanackRunState = IDLE_RUN
+const runListeners = new Set<() => void>()
+
+function updateRun(patch: Partial<AlmanackRunState>) {
+  runState = { ...runState, ...patch }
+  for (const listener of runListeners) listener()
+}
+
+function subscribeRun(listener: () => void) {
+  runListeners.add(listener)
+  return () => {
+    runListeners.delete(listener)
+  }
+}
+
+const getRunSnapshot = () => runState
+const getServerRunSnapshot = () => IDLE_RUN
+
+/** Read the progress stream until it closes or the run settles. */
+async function readProgress(progressId: string, signal: AbortSignal) {
+  try {
+    const res = await fetch(
+      `/api/v1/system/tools?action=capabilities-report-progress&id=${encodeURIComponent(progressId)}`,
+      { signal, headers: { Accept: 'text/event-stream' } },
+    )
+    if (!res.ok || !res.body) return
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const raw = line.slice(6).trim()
+        if (!raw) continue
+        try {
+          const event = JSON.parse(raw) as {
+            kind: string
+            key?: string
+            label?: string
+            message?: string
+          }
+          if (!runState.running) continue
+          if (event.kind === 'phase' && event.key) {
+            updateRun({ currentPhase: event.key, phaseLabel: event.label ?? null })
+          } else if (event.kind === 'done' || event.kind === 'error') {
+            updateRun({ currentPhase: null, phaseLabel: null })
+          }
+        } catch {
+          // Ignore chunking artifacts / malformed frames.
+        }
+      }
+    }
+  } catch {
+    // Aborted (the run settled) or a transient network error. The POST's own
+    // resolution is what drives the UI, so there is nothing to recover here.
+  }
+}
+
+/** Start a run unless one is already under way. Resolves when it settles. */
+async function startAlmanackRun(queryClient: QueryClient): Promise<void> {
+  if (runState.running) return
+
+  const progressId = crypto.randomUUID()
+  const controller = new AbortController()
+  updateRun({ ...IDLE_RUN, running: true, startedAt: Date.now() })
+
+  // Open the reader BEFORE the POST so the first phase event can't be
+  // missed. The bus buffers anyway, but this keeps the bar honest from the
+  // very first tick.
+  void readProgress(progressId, controller.signal)
+
+  try {
+    const result = await apiFetch<GenerateResponse>(
+      '/api/v1/system/tools?action=capabilities-report-generate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progressId }),
+      },
+    )
+    showSuccessToast('The Almanack has been bound')
+    updateRun({
+      finished: { id: result.reportId, filename: result.filename, content: result.content },
+    })
+  } catch (err) {
+    const message = apiErrorMessage(err, 'The Almanack could not be compiled')
+    updateRun({ error: message })
+    showErrorToast(message)
+  } finally {
+    controller.abort()
+    updateRun({ running: false, startedAt: null, currentPhase: null, phaseLabel: null })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.system.capabilitiesReports })
+  }
+}
+
+// ============================================================================
+// The card
+// ============================================================================
+
 export function CapabilitiesReportCard() {
   const queryClient = useQueryClient()
+  const run = useSyncExternalStore(subscribeRun, getRunSnapshot, getServerRunSnapshot)
 
-  const [error, setError] = useState<string | null>(null)
   const [loadingReportId, setLoadingReportId] = useState<string | null>(null)
-
-  // Live progress
-  const [currentPhase, setCurrentPhase] = useState<string | null>(null)
-  const [phaseLabel, setPhaseLabel] = useState<string | null>(null)
-  const [startedAt, setStartedAt] = useState<number | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
-
-  const [showDialog, setShowDialog] = useState(false)
-  const [selectedReport, setSelectedReport] = useState<{
-    id: string
-    filename: string
-    content: string
-  } | null>(null)
+  // A report the operator opened from the list. A freshly finished run's
+  // report (`run.finished`) is shown when no list report is open.
+  const [viewedReport, setViewedReport] = useState<ShownReport | null>(null)
+  const shownReport = viewedReport ?? run.finished
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.system.capabilitiesReports,
@@ -88,108 +220,6 @@ export function CapabilitiesReportCard() {
       ),
   })
   const reports = data?.reports ?? []
-
-  /** Read the progress stream until it closes or the component tears down. */
-  const startReader = useCallback(async (progressId: string, signal: AbortSignal) => {
-    try {
-      const res = await fetch(
-        `/api/v1/system/tools?action=capabilities-report-progress&id=${encodeURIComponent(progressId)}`,
-        { signal, headers: { Accept: 'text/event-stream' } },
-      )
-      if (!res.ok || !res.body) return
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const raw = line.slice(6).trim()
-          if (!raw) continue
-          try {
-            const event = JSON.parse(raw) as {
-              kind: string
-              key?: string
-              label?: string
-              message?: string
-            }
-            if (event.kind === 'phase' && event.key) {
-              setCurrentPhase(event.key)
-              setPhaseLabel(event.label ?? null)
-            } else if (event.kind === 'done' || event.kind === 'error') {
-              setCurrentPhase(null)
-              setPhaseLabel(null)
-            }
-          } catch {
-            // Ignore chunking artifacts / malformed frames.
-          }
-        }
-      }
-    } catch {
-      // Aborted (card unmounted) or a transient network error. The POST's own
-      // resolution is what drives the UI, so there is nothing to recover here.
-    }
-  }, [])
-
-  // Never leave a reader running behind an unmounted card.
-  useEffect(() => () => abortRef.current?.abort(), [])
-
-  const generateMutation = useMutation({
-    mutationFn: async () => {
-      const progressId = crypto.randomUUID()
-
-      abortRef.current?.abort()
-      const controller = new AbortController()
-      abortRef.current = controller
-
-      setError(null)
-      setStartedAt(Date.now())
-      setCurrentPhase(null)
-      setPhaseLabel(null)
-
-      // Open the reader BEFORE the POST so the first phase event can't be
-      // missed. The bus buffers anyway, but this keeps the bar honest from the
-      // very first tick.
-      void startReader(progressId, controller.signal)
-
-      return apiFetch<GenerateResponse>(
-        '/api/v1/system/tools?action=capabilities-report-generate',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ progressId }),
-        },
-      )
-    },
-    onSuccess: result => {
-      showSuccessToast('The Almanack has been bound')
-      setSelectedReport({
-        id: result.reportId,
-        filename: result.filename,
-        content: result.content,
-      })
-      setShowDialog(true)
-    },
-    onError: err => {
-      const message = getErrorMessage(err)
-      setError(message)
-      showErrorToast(message)
-    },
-    onSettled: () => {
-      abortRef.current?.abort()
-      abortRef.current = null
-      setCurrentPhase(null)
-      setPhaseLabel(null)
-      setStartedAt(null)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.system.capabilitiesReports })
-    },
-  })
 
   const deleteMutation = useMutation({
     mutationFn: (reportId: string) =>
@@ -215,12 +245,11 @@ export function CapabilitiesReportCard() {
       const result = await apiFetch<{ content: string }>(
         `/api/v1/system/tools?action=capabilities-report-get&reportId=${report.id}`,
       )
-      setSelectedReport({
+      setViewedReport({
         id: report.id,
         filename: report.filename,
         content: result.content,
       })
-      setShowDialog(true)
     } catch (err) {
       showErrorToast(getErrorMessage(err))
     } finally {
@@ -236,7 +265,8 @@ export function CapabilitiesReportCard() {
     deleteMutation.mutate(report.id)
   }
 
-  const generating = generateMutation.isPending
+  const generating = run.running
+  const error = run.error
 
   return (
     <div className="qt-card p-6">
@@ -263,7 +293,7 @@ export function CapabilitiesReportCard() {
       {/* Generate */}
       <div className="mb-6">
         <button
-          onClick={() => generateMutation.mutate()}
+          onClick={() => void startAlmanackRun(queryClient)}
           disabled={generating}
           className="qt-button qt-button-primary w-full flex items-center justify-center gap-2"
         >
@@ -275,13 +305,13 @@ export function CapabilitiesReportCard() {
           <div className="mt-3">
             <ProgressBar
               segments={SEGMENTS}
-              currentKey={currentPhase}
-              startedAt={startedAt}
+              currentKey={run.currentPhase}
+              startedAt={run.startedAt}
               // Before the first phase event lands there is no honest width to
               // draw, so the bar slides rather than claiming a percentage.
-              indeterminate={currentPhase === null}
+              indeterminate={run.currentPhase === null}
             />
-            {phaseLabel && <p className="qt-text-small mt-2">{phaseLabel}</p>}
+            {run.phaseLabel && <p className="qt-text-small mt-2">{run.phaseLabel}</p>}
           </div>
         )}
       </div>
@@ -351,16 +381,19 @@ export function CapabilitiesReportCard() {
       </div>
 
       {/* Report viewer */}
-      {selectedReport && (
+      {shownReport && (
         <CapabilitiesReportDialog
-          isOpen={showDialog}
+          isOpen
           onClose={() => {
-            setShowDialog(false)
-            setSelectedReport(null)
+            if (viewedReport) {
+              setViewedReport(null)
+            } else {
+              updateRun({ finished: null })
+            }
           }}
-          reportId={selectedReport.id}
-          filename={selectedReport.filename}
-          content={selectedReport.content}
+          reportId={shownReport.id}
+          filename={shownReport.filename}
+          content={shownReport.content}
         />
       )}
     </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import { useDraft } from '@/lib/hooks/use-draft'
 import type {
   ConciergeSettings,
   ConciergeSettingsUpdate,
@@ -31,6 +32,21 @@ const NEW_CHAT_STATE_OPTIONS: { value: ConciergeSettings['newChatsStartAs']; lab
 export function RefusalsCard({ settings, saving, onUpdate }: RefusalsCardProps) {
   const selectedState = NEW_CHAT_STATE_OPTIONS.find((o) => o.value === settings.newChatsStartAs)
 
+  // The tally is typed into and saved on blur or Enter, never per keystroke:
+  // typing "10" used to save 1, disable the field for that save and lose the 0
+  // (#250). The field is not disabled while a save is pending.
+  const [refusalsDraft, setRefusalsDraft, refusals] = useDraft(String(settings.autoSwitchAfterRefusals))
+  const commitRefusals = () => {
+    const parsed = Number.parseInt(refusalsDraft, 10)
+    if (refusalsDraft.trim() === '' || Number.isNaN(parsed)) {
+      refusals.reset()
+      return
+    }
+    const count = Math.min(10, Math.max(0, parsed))
+    setRefusalsDraft(String(count))
+    if (count !== settings.autoSwitchAfterRefusals) void onUpdate({ autoSwitchAfterRefusals: count })
+  }
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -43,13 +59,12 @@ export function RefusalsCard({ settings, saving, onUpdate }: RefusalsCardProps) 
           min={0}
           max={10}
           step={1}
-          value={settings.autoSwitchAfterRefusals}
-          onChange={(e) => {
-            const parsed = parseInt(e.target.value, 10)
-            if (Number.isNaN(parsed)) return
-            onUpdate({ autoSwitchAfterRefusals: Math.min(10, Math.max(0, parsed)) })
+          value={refusalsDraft}
+          onChange={(e) => setRefusalsDraft(e.target.value)}
+          onBlur={commitRefusals}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitRefusals()
           }}
-          disabled={saving}
           className="qt-input w-24"
         />
         <p className="qt-text-small">

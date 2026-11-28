@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
 import { TaskFilters } from './TaskFilters'
 import { TaskItem } from './TaskItem'
 import { TaskDetails } from './TaskDetails'
 import { useTasksQueue } from './hooks/useTasksQueue'
 import { formatRelativeDate } from '@/lib/format-time'
 import { useNow } from '@/hooks/useNow'
+import { useCommittedRange } from '@/hooks/useCommittedRange'
 import { Icon } from '@/components/ui/icon'
 import { formatTokenCount } from '@/lib/utils/format-tokens'
 import { Spinner } from '@/components/ui/Spinner'
@@ -36,19 +36,15 @@ export function TasksQueueCard() {
     deleteJob,
   } = useTasksQueue()
 
-  // While dragging the concurrency slider, show the local value for a smooth
-  // drag; otherwise reflect the persisted setting from the queue status.
+  // The concurrency slider shows its value live and saves on release —
+  // pointer, touch, pen or keyboard (#259).
   const persistedConcurrency = data?.maxConcurrentJobs ?? DEFAULT_CONCURRENCY
-  const [dragConcurrency, setDragConcurrency] = useState<number | null>(null)
-  const displayConcurrency = dragConcurrency ?? persistedConcurrency
-
-  const handleConcurrencyCommit = () => {
-    const value = dragConcurrency
-    setDragConcurrency(null)
-    if (value !== null && value !== persistedConcurrency) {
-      void saveConcurrency(value)
-    }
-  }
+  const concurrencyRange = useCommittedRange({
+    persisted: persistedConcurrency,
+    normalize: (v) => Math.min(MAX_CONCURRENCY, Math.max(MIN_CONCURRENCY, Math.round(v))),
+    commit: saveConcurrency,
+  })
+  const displayConcurrency = concurrencyRange.value
 
   // One shared minute tick drives every relative timestamp in the card,
   // including the ones TaskDetails renders through this same callback.
@@ -82,12 +78,7 @@ export function TasksQueueCard() {
           min={MIN_CONCURRENCY}
           max={MAX_CONCURRENCY}
           step={1}
-          value={displayConcurrency}
-          onMouseDown={() => setDragConcurrency(persistedConcurrency)}
-          onTouchStart={() => setDragConcurrency(persistedConcurrency)}
-          onChange={(e) => setDragConcurrency(parseInt(e.target.value, 10))}
-          onMouseUp={handleConcurrencyCommit}
-          onTouchEnd={handleConcurrencyCommit}
+          {...concurrencyRange.inputProps}
           className="qt-range w-full mt-2"
         />
         <p className="qt-text-small qt-text-muted mt-1">

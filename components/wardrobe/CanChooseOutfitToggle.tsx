@@ -23,7 +23,7 @@ export function CanChooseOutfitToggle({ checked, disabled, onChange }: CanChoose
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
           disabled={disabled}
-          className="mt-1 accent-[var(--primary)]"
+          className="mt-1 accent-[var(--color-primary)]"
         />
         <span className="flex-1 min-w-0">
           <span className="qt-text-label block">Let this character choose their opening outfit</span>

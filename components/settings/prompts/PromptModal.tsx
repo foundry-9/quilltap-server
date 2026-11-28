@@ -4,6 +4,7 @@ import { useId } from 'react'
 import { PromptTemplate, TemplateFormData } from './types'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 interface PromptModalProps {
@@ -11,6 +12,8 @@ interface PromptModalProps {
   editingTemplate: PromptTemplate | null
   formData: TemplateFormData
   isSaving: boolean
+  /** A refused save, shown inside the dialog where it can be seen (#252). */
+  error?: string | null
   onClose: () => void
   onSave: () => void
   onFormChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
@@ -24,6 +27,7 @@ export function PromptModal({
   editingTemplate,
   formData,
   isSaving,
+  error,
   onClose,
   onSave,
   onFormChange,
@@ -54,6 +58,8 @@ export function PromptModal({
       }
     >
       <div className="space-y-4">
+        {error && <ErrorAlert message={error} />}
+
         {/* Name field */}
         <div>
           <label className="qt-label mb-1" htmlFor={`${id}-name`}>

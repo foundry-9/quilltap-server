@@ -7,7 +7,8 @@
  * that reduces token costs by compressing older messages using a cheap LLM.
  */
 
-import { useState, useId } from 'react'
+import { useId } from 'react'
+import { useCommittedRange } from '@/hooks/useCommittedRange'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import {
   ChatSettings,
@@ -39,103 +40,43 @@ export function ContextCompressionSettingsComponent({
   const id = useId()
   const compressionSettings = settings.contextCompressionSettings || DEFAULT_CONTEXT_COMPRESSION_SETTINGS
 
-  // Track which slider is being dragged (null when not dragging)
-  const [dragging, setDragging] = useState<'window' | 'compression' | 'projectContext' | null>(null)
+  const persistedProjectContextInterval =
+    compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval
 
-  // Local state for sliders to allow smooth dragging
-  const [localWindowSize, setLocalWindowSize] = useState(compressionSettings.windowSize)
-  const [localCompressionTarget, setLocalCompressionTarget] = useState(compressionSettings.compressionTargetTokens)
-  // System prompt compression removed — only message history is compressed
-  const [localProjectContextInterval, setLocalProjectContextInterval] = useState(compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval)
+  // Each slider shows its value live and saves on release — pointer, touch,
+  // pen or keyboard (#259).
+  const windowRange = useCommittedRange({
+    persisted: compressionSettings.windowSize,
+    normalize: (v) => Math.min(WINDOW.max, Math.max(WINDOW.min, v)),
+    commit: (windowSize) => {
+      const updates: Partial<ContextCompressionSettings> = { windowSize }
+      // The project context interval may not fall below the window size.
+      if (persistedProjectContextInterval !== 0 && persistedProjectContextInterval < windowSize) {
+        updates.projectContextReinjectInterval = windowSize
+      }
+      return onUpdate(updates)
+    },
+  })
+  const displayWindowSize = windowRange.value
 
-  // Use local value while dragging, otherwise use settings value (for external updates)
-  const displayWindowSize = dragging === 'window' ? localWindowSize : compressionSettings.windowSize
-  const displayCompressionTarget = dragging === 'compression' ? localCompressionTarget : compressionSettings.compressionTargetTokens
-  const displayProjectContextInterval = dragging === 'projectContext' ? localProjectContextInterval : (compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval)
+  const compressionRange = useCommittedRange({
+    persisted: compressionSettings.compressionTargetTokens,
+    normalize: (v) => Math.min(COMPRESSION_TARGET.max, Math.max(COMPRESSION_TARGET.min, v)),
+    commit: (compressionTargetTokens) => onUpdate({ compressionTargetTokens }),
+  })
+  const displayCompressionTarget = compressionRange.value
+
+  const projectContextRange = useCommittedRange({
+    persisted: persistedProjectContextInterval,
+    // Minimum is the window size (no point sending more often than the
+    // window); 0 means disabled (only on the initial message).
+    normalize: (v) => (v === 0 ? 0 : Math.min(PROJECT_CONTEXT.max, Math.max(displayWindowSize, v))),
+    commit: (projectContextReinjectInterval) => onUpdate({ projectContextReinjectInterval }),
+  })
+  const displayProjectContextInterval = projectContextRange.value
 
   const handleEnabledChange = (enabled: boolean) => {
     onUpdate({ enabled })
-  }
-
-  const handleWindowSizeStart = () => {
-    setDragging('window')
-    setLocalWindowSize(compressionSettings.windowSize)
-  }
-
-  const handleWindowSizeChange = (windowSize: number) => {
-    const clampedValue = Math.min(WINDOW.max, Math.max(WINDOW.min, windowSize))
-    setLocalWindowSize(clampedValue)
-  }
-
-  const handleWindowSizeCommit = () => {
-    setDragging(null)
-    if (localWindowSize !== compressionSettings.windowSize) {
-      onUpdate({ windowSize: localWindowSize })
-    }
-  }
-
-  const handleCompressionTargetStart = () => {
-    setDragging('compression')
-    setLocalCompressionTarget(compressionSettings.compressionTargetTokens)
-  }
-
-  const handleCompressionTargetChange = (compressionTargetTokens: number) => {
-    const clampedValue = Math.min(COMPRESSION_TARGET.max, Math.max(COMPRESSION_TARGET.min, compressionTargetTokens))
-    setLocalCompressionTarget(clampedValue)
-  }
-
-  const handleCompressionTargetCommit = () => {
-    setDragging(null)
-    if (localCompressionTarget !== compressionSettings.compressionTargetTokens) {
-      onUpdate({ compressionTargetTokens: localCompressionTarget })
-    }
-  }
-
-
-  const handleProjectContextIntervalStart = () => {
-    setDragging('projectContext')
-    setLocalProjectContextInterval(compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval)
-  }
-
-  const handleProjectContextIntervalChange = (interval: number) => {
-    // Minimum is windowSize (no point sending more often than window)
-    // 0 means disabled (only on initial message)
-    const minValue = displayWindowSize
-    const clampedValue = interval === 0 ? 0 : Math.min(PROJECT_CONTEXT.max, Math.max(minValue, interval))
-    setLocalProjectContextInterval(clampedValue)
-  }
-
-  const handleProjectContextIntervalCommit = () => {
-    setDragging(null)
-    if (localProjectContextInterval !== (compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval)) {
-      onUpdate({ projectContextReinjectInterval: localProjectContextInterval })
-    }
-  }
-
-  // When window size changes, ensure project context interval is still valid
-  const handleWindowSizeChangeWithValidation = (windowSize: number) => {
-    const clampedValue = Math.min(WINDOW.max, Math.max(WINDOW.min, windowSize))
-    setLocalWindowSize(clampedValue)
-    // If project context interval is now below the new window size, adjust it
-    if (localProjectContextInterval !== 0 && localProjectContextInterval < clampedValue) {
-      setLocalProjectContextInterval(clampedValue)
-    }
-  }
-
-  const handleWindowSizeCommitWithValidation = () => {
-    setDragging(null)
-    const updates: Partial<ContextCompressionSettings> = {}
-    if (localWindowSize !== compressionSettings.windowSize) {
-      updates.windowSize = localWindowSize
-    }
-    // Also update project context interval if it's now invalid
-    const currentInterval = compressionSettings.projectContextReinjectInterval ?? DEFAULT_CONTEXT_COMPRESSION_SETTINGS.projectContextReinjectInterval
-    if (currentInterval !== 0 && currentInterval < localWindowSize) {
-      updates.projectContextReinjectInterval = localWindowSize
-    }
-    if (Object.keys(updates).length > 0) {
-      onUpdate(updates)
-    }
   }
 
   return (
@@ -186,12 +127,7 @@ export function ContextCompressionSettingsComponent({
             type="range"
             min={WINDOW.min}
             max={WINDOW.max}
-            value={displayWindowSize}
-            onMouseDown={handleWindowSizeStart}
-            onTouchStart={handleWindowSizeStart}
-            onChange={(e) => handleWindowSizeChangeWithValidation(parseInt(e.target.value, 10))}
-            onMouseUp={handleWindowSizeCommitWithValidation}
-            onTouchEnd={handleWindowSizeCommitWithValidation}
+            {...windowRange.inputProps}
             disabled={!compressionSettings.enabled}
             className="qt-range w-full"
           />
@@ -218,12 +154,7 @@ export function ContextCompressionSettingsComponent({
             min={COMPRESSION_TARGET.min}
             max={COMPRESSION_TARGET.max}
             step={100}
-            value={displayCompressionTarget}
-            onMouseDown={handleCompressionTargetStart}
-            onTouchStart={handleCompressionTargetStart}
-            onChange={(e) => handleCompressionTargetChange(parseInt(e.target.value, 10))}
-            onMouseUp={handleCompressionTargetCommit}
-            onTouchEnd={handleCompressionTargetCommit}
+            {...compressionRange.inputProps}
             disabled={!compressionSettings.enabled}
             className="qt-range w-full"
           />
@@ -249,12 +180,8 @@ export function ContextCompressionSettingsComponent({
             type="range"
             min={displayWindowSize}
             max={PROJECT_CONTEXT.max}
+            {...projectContextRange.inputProps}
             value={displayProjectContextInterval === 0 ? displayWindowSize : displayProjectContextInterval}
-            onMouseDown={handleProjectContextIntervalStart}
-            onTouchStart={handleProjectContextIntervalStart}
-            onChange={(e) => handleProjectContextIntervalChange(parseInt(e.target.value, 10))}
-            onMouseUp={handleProjectContextIntervalCommit}
-            onTouchEnd={handleProjectContextIntervalCommit}
             disabled={!compressionSettings.enabled}
             className="qt-range w-full"
           />

@@ -21,6 +21,11 @@
  *    resolves by the same rule (recursively — a fallback of `hsl(var(--x))`
  *    with `--x` undefined is still nothing).
  *
+ * The same rule holds for `var()` written in TS/TSX under `app/`, `components/`
+ * and `lib/` (inline `style={{}}` values and Tailwind arbitrary values such as
+ * `accent-[var(--x)]`), which is how `var(--muted)` and `var(--primary)` left
+ * swatches blank and checkboxes unthemed (#270).
+ *
  * Fallbacks are checked even when the property is defined: a fallback that
  * names nothing is a safety net with a hole in it.
  *
@@ -62,6 +67,14 @@ function tracked(args) {
 /** Replace comments with blanks, keeping newlines so line numbers survive. */
 function stripComments(css) {
   return css.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, ' '))
+}
+
+/**
+ * Blank `/* *\/` and `//` comments in TS source, keeping newlines. A `//`
+ * inside a string (a URL) is left alone by requiring it not follow `:`.
+ */
+function stripTsComments(src) {
+  return stripComments(src).replace(/(^|[^:'"`])\/\/[^\n]*/g, (c, lead) => lead + c.slice(lead.length).replace(/[^\n]/g, ' '))
 }
 
 function definedProperties() {
@@ -186,6 +199,26 @@ function main() {
         )
       }
     })
+  }
+
+  // Inline styles and Tailwind arbitrary values in TS/TSX (`style={{ color:
+  // 'var(--x)' }}`, `accent-[var(--x)]`) are just as invisible when they name
+  // nothing (#270). Comments are blanked; a template-built name
+  // (`var(--theme-${key})`) cannot be checked and is skipped.
+  const tsxSources = tracked(['app/*.ts', 'app/*.tsx', 'components/*.ts', 'components/*.tsx', 'lib/*.tsx']).filter(
+    (f) => !f.includes('__tests__'),
+  )
+  for (const file of tsxSources) {
+    const raw = readFileSync(path.join(REPO_ROOT, file), 'utf8')
+    if (!raw.includes('var(')) continue
+    const rawLines = raw.split('\n')
+    const src = stripTsComments(raw)
+    const skip = (line) => rawLines[line - 1]?.includes('css-var-exception')
+    for (const failure of unresolved(src, defined)) {
+      if (failure.name.includes('$') || !failure.name.startsWith('--')) continue
+      const line = lineOf(src, failure.offset)
+      if (!skip(line)) problems.push(`${file}:${line}  ${describe(failure)}`)
+    }
   }
 
   if (problems.length > 0) {

@@ -6,6 +6,9 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { useRealtimeRefetchInterval } from '@/hooks/useRealtime'
 import { getErrorMessage } from '@/lib/error-utils'
+import { apiErrorMessage } from '@/lib/query/fetcher'
+import { showErrorToast } from '@/lib/toast'
+import { showConfirmation } from '@/lib/alert'
 import type { QueueData, FullJobDetail } from '../types'
 
 /** Fallback poll cadence, used only while the realtime socket is down. */
@@ -47,6 +50,18 @@ export function useTasksQueue() {
       setError(null)
     }
   }, [loadError])
+
+  /**
+   * A job action failed (#327): say so in the card's error line and in a
+   * toast, rather than letting the button simply stop spinning.
+   */
+  const reportJobActionFailure = useCallback((err: unknown, fallback: string) => {
+    const errorMessage = apiErrorMessage(err, fallback)
+    setError(errorMessage)
+    showErrorToast(errorMessage)
+    console.error(fallback, { error: errorMessage })
+  }, [])
+
   const fetchQueueStatus = useCallback(async () => {
     await mutateQueue()
   }, [mutateQueue])
@@ -106,6 +121,7 @@ export function useTasksQueue() {
   const viewJob = useCallback(async (jobId: string) => {
     try {
       setJobActionLoading(jobId)
+      setError(null)
       const res = await fetch(`/api/v1/system/jobs/${jobId}`)
       if (!res.ok) {
         throw new Error('Failed to fetch job details')
@@ -115,17 +131,17 @@ export function useTasksQueue() {
       setSelectedJob(data.job)
       setShowJobDialog(true)
     } catch (err) {
-      const errorMessage = getErrorMessage(err)
-      console.error('Failed to fetch job details', { error: errorMessage })
+      reportJobActionFailure(err, 'Failed to fetch job details')
     } finally {
       setJobActionLoading(null)
     }
-  }, [])
+  }, [reportJobActionFailure])
 
   const pauseJob = useCallback(
     async (jobId: string) => {
       try {
         setJobActionLoading(jobId)
+        setError(null)
 
         const res = await fetch(`/api/v1/system/jobs/${jobId}?action=pause`, {
           method: 'POST',
@@ -133,25 +149,25 @@ export function useTasksQueue() {
         })
 
         if (!res.ok) {
-          const data = await res.json()
+          const data = await res.json().catch(() => ({}))
           throw new Error(data.error || 'Failed to pause job')
         }
 
         await mutateQueue()
       } catch (err) {
-        const errorMessage = getErrorMessage(err)
-        console.error('Failed to pause job', { error: errorMessage })
+        reportJobActionFailure(err, 'Failed to pause job')
       } finally {
         setJobActionLoading(null)
       }
     },
-    [mutateQueue]
+    [mutateQueue, reportJobActionFailure]
   )
 
   const resumeJob = useCallback(
     async (jobId: string) => {
       try {
         setJobActionLoading(jobId)
+        setError(null)
 
         const res = await fetch(`/api/v1/system/jobs/${jobId}?action=resume`, {
           method: 'POST',
@@ -159,31 +175,38 @@ export function useTasksQueue() {
         })
 
         if (!res.ok) {
-          const data = await res.json()
+          const data = await res.json().catch(() => ({}))
           throw new Error(data.error || 'Failed to resume job')
         }
 
         await mutateQueue()
       } catch (err) {
-        const errorMessage = getErrorMessage(err)
-        console.error('Failed to resume job', { error: errorMessage })
+        reportJobActionFailure(err, 'Failed to resume job')
       } finally {
         setJobActionLoading(null)
       }
     },
-    [mutateQueue]
+    [mutateQueue, reportJobActionFailure]
   )
 
   const deleteJob = async (jobId: string) => {
+    // Deleting a job cannot be undone, so it asks first (#327) — from the row
+    // and from the details dialog alike.
+    const confirmed = await showConfirmation(
+      'Strike this errand from the queue? Once struck, it cannot be restored.',
+    )
+    if (!confirmed) return
+
     try {
       setJobActionLoading(jobId)
+      setError(null)
 
       const res = await fetch(`/api/v1/system/jobs/${jobId}`, {
         method: 'DELETE',
       })
 
       if (!res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to delete job')
       }
 
@@ -195,8 +218,7 @@ export function useTasksQueue() {
 
       await mutateQueue()
     } catch (err) {
-      const errorMessage = getErrorMessage(err)
-      console.error('Failed to delete job', { error: errorMessage })
+      reportJobActionFailure(err, 'Failed to delete job')
     } finally {
       setJobActionLoading(null)
     }

@@ -1,17 +1,24 @@
 /**
  * Persist AI-generated scenarios (from the AI Wizard) to a character, one
- * POST per scenario, surviving individual failures. Returns the rows the
- * server minted so the edit view can splice them into form state; the
- * new-character view ignores the return. Shared by both views.
+ * POST per scenario, surviving individual failures. Returns how many saved
+ * and how many failed — both views toast a failure through
+ * `scenarioFailureMessage` (#273) — and the rows the server minted. Shared by
+ * both views.
  */
 
 import type { CharacterScenario } from '@/lib/schemas/character.types'
 
+/** The error-toast text for scenarios that did not save. */
+export function scenarioFailureMessage(failed: number): string {
+  return `${failed} scenario${failed === 1 ? '' : 's'} could not be saved.`
+}
+
 export async function saveGeneratedScenarios(
   characterId: string,
   scenarios: Array<{ title: string; content: string }>
-): Promise<{ saved: number; scenarios: CharacterScenario[] }> {
+): Promise<{ saved: number; failed: number; scenarios: CharacterScenario[] }> {
   let saved = 0
+  let failed = 0
   const savedScenarios: CharacterScenario[] = []
 
   for (const scenario of scenarios) {
@@ -34,13 +41,25 @@ export async function saveGeneratedScenarios(
             updatedAt: resData.scenario.updatedAt,
           })
         }
+      } else {
+        failed++
+        const errorData = await res.json().catch(() => ({}))
+        console.error('Failed to create scenario', {
+          characterId,
+          title: scenario.title,
+          status: res.status,
+          error: (errorData as { error?: string }).error ?? 'Unknown error',
+        })
       }
     } catch (err) {
+      failed++
       console.error('Failed to create scenario', {
+        characterId,
+        title: scenario.title,
         error: err instanceof Error ? err.message : String(err),
       })
     }
   }
 
-  return { saved, scenarios: savedScenarios }
+  return { saved, failed, scenarios: savedScenarios }
 }

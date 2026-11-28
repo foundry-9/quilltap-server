@@ -4,6 +4,29 @@
 
 ### 4.15-dev
 
+#### Fix: settings cards, tools cards and Aurora dialogs
+
+- Concierge refusal threshold, detection threshold and custom classification prompt saved on every keystroke or step and were disabled mid-save, losing characters and focus. They hold a `useDraft` copy and save on blur / Enter (slider on release). Fixes #250.
+- Tag style editor saved the emoji per keystroke, a pending debounced colour save could undo Bold / Italic / Strikethrough ticked meanwhile, and a failed list load showed nothing. Emoji saves on blur; the colour timer merges into the tag's latest style and immediate saves carry any pending colour; a load failure shows an error with Retry. Fixes #251.
+- Roleplay and prompt template save errors rendered on the page behind the open modal. They now render inside the modal; the prompt banner's no-op Retry is gone. Fixes #252.
+- Making an embedding profile the default queued the full re-embed twice (server on save, then the client's "Re-embed Everything?" prompt). The prompt and the client `?action=reindex` call are removed; the modal announces the server's re-embed and notifies the queue. Fixes #258.
+- The Context Compression and Simultaneous Labours sliders ignored keyboard changes (they committed only on mouseup / touchend). New `useCommittedRange` hook (`hooks/`) shows every change and commits on pointer up, key up or blur. Fixes #259.
+- Tool and subgroup checkboxes under a disabled plugin group (or subgroup) accepted clicks that changed nothing. They are disabled with a hint, and the toggle handlers refuse blocked rows. Fixes #323.
+- Collapsing the Almanack card mid-run lost the progress and the finished report, and allowed a second run. The run lives in a module-level store read through `useSyncExternalStore`; a remounted card resumes the bar, and a report finished while collapsed opens on the next mount. Fixes #325.
+- Memory recall settings kept showing a value whose save failed. Each control reverts to the value in force when the save returns false. Fixes #326.
+- Tasks Queue View / Pause / Resume / Delete failures only reached the console, and Delete ran without asking. Failures show in the card's error line and a toast; Delete asks through `showConfirmation`. Fixes #327.
+- Toggling a plugin invalidated the whole plugins namespace, re-running the npm upgrade check and blanking the Upgrades list. A toggle now invalidates only `queryKeys.plugins.list()`; the Upgrades spinner shows only on first load. Fixes #283.
+- The Settings page could jump to another group by itself as attention chips loaded or changed. The default group is latched on the first render where chips are ready. Fixes #286.
+- An attention chip did not switch the Providers card to By provider or open the provider's card once the user had chosen a view or the card was already open. The view override resets when the focus target changes, and the focused provider card opens. Fixes #287.
+- The Character Optimizer reported success and closed when applying failed (it read a stale `error`). `applyChanges` returns a boolean that `handleApply` branches on. Fixes #238.
+- Undefined CSS variables in TSX (`--muted`, `--primary`, `--qt-success`) left colour swatches blank and checkboxes unthemed at ten sites. Replaced with `--color-muted` / `--color-primary` / `--color-success`; `scripts/check-css-vars.mjs` now also scans `var()` in TS/TSX under `app/`, `components/` and `lib/`. Fixes #270.
+- The character delete dialog could send the delete twice. `onConfirm` may return a promise; the dialog locks its buttons and the modal (`busy`) while it runs. Fixes #271.
+- Deleting a group from the Aurora grid ran with no confirmation. It now asks, naming the group (`app/aurora/shared/confirm-delete-group.ts`). Fixes #272.
+- AI Wizard scenarios that failed to save were dropped silently. `saveGeneratedScenarios` returns a `failed` count and logs non-OK responses; both character pages show an error toast. Fixes #273.
+- Saving or deleting a progression in Aurora erased the entries the engine could not parse. The hook keeps the raw `progressions` object and writes every other entry back unchanged; a non-object `progressions` value refuses the write instead of overwriting it. Fixes #239.
+- Character memory search sent a request on every keystroke. The search term follows the input after 300 ms. Fixes #269.
+- Dressing instructions could show another wardrobe's text after switching quickly. Already fixed by the query-keyed hook in the 4.14 front-end pass; regression tests added. Fixes #280.
+
 #### Fix: setup, startup, restore, delete-all-data and AI import
 
 - `/setup` spun forever when the unlock-state check failed, and a non-OK response without a `state` left an empty card. `checkState` now checks `res.ok` and `data.state`; on failure the page shows the error and a Retry button that runs the check again. Fixes #328.

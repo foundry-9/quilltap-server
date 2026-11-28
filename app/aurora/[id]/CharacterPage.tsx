@@ -50,7 +50,7 @@ import {
 import { FIRST_SYSTEM_PROMPT_NAME, buildWizardCurrentData, generatedSystemPrompt, getGeneratedCharacterTextEntries } from '../shared/wizard-text-fields'
 import { saveGeneratedWardrobeItems } from '../shared/save-generated-wardrobe'
 import { saveGeneratedPhysicalDescription } from '../shared/save-generated-physical-description'
-import { saveGeneratedScenarios } from '../shared/save-generated-scenarios'
+import { saveGeneratedScenarios, scenarioFailureMessage } from '../shared/save-generated-scenarios'
 import { CharacterPageContext, type CharacterPageContextValue } from './CharacterPageContext'
 import { CharacterHeader } from './CharacterHeader'
 import { useCharacter, useCharacterPageSupport, useCharacterStats } from './hooks/useCharacter'
@@ -369,8 +369,9 @@ function LoadedCharacterPage({
     }
     const scenarios = normalizeGeneratedScenarios(data.scenarios)
     if (scenarios.length > 0) {
-      const { saved } = await saveGeneratedScenarios(characterId, scenarios)
+      const { saved, failed } = await saveGeneratedScenarios(characterId, scenarios)
       if (saved > 0) showSuccessToast(`${saved} scenario${saved > 1 ? 's' : ''} created`)
+      if (failed > 0) errors.push(scenarioFailureMessage(failed))
     }
     if (errors.length > 0) showErrorToast(errors.join(' '))
     await queryClient.invalidateQueries({ queryKey: queryKeys.characters.prompts(characterId) })
@@ -575,7 +576,7 @@ function LoadedCharacterPage({
           characterId={characterId}
           characterName={character.name}
           onClose={() => setShowDelete(false)}
-          onConfirm={(options) => void removeCharacter(options)}
+          onConfirm={removeCharacter}
         />
       )}
     </CharacterPageContext.Provider>

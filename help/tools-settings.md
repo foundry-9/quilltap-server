@@ -88,6 +88,8 @@ The Tool Settings modal displays:
 1. Some groups have subgroups (like MCP servers)
 2. Click the subgroup checkbox to toggle all its tools at once
 
+While a group (or a subgroup) is switched off, the checkboxes beneath it are greyed out and will not answer a click: the group's own switch outranks them. Turn the group back on first, and then you may pick and choose among its tools one by one.
+
 ## Making Changes Take Effect
 
 **Important:** Tool setting changes take effect on the **next AI message** you send.

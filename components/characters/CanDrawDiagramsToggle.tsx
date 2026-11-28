@@ -44,7 +44,7 @@ export function CanDrawDiagramsToggle({
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
           disabled={disabled}
-          className="mt-1 accent-[var(--primary)]"
+          className="mt-1 accent-[var(--color-primary)]"
           aria-describedby="can-draw-diagrams-hint"
         />
         <span className="flex-1 min-w-0">

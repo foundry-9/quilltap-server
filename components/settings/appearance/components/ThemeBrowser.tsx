@@ -373,7 +373,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                       <Icon
                         name="check"
                         className="w-3.5 h-3.5"
-                        style={{ color: 'var(--qt-success, hsl(142, 65%, 40%))' }}
+                        style={{ color: 'var(--color-success)' }}
                       />
                     ) : (
                       <Icon

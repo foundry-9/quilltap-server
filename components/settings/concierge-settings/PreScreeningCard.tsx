@@ -1,5 +1,6 @@
 'use client'
 
+import { useDraft } from '@/lib/hooks/use-draft'
 import { SettingsToggleRow } from '@/components/settings/chat-settings/components/SettingsToggleRow'
 import type {
   ConciergeSettings,
@@ -21,6 +22,20 @@ export interface PreScreeningCardProps {
 export function PreScreeningCard({ settings, saving, onUpdate }: PreScreeningCardProps) {
   const preScreen = settings.preScreen
   const scansDisabled = saving || !preScreen.enabled
+
+  // The slider and the prompt are drafted locally and saved when the user lets
+  // go (pointer up, a key released, blur), never per step or keystroke — and
+  // neither is disabled while a save is pending, which used to drop focus and
+  // the next character (#250).
+  const [thresholdDraft, setThresholdDraft] = useDraft(preScreen.threshold)
+  const commitThreshold = () => {
+    if (thresholdDraft !== preScreen.threshold) void onUpdate({ preScreen: { threshold: thresholdDraft } })
+  }
+  const savedPrompt = preScreen.customClassificationPrompt || ''
+  const [promptDraft, setPromptDraft] = useDraft(savedPrompt)
+  const commitPrompt = () => {
+    if (promptDraft !== savedPrompt) void onUpdate({ preScreen: { customClassificationPrompt: promptDraft || null } })
+  }
 
   return (
     <div className="space-y-6">
@@ -77,7 +92,7 @@ export function PreScreeningCard({ settings, saving, onUpdate }: PreScreeningCar
 
       <div className="space-y-2">
         <label htmlFor="concierge-threshold" className="block qt-text-label">
-          Detection threshold ({preScreen.threshold.toFixed(1)})
+          Detection threshold ({thresholdDraft.toFixed(1)})
         </label>
         <input
           id="concierge-threshold"
@@ -85,9 +100,11 @@ export function PreScreeningCard({ settings, saving, onUpdate }: PreScreeningCar
           min="0.1"
           max="1.0"
           step="0.1"
-          value={preScreen.threshold}
-          onChange={(e) => onUpdate({ preScreen: { threshold: parseFloat(e.target.value) } })}
-          disabled={saving}
+          value={thresholdDraft}
+          onChange={(e) => setThresholdDraft(parseFloat(e.target.value))}
+          onPointerUp={commitThreshold}
+          onKeyUp={commitThreshold}
+          onBlur={commitThreshold}
           className="qt-range w-full max-w-xs"
         />
         <p className="qt-text-small">
@@ -101,9 +118,9 @@ export function PreScreeningCard({ settings, saving, onUpdate }: PreScreeningCar
         </label>
         <textarea
           id="concierge-custom-classification-prompt"
-          value={preScreen.customClassificationPrompt || ''}
-          onChange={(e) => onUpdate({ preScreen: { customClassificationPrompt: e.target.value || null } })}
-          disabled={saving}
+          value={promptDraft}
+          onChange={(e) => setPromptDraft(e.target.value)}
+          onBlur={commitPrompt}
           rows={3}
           placeholder="Additional instructions for the content classifier..."
           className="qt-textarea"

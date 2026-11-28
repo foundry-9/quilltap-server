@@ -338,7 +338,7 @@ export function MergeConversationModal({
                         checked={includedCharacterIds.has(c.id)}
                         onChange={() => toggleIncluded(c.id)}
                         disabled={isMerging}
-                        className="accent-[var(--primary)]"
+                        className="accent-[var(--color-primary)]"
                       />
                       <span className="qt-text-primary">{c.name}</span>
                     </label>

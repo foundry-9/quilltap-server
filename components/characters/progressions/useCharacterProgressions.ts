@@ -11,6 +11,13 @@
  * there — `faction`, `hasAnsibleAccess`, whatever they invented — is never
  * sent, so it can never be eaten by a stale copy, and the fact-sheet card's
  * save cannot race this one.
+ *
+ * The write is built from the RAW `progressions` object the vault holds, not
+ * from the parsed map the card lists (#239). `parseProgressions` drops entries
+ * it cannot read — malformed, over the ceiling, an illegal id — and the card
+ * promises those are only being *skipped*; a write built from the parsed map
+ * would have erased every one of them. So a save or delete changes exactly the
+ * one id it names and hands every other raw entry back byte-for-byte.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -29,17 +36,39 @@ export interface UseCharacterProgressionsResult {
   /** True while the tombstone rule would refuse the PUT anyway. */
   isArchived: boolean
   isLoading: boolean
-  /** Write one entry, stamping `updatedAt`. Everything else in metadata survives. */
-  save: ReturnType<typeof useSaveProgressions>
-  /** Delete one entry by id. */
-  remove: ReturnType<typeof useSaveProgressions>
+  /** Write one entry. Every other entry — readable or not — and the rest of metadata survive. */
+  save: ReturnType<typeof useSaveProgressions<{ id: string; progression: Progression }>>
+  /** Delete one entry by id. Every other entry, readable or not, survives. */
+  remove: ReturnType<typeof useSaveProgressions<string>>
 }
 
-function useSaveProgressions(characterId: string) {
+/** What a write to the reserved key starts from: the raw object, or null when the key itself is unreadable. */
+type RawProgressions = Record<string, unknown> | null
+
+/** The vault's raw `progressions` object, untouched by parsing. `{}` when absent; null when not an object. */
+export function rawProgressionsOf(metadata: unknown): RawProgressions {
+  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) return {}
+  const raw = (metadata as Record<string, unknown>)[PROGRESSIONS_METADATA_KEY]
+  if (raw === undefined) return {}
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
+  return raw as Record<string, unknown>
+}
+
+const UNREADABLE_KEY_MESSAGE =
+  'The progressions entry in metadata.json is not an object, so nothing can be added beside it. Mend the file first.'
+
+function useSaveProgressions<TInput>(
+  characterId: string,
+  raw: RawProgressions,
+  apply: (current: Record<string, unknown>, input: TInput) => Record<string, unknown>,
+) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (next: Record<string, Progression>) => {
+    mutationFn: async (input: TInput) => {
+      // Refuse rather than overwrite a reserved key we cannot read at all.
+      if (raw === null) throw new Error(UNREADABLE_KEY_MESSAGE)
+      const next = apply({ ...raw }, input)
       const patch =
         Object.keys(next).length === 0
           ? { unset: [PROGRESSIONS_METADATA_KEY] }
@@ -66,8 +95,15 @@ export function useCharacterProgressions(characterId: string): UseCharacterProgr
     invalidIds.push(id)
   })
 
-  const save = useSaveProgressions(characterId)
-  const remove = useSaveProgressions(characterId)
+  const raw = rawProgressionsOf(character?.metadata)
+  const save = useSaveProgressions(characterId, raw, (current, { id, progression }: { id: string; progression: Progression }) => ({
+    ...current,
+    [id]: progression,
+  }))
+  const remove = useSaveProgressions(characterId, raw, (current, id: string) => {
+    delete current[id]
+    return current
+  })
 
   return {
     progressions,

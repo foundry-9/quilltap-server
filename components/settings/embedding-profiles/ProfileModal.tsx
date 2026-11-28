@@ -8,6 +8,7 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
+import { showInfoToast } from '@/lib/toast'
 import type { ApiKey, EmbeddingModel, EmbeddingProfile, EmbeddingProfileFormData } from './types'
 import type { EmbeddingProviderInfo } from './hooks/useEmbeddingProfiles'
 
@@ -44,10 +45,6 @@ export function ProfileModal({
     clearError: clearFormError,
   } = useAsyncOperation<void>()
 
-  const [showReembedDialog, setShowReembedDialog] = useState(false)
-  const [reembedProfileId, setReembedProfileId] = useState<string | null>(null)
-  const [reembedLoading, setReembedLoading] = useState(false)
-  const [reembedError, setReembedError] = useState<string | null>(null)
   const [fetchedModels, setFetchedModels] = useState<EmbeddingModel[]>([])
   // The provider the fetched list belongs to, so it is never offered for another
   const [fetchedModelsProvider, setFetchedModelsProvider] = useState<string | null>(null)
@@ -106,7 +103,7 @@ export function ProfileModal({
       const url = profile?.id ? `/api/v1/embedding-profiles/${profile.id}` : '/api/v1/embedding-profiles'
       const method = profile?.id ? 'PUT' : 'POST'
 
-      const result = await fetchJson<{ id: string }>(url, {
+      const result = await fetchJson<{ id: string; reembeddingTriggered?: boolean }>(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -118,43 +115,17 @@ export function ProfileModal({
 
       onSuccess()
 
-      // If newly set as default, prompt to re-embed before closing
-      if (isNewlyDefault && result.data?.id) {
-        setReembedProfileId(result.data.id)
-        setShowReembedDialog(true)
-      } else {
-        handleClose()
+      // A save that makes this the default has already queued the re-embed on
+      // the server (create and update alike). Say so and refresh the queue
+      // badges; never queue a second one from here (#258).
+      if (isNewlyDefault || result.data?.reembeddingTriggered) {
+        notifyQueueChange()
+        showInfoToast(
+          'Re-embedding has begun with the new default profile. Help documentation goes first, then memories and conversations; the Emb badge in the header shows its progress.',
+        )
       }
-    })
-  }
-
-  const handleReembedConfirm = async () => {
-    if (!reembedProfileId) return
-    setReembedLoading(true)
-    setReembedError(null)
-    try {
-      const result = await fetchJson(`/api/v1/embedding-profiles/${reembedProfileId}?action=reindex`, {
-        method: 'POST',
-      })
-      if (!result.ok) {
-        // Stay open and say so, rather than closing as if it had worked (#296)
-        setReembedError(result.error || 'The re-embed could not be queued')
-        return
-      }
-      notifyQueueChange()
-      setShowReembedDialog(false)
-      setReembedProfileId(null)
       handleClose()
-    } finally {
-      setReembedLoading(false)
-    }
-  }
-
-  const handleReembedDecline = () => {
-    setReembedError(null)
-    setShowReembedDialog(false)
-    setReembedProfileId(null)
-    handleClose()
+    })
   }
 
   const handleClose = () => {
@@ -437,57 +408,6 @@ export function ProfileModal({
           </label>
         </div>
       </div>
-    </BaseModal>
-
-    <BaseModal
-      isOpen={showReembedDialog}
-      onClose={handleReembedDecline}
-      title="Re-embed Everything?"
-      maxWidth="md"
-      footer={
-        <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={handleReembedDecline}
-            disabled={reembedLoading}
-            className="qt-button-secondary"
-          >
-            Skip
-          </button>
-          <button
-            type="button"
-            onClick={handleReembedConfirm}
-            disabled={reembedLoading}
-            className="qt-button-primary"
-          >
-            {reembedLoading ? (
-              <span className="flex items-center gap-2">
-                <span className="qt-spinner-sm" />
-                Queuing...
-              </span>
-            ) : (
-              'Re-embed Everything'
-            )}
-          </button>
-        </div>
-      }
-    >
-      {reembedError && (
-        <div role="alert" className="qt-alert-error mb-3">
-          {reembedError}
-        </div>
-      )}
-      <p className="qt-text">
-        You&apos;ve switched the default embedding profile. All existing
-        embeddings were created with a different model and need to be
-        regenerated — this includes help documentation, character memories,
-        and conversation history.
-      </p>
-      <p className="mt-3 qt-text-secondary qt-text-small">
-        Help documentation will be embedded first, followed by character
-        memories and conversation history. You can track progress via the
-        Emb badge in the header.
-      </p>
     </BaseModal>
     </>
   )

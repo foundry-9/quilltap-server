@@ -317,6 +317,30 @@ describe('Providers → By kind', () => {
   })
 })
 
+describe('Providers → a new focus on a mounted card (#287)', () => {
+  it('returns to By provider with the provider open when a chip arrives after the user picked By kind', async () => {
+    const { rerender } = renderWithQuery(<ProvidersCard />)
+    fireEvent.click(screen.getByRole('button', { name: 'By kind' }))
+    expect(screen.getByRole('button', { name: 'By kind' })).toHaveAttribute('aria-pressed', 'true')
+
+    rerender(<ProvidersCard focusProvider="OPENAI" />)
+
+    expect(screen.getByRole('button', { name: 'By provider' })).toHaveAttribute('aria-pressed', 'true')
+    const header = await screen.findByRole('button', { name: /^OpenAI/ })
+    await waitFor(() => expect(header).toHaveAttribute('aria-expanded', 'true'))
+  })
+
+  it('opens the named provider card when the By provider view is already showing', async () => {
+    const { rerender } = renderWithQuery(<ProvidersCard />)
+    const header = await screen.findByRole('button', { name: /^OpenAI/ })
+    expect(header).toHaveAttribute('aria-expanded', 'false')
+
+    rerender(<ProvidersCard focusProvider="OPENAI" />)
+
+    await waitFor(() => expect(header).toHaveAttribute('aria-expanded', 'true'))
+  })
+})
+
 describe('ApiKeyModal preselection', () => {
   it('opens with the provider picker set to the preselected provider', async () => {
     const { ApiKeyModal } = jest.requireActual('@/components/settings/api-keys/ApiKeyModal')

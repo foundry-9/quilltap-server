@@ -8,6 +8,17 @@ import React from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { createTestQueryClient } from '../../../helpers/renderWithQuery'
 import { TasksQueueCard } from '@/components/tools/tasks-queue'
+import { showConfirmation } from '@/lib/alert'
+import { showErrorToast } from '@/lib/toast'
+
+jest.mock('@/lib/alert', () => ({
+  showConfirmation: jest.fn(),
+}))
+
+jest.mock('@/lib/toast', () => ({
+  showErrorToast: jest.fn(),
+  showSuccessToast: jest.fn(),
+}))
 
 type QueueData = {
   stats: {
@@ -76,7 +87,10 @@ function jsonResponse(data: any, ok = true) {
   } as Response)
 }
 
-function mockQueueNetwork(queueResponses: QueueData[] = [defaultQueue]) {
+function mockQueueNetwork(
+  queueResponses: QueueData[] = [defaultQueue],
+  failJobActions = false,
+) {
   let queueGetCount = 0
   return jest.spyOn(global as any, 'fetch').mockImplementation((input: RequestInfo, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.url
@@ -100,6 +114,11 @@ function mockQueueNetwork(queueResponses: QueueData[] = [defaultQueue]) {
     }
 
     if (url.startsWith('/api/v1/system/jobs/')) {
+      if (failJobActions) return jsonResponse({ error: 'The job ledger is locked' }, false)
+      return jsonResponse({ success: true })
+    }
+
+    if (url === '/api/v1/system/tools?action=job-concurrency' && method === 'POST') {
       return jsonResponse({ success: true })
     }
 
@@ -107,8 +126,8 @@ function mockQueueNetwork(queueResponses: QueueData[] = [defaultQueue]) {
   })
 }
 
-async function renderQueueCard(queueResponses?: QueueData[]) {
-  const fetchMock = mockQueueNetwork(queueResponses)
+async function renderQueueCard(queueResponses?: QueueData[], failJobActions = false) {
+  const fetchMock = mockQueueNetwork(queueResponses, failJobActions)
   const queryClient = createTestQueryClient()
   await act(async () => {
     render(
@@ -211,5 +230,70 @@ describe('TasksQueueCard', () => {
         })
       )
     })
+  })
+
+  it('saves the concurrency slider when changed from the keyboard (#259)', async () => {
+    const fetchMock = await renderQueueCard([{ ...defaultQueue, maxConcurrentJobs: 4 } as QueueData])
+
+    const slider = await screen.findByLabelText(/Simultaneous Labours/)
+    await waitFor(() => expect(slider).toHaveValue('4'))
+
+    await act(async () => {
+      slider.focus()
+      fireEvent.keyDown(slider, { key: 'ArrowRight' })
+      fireEvent.change(slider, { target: { value: '5' } })
+      fireEvent.keyUp(slider, { key: 'ArrowRight' })
+    })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/v1/system/tools?action=job-concurrency',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ concurrency: 5 }) }),
+      )
+    })
+    // One release, one save — the trailing blur does not save twice.
+    act(() => slider.blur())
+    const saves = fetchMock.mock.calls.filter(([url]) => url === '/api/v1/system/tools?action=job-concurrency')
+    expect(saves).toHaveLength(1)
+  })
+
+  it('reports a failed pause instead of failing silently (#327)', async () => {
+    await renderQueueCard([defaultQueue], true)
+
+    const pauseButton = await screen.findByTitle('Pause')
+    await act(async () => {
+      fireEvent.click(pauseButton)
+    })
+
+    expect(await screen.findByText('The job ledger is locked')).toBeInTheDocument()
+    expect(showErrorToast).toHaveBeenCalledWith('The job ledger is locked')
+  })
+
+  it('asks before deleting a job, and deletes nothing when declined (#327)', async () => {
+    const confirm = showConfirmation as jest.Mock
+    confirm.mockResolvedValueOnce(false)
+    const fetchMock = await renderQueueCard()
+
+    const deleteButton = await screen.findByTitle('Delete')
+    await act(async () => {
+      fireEvent.click(deleteButton)
+    })
+
+    expect(confirm).toHaveBeenCalledTimes(1)
+    const deletes = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')
+    expect(deletes()).toHaveLength(0)
+
+    confirm.mockResolvedValueOnce(true)
+    await act(async () => {
+      fireEvent.click(deleteButton)
+    })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/v1/system/jobs/job-pending',
+        expect.objectContaining({ method: 'DELETE' }),
+      )
+    })
+    expect(deletes()).toHaveLength(1)
   })
 })

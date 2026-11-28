@@ -106,6 +106,8 @@ export function usePrompts() {
     retryFetch,
     saving: saveMutation.isPending,
     saveError: saveMutation.error ? apiErrorMessage(saveMutation.error, 'Failed to save template') : null,
+    /** Forget a failed save (the modal opening or closing starts clean). */
+    clearSaveError: saveMutation.reset,
     deleting: deleteMutation.isPending,
     deleteError: deleteMutation.error ? apiErrorMessage(deleteMutation.error, 'Failed to delete template') : null,
     saveTemplate,

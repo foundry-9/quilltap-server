@@ -314,7 +314,7 @@ export function ProvidersByProvider({ focusProvider }: { focusProvider?: string 
 // --- One provider -------------------------------------------------------------
 
 interface ProviderCardProps {
-  /** Open and scroll to this card on mount (an attention chip's target). */
+  /** Open and scroll to this card whenever it becomes the target (an attention chip's). */
   focused?: boolean
   group: Group
   displayName: string
@@ -327,8 +327,16 @@ interface ProviderCardProps {
 function ProviderCard({ focused, group, displayName, keyActions, offers, onAdd, onOpenProfile }: ProviderCardProps) {
   const [isOpen, setIsOpen] = useState(!!focused)
   const sectionRef = useRef<HTMLElement>(null)
+  // A chip clicked while this card is already mounted must open it, not only
+  // scroll to it (#287): adjust state during render when `focused` turns on.
+  const [seenFocused, setSeenFocused] = useState(!!focused)
+  if (!!focused !== seenFocused) {
+    setSeenFocused(!!focused)
+    if (focused) setIsOpen(true)
+  }
   useEffect(() => {
-    if (focused) requestAnimationFrame(() => sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    if (!focused) return
+    requestAnimationFrame(() => sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }, [focused])
   const domId = providerCardDomId(group.provider)
   const bodyId = `${domId}-body`

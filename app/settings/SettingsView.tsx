@@ -128,8 +128,14 @@ function SettingsPage({ address }: { address: AddressParams }) {
   }
 
   // --- Attention strip + default group --------------------------------------
-  const { chips } = useAttentionChips()
-  const defaultGroup: SettingsGroupId = chips[0]?.group ?? DEFAULT_SETTINGS_GROUP
+  // The default group is latched the first render the chips are ready, so a chip that lights or
+  // goes dark later never moves the page under the reader (#286).
+  const { chips, ready: chipsReady } = useAttentionChips()
+  const [latchedDefault, setLatchedDefault] = useState<SettingsGroupId | null>(null)
+  if (chipsReady && latchedDefault === null) {
+    setLatchedDefault(chips[0]?.group ?? DEFAULT_SETTINGS_GROUP)
+  }
+  const defaultGroup: SettingsGroupId = latchedDefault ?? DEFAULT_SETTINGS_GROUP
 
   // --- Filters ---------------------------------------------------------------
   const subsystems = useAllSubsystemInfo()
