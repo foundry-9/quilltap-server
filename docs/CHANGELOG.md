@@ -4,6 +4,13 @@
 
 ### 4.15-dev
 
+#### Fix: startup failed after a General-scope document was created
+
+- On a database that never ran `migrate-remaining-general-to-uploads-v1` (created after 4.4, or one that never had `_general/` files), creating a General-scope document wrote a file under `files/_general/`, which made the migration's `shouldRun` answer true. Its `run()` inserts into `doc_mount_blobs` as that table was before the content/link split, so it failed with "no column named mountPointId" and startup exited, on every boot.
+- `shouldRun` now answers false when the mount index has the split schema (`mountIndexHasLinkSplit`): `_general/` is where General-scope documents live, not a leftover to sweep.
+- `migrate-remaining-general-to-uploads-v1` and `provision-user-uploads-mount-v1` were labelled `introducedInVersion: '4.14.0'`; they shipped in 4.4.0. With the right label a skipped copy is baselined on any database born later.
+- Test: `__tests__/unit/migrations/migrate-remaining-general-to-uploads.test.ts`.
+
 #### Fix: list order, font licence retry, import memories, template hint and qtap links
 
 - "Re-extract memories" in the Salon list and a character's Conversations tab deleted the chat's memories before asking the server to queue extraction, ignoring a failed delete; a refused queue (no extraction profile, no turns) left the chat with no memories. The Salon sidebar's button only queued extraction over the existing rows. All three now call `?action=reextract-memories` through `confirmAndReextractChatMemories` (`lib/chat-utils.ts`), which refuses before anything is touched and otherwise enqueues `MEMORY_REGENERATE_CHAT` (wipe, cursor reset, rebuild). Same confirmation everywhere. Documented in `help/chat-participants.md` and `docs/developer/API.md`. Fixes #242.

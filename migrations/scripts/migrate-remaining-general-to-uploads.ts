@@ -43,6 +43,8 @@ import {
   isSQLiteBackend,
   getSQLiteDatabase,
   sqliteTableExists,
+  tableExists,
+  columnExists,
 } from '../lib/database-utils';
 import { getFilesDir, getMountIndexDatabasePath } from '../../lib/paths';
 
@@ -75,6 +77,22 @@ function openMountIndexDb(): DatabaseType | null {
   } catch (error) {
     try { db.close(); } catch { /* ignore */ }
     throw error;
+  }
+}
+
+/**
+ * Whether the mount index already has the content/link split
+ * (`add-doc-mount-file-links-v1`): `doc_mount_blobs` keyed by `fileId`, with no
+ * `mountPointId` / `relativePath` of its own. This migration writes the older
+ * shape and cannot run against the split one.
+ */
+function mountIndexHasLinkSplit(): boolean {
+  const db = openMountIndexDb();
+  if (!db) return false;
+  try {
+    return tableExists(db, 'doc_mount_blobs') && !columnExists(db, 'doc_mount_blobs', 'mountPointId');
+  } finally {
+    try { db.close(); } catch { /* ignore */ }
   }
 }
 
@@ -175,7 +193,7 @@ export const migrateRemainingGeneralToUploadsMigration: Migration = {
   id: MIGRATION_ID,
   description:
     'Sweep any remaining files under _general/ into the Quilltap Uploads mount; rewrite files.storageKey shims and archive the source files',
-  introducedInVersion: '4.14.0',
+  introducedInVersion: '4.4.0',
   dependsOn: [
     'provision-user-uploads-mount-v1',
     'migrate-general-story-backgrounds-to-mount-v1',
@@ -191,6 +209,17 @@ export const migrateRemainingGeneralToUploadsMigration: Migration = {
     if (!fs.existsSync(filesDir)) return false;
     const generalDir = path.join(filesDir, '_general');
     if (!fs.existsSync(generalDir)) return false;
+
+    // This sweep belongs to the 4.4 upgrade and writes the mount index as it
+    // was then. On the split schema it has no work it could do: `_general/` is
+    // still where General-scope documents live, so a file there is not a
+    // leftover, and running would fail every boot.
+    if (mountIndexHasLinkSplit()) {
+      logger.debug('Mount index already has the content/link split; standing down', {
+        context: `migration.${MIGRATION_ID}`,
+      });
+      return false;
+    }
 
     // Look for any live (non-archived) candidate on disk.
     const candidates = await walkGeneral(generalDir);
@@ -476,7 +505,10 @@ export const migrateRemainingGeneralToUploadsMigration: Migration = {
           });
         }
       }
+      let archiveIndex = 0;
       for (const candidate of candidates) {
+        archiveIndex++;
+        reportProgress(archiveIndex, candidates.length, 'archived files');
         const archiveDst = path.join(uploadsArchive, candidate.relativeToGeneral);
         try {
           await fsPromises.mkdir(path.dirname(archiveDst), { recursive: true });

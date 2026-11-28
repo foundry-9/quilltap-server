@@ -157,7 +157,7 @@ export const provisionUserUploadsMountMigration: Migration = {
   id: MIGRATION_ID,
   description:
     'Provision the global "Quilltap Uploads" database-backed mount point and persist its id in instance_settings',
-  introducedInVersion: '4.14.0',
+  introducedInVersion: '4.4.0',
   dependsOn: [
     'create-instance-settings-table-v1',
     'convert-project-files-to-document-stores-v1',
