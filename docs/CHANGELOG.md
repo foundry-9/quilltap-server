@@ -6,6 +6,7 @@
 
 #### Fix: list order, font licence retry, import memories, template hint and qtap links
 
+- "Re-extract memories" in the Salon list and a character's Conversations tab deleted the chat's memories before asking the server to queue extraction, ignoring a failed delete; a refused queue (no extraction profile, no turns) left the chat with no memories. The Salon sidebar's button only queued extraction over the existing rows. All three now call `?action=reextract-memories` through `confirmAndReextractChatMemories` (`lib/chat-utils.ts`), which refuses before anything is touched and otherwise enqueues `MEMORY_REGENERATE_CHAT` (wipe, cursor reset, rebuild). Same confirmation everywhere. Documented in `help/chat-participants.md` and `docs/developer/API.md`. Fixes #242.
 - Inventory and Wardrobe title lists sorted with plain `localeCompare`, so "The …" titles filed under T. Both use `compareTitles` (`lib/utils/title-sort.ts`), like the Atlas and scenarios. Documented in `help/inventory.md` and `help/wardrobe.md`. Fixes #312.
 - Retrying Add fonts after a font failed added the rest without the licence file. The uploaded licence path is kept in state and reused while the same file is chosen. Fixes #318.
 - The imported-chat memory dialog named the first character with a connection profile, counted message pairs, and was disabled when that character had no profile. The action covers every character and resolves its own profile; the dialog says so, counts turns as the server does, and reports the server's `jobCount`. Documented in `help/chats.md`. Fixes #330.

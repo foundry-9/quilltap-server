@@ -17,6 +17,7 @@ export {
   enqueueTitleUpdate,
   enqueueLLMLogCleanup,
   enqueueMemoryExtractionBatch,
+  enqueueMemoryRegenerateChat,
   getJobStatus,
   getQueueStats,
   getActiveCountsByType,

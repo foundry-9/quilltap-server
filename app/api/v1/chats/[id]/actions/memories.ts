@@ -3,7 +3,14 @@
  *
  * - queue-memories: enqueues one MEMORY_EXTRACTION turn job for every turn of
  *   the chat (`listExtractionTurns`). Each job rebuilds its turn transcript at
- *   execution time and runs the turn passes.
+ *   execution time and runs the turn passes. Nothing is wiped (the import
+ *   wizard's first extraction).
+ *
+ * - reextract-memories: the "Re-extract memories" buttons (#242). Checks the
+ *   extraction profile and the turns first and refuses before touching
+ *   anything; only then enqueues MEMORY_REGENERATE_CHAT, which wipes the
+ *   chat's extracted rows (`retireChatMemories`, sparing manual, cold and
+ *   digest rows), clears the fold cursors and re-enqueues every turn.
  *
  * - extract-memories-dry-run: runs the chat through the extraction pipeline
  *   with `dryRun: true` (`runExtractionDryRun`) — every turn, then both fold
@@ -15,7 +22,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { badRequest } from '@/lib/api/responses';
-import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/background-jobs';
+import { enqueueMemoryExtractionBatch, enqueueMemoryRegenerateChat, ensureProcessorRunning } from '@/lib/background-jobs';
 import {
   buildExtractionContext,
   ExtractionContextError,
@@ -33,6 +40,82 @@ function resolveExtractionProfileId(chat: ChatMetadata, ctx: RequestContext): Pr
 }
 
 /**
+ * Why a chat cannot be extracted from right now, or the profile and turns it
+ * would be extracted with. Shared by queue-memories and reextract-memories so
+ * both refuse on the same grounds.
+ */
+async function prepareExtraction(
+  chatId: string,
+  chat: ChatMetadata,
+  ctx: RequestContext,
+): Promise<
+  | { ok: true; connectionProfileId: string; turns: ReturnType<typeof listExtractionTurns> }
+  | { ok: false; response: NextResponse }
+> {
+  const connectionProfileId = await resolveExtractionProfileId(chat, ctx);
+  if (!connectionProfileId) {
+    logger.warn('[Chats v1] No connection profile for memory extraction', { userId: ctx.user.id, chatId });
+    return {
+      ok: false,
+      response: badRequest('No connection profile available for memory extraction. Give a seat a profile or set a cheap LLM profile in settings.'),
+    };
+  }
+
+  const messages = await loadChatMessageEvents(chatId);
+  const turns = listExtractionTurns(messages, chat.chatType);
+  if (turns.length === 0) {
+    return {
+      ok: false,
+      response: badRequest(
+        chat.chatType === 'autonomous'
+          ? 'No assistant messages found in this chat — nothing to extract memories from.'
+          : 'No messages found in this chat — nothing to extract memories from.',
+      ),
+    };
+  }
+
+  return { ok: true, connectionProfileId, turns };
+}
+
+/**
+ * Wipe a chat's extracted memories and rebuild them (#242).
+ *
+ * Everything that can refuse is checked here, in the request, before the wipe
+ * is queued: a missing extraction profile or a chat with no turns is a 400 and
+ * no memory is touched. The wipe and the re-enqueue then happen together in
+ * MEMORY_REGENERATE_CHAT, so a delete can never land without its rebuild.
+ */
+export async function handleReextractMemories(
+  _req: NextRequest,
+  chatId: string,
+  chat: ChatMetadata,
+  ctx: RequestContext,
+): Promise<NextResponse> {
+  const prepared = await prepareExtraction(chatId, chat, ctx);
+  if (!prepared.ok) return prepared.response;
+
+  const jobId = await enqueueMemoryRegenerateChat(ctx.user.id, {
+    chatId,
+    connectionProfileId: prepared.connectionProfileId,
+  });
+  ensureProcessorRunning();
+
+  logger.info('[Chats v1] Queued memory re-extraction', {
+    chatId,
+    jobId,
+    chatType: chat.chatType ?? null,
+    turnCount: prepared.turns.length,
+  });
+
+  return NextResponse.json({
+    success: true,
+    chatId,
+    jobId,
+    turnCount: prepared.turns.length,
+  });
+}
+
+/**
  * Queue per-turn memory extraction jobs for every USER message in the chat.
  *
  * The legacy version of this action accepted `characterId` / `characterName` /
@@ -47,25 +130,10 @@ export async function handleQueueMemories(
   chat: ChatMetadata,
   ctx: RequestContext,
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
-  const connectionProfileId = await resolveExtractionProfileId(chat, ctx);
-
-  if (!connectionProfileId) {
-    logger.warn('[Chats v1] No connection profile for memory extraction', { userId: user.id, chatId });
-    return badRequest('No connection profile available for memory extraction. Give a seat a profile or set a cheap LLM profile in settings.');
-  }
-
-  const messages = await loadChatMessageEvents(chatId);
-  const isAutonomous = chat.chatType === 'autonomous';
-  const batchEntries = listExtractionTurns(messages, chat.chatType);
-
-  if (batchEntries.length === 0) {
-    return badRequest(
-      isAutonomous
-        ? 'No assistant messages found in this chat — nothing to extract memories from.'
-        : 'No messages found in this chat — nothing to extract memories from.',
-    );
-  }
+  const { user } = ctx;
+  const prepared = await prepareExtraction(chatId, chat, ctx);
+  if (!prepared.ok) return prepared.response;
+  const { connectionProfileId, turns: batchEntries } = prepared;
 
   logger.info('[Chats v1] Queueing per-turn memory extraction jobs', {
     chatId,

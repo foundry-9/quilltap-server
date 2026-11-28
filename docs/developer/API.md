@@ -3507,6 +3507,17 @@ neither exists or the chat has no turns. Does not wipe existing memories first.
 
 **Response**: `{ "success": true, "jobCount": 12, "chatId": "…", "turnCount": 12 }`
 
+#### `POST /api/v1/chats/[id]?action=reextract-memories`
+
+Wipe the chat's extracted memories and rebuild them (the "Re-extract memories" buttons). No request
+body. Resolves the extraction profile and the turns as `queue-memories` does and returns the same
+400s before anything is touched; otherwise enqueues one `MEMORY_REGENERATE_CHAT` job, which retires
+the chat's memories (`retireChatMemories`: manual, cold and digest rows spared), clears the fold
+cursors and re-enqueues every turn plus the fold catch-ups. Deduped per chat while a regeneration is
+pending or running.
+
+**Response**: `{ "success": true, "chatId": "…", "jobId": "…", "turnCount": 12 }`
+
 #### `POST /api/v1/chats/[id]?action=extract-memories-dry-run`
 
 Run the chat through the extraction pipeline without writing anything (wrapped by

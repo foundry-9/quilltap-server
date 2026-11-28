@@ -3,17 +3,15 @@
 import { useCallback } from 'react'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { notifyQueueChange } from '@/components/layout/queue-status-badges'
-import type { Chat } from '../types'
+import { confirmAndReextractChatMemories } from '@/lib/chat-utils'
 
 interface UseMemoryActionsParams {
   chatId: string
   chatMemoryCount: number
   setChatMemoryCount: (count: number) => void
-  chat: Chat | null
 }
 
-export function useMemoryActions({ chatId, chatMemoryCount, setChatMemoryCount, chat }: UseMemoryActionsParams) {
+export function useMemoryActions({ chatId, chatMemoryCount, setChatMemoryCount }: UseMemoryActionsParams) {
   const handleDeleteChatMemories = useCallback(async () => {
     // Re-read before confirming. The rendered count is a subscription that a
     // dropped socket can leave behind, and a stale zero used to swallow this
@@ -66,43 +64,11 @@ export function useMemoryActions({ chatId, chatMemoryCount, setChatMemoryCount, 
     }
   }, [chatId, chatMemoryCount, setChatMemoryCount])
 
+  // The same wipe-and-rebuild as the Salon list and the Conversations tab
+  // (#242): it used to queue extraction over the old rows without deleting.
   const handleReextractMemories = useCallback(async () => {
-    const characterParticipant = chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)
-    if (!characterParticipant?.character) {
-      showErrorToast('Cannot re-extract memories: no active character in chat')
-      return
-    }
-
-    const confirmed = await showConfirmation(
-      `Queue memory extraction jobs for all messages in this chat? This will process the entire conversation history.`
-    )
-
-    if (!confirmed) {
-      return
-    }
-
-    try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=queue-memories`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          characterId: characterParticipant.character.id,
-          characterName: characterParticipant.character.name,
-        }),
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        showSuccessToast(`Queued ${data.jobCount} memory extraction jobs`)
-        notifyQueueChange()
-      } else {
-        const errorData = await res.json()
-        showErrorToast(`Failed to queue memory extraction: ${errorData.error}`)
-      }
-    } catch {
-      showErrorToast('Failed to queue memory extraction')
-    }
-  }, [chatId, chat])
+    await confirmAndReextractChatMemories(chatId)
+  }, [chatId])
 
   return {
     handleDeleteChatMemories,

@@ -9,12 +9,12 @@ import { Icon } from '@/components/ui/icon'
 import { ListPager } from '@/components/ui/ListPager'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ChatCard } from '@/components/chat/ChatCard'
-import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import { useRealtimeConnected, useRealtimeTopic } from '@/hooks/useRealtime'
 import {
   confirmAndDeleteChat,
+  confirmAndReextractChatMemories,
   transformCharacterChatToCardData,
   type CharacterChatShape,
 } from '@/lib/chat-utils'
@@ -121,31 +121,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
   }
 
   const handleReextractMemories = async (chatId: string) => {
-    const confirmed = await showConfirmation(
-      'This will delete the memories extracted from this chat and re-extract them from the conversation. Hand-written entries, archived entries and consolidated digests are kept. Are you sure?'
-    )
-    if (!confirmed) return
-
-    try {
-      // Delete existing memories for this chat
-      await fetch(`/api/v1/memories?chatId=${chatId}`, { method: 'DELETE' })
-
-      // Queue new memory extraction. Each job covers a whole turn, every
-      // character who spoke in it, so the request names no character.
-      const res = await fetch(`/api/v1/chats/${chatId}?action=queue-memories`, {
-        method: 'POST',
-      })
-      const data = await res.json()
-
-      if (res.ok) {
-        showSuccessToast(`Queued ${data.jobCount} memory extraction jobs`)
-        notifyQueueChange()
-      } else {
-        showErrorToast(data.error || 'Failed to queue memory extraction')
-      }
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to re-extract memories')
-    }
+    await confirmAndReextractChatMemories(chatId)
   }
 
   // Scriptorium status watch: re-read the chat list while a render/embed is in

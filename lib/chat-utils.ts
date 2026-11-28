@@ -8,7 +8,9 @@
  */
 
 import { showConfirmation } from '@/lib/alert'
-import { showErrorToast } from '@/lib/toast'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
+import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatCardData } from '@/components/chat/ChatCard'
 import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { ConciergeModeReason } from '@/lib/schemas/chat.types'
@@ -167,6 +169,39 @@ export async function confirmAndDeleteChat(chatId: string): Promise<boolean> {
     return true
   } catch (err) {
     showErrorToast(err instanceof Error ? err.message : 'Failed to delete chat')
+    return false
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Re-extract memories confirmation + request
+// ----------------------------------------------------------------------------
+
+/** What the confirmation says, word for word, wherever the button is (#242). */
+export const REEXTRACT_MEMORIES_CONFIRMATION =
+  'This will delete the memories extracted from this chat and re-extract them from the conversation. Hand-written entries, archived entries and consolidated digests are kept. Are you sure?'
+
+/**
+ * Confirm, then ask the server to wipe and rebuild the chat's extracted
+ * memories (`?action=reextract-memories`). The server refuses before touching
+ * anything when the chat has no extraction profile or no turns, so a refusal
+ * here leaves every memory where it was (#242). The Salon list, a character's
+ * Conversations tab and the Salon sidebar all call this; none deletes on its
+ * own. Returns whether the rebuild was queued.
+ */
+export async function confirmAndReextractChatMemories(chatId: string): Promise<boolean> {
+  const confirmed = await showConfirmation(REEXTRACT_MEMORIES_CONFIRMATION)
+  if (!confirmed) return false
+  try {
+    const data = await apiFetch<{ turnCount: number }>(
+      `/api/v1/chats/${chatId}?action=reextract-memories`,
+      { method: 'POST' },
+    )
+    showSuccessToast(`Re-extracting memories from ${data.turnCount} ${data.turnCount === 1 ? 'turn' : 'turns'}`)
+    notifyQueueChange()
+    return true
+  } catch (err) {
+    showErrorToast(apiErrorMessage(err, 'Failed to re-extract memories'))
     return false
   }
 }

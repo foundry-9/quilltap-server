@@ -21,7 +21,7 @@ export { handleStopTurn, handleRaiseHand } from './interrupt';
 export { handleGetAvatars, handleGetAvatarTimeline, handleSetAvatar, handleRemoveAvatar } from './avatars';
 export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';
-export { handleQueueMemories, handleExtractMemoriesDryRun } from './memories';
+export { handleQueueMemories, handleReextractMemories, handleExtractMemoriesDryRun } from './memories';
 export { handleRecallReplay } from './recall-replay';
 export { handleRng } from './rng';
 export { handleRunTool } from './run-tool';

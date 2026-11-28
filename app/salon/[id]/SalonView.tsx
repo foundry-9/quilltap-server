@@ -430,7 +430,6 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     chatId: id,
     chatMemoryCount,
     setChatMemoryCount: chatDataHook.setChatMemoryCount,
-    chat,
   })
 
   // --- Summary actions hook ---

@@ -11,11 +11,11 @@ import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
 import { ChatCard } from '@/components/chat/ChatCard'
-import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import {
   confirmAndDeleteChat,
+  confirmAndReextractChatMemories,
   transformSalonChatToCardData,
   type SalonChatShape,
 } from '@/lib/chat-utils'
@@ -113,30 +113,8 @@ export function SalonListView() {
   }
 
   const handleReextractMemories = useCallback(async (chatId: string) => {
-    const confirmed = await showConfirmation(
-      'This will delete the memories extracted from this chat and re-extract them from the conversation. Hand-written entries, archived entries and consolidated digests are kept. Are you sure?'
-    )
-    if (!confirmed) return
-
-    try {
-      await fetch(`/api/v1/memories?chatId=${chatId}`, { method: 'DELETE' })
-
-      const res = await fetch(`/api/v1/chats/${chatId}?action=queue-memories`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      const data = await res.json()
-
-      if (res.ok) {
-        showSuccessToast(`Queued ${data.jobCount} memory extraction jobs`)
-        notifyQueueChange()
-        await mutateChats()
-      } else {
-        showErrorToast(data.error || 'Failed to queue memory extraction')
-      }
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to re-extract memories')
+    if (await confirmAndReextractChatMemories(chatId)) {
+      await mutateChats()
     }
   }, [mutateChats])
 
