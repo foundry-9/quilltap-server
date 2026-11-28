@@ -2,8 +2,9 @@
  * Title ordering — the one rule for alphabetising display titles.
  *
  * Case-insensitive, with a leading definite article ignored: "The Gilded Cage"
- * files under G. Used by scenario lists (`lib/scenarios/sort.ts`) and Atlas
- * listings (`components/atlas/AtlasBrowser.tsx`).
+ * files under G. Used by scenario lists (`lib/scenarios/sort.ts`), Atlas
+ * listings (`components/atlas/AtlasBrowser.tsx`), the Inventory browser and
+ * the wardrobe's title sort (`lib/wardrobe/wear-display.ts`).
  *
  * Pure and client-safe.
  *

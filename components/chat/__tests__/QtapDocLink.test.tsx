@@ -64,6 +64,7 @@ describe('QtapLink', () => {
       expect.objectContaining({ scope: 'document_store', mountPoint: 'Notes', path: 'today.md' }),
       { exists: true, kind: 'document' },
       'qtap://Notes/today.md',
+      { tabId: null },
     )
   })
 
@@ -82,6 +83,7 @@ describe('QtapLink', () => {
       expect.objectContaining({ scope: 'document_store', mountPoint: 'Notes', path: 'cover.webp' }),
       { exists: true, kind: 'image' },
       'qtap://Notes/cover.webp',
+      { tabId: null },
     )
   })
 
@@ -111,6 +113,7 @@ describe('QtapLink', () => {
       expect.objectContaining({ scope: 'document_store', mountPoint: 'Notes', path: 'archive.pdf' }),
       { exists: true, kind: 'other' },
       'qtap://Notes/archive.pdf',
+      { tabId: null },
     )
   })
 

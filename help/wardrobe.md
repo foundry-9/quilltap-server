@@ -307,7 +307,7 @@ Every garment in the house keeps a ledger --- a discreet little tally, kept belo
 **Where to read it.**
 
 - In the **Wardrobe dialog**, each row carries one quiet line beneath its badges, counting every wearer in the household: *Worn 4× · last 3 days ago*, *Worn once · last a week ago*, or *Never worn*.
-- A **Sort** selector beside the Items/Outfits tabs arranges the list by **Title** (the usual order), **Recently worn**, **Most worn**, or **Newest**; under the two wear sorts, the never-worn sit at the back. A **Never worn** tickbox, beside *Show archived* and *Show shared*, shows only the garments nobody has yet had on --- it combines with any sort. Neither is remembered after the dialog closes.
+- A **Sort** selector beside the Items/Outfits tabs arranges the list by **Title** (the usual order, ignoring capitals and a leading "The", so *The Blue Coat* is filed under B, as the Atlas and the scenario lists do it), **Recently worn**, **Most worn**, or **Newest**; under the two wear sorts, the never-worn sit at the back. A **Never worn** tickbox, beside *Show archived* and *Show shared*, shows only the garments nobody has yet had on --- it combines with any sort. Neither is remembered after the dialog closes.
 - **Editing** an existing item shows a **Wear history** section at the foot of the form: when it was created, how many times it has been worn, first and last worn (with the conversation it was last worn in, if that conversation still exists), and who has worn it, most recent first.
 - The **project wardrobe card** shows the same one-line tally on each row.
 

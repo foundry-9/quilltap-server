@@ -13,6 +13,7 @@
  * POST /api/v1/documents?action=recent-documents  - recently-opened documents across all chats
  * POST /api/v1/documents?action=open-document     - read a document, or create a blank one
  * POST /api/v1/documents?action=read-document     - read file content for the editor
+ * POST /api/v1/documents?action=resolve-document  - does a qtap:// target exist, and what is it (#248)
  * POST /api/v1/documents?action=write-document    - write file content (mtime-checked)
  * POST /api/v1/documents?action=rename-document   - rename the underlying file
  * POST /api/v1/documents?action=delete-document   - delete the underlying file
@@ -27,10 +28,12 @@ import { successResponse, serverError, errorResponse } from '@/lib/api/responses
 import type { DocEditScope } from '@/lib/doc-edit';
 import {
   STANDALONE_ACCESS_CONTEXT,
+  classifyResolvedTarget,
   listAllEnabledStores,
   resolveGeneralLibrary,
+  resolveOperatorDocPath,
 } from '@/lib/documents/operator-doc-actions';
-import { sweepChatDocumentsAfterMove } from '@/lib/documents/core';
+import { documentExists, sweepChatDocumentsAfterMove } from '@/lib/documents/core';
 import {
   documentTargetFields,
   openDocumentFields,
@@ -204,6 +207,40 @@ async function handleReadDocument(
   );
 }
 
+/**
+ * Whether a qtap:// link rendered outside any chat names something that exists,
+ * and what kind of thing it is — the chat-less twin of the chat's
+ * `resolve-document` (#248). Resolved with no chat's reach, so `self` and the
+ * on-disk `project` scope are unresolvable here and read as absent.
+ */
+async function handleResolveDocument(
+  req: NextRequest,
+  { repos }: RequestContext,
+): Promise<NextResponse> {
+  const body = await req.json();
+  const data = readDocumentSchema.parse(body);
+
+  try {
+    const resolved = await resolveOperatorDocPath(STANDALONE_ACCESS_CONTEXT, {
+      scope: data.scope as DocEditScope,
+      filePath: data.filePath,
+      mountPoint: data.mountPoint,
+    });
+    const exists = await documentExists(resolved);
+    const kind = exists ? await classifyResolvedTarget(repos, resolved) : 'other';
+    logger.debug('standalone resolve-document', { filePath: data.filePath, scope: data.scope, mountPoint: data.mountPoint, exists, kind });
+    return successResponse({ exists, kind });
+  } catch (error) {
+    logger.debug('standalone resolve-document: path not resolvable; treating as non-existent', {
+      filePath: data.filePath,
+      scope: data.scope,
+      mountPoint: data.mountPoint,
+      error: getErrorMessage(error),
+    });
+    return successResponse({ exists: false, kind: 'other' });
+  }
+}
+
 /** Write file content from the standalone editor (mtime-checked, no Librarian). */
 async function handleWriteDocument(
   req: NextRequest,
@@ -335,6 +372,7 @@ export const POST = createContextHandler(
     'recent-documents': handleRecentDocuments,
     'open-document': handleOpenDocument,
     'read-document': handleReadDocument,
+    'resolve-document': handleResolveDocument,
     'write-document': handleWriteDocument,
     'rename-document': handleRenameDocument,
     'delete-document': handleDeleteDocument,

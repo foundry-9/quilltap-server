@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react'
+import { compareTitles } from '@/lib/utils/title-sort'
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
 import { encodeInventoryContainer, type InventoryContainer } from '@/lib/inventory/container'
 import { folderCrumb } from '@/lib/inventory/folders'
@@ -104,7 +105,7 @@ export function InventoryBrowser({
         if (term && !`${item.title ?? ''} ${item.name}`.toLowerCase().includes(term)) return false
         return true
       })
-      .sort((a, b) => (a.title || a.name).localeCompare(b.title || b.name, undefined, { sensitivity: 'base' }))
+      .sort((a, b) => compareTitles(a.title || a.name, b.title || b.name))
   }, [items, search, isCharacterScope, showShared, canManage, kindFilter, equippedOnly, equip, carriedIds])
 
   const state = useFolderBrowserState({

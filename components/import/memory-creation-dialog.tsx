@@ -33,51 +33,41 @@ interface MemoryCreationDialogProps {
 /**
  * Dialog for creating memories from an imported chat
  *
- * Queues background jobs to analyze each message pair for memories,
- * using the same process as live chats.
+ * Queues the chat's `queue-memories` action: one background extraction job per
+ * turn of the whole chat, covering every character who spoke, using the same
+ * process as live chats. The action takes no character and resolves its own
+ * connection profile, so the dialog names none (#330).
  */
 export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProps) {
   const [creating, setCreating] = useState(false)
 
-  // Get the first character for analysis
-  const firstCharacter = useMemo(() => {
-    const participant = chat.participants.find(p => p.type === 'CHARACTER' && p.character)
-    if (participant?.character && participant.connectionProfileId) {
-      return {
-        id: participant.character.id,
-        name: participant.character.name,
-        connectionProfileId: participant.connectionProfileId,
-      }
-    }
-    return null
+  // Every character seated in the chat — the analysis covers them all.
+  const characterNames = useMemo(() => {
+    const names = chat.participants
+      .map(p => (p.type === 'CHARACTER' ? p.character?.name?.trim() : undefined))
+      .filter((n): n is string => !!n)
+    return Array.from(new Set(names))
   }, [chat.participants])
 
-  // Count message pairs for analysis
-  const messagePairCount = useMemo(() => {
-    let count = 0
-    const messages = chat.messages.filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
-    for (let i = 0; i < messages.length - 1; i++) {
-      if (messages[i].role === 'USER' && messages[i + 1].role === 'ASSISTANT') {
-        count++
-      }
-    }
-    return count
+  // Turns, as the server counts them (`listExtractionTurns`): one per USER
+  // message, plus a greeting-only turn when a reply comes before the first.
+  const turnCount = useMemo(() => {
+    const spoken = chat.messages.filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
+    const openers = spoken.filter(m => m.role === 'USER').length
+    const firstOpener = spoken.findIndex(m => m.role === 'USER')
+    const greeting = (firstOpener === -1 ? spoken : spoken.slice(0, firstOpener)).some(m => m.role === 'ASSISTANT')
+    return openers + (greeting ? 1 : 0)
   }, [chat.messages])
 
   /**
    * Queue memory analysis jobs
    */
   const handleAnalyzeMessages = useCallback(async () => {
-    if (!firstCharacter) {
-      showErrorToast('No character found with a connection profile')
-      return
-    }
-
     setCreating(true)
 
     try {
-      if (messagePairCount === 0) {
-        showInfoToast('No message pairs found to analyze')
+      if (turnCount === 0) {
+        showInfoToast('No turns found to analyze')
         onClose()
         return
       }
@@ -97,7 +87,8 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
       }
 
       const result = await response.json()
-      showSuccessToast(`Queued ${result.jobCount ?? messagePairCount} turns for memory analysis`)
+      const queued: number = result.jobCount ?? turnCount
+      showSuccessToast(`Queued ${queued} turn${queued === 1 ? '' : 's'} for memory analysis`)
 
       onClose()
     } catch (err) {
@@ -109,7 +100,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
     } finally {
       setCreating(false)
     }
-  }, [chat.id, firstCharacter, messagePairCount, onClose])
+  }, [chat.id, turnCount, onClose])
 
   return (
     <BaseModal
@@ -133,7 +124,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
           <button
             type="button"
             onClick={handleAnalyzeMessages}
-            disabled={creating || !firstCharacter || messagePairCount === 0}
+            disabled={creating || turnCount === 0}
             className="qt-button qt-button-primary"
           >
             {creating ? (
@@ -142,7 +133,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
                 Queueing...
               </>
             ) : (
-              `Analyze ${messagePairCount} Message${messagePairCount === 1 ? '' : 's'}`
+              `Analyze ${turnCount} Turn${turnCount === 1 ? '' : 's'}`
             )}
           </button>
         </>
@@ -153,13 +144,14 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
           This will analyze each message exchange using AI to extract meaningful memories,
           just like live chats. The analysis runs in the background.
         </p>
-        {firstCharacter ? (
+        {turnCount > 0 ? (
           <p className="qt-text-small mt-2">
-            <strong>{messagePairCount}</strong> message pair{messagePairCount === 1 ? '' : 's'} will be analyzed for <strong>{firstCharacter.name}</strong>.
+            <strong>{turnCount}</strong> turn{turnCount === 1 ? '' : 's'} will be analyzed for every character in the chat
+            {characterNames.length > 0 ? <> ({characterNames.join(', ')})</> : null}.
           </p>
         ) : (
-          <p className="qt-text-small qt-text-destructive mt-2">
-            No character with a connection profile found. Cannot analyze messages.
+          <p className="qt-text-small mt-2">
+            There are no turns in this chat to analyze.
           </p>
         )}
       </div>

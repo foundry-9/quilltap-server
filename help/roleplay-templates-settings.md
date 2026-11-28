@@ -255,7 +255,7 @@ A rendering pattern's CSS class name (and a dialogue class name) takes only lett
 
 #### Draft Formatting Instructions
 
-Next to the **LLM Prompt** label is a **Draft formatting instructions** button. Click it to append a starter paragraph describing your current delimiters to the prompt (for example, "Narration and action: wrap in `*…*`"). It knows about unmarked narration, curly-quote and unclosed-paragraph wraps, and a template that has taken the asterisk from Markdown. It is only a starting point — edit the text freely; the prompt remains exactly what is sent to the model.
+Next to the **LLM Prompt** label is a **Draft formatting instructions** button. Click it to append a starter paragraph describing your current delimiters to the prompt (for example, "Narration and action: wrap in `*…*`"). It knows about unmarked narration, curly-quote and unclosed-paragraph wraps, and a template that has taken the asterisk from Markdown. The paragraph appears in the prompt editor at once, ready to be edited. It is only a starting point — edit the text freely; the prompt remains exactly what is sent to the model.
 
 ### Previewing Your Templates
 

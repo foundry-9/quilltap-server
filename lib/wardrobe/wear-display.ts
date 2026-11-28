@@ -16,6 +16,7 @@
  */
 
 import { formatRelativeDays } from '@/lib/format-time'
+import { compareTitles } from '@/lib/utils/title-sort'
 import { neverWornSummary, type WardrobeWearSummary } from '@/lib/schemas/wardrobe-wear.types'
 
 /** Anything that may carry the collection read's `wear` annotation. */
@@ -122,7 +123,7 @@ function compareDescNullsLast(a: number | null, b: number | null): number {
  * always the title, so equal keys (and the whole never-worn tail under the two
  * wear sorts) read alphabetically.
  *
- *  - `title` — A→Z.
+ *  - `title` — A→Z by `compareTitles` (case-insensitive, leading "The" ignored).
  *  - `recently-worn` — most recent `lastWornAt` first; never-worn items last.
  *  - `most-worn` — highest `wearCount` first; never-worn items last.
  *  - `newest` — most recent `createdAt` first.
@@ -131,7 +132,7 @@ function sortWardrobeItems<T extends SortableWardrobeItem>(
   items: readonly T[],
   sort: WardrobeListSort,
 ): T[] {
-  const byTitle = (a: T, b: T): number => a.title.localeCompare(b.title)
+  const byTitle = (a: T, b: T): number => compareTitles(a.title, b.title)
   const sorted = [...items]
   switch (sort) {
     case 'recently-worn':

@@ -4,6 +4,14 @@
 
 ### 4.15-dev
 
+#### Fix: list order, font licence retry, import memories, template hint and qtap links
+
+- Inventory and Wardrobe title lists sorted with plain `localeCompare`, so "The …" titles filed under T. Both use `compareTitles` (`lib/utils/title-sort.ts`), like the Atlas and scenarios. Documented in `help/inventory.md` and `help/wardrobe.md`. Fixes #312.
+- Retrying Add fonts after a font failed added the rest without the licence file. The uploaded licence path is kept in state and reused while the same file is chosen. Fixes #318.
+- The imported-chat memory dialog named the first character with a connection profile, counted message pairs, and was disabled when that character had no profile. The action covers every character and resolves its own profile; the dialog says so, counts turns as the server does, and reports the server's `jobCount`. Documented in `help/chats.md`. Fixes #330.
+- "Draft formatting instructions" appended the hint to form state only; the rich prompt editor reads its value on mount, so nothing showed and the next keystroke dropped it. The editor is remounted after the append. Fixes #249.
+- A qtap:// link outside a chat resolved against, and opened into, the first Salon open in any pane, posting a Librarian note there. A link now belongs to the workspace tab it is rendered in (`chatIdForLink`); outside a chat it is checked by the new standalone `POST /api/v1/documents?action=resolve-document` and opens in a `document-standalone` tab. Documented in `help/document-editing-tools.md`. Fixes #248.
+
 #### Fix: Salon dialogs, typed edits, workspace panels and themes
 
 - Add Character reset the chosen "Controlled By" profile whenever the character list refreshed. The default is applied only when the selected character changes. Fixes #274.

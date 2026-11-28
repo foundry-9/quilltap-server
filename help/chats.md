@@ -345,6 +345,12 @@ Save chats for backup or sharing:
 3. Choose export format
 4. File downloads to your computer
 
+### Importing a SillyTavern Chat
+
+The **Import SillyTavern Chat** button on the Salon list brings a SillyTavern `.jsonl` conversation into the house: choose the file, match each speaker to a character, and the chat arrives as a Quilltap chat of its own.
+
+Should you tick **Analyze messages for memories**, a final dialog offers to read the whole conversation for the Commonplace Book, turn by turn, exactly as a live chat is read. It goes through every turn for **every character in the chat** at once — it does not single out the first of them — and it needs no particular character to have a connection profile, for it uses whichever the chat would. The count it shows is of turns, and the note that follows tells you how many were sent to the queue. The work goes on in the background.
+
 ### Exporting a Markdown Transcript
 
 There comes an evening — there always does — when one wishes to carry the conversation out of the house entirely: to read it by lamplight, hand it to a friend, or file it in whatever commonplace book one keeps beyond these walls. For that there is **Export Markdown**, which produces not a data file for machines but a *transcript for people*: a single Markdown document of who said what, and when.

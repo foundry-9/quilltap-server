@@ -10,9 +10,14 @@ export interface QtapTargetResolution {
   kind: QtapTargetKind
 }
 
+/** Where a link is rendered: its workspace tab (null outside the workspace). */
+export interface QtapLinkOrigin {
+  tabId: string | null
+}
+
 export interface QtapLinkOpener {
-  resolve: (parts: QtapUriParts) => Promise<QtapTargetResolution>
-  open: (parts: QtapUriParts, resolution: QtapTargetResolution, href: string) => void
+  resolve: (parts: QtapUriParts, origin?: QtapLinkOrigin) => Promise<QtapTargetResolution>
+  open: (parts: QtapUriParts, resolution: QtapTargetResolution, href: string, origin?: QtapLinkOrigin) => void
 }
 
 export const QtapLinkContext = createContext<QtapLinkOpener | null>(null)

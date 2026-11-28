@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { parseQtapUri, type QtapUriParts } from '@/lib/doc-edit/qtap-uri'
 import { Icon } from '@/components/ui/icon'
+import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
 import { useQtapLink } from './QtapLinkContext'
 
 export function QtapLink({ href, children }: { href: string; children: ReactNode }) {
   const ctx = useQtapLink()
+  // The tab the link is rendered in decides which chat (if any) it opens in (#248).
+  const tabId = useWorkspaceTabId()
 
   const parts = useMemo<QtapUriParts | null>(() => {
     try {
@@ -25,7 +28,7 @@ export function QtapLink({ href, children }: { href: string; children: ReactNode
     if (!parts || !ctx) return
     let cancelled = false
     ctx
-      .resolve(parts)
+      .resolve(parts, { tabId })
       .then((resolution) => {
         if (!cancelled) setResult({ href, resolution })
       })
@@ -37,7 +40,7 @@ export function QtapLink({ href, children }: { href: string; children: ReactNode
     return () => {
       cancelled = true
     }
-  }, [parts, ctx, href])
+  }, [parts, ctx, href, tabId])
 
   if (!parts) return <>{children}</>
 
@@ -66,7 +69,7 @@ export function QtapLink({ href, children }: { href: string; children: ReactNode
       title={title}
       onClick={(e) => {
         e.preventDefault()
-        ctx.open(parts, resolution, href)
+        ctx.open(parts, resolution, href, { tabId })
       }}
     >
       <Icon name="file" className="qt-qtap-doc-icon" />

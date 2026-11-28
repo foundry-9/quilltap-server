@@ -109,6 +109,15 @@ describe('sortAndFilterWardrobeItems', () => {
     expect(titles(items)).toEqual(before)
   })
 
+  it('Title: ignores a leading "The" and case, like the Atlas and scenarios (#312)', () => {
+    const list: SortableWardrobeItem[] = [
+      { title: 'boots', createdAt: '2026-01-01T00:00:00.000Z' },
+      { title: 'The Apron', createdAt: '2026-01-01T00:00:00.000Z' },
+      { title: 'Coat', createdAt: '2026-01-01T00:00:00.000Z' },
+    ]
+    expect(titles(sortWardrobeItems(list, 'title'))).toEqual(['The Apron', 'boots', 'Coat'])
+  })
+
   it('Recently worn: latest first, ties by title, never-worn last (alphabetically)', () => {
     expect(titles(sortWardrobeItems(items, 'recently-worn'))).toEqual([
       'Coat',

@@ -1,6 +1,6 @@
 'use client'
 
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { useRoleplayTemplates } from './hooks/useRoleplayTemplates'
 import { TemplateCard } from './TemplateCard'
@@ -157,6 +157,8 @@ export default function RoleplayTemplatesTab() {
     handleCopyAsNew,
     appendFormattingHint,
   } = useRoleplayTemplates()
+  // Bumped by "Draft formatting instructions" to remount the prompt editor.
+  const [hintRemounts, setHintRemounts] = useState(0)
 
   const builtInTemplates = templates.filter(t => t.isBuiltIn)
   const userTemplates = templates.filter(t => !t.isBuiltIn)
@@ -406,7 +408,12 @@ export default function RoleplayTemplatesTab() {
                   actions={
                     <button
                       type="button"
-                      onClick={appendFormattingHint}
+                      onClick={() => {
+                        appendFormattingHint()
+                        // The rich editor reads its value only on mount, so
+                        // remount it to show the appended hint (#249).
+                        setHintRemounts(n => n + 1)
+                      }}
                       disabled={formData.delimiters.length === 0 && formData.narrationDelimiterMode !== 'none' && !formData.narrationOpen.trim()}
                       className="qt-button-secondary qt-button-sm"
                       title="Append a starter formatting guide drafted from the delimiters above"
@@ -418,7 +425,7 @@ export default function RoleplayTemplatesTab() {
                 <MarkdownLexicalEditor
                   value={formData.systemPrompt}
                   onChange={(value) => setFormData(prev => ({ ...prev, systemPrompt: value }))}
-                  remountKey={editingTemplate?.id ?? 'new'}
+                  remountKey={`${editingTemplate?.id ?? 'new'}-${hintRemounts}`}
                   namespace="RoleplayTemplate.systemPrompt"
                   ariaLabel="Template LLM prompt"
                   minHeight="14rem"

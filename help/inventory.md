@@ -19,6 +19,8 @@ The Inventory is not the [Wardrobe](wardrobe.md). The Wardrobe dresses a charact
 
 At the top of the dialog a single dropdown chooses which inventory you are looking at: a **character**, **Quilltap General**, a **project** or a **group**.
 
+Objects are listed alphabetically by title (or by name, when an object has no title), ignoring capitals and a leading "The" — *The Night Shift* is filed under N, just as the Atlas and the scenario lists file it.
+
 The dialog keeps itself current without being asked. Should a shelf be rearranged while it is open — by your own hand in another window, by a character rummaging through their pockets, or by one of Pascal's tools — the lists, the folders and the archetype pickers simply rearrange themselves to match, and the **Carrying now** pane does the same whenever anything is taken up or set down in the chat.
 
 ## Where items are kept

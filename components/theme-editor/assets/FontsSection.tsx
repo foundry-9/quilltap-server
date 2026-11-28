@@ -221,6 +221,9 @@ function AddFontForm({ files, detail, onClose }: { files: File[]; detail: DraftD
   )
   const [licence, setLicence] = useState('')
   const [licenceFile, setLicenceFile] = useState<File | null>(null)
+  // The licence file once uploaded, and the draft path it landed at: a retry
+  // after a font fails reuses the path rather than forgetting it (#318).
+  const [uploadedLicence, setUploadedLicence] = useState<{ file: File; path: string | undefined } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const started = useRef(false)
@@ -267,7 +270,9 @@ function AddFontForm({ files, detail, onClose }: { files: File[]; detail: DraftD
     setError(null)
     try {
       let licensePath: string | undefined
-      if (licenceFile) {
+      if (licenceFile && uploadedLicence?.file === licenceFile) {
+        licensePath = uploadedLicence.path
+      } else if (licenceFile) {
         const result = await ops.run(
           (manifestRevision, id) => themeDraftUpload<{ draft: DraftDetail; path?: string }>(id, 'add-licence-file', licenceFile, { manifestRevision }),
           { toast: false },
@@ -277,7 +282,7 @@ function AddFontForm({ files, detail, onClose }: { files: File[]; detail: DraftD
           return
         }
         licensePath = result.value.path
-        setLicenceFile(null)
+        setUploadedLicence({ file: licenceFile, path: licensePath })
       }
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i]

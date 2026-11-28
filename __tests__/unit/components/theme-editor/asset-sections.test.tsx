@@ -232,6 +232,37 @@ describe('Fonts', () => {
     expect(adds[2][3]).toMatchObject({ manifestRevision: 'mrev-Inter-Regular.woff2', weight: '700', style: 'italic' })
   })
 
+  it('keeps the uploaded licence file for a retry after a font fails (#318)', async () => {
+    let failedOnce = false
+    drafts.fetchThemeDraft.mockResolvedValue(detail({ manifestRevision: 'mrev-fresh' }))
+    drafts.themeDraftUpload.mockImplementation(async (_id: string, action: string, f: File) => {
+      if (action === 'read-font') {
+        return { font: { read: true, info: { format: 'woff2', family: 'Inter', weight: f.name.includes('Bold') ? '700' : '400', style: 'normal', variable: false, axes: [], licence: null, licenceUrl: null, embedding: 'installable' } } }
+      }
+      if (action === 'add-licence-file') return { draft: detail({ manifestRevision: 'mrev-l' }), path: 'fonts/OFL.txt' }
+      if (f.name === 'Inter-Bold.woff2' && !failedOnce) {
+        failedOnce = true
+        throw new ApiFetchError('stale', 409, { error: 'stale', details: { currentManifestRevision: 'mrev-fresh' } })
+      }
+      return { draft: detail({ manifestRevision: `mrev-${f.name}` }), path: `fonts/${f.name}` }
+    })
+    renderSection(detail(), (d) => <FontsSection detail={d} tokens={LORA_SANS} previewing onShowFontTokens={() => {}} />)
+    chooseFiles(fileInputs()[0], [new File(['a'], 'Inter-Regular.woff2'), new File(['b'], 'Inter-Bold.woff2')])
+    const dialog = await screen.findByRole('dialog', { name: 'Add fonts' })
+    fireEvent.change(within(dialog).getByLabelText('Licence, for every font above'), { target: { value: 'OFL-1.1' } })
+    chooseFiles(fileInputs(dialog)[0], [new File(['licence'], 'OFL.txt')])
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Add 2 fonts' })).toBeEnabled())
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add 2 fonts' }))
+    const retry = await within(dialog).findByRole('button', { name: 'Add the font' })
+    await waitFor(() => expect(retry).toBeEnabled())
+    fireEvent.click(retry)
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add fonts' })).not.toBeInTheDocument())
+    const adds = drafts.themeDraftUpload.mock.calls.filter((c) => c[1] !== 'read-font')
+    expect(adds.map((c) => c[1])).toEqual(['add-licence-file', 'add-font', 'add-font', 'add-font'])
+    expect(adds[3][2].name).toBe('Inter-Bold.woff2')
+    expect(adds[3][3]).toMatchObject({ licenseFile: 'fonts/OFL.txt' })
+  })
+
   it('shows a refused font in the dialog', async () => {
     drafts.themeDraftUpload.mockImplementation(async (_id: string, action: string) => {
       if (action === 'read-font') return { font: { read: true, info: { format: 'woff2', family: 'Inter', weight: '400', style: 'normal', variable: false, axes: [], licence: null, licenceUrl: null, embedding: 'installable' } } }
